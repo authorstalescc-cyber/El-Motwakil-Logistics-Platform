@@ -1,0 +1,1585 @@
+<?php
+namespace App\Controllers;
+
+use App\Core\Controller;
+use App\Core\Database;
+use App\Core\App;
+use App\Calc;
+use App\Models\Permit;
+use App\Models\PermitInvoice;
+use App\Models\Bill;
+use App\Models\Closing;
+use App\Models\Lookup;
+use App\Models\Audit;
+use App\Models\PartyMaster;
+
+/**
+ * الإصدارات (إذن للصادر / شهادة للوارد) — أكبر عملية في النظام.
+ * صفحة التفاصيل هي «التايم لاين»: بيانات الإذن ← التخصيص ← الحمولة ← البوليصة ←
+ * الرسوم ← التعتيق ← الهيئة ← المصاريف الإضافية ← المولدات.
+ */
+class PermitController extends Controller
+{
+    private const UPLOAD_EXT = ['jpg','jpeg','png','webp','gif','pdf'];
+
+    /**
+     * تفصيل الحاويات حسب النوع من البوالص، مجمّعاً بالاستعلام الواحد.
+     * $col: عمود الربط ('permit_id' أو 'movement_id')، $ids: مصفوفة المعرّفات.
+     * يُرجع خريطة [id => [ ['type'=>..., 'cnt'=>...], ... ]].
+     */
+    private static function containerBreakdown(string $col, array $ids): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if (!$ids) { return []; }
+        $col = $col === 'movement_id' ? 'movement_id' : 'permit_id';   // قائمة بيضاء
+        $in  = implode(',', $ids);
+        $map = [];
+        foreach (Database::all(
+            "SELECT $col AS gid, container_type AS type, COALESCE(SUM(container_count),0) AS cnt
+               FROM bawalis
+              WHERE $col IN ($in) AND container_type IS NOT NULL AND container_type <> ''
+              GROUP BY $col, container_type
+              ORDER BY container_type") as $row) {
+            $map[(int)$row['gid']][] = ['type' => $row['type'], 'cnt' => (int)$row['cnt']];
+        }
+        return $map;
+    }
+
+    public function index(): void
+    {
+        $this->requireAuth();
+        $v = $_GET['view'] ?? '';
+        $mode = in_array($v, ['records','movements'], true) ? $v : 'follow';
+
+        // إحصائيات عامة (تظهر في كل الأوضاع)
+        $stats = Database::row(
+            "SELECT
+                COUNT(*) AS total,
+                COALESCE(SUM(status='open'),0)   AS open_cnt,
+                COALESCE(SUM(status='closed'),0) AS closed_cnt
+             FROM permits"
+        ) ?: ['total'=>0,'open_cnt'=>0,'closed_cnt'=>0];
+
+        if ($mode === 'movements') {
+            // ملخص الحركات عبر كل الأذونات
+            $q = trim($_GET['q'] ?? '');
+            $conds = []; $params = [];
+            if ($q !== '') {
+                $conds[] = '(p.permit_no LIKE ? OR p.company LIKE ? OR p.client LIKE ?)';
+                array_push($params, "%$q%", "%$q%", "%$q%");
+            }
+            $where = $conds ? 'WHERE ' . implode(' AND ', $conds) : '';
+            $moves = Database::all(
+                "SELECT m.id, m.seq, m.note,
+                        p.id AS permit_id, p.permit_no, p.permit_type, p.company, p.client, p.status,
+                        (SELECT COUNT(*) FROM bawalis b WHERE b.movement_id = m.id) AS bills,
+                        (SELECT COALESCE(SUM(b.container_count),0) FROM bawalis b WHERE b.movement_id = m.id) AS containers,
+                        (SELECT COALESCE(SUM(b.custody),0) FROM bawalis b WHERE b.movement_id = m.id) AS custody,
+                        (SELECT COALESCE(SUM(b.remaining),0) FROM bawalis b WHERE b.movement_id = m.id) AS remaining,
+                        (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.movement_id = m.id AND ".Permit::expenseSql('s').") AS expense
+                 FROM permit_movements m JOIN permits p ON p.id = m.permit_id
+                 $where
+                 ORDER BY m.id DESC
+                 LIMIT 300",
+                $params
+            );
+            // تفصيل الحاويات حسب النوع لكل حركة (النوع + عدده)
+            $ctMap = self::containerBreakdown('movement_id', array_map(fn($m)=>(int)$m['id'], $moves));
+            foreach ($moves as &$mv) { $mv['ctype_breakdown'] = $ctMap[(int)$mv['id']] ?? []; }
+            unset($mv);
+            $this->render('permits/index', [
+                'title' => 'ملخص الحركات',
+                'mode'  => 'movements',
+                'moves' => $moves,
+                'stats' => $stats,
+                'movesCount' => (int) Database::scalar("SELECT COUNT(*) FROM permit_movements"),
+                'q' => $q,
+            ]);
+            return;
+        }
+
+        if ($mode === 'follow') {
+            // شاشة المتابعة: الأذونات المفتوحة + ما ينقصها + تفاصيل بصرية
+            $rows = Database::all(
+                "SELECT p.*,
+                        (SELECT COUNT(*) FROM bawalis b WHERE b.permit_id = p.id) AS bills,
+                        (SELECT COUNT(*) FROM permit_stages s WHERE s.permit_id = p.id) AS stage_count,
+                        (SELECT COUNT(*) FROM permit_stages s WHERE s.permit_id = p.id AND s.status='pending') AS pending,
+                        (SELECT COALESCE(SUM(b.custody),0) FROM bawalis b WHERE b.permit_id = p.id) AS custody,
+                        (SELECT COALESCE(SUM(b.remaining),0) FROM bawalis b WHERE b.permit_id = p.id) AS remaining,
+                        (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.permit_id = p.id AND ".Permit::expenseSql('s').") AS expense,
+                        (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.permit_id = p.id AND ".Permit::revenueSql('s').") AS fees
+                 FROM permits p
+                 WHERE p.status = 'open'
+                 ORDER BY p.permit_date DESC, p.id DESC
+                 LIMIT 300"
+            );
+
+            // خريطة مراحل كل إذن (لعرض نقاط التقدّم)
+            $ids = array_map(fn($r)=>(int)$r['id'], $rows);
+            $keysMap = [];
+            if ($ids) {
+                $in = implode(',', $ids);
+                foreach (Database::all("SELECT permit_id, stage_key FROM permit_stages WHERE permit_id IN ($in) GROUP BY permit_id, stage_key") as $k) {
+                    $keysMap[(int)$k['permit_id']][$k['stage_key']] = true;
+                }
+            }
+
+            // تفصيل الحاويات حسب النوع لكل إذن (النوع + عدده) من البوالص
+            $ctMap = self::containerBreakdown('permit_id', $ids);
+
+            // الإيصالات المضافة لكل إذن (البيان + الإجمالي) — عرضها على البطاقة بدل تفصيل المصاريف
+            $rcMap = [];
+            if ($ids) {
+                foreach (Database::all(
+                    "SELECT permit_id, note, amount FROM permit_stages
+                     WHERE permit_id IN ($in) AND stage_key='receipts' AND status <> 'none'
+                     ORDER BY entry_date, id"
+                ) as $rc) {
+                    $rcMap[(int)$rc['permit_id']][] = $rc;
+                }
+            }
+
+            $active = Permit::activeStages();
+            $incomplete = 0;
+            foreach ($rows as &$r) {
+                $r['ctype_breakdown'] = $ctMap[(int)$r['id']] ?? [];
+                $r['receipts'] = $rcMap[(int)$r['id']] ?? [];
+                // الإحصاء الذكي: أي الإيصالات المتوقّعة ناقصة (لعرض «بدون هيئة» … على البطاقة)
+                // $r = صف الإذن كاملاً (SELECT p.*) فيشمل chk_* اللازمة للقواعد المشروطة
+                $r['rcp_missing'] = Permit::receiptGuide($r, $r['receipts'])['missing'];
+                $have = $keysMap[(int)$r['id']] ?? [];
+                $dots = []; $done = 0; $tot = 0;
+                foreach ($active as $k => $m) {
+                    if ($k === 'generators') { continue; }   // اختيارية — لا تدخل التقدّم
+                    $tot++;
+                    $isDone = $k === 'data' ? true
+                            : ($k === 'bills' ? ((int)$r['bills'] > 0) : isset($have[$k]));
+                    if ($isDone) { $done++; }
+                    $dots[] = ['icon' => $m['icon'], 'label' => $m['label'], 'done' => $isDone];
+                }
+                $r['dots'] = $dots;
+                $r['progress'] = $tot ? (int) round($done / $tot * 100) : 0;
+
+                $missing = [];
+                if ((int)$r['bills'] === 0)       { $missing[] = 'لا بوالص مرتبطة'; }
+                if ((int)$r['pending'] > 0)       { $missing[] = 'بنود ناقصة (' . (int)$r['pending'] . ')'; }
+                if ((int)$r['stage_count'] === 0) { $missing[] = 'لا بنود بعد'; }
+                $r['missing'] = $missing;
+                $r['is_incomplete'] = !empty($missing);
+                if ($r['is_incomplete']) { $incomplete++; }
+            }
+            unset($r);
+
+            $this->render('permits/index', [
+                'title'      => 'متابعة الأذونات',
+                'mode'       => 'follow',
+                'rows'       => $rows,
+                'stats'      => $stats,
+                'incomplete' => $incomplete,
+            ]);
+            return;
+        }
+
+        // وضع السجلات: قائمة كاملة قابلة للبحث
+        $q    = trim($_GET['q'] ?? '');
+        $type = trim($_GET['type'] ?? '');
+        $date = array_key_exists('date', $_GET) ? trim($_GET['date']) : '';
+        $st   = trim($_GET['st'] ?? '');
+
+        $conds = []; $params = [];
+        if ($q !== '') {
+            $conds[] = '(p.permit_no LIKE ? OR p.company LIKE ? OR p.client LIKE ?)';
+            array_push($params, "%$q%", "%$q%", "%$q%");
+        }
+        if ($type !== '') { $conds[] = 'p.permit_type = ?'; $params[] = $type; }
+        if ($date !== '') { $conds[] = 'p.permit_date = ?'; $params[] = $date; }
+        if ($st === 'open' || $st === 'closed') { $conds[] = 'p.status = ?'; $params[] = $st; }
+        $where = $conds ? 'WHERE ' . implode(' AND ', $conds) : '';
+
+        $rows = Database::all(
+            "SELECT p.*,
+                    (SELECT COUNT(*) FROM bawalis b WHERE b.permit_id = p.id) AS bills,
+                    (SELECT COALESCE(SUM(b.custody),0) FROM bawalis b WHERE b.permit_id = p.id) AS custody,
+                    (SELECT COALESCE(SUM(b.remaining),0) FROM bawalis b WHERE b.permit_id = p.id) AS remaining,
+                    (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.permit_id = p.id AND ".Permit::expenseSql('s').") AS expense,
+                    (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.permit_id = p.id AND ".Permit::revenueSql('s').") AS fees
+             FROM permits p
+             $where
+             ORDER BY p.permit_date DESC, p.id DESC
+             LIMIT 400",
+            $params
+        );
+        $total = (int) Database::scalar("SELECT COUNT(*) FROM permits p $where", $params);
+
+        $this->render('permits/index', [
+            'title' => 'سجلات الأذونات والشهادات',
+            'mode'  => 'records',
+            'rows'  => $rows,
+            'total' => $total,
+            'stats' => $stats,
+            'q' => $q, 'type' => $type, 'date' => $date, 'st' => $st,
+        ]);
+    }
+
+    public function create(): void
+    {
+        $this->requireAuth();
+        $this->form(null);
+    }
+
+    public function edit(string $id): void
+    {
+        $this->requireAuth();
+        $p = Permit::find((int)$id);
+        if (!$p) { redirect('permits'); }
+        $this->form($p);
+    }
+
+    private function form(?array $p): void
+    {
+        $this->render('permits/form', [
+            'title'   => $p ? 'تعديل بيانات الإصدار' : 'إصدار جديد',
+            'p'       => $p ?? ['permit_type'=>'sader','permit_no'=>'','permit_date'=>work_date(),'company'=>'','client'=>'','destination'=>'','shipping_co'=>'','agency'=>'','port'=>'','containers'=>0,'container_type'=>'','inspection_rate'=>null,'guarantee_rate'=>null,'note'=>''],
+            'action'  => $p ? url('permits/'.$p['id']) : url('permits'),
+            'isEdit'  => (bool)$p,
+            'lookups' => Lookup::allGrouped(),
+            'nameMap' => \App\Models\Party::nameMap(),
+        ]);
+    }
+
+    public function store(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        if ($err = $this->permitNoError(null)) { flash('error', $err); redirect('permits/new'); }
+        if ($err = $this->nameGuardError(['company'=>'company','client'=>'client','destination'=>'destination'])) { flash('error', $err); redirect('permits/new'); }
+        $id = $this->save(null);
+        Permit::createMovement($id);   // أول حركة جاهزة فورًا لإضافة البوالص/البنود
+        flash('success', 'تم إنشاء الإصدار — أكمِل بياناته من التايم لاين.');
+        redirect('permits/'.$id.'/manage');
+    }
+
+    public function update(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        if ($err = $this->permitNoError((int)$id)) { flash('error', $err); redirect('permits/'.$id.'/edit'); }
+        if ($err = $this->nameGuardError(['company'=>'company','client'=>'client','destination'=>'destination'])) { flash('error', $err); redirect('permits/'.$id.'/edit'); }
+        try {
+            $this->save((int)$id);
+            flash('success', 'تم حفظ بيانات الإصدار.');
+        } catch (\Throwable $e) {
+            flash('error',$e->getMessage());
+        }
+        redirect('permits/'.$id.'/manage#stage-data');
+    }
+
+    /**
+     * طبقة حماية: يُعيد رسالة خطأ إن كان رقم الإذن/الشهادة مكرَّرًا ضمن نفس النوع، وإلا null.
+     * تُستدعى قبل الحفظ في store()/update().
+     */
+    private function permitNoError(?int $id): ?string
+    {
+        $type = ($_POST['permit_type'] ?? 'sader') === 'warid' ? 'warid' : 'sader';
+        $no   = trim($_POST['permit_no'] ?? '');
+        if ($no !== '' && Permit::noExists($no, $type, $id)) {
+            return Permit::noLabel($type) . ' «' . $no . '» مُستخدَم من قبل — لا يمكن تكراره. '
+                 . 'راجع الإصدار الموجود أو اختر رقمًا مختلفًا.';
+        }
+        return null;
+    }
+
+    /**
+     * حوكمة الأسماء عند الحفظ (منع البيانات الرديئة / التكرار الإملائي):
+     *   - يوحِّد تهجئة كل اسم تلقائيًا في $_POST لو طابق مفتاحه اسمًا مخزّنًا (همزة/ألف/ة/مسافات).
+     *   - يُرجع رسالة خطأ لأول اسم «قريب لكن مختلف» غير مؤكَّد (stop-and-choose)، وإلا null.
+     * التأكيد يأتي من العميل عبر الحقل المخفي `__newname_<field>=1` («ده اسم جديد فعلاً»).
+     * @param array<string,string> $map حقل الإدخال ⇒ نوع الاقتراح (owner/driver/company…)
+     */
+    private function nameGuardError(array $map): ?string
+    {
+        foreach ($map as $field => $type) {
+            $raw = trim($_POST[$field] ?? '');
+            if ($raw === '') { continue; }
+            $g = \App\Models\NameSuggestion::resolve($type, $raw);
+            if ($g['conflict'] !== null && empty($_POST['__newname_'.$field])) {
+                return 'الاسم «'.$raw.'» قريب جدًا من «'.$g['conflict'].'» المخزَّن مسبقًا. '
+                     . 'اختر الاسم الموجود لتفادي التكرار، أو أكِّد أنه اسم جديد فعلاً.';
+            }
+            $_POST[$field] = $g['value']; // توحيد التهجئة المعتمدة (أو إبقاؤها كما هي)
+        }
+        return null;
+    }
+
+    private function save(?int $id): int
+    {
+        $before = $id !== null ? Database::row('SELECT * FROM permits WHERE id = ?', [$id]) : null;
+        $type = ($_POST['permit_type'] ?? 'sader') === 'warid' ? 'warid' : 'sader';
+        $agent = \App\Models\PartyMaster::ensure('agent', trim($_POST['client'] ?? ''));
+        $company = \App\Models\PartyMaster::ensure('company', trim($_POST['company'] ?? ''));
+        $data = [
+            'permit_type' => $type,
+            'permit_no'   => trim($_POST['permit_no'] ?? '') ?: null,
+            'permit_date' => $_POST['permit_date'] ?: null,
+            'company'     => $company['name'] ?? null,
+            'company_id'  => $company['id'] ?? null,
+            'client'      => $agent['name'] ?? null,
+            'agent_id'    => $agent['id'] ?? null,
+            'destination' => trim($_POST['destination'] ?? '') ?: null,
+            'shipping_co' => trim($_POST['shipping_co'] ?? '') ?: null,
+            'agency'      => trim($_POST['agency'] ?? '') ?: null,
+            'port'        => trim($_POST['port'] ?? '') ?: null,
+            'containers'  => max(0, (int)($_POST['containers'] ?? 0)),
+            'container_type' => trim($_POST['container_type'] ?? '') ?: null,
+            // سعر الكشف والضمان لكل إذن — فارغ = NULL (لا قيمة افتراضية)
+            'inspection_rate' => ($_POST['inspection_rate'] ?? '') === '' ? null : (float)$_POST['inspection_rate'],
+            'guarantee_rate'  => ($_POST['guarantee_rate'] ?? '') === '' ? null : (float)$_POST['guarantee_rate'],
+            'note'        => trim($_POST['note'] ?? '') ?: null,
+        ];
+        if ($id === null) {
+            $cols = array_keys($data);
+            Database::exec(
+                "INSERT INTO permits (`".implode('`,`',$cols)."`) VALUES (".implode(',', array_map(fn($c)=>":$c",$cols)).")",
+                array_combine(array_map(fn($c)=>":$c",$cols), array_values($data))
+            );
+            $id = Database::lastId();
+        } else {
+            $sets = implode(',', array_map(fn($c)=>"`$c`=:$c", array_keys($data)));
+            $params = array_combine(array_map(fn($c)=>":$c",array_keys($data)), array_values($data));
+            $params[':id'] = $id;
+            $params[':version'] = max(1,(int)($_POST['lock_version'] ?? 1));
+            $changed = Database::exec("UPDATE permits SET $sets,lock_version=lock_version+1 WHERE id=:id AND lock_version=:version", $params);
+            if ($changed !== 1) { throw new \RuntimeException('عدّل مستخدم آخر هذا الإذن. أعد تحميل الصفحة وراجع التغييرات قبل الحفظ.'); }
+        }
+        // تعلّم الشركة/العميل/الجهة/بيانات الشحن للقوائم
+        if (!empty($data['company']))     { Lookup::add('company', $data['company']); }
+        if (!empty($data['client']))      { Lookup::add('client', $data['client']); }
+        if (!empty($data['destination'])) { Lookup::add('destination', $data['destination']); }
+        if (!empty($data['shipping_co'])) { Lookup::add('shipping_co', $data['shipping_co']); }
+        if (!empty($data['agency']))      { Lookup::add('agency', $data['agency']); }
+        if (!empty($data['port']))        { Lookup::add('port', $data['port']); }
+        if (!empty($data['container_type'])) { Lookup::add('container_type', $data['container_type']); }
+        $saved = Database::row('SELECT * FROM permits WHERE id = ?', [$id]);
+        $label = Permit::noLabel($type) . ' ' . ($data['permit_no'] ?: '#'.$id);
+        Audit::log(
+            $before ? 'update' : 'create', 'permits', $id, $before, $saved,
+            ($before ? 'تعديل ' : 'إضافة ') . $label,
+            ['permit_id'=>$id, 'permit_no'=>$data['permit_no'], 'record_date'=>$data['permit_date']]
+        );
+        return $id;
+    }
+
+    /** يجمّع بيانات الإصدار الكاملة (تُستخدم في العرض والإدارة) */
+    private function gather(int $pid): array
+    {
+        $p = Permit::find($pid);
+        if (!$p) { redirect('permits'); }
+
+        $movements = Permit::movements($pid);
+        foreach ($movements as &$mv) {
+            $mv['bills']  = Permit::movementBills((int)$mv['id']);
+            $mv['stages'] = Permit::movementStagesGrouped((int)$mv['id']);
+        }
+        unset($mv);
+
+        return [
+            'p'            => $p,
+            'movements'    => $movements,
+            'permitStages' => Permit::permitStagesGrouped($pid),
+            'generators'   => Permit::generators($p['permit_no']),
+            'totals'       => Permit::totals($pid),
+            'lookups'      => Lookup::allGrouped(),
+            // مرشد الإيصالات الذكي (استرشادي — v32): المتوقّع/الناقص حسب النوع والتوكيل والـchecklist
+            'rcpGuide'     => Permit::receiptGuideForPermit($pid),
+        ];
+    }
+
+    /** صفحة عرض الإذن — للقراءة فقط بشكل احترافي (الضغط على الإذن يفتحها) */
+    public function view(string $id): void
+    {
+        $this->requireAuth();
+        $pid  = (int)$id;
+        $data = $this->gather($pid);
+        $data['title'] = Permit::typeLabel($data['p']['permit_type']) . ' — ' . ($data['p']['permit_no'] ?: '#'.$pid);
+        // تفصيل الحاويات (عدد×تصنيف) + تغطية الإيصالات المتوقّعة — للعرض الذكي
+        $data['ctBreakdown'] = self::containerBreakdown('permit_id', [$pid])[$pid] ?? [];
+        $data['rcpCoverage'] = Permit::receiptCoverageForPermit($pid);
+        $this->render('permits/view', $data);
+    }
+
+    /**
+     * حفظ إجابات checklist مرشد الإيصالات (استرشادي — لا يمسّ أي حساب/تقفيل/عهدة).
+     * الحقول: chk_ateeq (port|yard|sacia|none) · chk_load (port|outside) · chk_nabatshia · chk_lamanea
+     */
+    public function saveChecklist(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        if (!Permit::find($pid)) { redirect('permits'); }
+        Permit::saveChecklist($pid, $_POST);
+        flash('success', 'تم حفظ بيانات المرشد.');
+        redirect('permits/'.$pid.'/manage#rcp-guide');
+    }
+
+    /** تأشير/إلغاء «مش محتاجه في الإذن ده» لإيصال متوقّع (استرشادي بحت). */
+    public function receiptDismiss(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        if (!Permit::find($pid)) { redirect('permits'); }
+        Permit::toggleDismissedReceipt($pid, (string)($_POST['label'] ?? ''));
+        $back = ($_POST['back'] ?? '') === 'view' ? 'permits/'.$pid : 'permits/'.$pid.'/manage#rcp-guide';
+        redirect($back);
+    }
+
+    /**
+     * يجمّع كل بيانات الإذن اللازمة لورقة المراجعة (يُرجِع null لو الإذن غير موجود).
+     * يُشارَك بين الطباعة المفردة والمجمّعة. لا يعيد التوجيه (بعكس gather).
+     */
+    private function printData(int $pid): ?array
+    {
+        $p = Permit::find($pid);
+        if (!$p) { return null; }
+        $movements = Permit::movements($pid);
+        foreach ($movements as &$mv) {
+            $mv['bills']  = Permit::movementBills((int)$mv['id']);
+            $mv['stages'] = Permit::movementStagesGrouped((int)$mv['id']);
+        }
+        unset($mv);
+        $mvIds = array_map(fn($m)=>(int)$m['id'], $movements);
+        return [
+            'p'            => $p,
+            'movements'    => $movements,
+            'permitStages' => Permit::permitStagesGrouped($pid),
+            'generators'   => Permit::generators($p['permit_no']),
+            'totals'       => Permit::totals($pid),
+            'ctBreakdown'  => self::containerBreakdown('permit_id', [$pid])[$pid] ?? [],
+            'mvCtMap'      => self::containerBreakdown('movement_id', $mvIds),
+            'primaryDef'   => Permit::primaryFeesDefault($pid),
+            'rcpCoverage'  => Permit::receiptCoverageForPermit($pid),
+        ];
+    }
+
+    /**
+     * كشف مراجعة كامل للإذن — صفحة طباعة A4 مستقلّة (بلا التخطيط العام).
+     * تعرض كل بيانات الإذن + كل الحركات والبوالص + كل بنود المراحل (رسوم/إيصالات/مصاريف/مولدات)
+     * + الإجماليات، للمراجعة اليدوية والأرشفة الورقية.
+     */
+    public function printSheet(string $id): void
+    {
+        $this->requireAuth();
+        $pid  = (int)$id;
+        $data = $this->printData($pid);
+        if (!$data) { redirect('permits'); }
+        $data['title'] = 'كشف مراجعة — ' . Permit::typeLabel($data['p']['permit_type']) . ' ' . ($data['p']['permit_no'] ?: '#'.$pid);
+        $this->render('permits/print', $data, false);
+    }
+
+    /**
+     * طباعة مجمّعة لعدة أذونات دفعة واحدة — كل إذن ورقة مستقلّة في صفحة منفصلة.
+     * المعرّفات تأتي في ?ids=1,2,3 (أو ids[]=). الأذونات غير الموجودة تُتخطّى بلا خطأ.
+     */
+    public function printBatch(): void
+    {
+        $this->requireAuth();
+        $raw = $_GET['ids'] ?? '';
+        $ids = is_array($raw) ? $raw : explode(',', (string)$raw);
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($n) => $n > 0)));
+        if (!$ids) {
+            flash('error', 'اختر إذنًا واحدًا على الأقل للطباعة.');
+            redirect('permits?view=records');
+        }
+        $ids = array_slice($ids, 0, 60);   // حدّ أمان أعلى لعدد الأوراق في الدفعة الواحدة
+
+        $sheets = [];
+        foreach ($ids as $pid) {
+            $d = $this->printData($pid);
+            if ($d) { $sheets[] = $d; }
+        }
+        if (!$sheets) {
+            flash('error', 'لم يُعثر على الأذونات المحدَّدة.');
+            redirect('permits?view=records');
+        }
+
+        $this->render('permits/print_batch', [
+            'title'  => 'طباعة مجمّعة — ' . count($sheets) . ' إذن',
+            'sheets' => $sheets,
+        ], false);
+    }
+
+    /** صفحة إدارة/تعديل الإذن — التايم لاين التفاعلي (يُفتح بزر «تعديل») */
+    public function manage(string $id): void
+    {
+        $this->requireAuth();
+        $data = $this->gather((int)$id);
+        $data['title']   = 'إدارة: ' . Permit::typeLabel($data['p']['permit_type']) . ' — ' . ($data['p']['permit_no'] ?: '#'.(int)$id);
+        $data['nameMap'] = \App\Models\Party::nameMap();
+        $data['carMap']  = \App\Models\Party::carOwnerMap();
+        $data['declOwners'] = self::declarationOwners();
+        $data['receiptMoveTargets'] = Permit::receiptMoveTargets((int)$id);
+        $this->render('permits/manage', $data);
+    }
+
+    /** أسماء أصحاب البيان المستخدَمة سابقًا (لاقتراحها في نموذج البوليصة) */
+    private static function declarationOwners(): array
+    {
+        return array_column(Database::all(
+            "SELECT DISTINCT declaration_owner FROM bawalis
+             WHERE declaration_owner IS NOT NULL AND declaration_owner <> ''
+             ORDER BY declaration_owner"
+        ), 'declaration_owner');
+    }
+
+    /**
+     * يجمّع بيانات حركة واحدة لرندر قالب `_movement.php` (في ردود الـ AJAX).
+     * يُرجِع null لو الحركة غير موجودة.
+     */
+    private function movementPayload(int $mid): ?array
+    {
+        $mv = Permit::movement($mid);
+        if (!$mv) { return null; }
+        $pid = (int)$mv['permit_id'];
+        $p   = Permit::find($pid);
+        if (!$p) { return null; }
+        $mv['bills']  = Permit::movementBills($mid);
+        $mv['stages'] = Permit::movementStagesGrouped($mid);
+        $ctTotal     = (int)($p['containers'] ?? 0);
+        $ctAllocated = (int) Database::scalar('SELECT COALESCE(SUM(container_count),0) FROM bawalis WHERE permit_id = ?', [$pid]);
+        return [
+            'p'             => $p,
+            'mv'            => $mv,
+            'mStages'       => Permit::scopedStages('movement'),
+            'mvExpenseKeys' => ['receipts'],
+            'ctTotal'       => $ctTotal,
+            'ctAllocated'   => $ctAllocated,
+            'generators'    => Permit::generators($p['permit_no']),
+            'primaryDef'    => Permit::primaryFeesDefault($pid),
+            'receiptMoveTargets' => Permit::receiptMoveTargets($pid),
+        ];
+    }
+
+    /**
+     * رد AJAX موحّد: يرندر قالب الحركة المحدّثة ويُرجعه JSON.
+     * $mid = الحركة المتأثّرة (null = محذوفة). $removedMovementId عند حذف حركة.
+     */
+    private function ajaxMovement(?int $mid, string $flash = '', ?int $removedMovementId = null): void
+    {
+        $payload = ['ok' => true, 'flash' => $flash];
+        if ($removedMovementId) {
+            $payload['removed'] = $removedMovementId;
+        } elseif ($mid !== null) {
+            $data = $this->movementPayload($mid);
+            $payload['html'] = $data ? $this->renderToString('permits/_movement', $data) : '';
+            $payload['movementId'] = $mid;
+        }
+        $this->json($payload);
+    }
+
+    // ==================================================================
+    //  فوترة العميل الخاصة بالأذونات (النظام الأول)
+    // ==================================================================
+
+    /** شاشة إعداد الفاتورة: ملخص الإذن + بنود بيان/كمية/سعر/إجمالي + خيارات الضريبة والإغلاق. */
+    public function invoiceForm(string $id): void
+    {
+        $this->requireAuth();
+        $pid  = (int)$id;
+        $data = $this->gather($pid);   // p, movements (بـ bills+stages), totals, ...
+        $p    = $data['p'];
+        $ctMap = self::containerBreakdown('permit_id', [$pid]);
+        $agentMaster = !empty($p['agent_id'])
+            ? PartyMaster::find('agent', (int)$p['agent_id'])
+            : PartyMaster::resolve('agent', (string)($p['client'] ?? ''));
+
+        $this->render('permits/invoice_form', [
+            'title'         => 'إصدار فاتورة — ' . Permit::typeLabel($p['permit_type']) . ' ' . ($p['permit_no'] ?: '#'.$pid),
+            'p'             => $p,
+            'movements'     => $data['movements'],
+            'totals'        => $data['totals'],
+            'ctBreakdown'   => $ctMap[$pid] ?? [],
+            'candidates'    => PermitInvoice::candidateItems($pid),
+            'actualFreight' => PermitInvoice::actualFreight($pid),
+            'vatRate'       => (float) App::setting('vat_rate', 0.14),
+            'currency'      => App::setting('currency', 'ج.م'),
+            'invoices'      => PermitInvoice::forPermit($pid),
+            'paymentTermsDays' => (int)($agentMaster['payment_terms_days'] ?? 30),
+        ]);
+    }
+
+    /** حفظ الفاتورة كلقطة ثابتة ثم فتح صفحة الطباعة. */
+    public function invoiceStore(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        $p = Permit::find($pid);
+        if (!$p) { redirect('permits'); }
+
+        $validKinds = array_keys(PermitInvoice::KINDS);
+        $kind = in_array($_POST['doc_kind'] ?? '', $validKinds, true) ? $_POST['doc_kind'] : 'invoice';
+        // الضريبة تُقبل فقط للفاتورة (كشف الحساب والمطالبة بالإيصالات لا يخضعان للضريبة أبداً)
+        $taxable = ($kind === 'invoice' && ($_POST['taxable'] ?? '') === '1') ? 1 : 0;
+
+        // رقم مسلسل خاص بالعميل (اختياري) — يجب ألا يتكرّر
+        $serial = trim($_POST['serial_no'] ?? '');
+        if ($serial !== '' && PermitInvoice::serialExists($serial)) {
+            flash('error', 'الرقم المسلسل «' . $serial . '» مستخدَم من قبل — اختر رقماً آخر.');
+            redirect('permits/'.$pid.'/invoice');
+        }
+
+        $pdo = Database::conn();
+        $pdo->beginTransaction();
+        try {
+
+        // توكيل ملاحي / ميناء: لو ناقصان في الإذن وأدخلهما المستخدم هنا → سجّلهما في الإذن نفسه
+        $agencyIn = trim($_POST['agency'] ?? '');
+        $portIn   = trim($_POST['port'] ?? '');
+        $agency   = ($p['agency'] ?? '') !== '' ? $p['agency'] : ($agencyIn ?: null);
+        $port     = ($p['port'] ?? '') !== '' ? $p['port']   : ($portIn   ?: null);
+        if (($p['agency'] ?? '') === '' && $agencyIn !== '') {
+            Database::exec('UPDATE permits SET agency = ? WHERE id = ?', [$agencyIn, $pid]);
+        }
+        if (($p['port'] ?? '') === '' && $portIn !== '') {
+            Database::exec('UPDATE permits SET port = ? WHERE id = ?', [$portIn, $pid]);
+        }
+
+        // بنود الفاتورة: بيان + كمية + سعر (+ علم النولون لحساب الضريبة عليه فقط)
+        // مع مزامنة عكسية مع الإذن: تعديل بند = تعديل بنده في الإذن، وإضافة بند = بند إيصال جديد في الإذن.
+        $rows  = self::invoiceRowsFromPost();
+        $items = [];
+
+        $today    = work_date();
+        $dayOpen  = (Closing::guard($today) === null);   // اليوم غير متقفل؟ (لإضافة بنود جديدة للإذن)
+        $latestMv = Database::scalar('SELECT id FROM permit_movements WHERE permit_id = ? ORDER BY seq DESC, id DESC LIMIT 1', [$pid]);
+
+        foreach ($rows as $r) {
+            $label     = $r['label'];
+            $qty       = $r['qty'];
+            $price     = $r['price'];   // سعر الوحدة (سعر العميل)
+            $src       = $r['src'];
+            $isFreight = $r['freight'];
+
+            $items[] = [
+                'label'   => $label,
+                'qty'     => $qty,
+                'price'   => $price,
+                'freight' => $isFreight,
+                'source'  => $src,
+            ];
+
+            // ===== المزامنة العكسية مع الإذن (النولون مستثنى — رقم فاتورة مستقل) =====
+            if ($isFreight) { continue; }
+            $clientTotal = $r['total'];
+            if (strncmp($src, 'stage:', 6) === 0) {
+                // تعديل بند قائم: نحدّث البيان/الكمية/سعر العميل فقط (لا نمسّ المبلغ النقدي حفاظاً على الإقفال)
+                $sid = (int) substr($src, 6);
+                if ($sid > 0) {
+                    Database::exec(
+                        'UPDATE permit_stages SET note = ?, qty = ?, actual_amount = ? WHERE id = ? AND permit_id = ?',
+                        [$label ?: null, (int)$qty, $clientTotal, $sid, $pid]
+                    );
+                }
+            } elseif ($src === 'new' && $dayOpen) {
+                // بند جديد أضافه المستخدم → إيصال جديد في الإذن (على أحدث حركة) بتاريخ اليوم
+                Database::exec(
+                    "INSERT INTO permit_stages (permit_id, movement_id, stage_key, amount, qty, actual_amount, entry_date, note, status, is_visa)
+                     VALUES (?, ?, 'receipts', ?, ?, ?, ?, ?, 'done', 0)",
+                    [$pid, $latestMv ? (int)$latestMv : null, $clientTotal, (int)$qty, $clientTotal, $today, $label ?: 'إيصال']
+                );
+                $receiptId = Database::lastId();
+                $receiptRow = Database::row('SELECT * FROM permit_stages WHERE id = ?', [$receiptId]);
+                Audit::log('create', 'permit_stages', $receiptId, null, $receiptRow,
+                    'إضافة إيصال «'.($label ?: 'إيصال').'» بقيمة '.number_format((float)$clientTotal, 2, '.', ',').
+                    ' عند إصدار الفاتورة — '.Permit::noLabel($p['permit_type']).' '.($p['permit_no'] ?: '#'.$pid),
+                    ['permit_id'=>$pid, 'permit_no'=>$p['permit_no'], 'movement_id'=>$latestMv, 'record_date'=>$today]);
+            }
+            // primary_auto (رسوم أولية تلقائية معروضة فقط) لا تُثبَّت في الإذن حتى لا تُضاف كمصروف نقدي.
+        }
+
+        $invId = PermitInvoice::create(self::invoicePayload($p, $items, $agency, $port));
+
+        // إغلاق الإذن اختيارياً مع إصدار الفاتورة
+        $msg = 'تم إصدار المستند وحفظه ✓';
+        if (($_POST['close_permit'] ?? '') === '1' && ($p['status'] ?? 'open') !== 'closed') {
+            Database::exec('UPDATE permits SET status = ? WHERE id = ?', ['closed', $pid]);
+            $msg .= ' وتم إغلاق الإذن.';
+        }
+        $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            $duplicate = (string)$e->getCode() === '23000';
+            flash('error', $duplicate
+                ? 'تعذّر الإصدار لأن رقماً فريداً استُخدم بالتزامن. أعد تحميل الصفحة وراجع رقم المسلسل.'
+                : 'تعذّر إصدار المستند، ولم تُحفظ أي تعديلات جزئية. حاول مرة أخرى.');
+            redirect('permits/'.$pid.'/invoice');
+        }
+        flash('success', $msg);
+        redirect('permits/invoice/'.$invId);
+    }
+
+    /**
+     * معاينة الفاتورة قبل إصدارها: يعرض نفس صفحة الطباعة A4 من مدخلات الفورم
+     * **بلا أي حفظ أو أثر جانبي** (لا مزامنة مع الإذن، لا إغلاق، لا إدراج في قاعدة البيانات).
+     * من المعاينة يؤكّد المستخدم الإصدار (POST إلى invoiceStore) أو يرجع للتعديل.
+     */
+    public function invoicePreview(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        $p = Permit::find($pid);
+        if (!$p) { redirect('permits'); }
+
+        // نفس تحليل البنود المستخدَم في الإصدار، لكن بلا أي كتابة (نبني البنود فقط)
+        $items = [];
+        foreach (self::invoiceRowsFromPost() as $r) {
+            $items[] = ['label' => $r['label'], 'qty' => $r['qty'], 'price' => $r['price'], 'freight' => $r['freight']];
+        }
+        // التوكيل الملاحي/الميناء للعرض فقط (لا يُحفَظ في الإذن أثناء المعاينة)
+        $agencyIn = trim($_POST['agency'] ?? '');
+        $portIn   = trim($_POST['port'] ?? '');
+        $agency   = ($p['agency'] ?? '') !== '' ? $p['agency'] : ($agencyIn ?: null);
+        $port     = ($p['port'] ?? '') !== '' ? $p['port']   : ($portIn   ?: null);
+
+        $inv = PermitInvoice::preview(self::invoicePayload($p, $items, $agency, $port));
+
+        $this->render('permits/invoice_print', [
+            'title'    => 'معاينة — ' . PermitInvoice::kindLabel($inv['doc_kind']),
+            'inv'      => $inv,
+            'preview'  => true,          // وضع المعاينة: شريط تأكيد/تعديل بدل الطباعة/الرجوع
+            'post'     => $_POST,        // لإعادة إرسال نفس القيم عند التأكيد
+            'storeUrl' => url('permits/' . $pid . '/invoice'),
+        ], false);
+    }
+
+    /**
+     * يبني بنود الفاتورة من مدخلات POST (بلا أي كتابة في القاعدة).
+     * كل عنصر: [label, qty, price(سعر الوحدة), freight(bool), src, total].
+     */
+    private static function invoiceRowsFromPost(): array
+    {
+        $rows   = [];
+        $labels = $_POST['item_label'] ?? [];
+        $qtys   = $_POST['item_qty']   ?? [];
+        $prices = $_POST['item_price'] ?? [];
+        $srcs   = $_POST['item_src']   ?? [];   // freight | stage:<id> | primary_auto | new
+        foreach ($labels as $i => $lbl) {
+            $label     = trim((string)$lbl);
+            $qty       = max(1, (float)($qtys[$i] ?? 1));
+            $price     = (float)($prices[$i] ?? 0);
+            $src       = (string)($srcs[$i] ?? 'new');
+            $isFreight = ($src === 'freight');
+            if ($label === '' && $price == 0.0) { continue; }   // تجاهل الصفوف الفارغة
+            $rows[] = [
+                'label'   => $label,
+                'qty'     => $qty,
+                'price'   => $price,
+                'freight' => $isFreight,
+                'src'     => $src,
+                'total'   => round($qty * $price, 2),
+            ];
+        }
+        return $rows;
+    }
+
+    /** يجمع بيانات الفاتورة المشتركة بين المعاينة والإصدار من POST + الإذن + البنود. */
+    private static function invoicePayload(array $p, array $items, ?string $agency, ?string $port): array
+    {
+        $validKinds = array_keys(PermitInvoice::KINDS);
+        $kind    = in_array($_POST['doc_kind'] ?? '', $validKinds, true) ? $_POST['doc_kind'] : 'invoice';
+        $taxable = ($kind === 'invoice' && ($_POST['taxable'] ?? '') === '1') ? 1 : 0;
+        return [
+            'permit_id'      => (int)$p['id'],
+            'doc_kind'       => $kind,
+            'taxable'        => $taxable,
+            'internal_no'    => $_POST['internal_no'] ?? '',
+            'serial_no'      => trim($_POST['serial_no'] ?? ''),
+            'custom_title'   => $_POST['custom_title'] ?? '',
+            'invoice_date'   => $_POST['invoice_date'] ?: work_date(),
+            'due_date'       => $_POST['due_date'] ?? '',
+            'client'         => $p['client'],
+            // اسم العميل للطباعة فقط (لا يمسّ client الحقيقي المربوط بالإذن)
+            'display_client' => $_POST['display_client'] ?? '',
+            'company'        => $p['company'],
+            'destination'    => $p['destination'],
+            'permit_no'      => $p['permit_no'],
+            'permit_type'    => $p['permit_type'],
+            'agency'         => $agency,
+            'port'           => $port,
+            'containers'     => (int)($p['containers'] ?? 0),
+            'vat_rate'       => (float) App::setting('vat_rate', 0.14),
+            'note'           => $_POST['note'] ?? '',
+            'items'          => $items,
+        ];
+    }
+
+    /** صفحة الطباعة A4 (مستقلة بدون التخطيط العام). */
+    public function invoicePrint(string $invId): void
+    {
+        $this->requireAuth();
+        $inv = PermitInvoice::find((int)$invId);
+        if (!$inv) { flash('error', 'المستند غير موجود.'); redirect('permits'); }
+        $this->render('permits/invoice_print', [
+            'title' => PermitInvoice::kindLabel($inv['doc_kind']) . ' ' . ($inv['doc_no'] ?: '#'.$inv['id']),
+            'inv'   => $inv,
+        ], false);
+    }
+
+    /** إلغاء فاتورة محفوظة مع بقاء المستند ورقمه في السجل. */
+    public function invoiceDelete(string $invId): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        try {
+            $pid = PermitInvoice::void(
+                (int)$invId,
+                trim($_POST['reason'] ?? ''),
+                isset($_POST['lock_version']) ? (int)$_POST['lock_version'] : null
+            );
+            flash('success', 'تم إلغاء المستند مع الاحتفاظ برقمه وسجله.');
+        } catch (\Throwable $e) {
+            $pid = (int)(PermitInvoice::find((int)$invId)['permit_id'] ?? 0);
+            flash('error', $e->getMessage());
+        }
+        // العودة للمكان الذي جاء منه الحذف (back آمن داخلي)، وإلا شاشة فاتورة الإذن.
+        $back = self::safeBack($_POST['back'] ?? '');
+        redirect($back ?: ($pid ? 'permits/'.$pid.'/invoice' : 'invoices'));
+    }
+
+    /** مسار داخلي آمن للعودة إليه بعد إجراء (يمنع إعادة التوجيه الخارجي). */
+    private static function safeBack(?string $back): ?string
+    {
+        $back = trim((string)$back);
+        if ($back === '') { return null; }
+        if (str_contains($back, '://') || str_starts_with($back, '//')) { return null; }
+        if (!preg_match('~^[A-Za-z0-9/_?=&%.\-]+$~', $back)) { return null; }
+        return ltrim($back, '/');
+    }
+
+    /** إنشاء حركة جديدة داخل الإذن */
+    public function createMovement(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        $permit = Permit::find($pid);
+        if (!$permit) { redirect('permits'); }
+        [$ctCount, $ctType] = $this->movementContainerInput();
+        $mid = Permit::createMovement($pid, trim($_POST['note'] ?? '') ?: null, $ctCount, $ctType);
+        if ($ctType !== null) { Lookup::add('container_type', $ctType); }
+        if ($this->wantsJson()) { $this->ajaxMovement($mid, 'تمت إضافة حركة جديدة.'); return; }
+        flash('success', 'تمت إضافة حركة جديدة.');
+        redirect('permits/'.$pid.'/manage#movement-'.$mid);
+    }
+
+    /** تعديل وصف الحركة: ملاحظة + عدد/تصنيف الحاويات (حقول وصفية معزولة) */
+    public function updateMovement(string $mid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $mv = Permit::movement((int)$mid);
+        if (!$mv) { redirect('permits'); }
+        $pid = (int)$mv['permit_id'];
+        [$ctCount, $ctType] = $this->movementContainerInput();
+        Permit::updateMovement((int)$mid, trim($_POST['note'] ?? '') ?: null, $ctCount, $ctType);
+        if ($ctType !== null) { Lookup::add('container_type', $ctType); }
+        if ($this->wantsJson()) { $this->ajaxMovement((int)$mid, 'تم حفظ بيانات الحركة.'); return; }
+        flash('success', 'تم حفظ بيانات الحركة.');
+        redirect('permits/'.$pid.'/manage#movement-'.(int)$mid);
+    }
+
+    /** يقرأ عدد/تصنيف الحاويات من الفورم (وصفي على مستوى الحركة). */
+    private function movementContainerInput(): array
+    {
+        $rawCount = trim($_POST['container_count'] ?? '');
+        $ctCount  = $rawCount === '' ? null : max(0, (int)$rawCount);
+        $ctType   = trim($_POST['container_type'] ?? '') ?: null;
+        return [$ctCount, $ctType];
+    }
+
+    /** حذف حركة (تُحذف بنودها؛ وبوالصها تُعاد لحركة أخرى إن وُجدت) */
+    public function deleteMovement(string $mid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $mv = Permit::movement((int)$mid);
+        if (!$mv) { redirect('permits'); }
+        $pid = (int)$mv['permit_id'];
+
+        // لا تسمح بحذف آخر حركة إن كانت بها بوالص (لتفادي بوالص بلا حركة)
+        $billCount = (int) Database::scalar('SELECT COUNT(*) FROM bawalis WHERE movement_id = ?', [(int)$mid]);
+        $other = Database::scalar('SELECT id FROM permit_movements WHERE permit_id = ? AND id <> ? ORDER BY seq LIMIT 1', [$pid, (int)$mid]);
+        if ($billCount > 0 && !$other) {
+            $err = 'لا يمكن حذف آخر حركة بها بوالص — انقل بوالصها أو احذفها أولاً، أو أضف حركة أخرى.';
+            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+            flash('error', $err);
+            redirect('permits/'.$pid.'/manage#movement-'.(int)$mid);
+        }
+
+        // القفل الصارم: امنع حذف حركة تحوي بند مصروف نقدي مؤرَّخًا في يوم متقفل
+        $maxClosed = Closing::lastClosedDate();
+        if ($maxClosed !== null) {
+            $expSql = Permit::expenseSql('s');
+            $blocked = (int) Database::scalar(
+                "SELECT COUNT(*) FROM permit_stages s
+                 WHERE s.movement_id = ? AND s.is_visa = 0 AND $expSql AND s.entry_date <= ?",
+                [(int)$mid, $maxClosed]);
+            if ($blocked) {
+                $err = 'الحركة تحوي بنود مصروفات في أيام متقفلة. افتح الإقفال أولاً قبل حذفها.';
+                if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+                flash('error', $err);
+                redirect('permits/'.$pid.'/manage#movement-'.(int)$mid);
+            }
+        }
+
+        // احذف مرفقات بنود الحركة
+        foreach (Database::all('SELECT attachment FROM permit_stages WHERE movement_id = ?', [(int)$mid]) as $s) {
+            $this->deleteFile($s['attachment']);
+        }
+        Database::exec('DELETE FROM permit_stages WHERE movement_id = ?', [(int)$mid]);
+
+        // أعِد بوالص هذه الحركة لأقدم حركة أخرى
+        Database::exec('UPDATE bawalis SET movement_id = ? WHERE movement_id = ?', [$other ? (int)$other : null, (int)$mid]);
+
+        Database::exec('DELETE FROM permit_movements WHERE id = ?', [(int)$mid]);
+        if ($this->wantsJson()) { $this->ajaxMovement(null, 'تم حذف الحركة.', (int)$mid); return; }
+        flash('success', 'تم حذف الحركة.');
+        redirect('permits/'.$pid.'/manage#stage-bills');
+    }
+
+    /** حفظ/إضافة بند مرحلة (يقبل رفع ملف) */
+    public function saveStage(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        $permit = Permit::find($pid);
+        if (!$permit) { redirect('permits'); }
+
+        $key = trim($_POST['stage_key'] ?? '');
+        if (!in_array($key, Permit::stageKeys(), true)) {
+            flash('error', 'مرحلة غير معروفة.');
+            redirect('permits/'.$pid.'/manage');
+        }
+        $stageId = (int)($_POST['stage_id'] ?? 0);   // 0 = بند جديد
+        // الحركة: مطلوبة للمراحل ذات النطاق movement، وNULL لمراحل الإذن (رسوم أولية)
+        $scope = Permit::STAGES[$key]['scope'] ?? 'movement';
+        $movementId = $scope === 'movement' ? ((int)($_POST['movement_id'] ?? 0) ?: null) : null;
+
+        // القفل الصارم: بنود المصروفات النقدية (التي تدخل التقفيل) لا تُكتَب على أيام متقفلة.
+        // نفحص التاريخ الجديد، وعند التعديل التاريخ القديم للبند أيضًا. الفيزا والبنود المحصّلة مستثناة.
+        $newEntry = ($_POST['entry_date'] ?? '') ?: work_date();
+        $affectsClosing = empty($_POST['is_visa'])
+            && (in_array($key, Permit::expenseKeys(), true)
+                || ($key === 'custom' && ($_POST['direction'] ?? 'expense') !== 'revenue'));
+        if ($affectsClosing) {
+            $lockErr = Closing::guard($newEntry);
+            if (!$lockErr && $stageId > 0) {
+                $oldEntry = Database::scalar('SELECT entry_date FROM permit_stages WHERE id=? AND permit_id=?', [$stageId, $pid]);
+                if ($oldEntry) { $lockErr = Closing::guard($oldEntry); }
+            }
+            if ($lockErr) {
+                if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$lockErr]); return; }
+                flash('error', $lockErr);
+                redirect('permits/'.$pid.'/manage');
+            }
+        }
+
+        // «لا يوجد»: تعليم المرحلة كمكتملة بلا بند (صف علامة بمبلغ 0 وحالة none)
+        if (!empty($_POST['mark_none'])) {
+            // امسح أي علامة سابقة لنفس المرحلة/الحركة ثم أدرج واحدة (منع التكرار)
+            if ($movementId) {
+                Database::exec("DELETE FROM permit_stages WHERE permit_id=? AND movement_id=? AND stage_key=? AND status='none'", [$pid, $movementId, $key]);
+            } else {
+                Database::exec("DELETE FROM permit_stages WHERE permit_id=? AND movement_id IS NULL AND stage_key=? AND status='none'", [$pid, $key]);
+            }
+            Database::exec(
+                "INSERT INTO permit_stages (permit_id, movement_id, stage_key, amount, entry_date, note, status, is_visa)
+                 VALUES (?,?,?,0,?, 'لا يوجد', 'none', 0)",
+                [$pid, $movementId, $key, work_date()]
+            );
+            $noneId = Database::lastId();
+            $noneRow = Database::row('SELECT * FROM permit_stages WHERE id = ?', [$noneId]);
+            Audit::log('create', 'permit_stages', $noneId, null, $noneRow,
+                'إثبات «لا يوجد» لبند '.Permit::label($key).' — '.Permit::noLabel($permit['permit_type']).' '.($permit['permit_no'] ?: '#'.$pid),
+                ['permit_id'=>$pid, 'permit_no'=>$permit['permit_no'], 'record_date'=>work_date()]);
+            $msg = 'تم تعليم «' . Permit::label($key) . '» كمكتملة (لا يوجد).';
+            if ($this->wantsJson()) {
+                if ($movementId) { $this->ajaxMovement($movementId, $msg); } else { $this->json(['ok'=>true, 'flash'=>$msg, 'reload'=>true]); }
+                return;
+            }
+            flash('success', $msg);
+            redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-'.$key));
+        }
+
+        // اتجاه البند المخصّص (مصروف/محصّل) — للبنود المخصّصة فقط
+        $direction = null;
+        if ($key === 'custom') {
+            $direction = ($_POST['direction'] ?? 'expense') === 'revenue' ? 'revenue' : 'expense';
+        }
+
+        // الكمية (للإيصالات): الإجمالي المخزَّن = سعر الوحدة × الكمية.
+        // البنود التي لا تُرسِل qty (رسوم أولية/مخصّصة) → qty=1 فلا يتغيّر سلوكها.
+        $qty      = max(1, (int)($_POST['qty'] ?? 1));
+        $unit     = (float)($_POST['amount'] ?? 0);
+        $amount   = round($qty * $unit, 2);
+
+        // السعر الفعلي (اللي هنحاسب بيه العميل) — لكل البنود ماعدا البوالص والرسوم الأولية (الكشف والضمان)
+        // يُدخَل كسعر وحدة أيضاً ويُضرب في الكمية ليعطي الإجمالي الفعلي.
+        $actual = ($key === 'primary_fees' || ($_POST['actual_amount'] ?? '') === '')
+            ? null : round($qty * (float)$_POST['actual_amount'], 2);
+
+        $data = [
+            'direction'  => $direction,
+            'amount'     => $amount,
+            'qty'        => $qty,
+            'actual_amount' => $actual,
+            'entry_date' => ($_POST['entry_date'] ?? '') ?: work_date(),
+            'ref_no'     => trim($_POST['ref_no'] ?? '') ?: null,
+            'note'       => trim($_POST['note'] ?? '') ?: null,
+            'status'     => ($_POST['status'] ?? 'done') === 'pending' ? 'pending' : 'done',
+            'is_visa'    => !empty($_POST['is_visa']) ? 1 : 0,   // فيزا: لا يُحتسب في التقفيل
+            'visa_card_id' => (!empty($_POST['is_visa']) && !empty($_POST['visa_card_id'])) ? (int)$_POST['visa_card_id'] : null,
+        ];
+
+        // رفع مرفق إن وُجد
+        $attach = $this->handleUpload('attachment');
+
+        $beforeStage = $stageId > 0
+            ? Database::row('SELECT * FROM permit_stages WHERE id = ? AND permit_id = ?', [$stageId, $pid])
+            : null;
+        if ($stageId > 0) {
+            // تعديل بند قائم
+            $set = 'direction=:direction, amount=:amount, qty=:qty, actual_amount=:actual_amount, entry_date=:entry_date, ref_no=:ref_no, note=:note, status=:status, is_visa=:is_visa, visa_card_id=:visa_card_id';
+            $prm = array_combine(array_map(fn($c)=>":$c",array_keys($data)), array_values($data));
+            $prm[':id'] = $stageId; $prm[':pid'] = $pid;
+            if ($attach !== null) { $set .= ', attachment=:attachment'; $prm[':attachment'] = $attach; }
+            Database::exec("UPDATE permit_stages SET $set WHERE id=:id AND permit_id=:pid", $prm);
+        } else {
+            Database::exec(
+                'INSERT INTO permit_stages (permit_id, movement_id, stage_key, direction, amount, qty, actual_amount, entry_date, ref_no, note, status, attachment, is_visa, visa_card_id)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                [$pid, $movementId, $key, $direction, $data['amount'], $data['qty'], $data['actual_amount'], $data['entry_date'], $data['ref_no'], $data['note'], $data['status'], $attach, $data['is_visa'], $data['visa_card_id']]
+            );
+            $stageId = Database::lastId();
+        }
+        $savedStage = Database::row('SELECT * FROM permit_stages WHERE id = ?', [$stageId]);
+        $entryKind = $key === 'receipts' ? 'إيصال'
+            : ((in_array($key, Permit::expenseKeys(), true) || ($key === 'custom' && $direction !== 'revenue')) ? 'مصروف' : 'بند');
+        $entryText = ($beforeStage ? 'تعديل ' : 'إضافة ') . $entryKind . ' «' . Permit::label($key) . '»';
+        if (!empty($data['note'])) { $entryText .= ' — ' . $data['note']; }
+        if ((float)$data['amount'] !== 0.0) { $entryText .= ' بقيمة ' . number_format((float)$data['amount'], 2, '.', ','); }
+        $entryText .= ' — ' . Permit::noLabel($permit['permit_type']) . ' ' . ($permit['permit_no'] ?: '#'.$pid);
+        Audit::log($beforeStage ? 'update' : 'create', 'permit_stages', $stageId, $beforeStage, $savedStage,
+            $entryText, ['permit_id'=>$pid, 'permit_no'=>$permit['permit_no'], 'movement_id'=>$movementId, 'record_date'=>$data['entry_date']]);
+        // تعلّم فئة القسم الموحّد (مصاريف إضافية / بنود مخصّصة) من الملاحظة
+        if ($key === 'custom'   && !empty($data['note'])) { Lookup::add('mv_expense', $data['note']); }
+        if ($key === 'receipts' && !empty($data['note'])) { Lookup::add('mv_receipt', $data['note']); }
+
+        $msg = 'تم حفظ بند ' . Permit::label($key) . '.';
+        if ($this->wantsJson()) {
+            if ($movementId) { $this->ajaxMovement($movementId, $msg); } else { $this->json(['ok'=>true, 'flash'=>$msg, 'reload'=>true]); }
+            return;
+        }
+        flash('success', $msg);
+        redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-'.$key));
+    }
+
+    /** نقل إيصال كما هو إلى حركة في إذن آخر، بلا نسخ أو تغيير لأي قيمة مالية/تاريخية. */
+    public function moveReceipt(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $sourcePermitId = 0;
+        try {
+            $stageId = (int)$sid;
+            $existing = Database::row('SELECT permit_id FROM permit_stages WHERE id = ?', [$stageId]);
+            $sourcePermitId = (int)($existing['permit_id'] ?? 0);
+            $result = Permit::moveReceipt($stageId, (int)($_POST['target_movement_id'] ?? 0));
+            flash('success', 'تم نقل الإيصال بكامل بياناته وتاريخه إلى '.Permit::noLabel($result['target_permit_type']).' '.$result['target_permit_no'].'.');
+            redirect('permits/'.$result['target_permit_id'].'/manage#stage-receipts-'.$result['target_movement_id']);
+        } catch (\Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect($sourcePermitId ? 'permits/'.$sourcePermitId.'/manage#stage-receipts' : 'permits');
+        }
+    }
+
+    public function deleteStage(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $row = Database::row('SELECT permit_id, movement_id, attachment, entry_date, stage_key, direction, is_visa FROM permit_stages WHERE id = ?', [(int)$sid]);
+        if ($row) {
+            // القفل الصارم: لا حذف لبند مصروف نقدي تاريخه في يوم متقفل (يغيّر رقمًا مثبّتًا)
+            $affects = ((int)$row['is_visa'] === 0)
+                && (in_array($row['stage_key'], Permit::expenseKeys(), true)
+                    || ($row['stage_key'] === 'custom' && ($row['direction'] ?? 'expense') !== 'revenue'));
+            if ($affects && ($err = Closing::guard($row['entry_date']))) {
+                if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+                flash('error', $err);
+                redirect('permits/'.(int)$row['permit_id'].'/manage');
+            }
+            $this->deleteFile($row['attachment']);
+            Database::exec('DELETE FROM permit_stages WHERE id = ?', [(int)$sid]);
+            $mvId = $row['movement_id'] ? (int)$row['movement_id'] : null;
+            if ($this->wantsJson()) {
+                if ($mvId) { $this->ajaxMovement($mvId, 'تم حذف البند.'); } else { $this->json(['ok'=>true, 'flash'=>'تم حذف البند.', 'reload'=>true]); }
+                return;
+            }
+            flash('success', 'تم حذف البند.');
+            redirect('permits/'.(int)$row['permit_id'].'/manage');
+        }
+        if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>'البند غير موجود.']); return; }
+        redirect('permits');
+    }
+
+    /** ربط بوليصة موجودة بالإصدار (عبر رقم البوليصة) */
+    public function linkBill(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        if (!Permit::find($pid)) { redirect('permits'); }
+        $movementId = (int)($_POST['movement_id'] ?? 0) ?: null;
+        $billNo = trim($_POST['bill_number'] ?? '');
+        $ok = false; $msg = '';
+        if ($billNo !== '') {
+            // البوالص المُرحَّلة من الأرشيف لا تُربط بإذن أو حركة تحت أي ظرف.
+            $bill = Database::row(
+                'SELECT id FROM bawalis WHERE is_legacy=0 AND bill_number = ? ORDER BY id DESC LIMIT 1',
+                [$billNo]
+            );
+            if ($bill) {
+                Database::exec('UPDATE bawalis SET permit_id = ?, movement_id = ? WHERE id = ?', [$pid, $movementId, (int)$bill['id']]);
+                $ok = true; $msg = 'تم ربط البوليصة ' . $billNo . ' بالحركة.';
+                flash('success', $msg);
+            } else {
+                $msg = 'لم يتم العثور على بوليصة بالرقم ' . $billNo . '.';
+                flash('error', $msg);
+            }
+        }
+        if ($this->wantsJson()) {
+            if ($ok && $movementId) { $this->ajaxMovement($movementId, $msg); } else { $this->json(['ok'=>$ok, 'flash'=>$msg]); }
+            return;
+        }
+        redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-bills'));
+    }
+
+    public function unlinkBill(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        $billId = (int)($_POST['bill_id'] ?? 0);
+        Database::exec('UPDATE bawalis SET permit_id = NULL, movement_id = NULL WHERE id = ? AND permit_id = ?', [$billId, $pid]);
+        flash('success', 'تم فك ربط البوليصة.');
+        redirect('permits/'.$pid.'/manage#stage-bills');
+    }
+
+    /** حذف بوليصة نهائياً من داخل الإذن */
+    public function deleteBill(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        $billId = (int)($_POST['bill_id'] ?? 0);
+        $bill = Database::row('SELECT movement_id, custody, bill_date FROM bawalis WHERE id = ? AND permit_id = ?', [$billId, $pid]);
+        if ($bill) {
+            // القفل الصارم: لا حذف لبوليصة بعهدة تاريخها في يوم متقفل
+            if ((float)$bill['custody'] > 0 && ($err = Closing::guard($bill['bill_date']))) {
+                if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+                flash('error', $err);
+                redirect('permits/'.$pid.'/manage');
+            }
+            Database::exec('DELETE FROM bawalis WHERE id = ?', [$billId]);   // bill_payments تُحذف بالـ CASCADE
+            $mvId = $bill['movement_id'] ? (int)$bill['movement_id'] : null;
+            if ($this->wantsJson()) {
+                if ($mvId) { $this->ajaxMovement($mvId, 'تم حذف البوليصة نهائياً.'); } else { $this->json(['ok'=>true, 'flash'=>'تم حذف البوليصة نهائياً.', 'reload'=>true]); }
+                return;
+            }
+            flash('success', 'تم حذف البوليصة نهائياً.');
+            redirect('permits/'.$pid . '/manage' . ($mvId ? '#movement-'.$mvId : '#stage-bills'));
+        }
+        if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>'البوليصة غير موجودة.']); return; }
+        redirect('permits/'.$pid.'/manage');
+    }
+
+    /** إنشاء بوليصة جديدة وربطها بالإصدار مباشرةً من التايم لاين */
+    public function createBill(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        $p = Permit::find($pid);
+        if (!$p) { redirect('permits'); }
+
+        $type = $p['permit_type'];
+        $movementId = (int)($_POST['movement_id'] ?? 0) ?: null;
+        if ($movementId && !Database::scalar('SELECT id FROM permit_movements WHERE id=? AND permit_id=?', [$movementId, $pid])) {
+            $err = 'الحركة المختارة لا تتبع هذا الإذن. أعد تحميل الصفحة وحاول مرة أخرى.';
+            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+            flash('error', $err); redirect('permits/'.$pid.'/manage#stage-bills');
+        }
+
+        // القفل الصارم: لا عهدة سائق ببوليصة تاريخها في يوم متقفل (تغيّر عهد يوم مثبّت)
+        $billDate = ($_POST['bill_date'] ?? '') ?: work_date();
+        if ((float)($_POST['custody'] ?? 0) > 0 && ($err = Closing::guard($billDate))) {
+            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+            flash('error', $err);
+            redirect('permits/'.$pid.'/manage'.($movementId?'#movement-'.$movementId:'#stage-bills'));
+        }
+
+        // منع تكرار رقم البوليصة — طبقة حماية ضد الخطأ في الإدخال
+        $billNo = trim($_POST['bill_number'] ?? '');
+        if ($billNo !== '' && Bill::numberExists($billNo)) {
+            $err = 'رقم البوليصة «'.$billNo.'» مُستخدَم من قبل — لا يمكن تكراره. اختر رقمًا مختلفًا.';
+            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+            flash('error', $err);
+            redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-bills'));
+        }
+
+        // حوكمة الأسماء: توحيد التهجئة تلقائيًا + إيقاف الأسماء القريبة غير المؤكَّدة
+        if ($err = $this->nameGuardError(['declaration_owner'=>'owner','driver'=>'driver','car_owner'=>'car_owner'])) {
+            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+            flash('error', $err);
+            redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-bills'));
+        }
+
+        // العدد يلتزم بسعة الحركة الظاهرة (مثلاً 6/7). الحركات القديمة بلا سعة
+        // ترجع تلقائيًا لإجمالي الإذن كحد احتياطي.
+        $newCount = max(0, (int)($_POST['container_count'] ?? 0));
+        $capacity = Permit::billContainerCapacity($pid, $movementId);
+        if ($capacity['total'] > 0) {
+            if ($capacity['allocated'] + $newCount > $capacity['total']) {
+                $whereLabel = $capacity['scope'] === 'movement' ? 'الحركة' : 'إجمالي الإذن';
+                $err = 'عدد الحاويات ('.$newCount.') يتجاوز المتبقّي من '.$whereLabel.' (المتبقّي '.
+                    $capacity['left'].' من '.$capacity['total'].'). لم تُحفظ البوليصة.';
+                if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+                flash('error', $err);
+                redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-bills'));
+            }
+        }
+
+        // الخصم الافتراضي (200) يُطبَّق هنا تماماً كما في نموذج البوالص القياسي.
+        // المصدر الوحيد للقيمة الافتراضية هو Schema (bawalis.discount.default) حتى لا تتكرّر.
+        $discField   = array_column(\App\Schema::get('bawalis')['fields'], null, 'key')['discount'] ?? [];
+        $discDefault = (float)($discField['default'] ?? 0);
+        $discount    = ($_POST['discount'] ?? '') === '' ? $discDefault : (float)$_POST['discount'];
+
+        $ownerMaster = \App\Models\PartyMaster::ensure('owner', trim($_POST['declaration_owner'] ?? ''));
+        $data = [
+            'permit_id'         => $pid,
+            'movement_id'       => $movementId,
+            'bill_type'         => $type,
+            'bill_date'         => $billDate,
+            'bill_number'       => trim($_POST['bill_number'] ?? '') ?: null,
+            'permit_no'         => $type === 'sader' ? ($p['permit_no'] ?: null) : null,
+            'cert_number'       => $type === 'warid' ? ($p['permit_no'] ?: null) : null,
+            // صاحب البيان يُدخَل يدويًا (اختياري) — ليس هو العميل/الوكيل. فارغ = بوليصة بلا صاحب بيان تُعيَّن لاحقًا.
+            'declaration_owner' => $ownerMaster['name'] ?? null,
+            'declaration_owner_id' => $ownerMaster['id'] ?? null,
+            'company'           => $p['company'] ?: null,
+            'company_id'        => $p['company_id'] ?? null,
+            'destination'       => $p['destination'] ?: null,
+            'container_no'      => trim($_POST['container_no'] ?? '') ?: null,
+            // تصنيف الحاويات: يؤخذ من المدخل، وإلا يُملأ تلقائيًا من تصنيف الإذن
+            'container_type'    => (trim($_POST['container_type'] ?? '') ?: null) ?: ($p['container_type'] ?? null),
+            'container_count'   => $newCount,
+            'car_no'            => $this->composeCarNo() ?: null,
+            'driver'            => trim($_POST['driver'] ?? '') ?: null,
+            'car_owner'         => trim($_POST['car_owner'] ?? '') ?: null,
+            'freight'           => (float)($_POST['freight'] ?? 0),
+            'custody'           => (float)($_POST['custody'] ?? 0),
+            'transfer'          => (float)($_POST['transfer'] ?? 0),
+            'discount'          => $discount,
+            'overnight_collection' => (float)($_POST['overnight_collection'] ?? 0),
+        ];
+        $data['debt'] = Calc::bawala($data)['debt'];
+
+        $cols = array_keys($data);
+        Database::exec(
+            "INSERT INTO bawalis (`".implode('`,`',$cols)."`) VALUES (".implode(',', array_map(fn($c)=>":$c",$cols)).")",
+            array_combine(array_map(fn($c)=>":$c",$cols), array_values($data))
+        );
+        $billId = Database::lastId();
+        Bill::recalc($billId);
+        \App\Models\Movement::ensureForBill($billId);   // تُنشئ الحركة وتنقل بيانات الشحن من الإذن
+
+        if (!empty($data['driver']))    { Lookup::add('driver', $data['driver']); }
+        if (!empty($data['car_owner'])) { Lookup::add('car_owner', $data['car_owner']); }
+
+        // بعد ensureForBill قد تُنشأ حركة للبوليصة إن لم تكن محدّدة
+        $targetMv = $movementId ?: (int) Database::scalar('SELECT movement_id FROM bawalis WHERE id = ?', [$billId]);
+        $savedBill = Database::row('SELECT * FROM bawalis WHERE id = ?', [$billId]);
+        Audit::log('create', 'bawalis', $billId, null, $savedBill,
+            'إضافة بوليصة '.($data['bill_number'] ?: '#'.$billId).' من داخل '.Permit::noLabel($type).' '.($p['permit_no'] ?: '#'.$pid),
+            ['permit_id'=>$pid, 'permit_no'=>$p['permit_no'], 'movement_id'=>$targetMv, 'record_date'=>$billDate]);
+        if ($this->wantsJson()) {
+            if ($targetMv) { $this->ajaxMovement((int)$targetMv, 'تم إنشاء البوليصة وربطها بالحركة.'); } else { $this->json(['ok'=>true, 'flash'=>'تم إنشاء البوليصة.', 'reload'=>true]); }
+            return;
+        }
+        flash('success', 'تم إنشاء البوليصة وربطها بالحركة.');
+        redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-bills'));
+    }
+
+    /**
+     * تعديل بوليصة في مكانها (AJAX) — من نافذة منبثقة داخل صفحة الإدارة،
+     * بدل الانتقال لصفحة البوليصة. يُعيد رندر الحركة المحدَّثة كردّ JSON.
+     * يطبّق نفس حمايات الإنشاء: القفل، منع تكرار الرقم، سقف العهدة، سقف الحاويات.
+     */
+    public function updateBill(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        $p = Permit::find($pid);
+        if (!$p) { redirect('permits'); }
+
+        $billId = (int)($_POST['bill_id'] ?? 0);
+        $bill = Database::row('SELECT * FROM bawalis WHERE id = ? AND permit_id = ?', [$billId, $pid]);
+        if (!$bill) {
+            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>'البوليصة غير موجودة.']); return; }
+            flash('error', 'البوليصة غير موجودة.');
+            redirect('permits/'.$pid.'/manage');
+        }
+        $movementId = $bill['movement_id'] ? (int)$bill['movement_id'] : null;
+        $anchor = $movementId ? '#movement-'.$movementId : '#stage-bills';
+
+        // مساعد إظهار خطأ (JSON أو flash+redirect) — يُرجِع true دائمًا لإيقاف المتابعة
+        $fail = function (string $err) use ($pid, $anchor): bool {
+            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return true; }
+            flash('error', $err);
+            redirect('permits/'.$pid.'/manage'.$anchor);
+            return true;
+        };
+
+        $newDate    = ($_POST['bill_date'] ?? '') ?: ($bill['bill_date'] ?: work_date());
+        $newCustody = (float)($_POST['custody'] ?? 0);
+
+        // (1) القفل الصارم: لا كتابة على يوم متقفل (التاريخ الجديد أو القديم)
+        if ($err = Closing::guard($newDate))        { if ($fail($err)) return; }
+        if ($err = Closing::guard($bill['bill_date'])) { if ($fail($err)) return; }
+
+        // (2) منع تكرار رقم البوليصة (باستثناء نفسها)
+        $billNo = trim($_POST['bill_number'] ?? '');
+        if ($billNo !== '' && Bill::numberExists($billNo, $billId)) {
+            if ($fail('رقم البوليصة «'.$billNo.'» مُستخدَم من قبل — لا يمكن تكراره. اختر رقمًا مختلفًا.')) return;
+        }
+
+        // (3) عهدة السائق لا تتجاوز رصيد العهدة المتاح (باستثناء خصم هذه البوليصة)
+        if ($newCustody > 0) {
+            $available = \App\Models\Custody::availableForBill($billId);
+            if ($newCustody > $available + 0.005) {
+                if ($fail('عهدة السائق ('.number_format($newCustody,0).') تتجاوز رصيد العهدة المتاح ('.number_format($available,0).').')) return;
+            }
+        }
+
+        // (4) عدد الحاويات لا يتجاوز سعة الحركة الظاهرة (مع استثناء البوليصة نفسها).
+        $newCount = max(0, (int)($_POST['container_count'] ?? 0));
+        $capacity = Permit::billContainerCapacity($pid, $movementId, $billId);
+        if ($capacity['total'] > 0) {
+            if ($capacity['allocated'] + $newCount > $capacity['total']) {
+                $whereLabel = $capacity['scope'] === 'movement' ? 'الحركة' : 'إجمالي الإذن';
+                if ($fail('عدد الحاويات ('.$newCount.') يتجاوز المتبقّي من '.$whereLabel.' (المتبقّي '.
+                    $capacity['left'].' من '.$capacity['total'].').')) return;
+            }
+        }
+
+        // (5) حوكمة الأسماء: توحيد التهجئة تلقائيًا + إيقاف الأسماء القريبة غير المؤكَّدة
+        if ($err = $this->nameGuardError(['declaration_owner'=>'owner','driver'=>'driver','car_owner'=>'car_owner'])) {
+            if ($fail($err)) return;
+        }
+
+        $discount = ($_POST['discount'] ?? '') === '' ? (float)$bill['discount'] : (float)$_POST['discount'];
+        $ownerMaster = \App\Models\PartyMaster::ensure('owner', trim($_POST['declaration_owner'] ?? ''));
+        $data = [
+            'bill_date'         => $newDate,
+            'bill_number'       => $billNo ?: null,
+            'declaration_owner' => $ownerMaster['name'] ?? null,
+            'declaration_owner_id' => $ownerMaster['id'] ?? null,
+            'container_no'      => trim($_POST['container_no'] ?? '') ?: null,
+            'container_type'    => trim($_POST['container_type'] ?? '') ?: null,
+            'container_count'   => $newCount,
+            'car_no'            => $this->composeCarNo() ?: null,
+            'driver'            => trim($_POST['driver'] ?? '') ?: null,
+            'car_owner'         => trim($_POST['car_owner'] ?? '') ?: null,
+            'freight'           => (float)($_POST['freight'] ?? 0),
+            'custody'           => $newCustody,
+            'transfer'          => (float)($_POST['transfer'] ?? 0),
+            'discount'          => $discount,
+            'overnight_collection' => (float)($_POST['overnight_collection'] ?? 0),
+        ];
+        $data['debt'] = Calc::bawala($data)['debt'];
+
+        $sets   = implode(',', array_map(fn($c)=>"`$c`=:$c", array_keys($data)));
+        $params = array_combine(array_map(fn($c)=>":$c", array_keys($data)), array_values($data));
+        $params[':id'] = $billId; $params[':pid'] = $pid;
+        $params[':version'] = max(1,(int)($_POST['lock_version'] ?? ($bill['lock_version'] ?? 1)));
+        $changed = Database::exec("UPDATE bawalis SET $sets,lock_version=lock_version+1 WHERE id=:id AND permit_id=:pid AND lock_version=:version", $params);
+        if ($changed !== 1) { if ($fail('عدّل مستخدم آخر هذه البوليصة. أعد تحميل الصفحة قبل الحفظ.')) return; }
+
+        Bill::recalc($billId);
+        \App\Models\Movement::ensureForBill($billId);
+
+        if (!empty($data['driver']))    { Lookup::add('driver', $data['driver']); }
+        if (!empty($data['car_owner'])) { Lookup::add('car_owner', $data['car_owner']); }
+
+        $msg = 'تم حفظ تعديلات البوليصة ✓';
+        if ($this->wantsJson()) {
+            if ($movementId) { $this->ajaxMovement($movementId, $msg); } else { $this->json(['ok'=>true, 'flash'=>$msg, 'reload'=>true]); }
+            return;
+        }
+        flash('success', $msg);
+        redirect('permits/'.$pid.'/manage'.$anchor);
+    }
+
+    /**
+     * نسخ بوليصة: يُنشئ بوليصة جديدة بنفس بياناتها (بدون الدفعات) داخل نفس
+     * الحركة والإذن، ثم يفتحها للتعديل مباشرةً.
+     */
+    public function copyBill(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        if (!Permit::find($pid)) { redirect('permits'); }
+        $billId = (int)($_POST['bill_id'] ?? 0);
+        $src = Database::row('SELECT * FROM bawalis WHERE id = ? AND permit_id = ?', [$billId, $pid]);
+        if (!$src) {
+            flash('error', 'البوليصة غير موجودة.');
+            redirect('permits/'.$pid.'/manage#stage-bills');
+        }
+        // النسخة سجل جديد؛ تاريخها هو تاريخ العمل لا تاريخ البوليصة الأصلية.
+        $copyDate = work_date();
+        if ((float)($src['custody'] ?? 0) > 0 && ($err = Closing::guard($copyDate))) {
+            flash('error', $err);
+            redirect('permits/'.$pid.'/manage#stage-bills');
+        }
+
+        // ننسخ كل الأعمدة عدا المفاتيح والقيم المحسوبة/الدفعات
+        $skip = ['id','paid','remaining','pay_status','created_at','updated_at'];
+        $data = [];
+        foreach ($src as $col => $val) {
+            if (in_array($col, $skip, true)) { continue; }
+            $data[$col] = $val;
+        }
+        $data['bill_date'] = $copyDate;
+        // رقم بوليصة مميّز للنسخة (يعدّله المستخدم) — نضمن عدم التكرار بإضافة عدّاد إن لزم
+        if (!empty($data['bill_number'])) {
+            $base = $data['bill_number'] . ' - نسخة';
+            $cand = $base; $i = 2;
+            while (Bill::numberExists($cand)) { $cand = $base . ' ' . $i; $i++; }
+            $data['bill_number'] = $cand;
+        }
+
+        // لا تُكرِّر حاويات تتجاوز سعة الحركة — تُنسخ النسخة بصفر ويُنبَّه المستخدم.
+        $copyNote = '';
+        $copyCapacity = Permit::billContainerCapacity($pid, !empty($data['movement_id']) ? (int)$data['movement_id'] : null);
+        if ($copyCapacity['total'] > 0) {
+            $srcCount = max(0, (int) ($data['container_count'] ?? 0));
+            if ($copyCapacity['allocated'] + $srcCount > $copyCapacity['total']) {
+                $data['container_count'] = 0;
+                $copyNote = ' (صُفِّر عدد الحاويات لأن الحركة مكتملة — عدّله لو فيها متبقٍّ.)';
+            }
+        }
+
+        $cols = array_keys($data);
+        Database::exec(
+            "INSERT INTO bawalis (`".implode('`,`',$cols)."`) VALUES (".implode(',', array_map(fn($c)=>":$c",$cols)).")",
+            array_combine(array_map(fn($c)=>":$c",$cols), array_values($data))
+        );
+        $newId = Database::lastId();
+        Bill::recalc($newId);
+        \App\Models\Movement::ensureForBill($newId);
+
+        $savedCopy = Database::row('SELECT * FROM bawalis WHERE id = ?', [$newId]);
+        Audit::log('create', 'bawalis', $newId, null, $savedCopy,
+            'نسخ بوليصة '.($src['bill_number'] ?: '#'.$billId).' كبوليصة جديدة '.($data['bill_number'] ?: '#'.$newId),
+            ['permit_id'=>$pid, 'source_bill_id'=>$billId, 'record_date'=>$copyDate]);
+
+        flash('success', 'تم نسخ البوليصة — عدّل بياناتها ثم احفظ.' . $copyNote);
+        redirect('bawalis/'.$newId.'/edit');
+    }
+
+    /** إتمام / إعادة فتح الإذن */
+    public function close(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        $p = Permit::find($pid);
+        if (!$p) { redirect('permits'); }
+        $new = ($p['status'] ?? 'open') === 'closed' ? 'open' : 'closed';
+        Database::exec('UPDATE permits SET status = ? WHERE id = ?', [$new, $pid]);
+        flash('success', $new === 'closed' ? 'تم إتمام الإذن وإغلاقه ✓' : 'تم إعادة فتح الإذن.');
+        redirect('permits/'.$pid);   // صفحة العرض
+    }
+
+    public function destroy(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int)$id;
+        if ((int)Database::scalar("SELECT COUNT(*) FROM permit_invoices WHERE permit_id=? AND status<>'void'",[$pid]) > 0) {
+            flash('error','لا يمكن حذف إذن له مستندات مالية صادرة. ألغِ المستندات أولاً أو اترك الإذن محفوظاً.');
+            redirect('permits/'.$pid);
+        }
+        // احذف مرفقات المراحل أولاً
+        foreach (Permit::stages($pid) as $s) { $this->deleteFile($s['attachment']); }
+        Database::exec('UPDATE bawalis SET permit_id = NULL WHERE permit_id = ?', [$pid]);
+        Database::exec('DELETE FROM permits WHERE id = ?', [$pid]);   // permit_stages تُحذف بالـ CASCADE
+        flash('success', 'تم حذف الإصدار.');
+        redirect('permits');
+    }
+
+    /** يجمّع رقم السيارة من خانتَي الحروف والأرقام (حروف ثم أرقام) */
+    private function composeCarNo(): string
+    {
+        $letters = trim($_POST['car_letters'] ?? '');
+        $digits  = trim($_POST['car_digits'] ?? '');
+        $combined = trim($letters . ' ' . $digits);
+        // دعم الإدخال المدمج القديم إن وُجد
+        return $combined !== '' ? $combined : trim($_POST['car_no'] ?? '');
+    }
+
+    // ------------------------------------------------------------------
+    //  رفع/حذف المرفقات (تُخزَّن في public/uploads/permits)
+    // ------------------------------------------------------------------
+    private function uploadDir(): string
+    {
+        $dir = App::basePath('public/uploads/permits');
+        if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+        return $dir;
+    }
+
+    private function handleUpload(string $field): ?string
+    {
+        if (empty($_FILES[$field]) || ($_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            return null;
+        }
+        $f = $_FILES[$field];
+        if ($f['error'] !== UPLOAD_ERR_OK) { return null; }
+        $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, self::UPLOAD_EXT, true)) {
+            flash('error', 'نوع الملف غير مسموح (صور أو PDF فقط).');
+            return null;
+        }
+        // اسم آمن فريد (بدون Date/random — نعتمد على uniqid المتاح)
+        $name = 'p' . uniqid('', true) . '.' . $ext;
+        $dest = $this->uploadDir() . '/' . $name;
+        if (@move_uploaded_file($f['tmp_name'], $dest)) {
+            return 'uploads/permits/' . $name;   // مسار نسبي من public/
+        }
+        return null;
+    }
+
+    private function deleteFile(?string $rel): void
+    {
+        if (!$rel) { return; }
+        $path = App::basePath('public/' . $rel);
+        if (is_file($path)) { @unlink($path); }
+    }
+}

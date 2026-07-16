@@ -1,0 +1,6 @@
+# بيانات ونُسخ احتياطية
+storage/backups/*.sql
+database/old_data.json
+.DS_Store
+chrome-profile*/
+*.log

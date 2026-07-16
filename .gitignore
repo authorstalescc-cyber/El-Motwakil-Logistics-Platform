@@ -1,0 +1,15 @@
+# ===== أسرار — ممنوع رفعها نهائيًا =====
+# مفاتيح Groq API الحقيقية. النسخة النموذجية المرفوعة: config.example.php
+groq-APIs-AI-Tokens.md
+almotawakel-web/config/config.php
+
+# ===== ملفات مؤقتة من الماك وأوفيس =====
+.DS_Store
+~$*
+*.log
+
+# ===== نسخ احتياطية وبيانات متولّدة =====
+almotawakel-web/storage/backups/*.sql
+almotawakel-web/database/old_data.json
+chrome-profile*/
+_preview_*.pdf
