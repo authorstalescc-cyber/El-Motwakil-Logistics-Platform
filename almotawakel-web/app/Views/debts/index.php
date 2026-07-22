@@ -67,7 +67,7 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
 </style>
 
 <!-- ============ نظرة عامة ============ -->
-<div class="kpi-grid mb four" style="grid-template-columns:repeat(4,1fr)">
+<div class="kpi-grid mb four">
   <div class="kpi red"><div class="lbl">إجمالي المديونيات على الشركة</div>
     <div class="val"><?= intf($ov['grand_remaining']) ?><span class="cur">ج.م</span></div></div>
   <a class="kpi navy" href="<?= url('settlements') ?>" title="أصحاب بيان البوالص">
@@ -198,7 +198,7 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
 
 <!-- ============ تبويب: أصحاب بيان البوالص ============ -->
 <div class="tab-panel<?= $tab==='owners'?' active':'' ?>" id="tab-owners">
-  <div class="debt-figs" style="grid-template-columns:repeat(4,1fr)">
+  <div class="debt-figs g4">
     <div class="fig"><div class="lbl">عدد أصحاب البيان</div><div class="val navy"><?= intf($ownersSum['owners']) ?></div></div>
     <div class="fig"><div class="lbl">إجمالي المديونية</div><div class="val navy"><?= intf($ownersSum['debt']) ?></div></div>
     <div class="fig"><div class="lbl">المدفوع لهم</div><div class="val pos"><?= intf($ownersSum['paid']) ?></div></div>

@@ -12,6 +12,7 @@ $hasBase = $base !== '';
   <div>
     <h2 class="pg-title"><?= icon('map-pin', 22) ?> تتبع الشحنات</h2>
     <p class="pg-sub">ابعت رابط للسائق على الواتساب، يضغط زرار، فتشوف مكان الشحنة بالتاريخ والساعة.</p>
+<?php if ($status === 'active'): ?><span class="live-pill" id="trackLive">● بيتحدّث كل دقيقة</span><?php endif; ?>
   </div>
   <div class="pg-actions">
     <a class="btn ghost" href="<?= url('tracking/places') ?>"><?= icon('anchor', 16) ?> وجهات الخريطة</a>
@@ -269,11 +270,21 @@ if ($onMap):
 
   // تحديث تلقائي كل دقيقة — الكروت تحت ما بتتحدّثش إلا بإعادة التحميل
   <?php if ($status === 'active'): ?>
+  /* ⚠️ كان بيبلع أي خطأ شبكة بالسكوت، فالخريطة بتقف والمستخدم فاكرها
+     حيّة — ده تضليل. دلوقتي بيبان تنبيه بعد فشلين ورا بعض. */
+  var pollFails = 0;
+  function pollState(ok){
+    pollFails = ok ? 0 : pollFails + 1;
+    var el = document.getElementById('trackLive'); if (!el) return;
+    var stale = pollFails >= 2;
+    el.classList.toggle('stale', stale);
+    el.textContent = stale ? '⚠ التحديث التلقائي واقف — حدّث الصفحة' : '● بيتحدّث كل دقيقة';
+  }
   setInterval(function(){
     fetch(<?= js_json(url('tracking/feed')) ?>, {headers:{'X-Requested-With':'XMLHttpRequest'}})
-      .then(function(r){ return r.json(); })
-      .then(function(j){ if (j.ok && j.cars.length) draw(j.cars); })
-      .catch(function(){});
+      .then(function(r){ if(!r.ok) throw new Error('http'); return r.json(); })
+      .then(function(j){ if (j.ok && j.cars.length) draw(j.cars); pollState(true); })
+      .catch(function(){ pollState(false); });
   }, 60000);
   <?php endif; ?>
 })();

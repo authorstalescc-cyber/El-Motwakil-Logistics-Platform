@@ -1743,7 +1743,14 @@
     function labelControls(root) {
       (root.matches && root.matches(controls) ? [root] : Array.from(root.querySelectorAll ? root.querySelectorAll(controls) : [])).forEach((el) => {
         if (!el.id) el.id = 'form-control-' + (++controlId);
-        let label = el.closest('.field,.fld,.ms-fld,.bf-fld,.inline-field')?.querySelector('label');
+        const box = el.closest('.field,.fld,.ms-fld,.bf-fld,.inline-field');
+        let label = box?.querySelector('label');
+        /* ⚠️ نمط شائع في المشروع: الحقل **جوّه** الـlabel نفسه
+             <label class="fld"><span>الاسم</span><input required></label>
+           وقتها `box` هو الـlabel، و`box.querySelector('label')` بيرجّع null،
+           فعلامة «مطلوب» ما كانتش بتتحط على الحقول دي خالص. */
+        if (!label && box && box.tagName === 'LABEL') { label = box; }
+        if (!label) { label = el.closest('label'); }
         if (label && !label.contains(el)) label.setAttribute('for', el.id);
         if (!accessibleName(el)) {
           const fallback = el.title || el.placeholder || (el.tagName === 'SELECT' ? el.options[0]?.textContent : '') || el.name || 'حقل إدخال';
@@ -1751,7 +1758,10 @@
         }
         if (el.required) {
           el.setAttribute('aria-required', 'true');
-          if (label) label.classList.add('required-label');
+          /* لو الحقل جوّه الـlabel، النجمة لازم تتحط على النص (أول <span>)
+             مش على الـlabel نفسه — وإلا هتظهر **بعد** خانة الإدخال. */
+          const mark = (label && label.contains(el) && label.querySelector('span')) || label;
+          if (mark) mark.classList.add('required-label');
         }
       });
       (root.querySelectorAll ? root.querySelectorAll('button,a') : []).forEach((el) => {

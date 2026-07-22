@@ -102,7 +102,7 @@ tr.norec:hover{background:transparent!important}
       <tbody>
         <?php if (!$rows): ?>
           <tr class="norec"><td colspan="8">
-            <div class="empty"><div class="ic">📭</div>لا توجد مصروفات مطابقة — اضغط «إضافة مصروف يدوي» لبدء الإدخال.</div>
+            <div class="empty"><div class="ic">📭</div><b>مفيش مصروفات مطابقة</b><span>جرّب تغيّر الفلاتر، أو سجّل مصروف جديد.</span><a class="btn sm" href="<?= url('expenses/new') ?>">➕ إضافة مصروف يدوي</a></div>
           </td></tr>
         <?php else: $i = ($page-1)*50; foreach ($rows as $r): $i++;
           $src = $r['source'];

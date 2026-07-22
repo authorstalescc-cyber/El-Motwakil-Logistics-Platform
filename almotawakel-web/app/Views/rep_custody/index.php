@@ -14,7 +14,7 @@
   ومن عهدة المندوب في كشفه. أما المرتجع فيُقفل عهدة المندوب ولا يُضاف إلى الخزنة.
 </div>
 
-<div class="kpi-grid mb" style="grid-template-columns:repeat(4,1fr)">
+<div class="kpi-grid mb four">
   <div class="kpi gold">
     <div class="lbl"><?= $sum['balance'] < 0 ? 'إجمالي المستحق للمناديب' : 'الفاضل مع المناديب دلوقتي' ?></div>
     <div class="val" data-secret data-val="<?= e(intf($sum['balance'])) ?>">••••••</div>

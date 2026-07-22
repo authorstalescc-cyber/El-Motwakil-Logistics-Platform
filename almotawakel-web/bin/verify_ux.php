@@ -827,6 +827,57 @@ $kpiCount <= 4
     ? ok("المؤشرات بقت {$kpiCount} بدل ٦ — أرقام النهاردة بس")
     : bad("لسه فيه {$kpiCount} مؤشر — الصفحة بتعرض كل حاجة بنفس الأهمية");
 
+/* ══════════════ ٢٠) الجداول والنماذج على الموبايل ══════════════ */
+sec('٢٠) الجداول والنماذج (المرحلة ٥)');
+
+/* ⚠️ أخطر واحدة هنا: `app.js` بيضيف `.table-mobile-scroll` لكل جدول بـ٧ أعمدة
+   أو أكتر، و**الكلاس ما كانش له ولا قاعدة CSS واحدة** — يعني آلية التمرير
+   الأفقي كانت معطّلة تمامًا والجداول العريضة بتخرج برّه الشاشة. */
+str_contains($jsSrc, "'table-mobile-scroll'")
+    ? ok('app.js لسه بيوسم الجداول العريضة')
+    : bad('app.js ما بقاش بيوسم الجداول العريضة');
+preg_match('/table\.table-mobile-scroll\s*\{/', $cssSrc)
+    ? ok('`.table-mobile-scroll` له قاعدة CSS فعلية (كان بيتضاف بلا أي تأثير)')
+    : bad('`.table-mobile-scroll` بيتضاف من JS ومفيش له CSS — التمرير الأفقي معطّل');
+
+/* الشبكات المكتوبة inline بتدهس القواعد المتجاوبة فبتفضل ٤-٦ أعمدة على الموبايل */
+$inlineGrids = [];
+foreach (office_views($root) as $path => $src) {
+    if (str_contains($path, 'print') || str_contains($path, 'statement')) { continue; }
+    if (preg_match('/style="[^"]*grid-template-columns:repeat\([4-9]/', $src)) {
+        $inlineGrids[] = str_replace($root . '/app/Views/', '', $path);
+    }
+}
+$inlineGrids ? bad('شبكات inline بتدهس التجاوب: ' . implode('، ', $inlineGrids))
+             : ok('مفيش شبكة inline بـ٤ أعمدة أو أكتر بتدهس القواعد المتجاوبة');
+
+/* علامة «مطلوب» بتتحط تلقائيًّا — بما فيها نمط «الحقل جوّه الـlabel» اللي
+   كان بيفوت من غير علامة خالص. */
+str_contains($jsSrc, "box.tagName === 'LABEL'")
+    ? ok('علامة «مطلوب» بتتحط حتى لو الحقل جوّه الـlabel')
+    : bad('الحقول اللي جوّه labels مش بتاخد علامة «مطلوب»');
+str_contains($cssSrc, '.required-label::after')
+    ? ok('نجمة الحقل المطلوب معرَّفة')
+    : bad('نجمة الحقل المطلوب مش معرَّفة');
+
+/* التحديث التلقائي: الفشل الصامت بيخلّي الخريطة تقف والمستخدم فاكرها حيّة */
+$silentPolls = [];
+foreach (['tracking/index.php', 'tracking/show.php'] as $rel) {
+    $src = (string) file_get_contents($root . '/app/Views/' . $rel);
+    if (preg_match('/\.catch\(function\(\)\{\}\)/', $src)) { $silentPolls[] = $rel; }
+}
+$silentPolls ? bad('تحديث تلقائي بيبلع الأخطاء بالسكوت: ' . implode('، ', $silentPolls))
+             : ok('فشل التحديث التلقائي بيبان للمستخدم (مش بيتبلع بالسكوت)');
+str_contains($cssSrc, '.live-pill.stale')
+    ? ok('مؤشر «التحديث واقف» موجود')
+    : bad('مفيش مؤشر لحالة التحديث التلقائي');
+
+/* حالات فراغ بتشاور على أزرار مش موجودة = تضليل مباشر */
+$movView = (string) file_get_contents($root . '/app/Views/movements/index.php');
+!str_contains($movView, 'اضغط «حركة جديدة»')
+    ? ok('حالة فراغ الحركات ما بقتش تشاور على زر مش موجود')
+    : bad('حالة فراغ الحركات لسه بتشاور على زر «حركة جديدة» المش موجود');
+
 /* ══════════════ الخلاصة ══════════════ */
 echo "\n" . str_repeat('=', 62) . "\n";
 echo "نجح: $pass   |   فشل: $fail   |   تخطّي: $skip\n";

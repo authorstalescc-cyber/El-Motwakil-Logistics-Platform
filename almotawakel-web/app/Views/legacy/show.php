@@ -35,7 +35,7 @@ $fmt = function(string $type, $v) {
 <div class="card mb" style="padding:0;overflow:hidden">
   <?php foreach ($groups as $gk => $gLabel): if (empty($byGroup[$gk])) continue; ?>
     <div class="form-group-title gt-<?= $gk ?>"><?= e($gLabel) ?></div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0">
+    <div class="grid-auto g4" style="gap:0">
       <?php foreach ($byGroup[$gk] as [$key, $label, $type]): ?>
         <div style="padding:11px 16px;border-bottom:1px solid var(--line);border-inline-start:1px solid var(--line)">
           <div style="font-size:.76rem;color:var(--grey);font-weight:700;margin-bottom:3px"><?= e($label) ?></div>

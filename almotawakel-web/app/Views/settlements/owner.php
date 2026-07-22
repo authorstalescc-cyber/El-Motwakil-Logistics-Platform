@@ -41,7 +41,7 @@
 
 <!-- إحصائيات صاحب البيان (فورية بمجرد اختياره) — كل كارت يعرض بوالصه المقابلة -->
 <?php $ob = url('settlements') . '?owner=' . urlencode($owner); ?>
-<div class="kpi-grid mb" style="grid-template-columns:repeat(6,1fr);gap:12px">
+<div class="kpi-grid mb six">
   <a class="kpi navy" href="<?= $ob ?>" title="عرض كل بوالصه"><div class="lbl">إجمالي المديونية</div><div class="val"><?= intf($stats['debt']) ?><span class="cur">ج.م</span></div></a>
   <a class="kpi green" href="<?= $ob ?>&amp;status=paid" title="عرض البوالص المسدّدة"><div class="lbl">إجمالي المدفوع</div><div class="val"><?= intf($stats['paid']) ?><span class="cur">ج.م</span></div></a>
   <a class="kpi red" href="<?= $ob ?>&amp;status=due" title="عرض البوالص المتبقّية"><div class="lbl">إجمالي المتبقّي</div><div class="val"><?= intf($stats['remaining']) ?><span class="cur">ج.م</span></div></a>

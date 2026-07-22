@@ -59,7 +59,7 @@ $isSearch = ($mode ?? 'directory') === 'search';
 
 <?php if ($isSearch): /* ============================= وضع نتائج البحث ============================= */ ?>
 
-  <div class="kpi-grid mb four" style="grid-template-columns:repeat(4,1fr)">
+  <div class="kpi-grid mb four">
     <div class="kpi gold"><div class="lbl">عدد البوالص المطابقة</div><div class="val"><?= intf($resTot['n']) ?></div></div>
     <div class="kpi navy"><div class="lbl">إجمالي الدين</div><div class="val"><?= intf($resTot['debt']) ?><span class="cur">ج.م</span></div></div>
     <div class="kpi green"><div class="lbl">المدفوع</div><div class="val"><?= intf($resTot['paid']) ?><span class="cur">ج.م</span></div></div>
@@ -82,7 +82,7 @@ $isSearch = ($mode ?? 'directory') === 'search';
     <a class="btn ghost" target="_blank" href="<?= url('statements/batch?scope=' . (!empty($dueOnly)?'due':'all') . '&autoprint=1') ?>">🖨️ طباعة المعروض مجمعًا</a>
   </div>
 
-  <div class="kpi-grid mb four" style="grid-template-columns:repeat(4,1fr)">
+  <div class="kpi-grid mb four">
     <a class="kpi navy" href="<?= url('settlements') ?>" title="عرض كل أصحاب البيان"><div class="lbl">عدد أصحاب البيان</div><div class="val"><?= intf($tot['owners']) ?></div></a>
     <a class="kpi gold" href="<?= url('settlements') ?>?status=due" title="عرض البوالص غير المسدّدة"><div class="lbl">لهم مديونية</div><div class="val"><?= intf($dueOwners) ?></div></a>
     <a class="kpi green" href="<?= url('settlements') ?>?status=paid" title="عرض البوالص المسدّدة"><div class="lbl">إجمالي المدفوع لهم</div><div class="val"><?= intf($tot['paid']) ?><span class="cur">ج.م</span></div></a>

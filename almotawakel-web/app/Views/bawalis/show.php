@@ -40,7 +40,7 @@ $sum = fn($arr) => array_sum(array_map(fn($x)=>(float)$x['amount'], $arr));
 <div class="card mb" style="padding:0;overflow:hidden">
   <?php foreach ($groups as $gk=>$gLabel): if (empty($byGroup[$gk])) continue; ?>
     <div class="form-group-title gt-<?= $gk ?>"><?= $gLabel ?></div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:0">
+    <div class="grid-auto g4" style="gap:0;padding:0">
       <?php foreach ($byGroup[$gk] as $f):
         // في النوع صادر نخفي الشهادة، وفي وارد نخفي الإذن
         if (($f['key']==='cert_number' && $bill['bill_type']!=='warid') ||

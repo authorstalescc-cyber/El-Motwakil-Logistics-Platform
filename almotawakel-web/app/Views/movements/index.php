@@ -21,7 +21,7 @@
     </tr></thead>
     <tbody>
       <?php if(!$rows): ?>
-        <tr><td colspan="13"><div class="empty"><div class="ic">📭</div>لا حركات — اضغط «حركة جديدة».</div></td></tr>
+        <tr><td colspan="13"><div class="empty"><div class="ic">📭</div><b>مفيش حركات</b><span>الحركات بتتعمل من جوّه الإذن نفسه، مش من هنا.</span><a class="btn sm" href="<?= url('permits') ?>">افتح الأذونات</a></div></td></tr>
       <?php else: $i=0; foreach($rows as $r): $i++; ?>
         <tr>
           <td><?= $i ?></td>

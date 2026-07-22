@@ -256,7 +256,7 @@ $printQs = http_build_query(array_filter(['from'=>$from,'to'=>$to]));
 
 <!-- ═══════════ الأذون ═══════════ -->
 <section class="tab-panel" data-panel="permits">
-  <div class="counters mb" style="grid-template-columns:repeat(4,1fr)">
+  <div class="counters mb g4">
     <div class="counter"><div class="n"><?= intf($permitsList['totals']['c']) ?></div><div class="l">إجمالي الأذون</div></div>
     <div class="counter"><div class="n" style="color:var(--green)"><?= intf($permitsList['totals']['open_cnt']) ?></div><div class="l">مفتوحة</div></div>
     <div class="counter"><div class="n" style="color:var(--grey)"><?= intf($permitsList['totals']['closed_cnt']) ?></div><div class="l">مقفولة</div></div>

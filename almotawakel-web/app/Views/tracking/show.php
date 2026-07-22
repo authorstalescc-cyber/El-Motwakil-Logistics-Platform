@@ -26,6 +26,7 @@ $msg   = $link !== '' ? Track::waMessage($t + ['bill_number' => $bill['bill_numb
       <?php if (!empty($bill['destination'])): ?> · رايحة <b><?= e($bill['destination']) ?></b><?php endif; ?>
       <?php if (!empty($bill['container_no'])): ?> · حاوية <?= e($bill['container_no']) ?><?php endif; ?>
     </p>
+    <?php if (Track::isOpen($t)): ?><span class="live-pill" id="trackLive1">● بيتحدّث تلقائيًا</span><?php endif; ?>
   </div>
   <div class="pg-actions">
     <a class="btn ghost" href="<?= url('tracking') ?>">← كل الشحنات</a>
@@ -342,7 +343,7 @@ if ($eta): ?>
                       date:p.date.slice(8,10) + '/' + p.date.slice(5,7)};
             }), false);
           }
-        }).catch(function(){});
+        }).catch(function(){ var el=document.getElementById('trackLive1'); if(el){ el.classList.add('stale'); el.textContent='⚠ التحديث التلقائي واقف — حدّث الصفحة'; } });
     }, 20000);
   }
 })();

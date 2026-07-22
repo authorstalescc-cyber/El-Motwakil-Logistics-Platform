@@ -6,7 +6,7 @@
 </div>
 
 <!-- بطاقات النظرة العامة -->
-<div class="kpi-grid mb" style="grid-template-columns:repeat(3,1fr)">
+<div class="kpi-grid mb three">
   <div class="kpi gold">
     <div class="lbl">إجمالي الأرصدة المتاحة</div>
     <div class="val" data-secret data-val="<?= e(intf($summary['balance'])) ?>">••••••</div>
@@ -37,7 +37,7 @@
     </tr></thead>
     <tbody>
       <?php if(!$cards): ?>
-        <tr><td colspan="7"><div class="empty"><div class="ic">💳</div>لا كروت بعد. أضِف أول كارت فيزا من زر «إضافة كارت».</div></td></tr>
+        <tr><td colspan="7"><div class="empty"><div class="ic">💳</div><b>مفيش كروت فيزا</b><span>ضيف أول كارت عشان تتابع رصيده ومدفوعاته.</span><a class="btn sm" href="<?= url('office/new') ?>">➕ إضافة كارت</a></div></td></tr>
       <?php else: foreach ($cards as $c): ?>
         <tr<?= $c['status']==='inactive'?' style="opacity:.55"':'' ?>>
           <td style="text-align:right;font-weight:700">

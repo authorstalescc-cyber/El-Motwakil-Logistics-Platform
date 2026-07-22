@@ -18,7 +18,7 @@ $selectedPermits = array_map('intval', (array) ($assignOld['permit_ids'] ?? []))
   <a class="btn ghost" href="<?= url('rep-custody') ?>">← كل المناديب</a>
 </div>
 
-<div class="kpi-grid mb" style="grid-template-columns:repeat(4,1fr)">
+<div class="kpi-grid mb four">
   <div class="kpi gold">
     <div class="lbl"><?= $b['balance'] < 0 ? 'مستحق للمندوب' : 'الفاضل معاه دلوقتي' ?></div>
     <div class="val" data-secret data-val="<?= e(intf(abs($b['balance']))) ?>">••••••</div>

@@ -23,7 +23,7 @@ $cols = [
   <span style="color:var(--grey)">معزولة تمامًا: لا تدخل في العهدة أو التقفيل أو أي حساب في البرنامج الحالي.</span>
 </div>
 
-<div class="cards-row" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px">
+<div class="kpi-grid mb five">
   <div class="card" style="padding:14px 16px">
     <div style="font-size:.78rem;color:var(--grey);font-weight:700">إجمالي البوالص<?= $active ? ' <span style="color:#8a6d10">(حسب الفلتر)</span>' : '' ?></div>
     <div style="font-size:1.5rem;font-weight:800;color:var(--navy)"><?= intf($stats['n']) ?></div>
