@@ -9,18 +9,20 @@ $company = App::setting('company_name', 'شركة المتوكل');
 $cur = App::setting('currency', 'ج.م');
 $isToday = ($date === date('Y-m-d'));
 
-/* بطاقات المؤشرات (بدون نولون، بدون المتبقي) — كل واحدة تفتح بوب-أب بالمستهدف فقط */
+/* بطاقات المؤشرات — **أرقام النهاردة بس** (المرحلة ٤).
+   كانوا ٦ وكله بنفس الوزن. اللي اتشال منهم مكانه أوضح دلوقتي:
+     • «جاهز للفوترة» بقى صف تصرّف في «محتاج منك» فوق.
+     • «أذونات مفتوحة» له قايمة كاملة تحت مباشرةً (③).
+   بدون نولون وبدون «المتبقي للعملاء» — قرار صاحب المشروع. */
 $kpis = [
-  ['permits_open','أذونات مفتوحة',   'navy',   'folder',        $permits['open'],       0, '',      'الأذونات المفتوحة'],
-  ['ready',        'جاهز للفوترة',    'teal',   'receipt',       $readySum['count'],     0, '',      'الأذونات الجاهزة للفوترة'],
   ['expenses',     'مصروفات اليوم',   'red',    'trending-down', $daily['expenses'],     1, $cur,    'مصروفات '.dfmt($date)],
   ['receipts',     'إيصالات اليوم',   'gold',   'clipboard',     $daily['receipts_cnt'], 0, 'إيصال', 'إيصالات '.dfmt($date)],
-  ['custody',      'رصيد العهدة',     'purple', 'briefcase',     $custody,               1, $cur,    'تفاصيل رصيد العهدة'],
+  ['custody',      'خزنة المكتب',     'purple', 'briefcase',     $custody,               1, $cur,    'تفاصيل خزنة المكتب'],
 ];
-/* عهدة المناديب — كارت سادس يظهر بس لو الوحدة متاحة (v35) */
+/* عهدة المناديب — كارت رابع يظهر بس لو الوحدة متاحة (v35) */
 $rp = $repsPanel;
 if ($rp['available']) {
-  $kpis[] = ['reps','عهدة المناديب','sader','users',$rp['totals']['outstanding'],1,$cur,'متابعة عهدة المناديب ومدخلاتهم'];
+  $kpis[] = ['reps','برّه مع المناديب','sader','users',$rp['totals']['outstanding'],1,$cur,'متابعة عهدة المناديب ومدخلاتهم'];
 }
 
 /* خريطة أنواع سجل النشاط */
@@ -109,47 +111,48 @@ $rowSub = function(array $s) use ($subMeta) {
 ?>
 <div class="dash2">
 
-<!-- ═══════════════ ترويسة + شريط متحرك ═══════════════ -->
-<section class="d-hero">
+<!-- ═══════════════ ① محتاج منك — أول حاجة تشوفها ═══════════════ -->
+<?php
+/* المرحلة ٤: الداشبورد بقى يجاوب على «أعمل إيه دلوقتي؟» الأول.
+   المصدر هو **نفس** مجمّع الإشعارات بتاع الجرس والشارات (App\Models\Notification)
+   فمستحيل الأرقام تختلف، والاستدعاء متكاش في الجلسة 30 ثانية. */
+$todo = \App\Models\Notification::feed();
+?>
+<section class="d-hero compact">
   <div class="d-hero-glow"></div>
   <div class="d-hero-left">
     <span class="d-hero-eyebrow"><?= icon('sparkles',14) ?> <?= e($company) ?></span>
     <h1 class="d-hero-title"><?= e($greet) ?> <span class="wave">👋</span></h1>
-    <p class="d-hero-sub">دي كل الحركة على تاريخ العمل المحدَّد — النقل والتخليص الجمركي.</p>
     <div class="d-hero-chips">
       <span class="d-hchip <?= $isToday?'':'warn' ?>"><?= icon('calendar',14) ?> <?= e(dfmt($date)) ?><?= $isToday?' · النهاردة':'' ?></span>
-      <button type="button" class="d-hchip" data-pop="permits_open" data-title="الأذونات المفتوحة"><?= icon('folder',14) ?> <?= intf($permits['open']) ?> إذن مفتوح</button>
-      <button type="button" class="d-hchip go" data-pop="ready" data-title="الأذونات الجاهزة للفوترة"><?= icon('receipt',14) ?> <?= intf($readySum['count']) ?> جاهز للفوترة</button>
       <button type="button" class="d-hchip quick" id="quickEntryOpen"><?= icon('plus',14) ?> إدخال سريع للإيصالات والمصاريف</button>
     </div>
   </div>
-
-  <!-- شريط "آخر ما تمت إضافته" -->
-  <div class="d-live">
-    <div class="d-live-head"><span class="d-live-dot"></span> آخر ما تمت إضافته</div>
-    <div class="d-live-stage" id="dLive">
-      <?php if (!$feed): ?>
-        <div class="d-live-item on"><span class="d-live-empty">لا توجد حركات على هذا التاريخ.</span></div>
-      <?php else: foreach ($feed as $i => $f): $rc = !empty($f['is_receipt']); ?>
-      <div class="d-live-item<?= $i===0?' on':'' ?>">
-        <span class="d-live-ic <?= $rc?'rc':'ex' ?>"><?= icon($rc?'clipboard':'trending-down',18) ?></span>
-        <div class="d-live-body">
-          <b><?= e($f['label'] ?: ($rc?'إيصال':'مصروف')) ?><?php
-            if ($f['ref_kind']==='permit' && !empty($f['ref'])) echo ' <small class="lref">· إذن #'.e($f['ref']).'</small>';
-            elseif ($f['ref_kind']==='bill' && !empty($f['ref'])) echo ' <small class="lref">· بوليصة #'.e($f['ref']).'</small>';
-            elseif ($f['owner']) echo ' <small>· '.e($f['owner']).'</small>'; ?></b>
-          <span><?= e(($f['owner'] && $f['ref_kind']!=='manual' ? $f['owner'].' — ' : '').($f['note'] ?: '')) ?: 'بدون تفاصيل' ?></span>
-        </div>
-        <div class="d-live-side"><b class="<?= $rc?'rc':'ex' ?>"><?= money0($f['amount']) ?></b><span><?= e(dfmt($f['d'])) ?></span></div>
-      </div>
-      <?php endforeach; endif; ?>
-    </div>
-    <div class="d-live-dots" id="dLiveDots"></div>
-  </div>
 </section>
 
+<div class="d-todo mb<?= $todo['count'] ? '' : ' clear' ?>">
+  <div class="d-todo-head">
+    <?= icon('check-circle',18) ?>
+    <b>محتاج منك</b>
+    <?php if ($todo['count']): ?><span class="d-badge red"><?= intf($todo['count']) ?></span><?php endif; ?>
+  </div>
+  <?php if (!$todo['count']): ?>
+    <div class="d-todo-empty"><?= icon('check',22) ?><b>كله تمام النهاردة ✓</b><span>مفيش حاجة مستنية منك.</span></div>
+  <?php else: ?>
+    <div class="d-todo-list">
+      <?php foreach ($todo['items'] as $t): ?>
+        <a class="d-todo-row <?= e($t['kind']) ?>" href="<?= e($t['url']) ?>">
+          <span class="d-todo-ic"><?= icon($t['icon'], 18) ?></span>
+          <span class="d-todo-tx"><b><?= e($t['title']) ?></b><span><?= e($t['body']) ?></span></span>
+          <span class="d-todo-go"><?= icon('chevron',16) ?></span>
+        </a>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+</div>
+
 <!-- ═══════════════ مؤشرات (عدّاد متحرك، تفتح بوب-أب) ═══════════════ -->
-<div class="d-kpis <?= count($kpis)>=6 ? 'six' : 'five' ?>">
+<div class="d-kpis <?= count($kpis)>=4 ? 'four' : 'three' ?>">
   <?php foreach ($kpis as [$pop,$lbl,$cls,$ic,$val,$dec,$suf,$ttl]): ?>
   <button type="button" class="d-kpi <?= $cls ?>" data-pop="<?= e($pop) ?>" data-title="<?= e($ttl) ?>">
     <span class="d-kpi-ic"><?= icon($ic,20) ?></span>
@@ -265,7 +268,7 @@ $rowSub = function(array $s) use ($subMeta) {
 <div class="d-grid-feed mb">
   <div class="d-card">
     <div class="d-card-head">
-      <h3><?= icon('trending-down',18) ?> آخر المصروفات والإيصالات</h3>
+      <h3><?= icon('trending-down',18) ?> فلوس <?= e(dfmt($date)) ?><small class="d-head-sub">المصروفات والإيصالات على تاريخ العمل</small></h3>
       <a class="btn ghost sm" href="<?= url('expenses') ?>">سجل المصروفات <?= icon('chevron',15) ?></a>
     </div>
     <div class="d-feed">
@@ -334,22 +337,18 @@ $rowSub = function(array $s) use ($subMeta) {
   </div>
 </div>
 
-<!-- ═══════════════ الرسوم ═══════════════ -->
-<div class="d-sec-head"><?= icon('bar-chart',17) ?><span>التحليلات والرسوم</span><em class="d-sec-year"><?= intf($year) ?></em></div>
-<div class="d-card chart-full mb">
-  <div class="d-card-head"><h3><?= icon('trending-down',16) ?> الأداء الشهري — المصروفات والمدفوعات (<?= intf($year) ?>)</h3></div>
-  <div class="chart-box tall"><canvas id="chMonthly"></canvas></div>
-</div>
-<div class="d-charts3">
-  <div class="d-card"><div class="d-card-head"><h3>حجم العمليات — آخر ١٤ يوم</h3></div><div class="chart-box"><canvas id="chTrend"></canvas></div></div>
-  <div class="d-card"><div class="d-card-head"><h3>توزيع المصروفات</h3></div><div class="chart-box"><canvas id="chExpenses"></canvas></div></div>
-  <div class="d-card"><div class="d-card-head"><h3>المتبقي للعملاء (الأعلى)</h3></div><div class="chart-box"><canvas id="chClients"></canvas></div></div>
-</div>
+<?php /* ═══ الرسوم اتنقلت للتقارير (المرحلة ٤) ═══
+   • «الأداء الشهري» و«توزيع المصروفات» كانوا **مكرَّرين حرفيًا** في /reports.
+   • «حجم العمليات — آخر ١٤ يوم» اتنقل لـ/reports.
+   • «المتبقي للعملاء» اتشال: بيخالف قرار صاحب المشروع الموثَّق إن الداشبورد
+     **بلا نولون وبلا «المتبقي للعملاء»** — رجع بالغلط في وقت ما. والمعلومة
+     موجودة أصلاً في /reports (Metrics::clientDebts).
+   المكسب: ٤ استعلامات ثقيلة اتشالت من كل فتحة للداشبورد. */ ?>
 
 <!-- ═══════════════ آخر الحركات ═══════════════ -->
 <div class="d-card mb" style="margin-top:16px">
   <div class="d-card-head">
-    <h3><?= icon('clock',18) ?> آخر الحركات والعمليات</h3>
+    <h3><?= icon('clock',18) ?> آخر ما اتسجّل في النظام<small class="d-head-sub">أحدث السجلات من كل الوحدات — مش مربوط بتاريخ العمل</small></h3>
     <a class="btn ghost sm" href="<?= url('search') ?>">بحث شامل <?= icon('chevron',15) ?></a>
   </div>
   <div class="activity">
@@ -526,7 +525,7 @@ $rowSub = function(array $s) use ($subMeta) {
   <?php endif; ?>
 </div>
 
-<script src="<?= url('assets/js/chart.umd.js') ?>"></script>
+<?php /* Chart.js (200KB) اتشال من الداشبورد مع الرسوم — بيتحمّل في /reports بس */ ?>
 <script>
 /* ── الإدخال السريع الجماعي ── */
 (function(){
@@ -687,17 +686,8 @@ $rowSub = function(array $s) use ($subMeta) {
   });
 })();
 
-/* ── شريط متحرك ── */
-(function(){
-  const stage=document.getElementById('dLive'); if(!stage) return;
-  const items=[...stage.querySelectorAll('.d-live-item')], dots=document.getElementById('dLiveDots');
-  if(items.length<=1) return;
-  items.forEach((_,i)=>{const d=document.createElement('span');d.className='d-live-d'+(i===0?' on':'');dots.appendChild(d);});
-  const dotEls=[...dots.children]; let cur=0;
-  function show(n){ items[cur].classList.remove('on');dotEls[cur].classList.remove('on');
-    cur=n; items[cur].classList.add('on');dotEls[cur].classList.add('on'); }
-  setInterval(()=>show((cur+1)%items.length),3000);
-})();
+/* الشريط المتحرك اتشال (المرحلة ٤): كان بيعرض بند واحد ويلفّ كل ٣ ثواني،
+   يعني بيخبّي معلومات ويجبر المستخدم يستنى بدل ما يقرا بسرعته. */
 
 /* ── البوب-أب ── */
 (function(){
@@ -728,32 +718,5 @@ $rowSub = function(array $s) use ($subMeta) {
   }));
 })();
 
-/* ── الرسوم ── */
-const CH=<?= js_json($charts) ?>;
-const C={navy:'#15355B',navyMid:'#1E4B7A',gold:'#C9A227',green:'#1E6E3C',red:'#9B2C2C',teal:'#14746F',purple:'#5B3E7A',slate:'#4a5a70'};
-Chart.defaults.font.family="'Segoe UI','Tahoma',sans-serif"; Chart.defaults.font.size=12; Chart.defaults.color='#5A6472';
-Chart.defaults.plugins.legend.rtl=true; Chart.defaults.plugins.tooltip.rtl=true;
-Chart.defaults.plugins.tooltip.backgroundColor='#15355B'; Chart.defaults.plugins.tooltip.padding=10; Chart.defaults.plugins.tooltip.cornerRadius=8;
-const nf=(v)=>new Intl.NumberFormat('en-US').format(Math.round(v));
-const AR_MONTHS=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-function grad(ctx,hex,a1,a2){const g=ctx.createLinearGradient(0,0,0,300);g.addColorStop(0,hex+a1);g.addColorStop(1,hex+a2);return g;}
-
-(function(){ const el=document.getElementById('chMonthly'),cx=el.getContext('2d');
-  new Chart(el,{type:'line',data:{labels:AR_MONTHS,datasets:[
-    {label:'المصروفات',data:CH.monthly.map(m=>+m.expenses),borderColor:C.red,backgroundColor:grad(cx,C.red,'2b','00'),fill:true,tension:.38,borderWidth:2.5,pointRadius:0,pointHoverRadius:5,pointBackgroundColor:C.red},
-    {label:'المدفوعات',data:CH.monthly.map(m=>+m.collections),borderColor:C.green,backgroundColor:grad(cx,C.green,'2b','00'),fill:true,tension:.38,borderWidth:2.5,pointRadius:0,pointHoverRadius:5,pointBackgroundColor:C.green}]},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      scales:{y:{beginAtZero:true,ticks:{callback:nf},grid:{color:'#EEF1F6'}},x:{grid:{display:false}}},
-      plugins:{legend:{position:'top',align:'end',labels:{usePointStyle:true,boxWidth:8,padding:16}}}}}); })();
-
-new Chart(document.getElementById('chTrend'),{type:'bar',data:{labels:CH.trend.labels,datasets:[{label:'عدد العمليات',data:CH.trend.data,backgroundColor:'rgba(21,53,91,.85)',hoverBackgroundColor:C.gold,borderRadius:6,maxBarThickness:22}]},
-  options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:'#EEF1F6'}},x:{grid:{display:false}}},plugins:{legend:{display:false}}}});
-
-new Chart(document.getElementById('chClients'),{type:'bar',data:{labels:CH.clients.map(r=>r.name),datasets:[{label:'المتبقي',data:CH.clients.map(r=>+r.remaining),backgroundColor:C.gold,borderRadius:6,maxBarThickness:20}]},
-  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:nf},grid:{color:'#EEF1F6'}},y:{grid:{display:false}}},plugins:{legend:{display:false}}}});
-
-(function(){ const ex=CH.expenses,catSum=(ex.categories||[]).reduce((s,r)=>s+ +r.value,0);
-  const slices=[['حركات البوالص',catSum,C.navy],['الأذونات',+ex.permits,C.teal],['التخليص',+ex.takhlis,C.gold],['شامل',+ex.shamil,C.purple],['مصاريف يدوية',+ex.manual,C.slate],['سداد مديونيات',+ex.debt,C.red]].filter(s=>s[1]>0);
-  new Chart(document.getElementById('chExpenses'),{type:'doughnut',data:{labels:slices.map(s=>s[0]),datasets:[{data:slices.map(s=>s[1]),backgroundColor:slices.map(s=>s[2]),borderWidth:2,borderColor:'#fff',hoverOffset:6}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'right',labels:{usePointStyle:true,boxWidth:8,padding:9,font:{size:11}}},tooltip:{callbacks:{label:(c)=>' '+c.label+': '+nf(c.parsed)}}}}}); })();
+/* سكربت الرسوم اتشال مع الرسوم نفسها (المرحلة ٤) — مكانها /reports */
 </script>

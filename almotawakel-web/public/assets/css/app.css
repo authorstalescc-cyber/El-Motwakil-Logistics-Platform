@@ -2365,7 +2365,7 @@ a.d-hchip:hover{background:rgba(255,255,255,.2)}
   background:var(--card);border:1px solid var(--line2);border-radius:20px;padding:3px 13px}
 
 /* ---------- مؤشرات (عدّاد متحرك) ---------- */
-.d-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px}
+.d-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
 .d-kpi{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 15px;
   box-shadow:var(--shadow);overflow:hidden;transition:.18s;text-decoration:none;--kc:var(--navy-mid);display:block}
 .d-kpi::before{content:'';position:absolute;inset-block:0;inset-inline-start:0;width:4px;background:var(--kc)}
@@ -2373,6 +2373,8 @@ a.d-hchip:hover{background:rgba(255,255,255,.2)}
 .d-kpi.navy{--kc:var(--navy-mid)} .d-kpi.green{--kc:var(--green)} .d-kpi.gold{--kc:#b58f1e}
 .d-kpi.purple{--kc:var(--purple)} .d-kpi.teal{--kc:var(--teal)} .d-kpi.red{--kc:var(--red)}
 .d-kpi.sader{--kc:var(--sader)}
+.d-kpis.three{grid-template-columns:repeat(3,1fr)} .d-kpis.four{grid-template-columns:repeat(4,1fr)}
+/* .five/.six اتسابوا للتوافق لو رجعت مؤشرات (المرحلة ٤ نزّلتهم من ٦ لـ٤) */
 .d-kpis.five{grid-template-columns:repeat(5,1fr)} .d-kpis.six{grid-template-columns:repeat(6,1fr)}
 .d-kpi-eye{opacity:.55}
 .d-kpi-ic{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;margin-bottom:11px;
@@ -2854,3 +2856,52 @@ button.d-hchip{cursor:pointer;font-family:inherit}
   .pb-modes{order:9}
   .pb-mode span:not(.ic){display:none}
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ① «محتاج منك» — قائمة التصرّفات على رأس الداشبورد (المرحلة ٤)
+   بتجاوب على «أعمل إيه دلوقتي؟» قبل أي رقم أو رسم.
+   ══════════════════════════════════════════════════════════════════════════ */
+.d-todo{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius-3);
+  overflow:hidden;box-shadow:var(--shadow-2)
+}
+.d-todo.clear{border-color:#b6dcc1;background:linear-gradient(180deg,#f4fbf6,var(--card))}
+.d-todo-head{
+  display:flex;align-items:center;gap:var(--space-2);
+  padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--line);
+  font-weight:var(--fw-black);color:var(--navy)
+}
+.d-todo.clear .d-todo-head{border-bottom-color:#d8ecdd;color:var(--green)}
+.d-todo-list{display:flex;flex-direction:column}
+.d-todo-row{
+  display:flex;align-items:center;gap:var(--space-3);
+  padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--line);
+  color:inherit;transition:var(--dur-fast) var(--ease)
+}
+.d-todo-row:last-child{border-bottom:none}
+.d-todo-row:hover{background:var(--bg)}
+.d-todo-ic{
+  flex:none;width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+  border-radius:var(--radius-2);background:var(--bg);color:var(--navy)
+}
+.d-todo-row.err  .d-todo-ic{background:var(--red-lt);color:var(--red)}
+.d-todo-row.warn .d-todo-ic{background:var(--gold-light);color:var(--gold-dark)}
+.d-todo-row.info .d-todo-ic{background:var(--warid-lt);color:var(--warid-dk)}
+.d-todo-tx{flex:1;min-width:0}
+.d-todo-tx b{display:block;font-size:var(--fs-3);font-weight:var(--fw-black);color:var(--ink)}
+.d-todo-tx span{display:block;font-size:var(--fs-1);font-weight:var(--fw-bold);color:var(--grey);margin-top:2px}
+.d-todo-go{flex:none;color:var(--grey)}
+.d-todo-empty{
+  display:flex;flex-direction:column;align-items:center;gap:var(--space-1);
+  padding:var(--space-6) var(--space-4);text-align:center;color:var(--green)
+}
+.d-todo-empty b{font-size:var(--fs-4);color:var(--ink)}
+.d-todo-empty span{font-size:var(--fs-2);font-weight:var(--fw-bold);color:var(--grey)}
+/* الهيرو بقى أقصر بعد ما الشريط المتحرك اتشال */
+.d-hero.compact{min-height:auto;padding-bottom:var(--space-5)}
+@media(max-width:560px){
+  .d-todo-tx b{font-size:var(--fs-2)}
+}
+
+/* سطر توضيحي تحت عنوان الكارت — بيفرّق بين سجل «فلوس اليوم» وسجل «آخر ما اتسجّل» */
+.d-card-head h3 .d-head-sub{display:block;font-size:var(--fs-1);font-weight:var(--fw-bold);color:var(--grey);margin-top:2px}

@@ -75,6 +75,7 @@ $printQs = http_build_query(array_filter(['from'=>$from,'to'=>$to]));
 <!-- ═══════════ نظرة عامة ═══════════ -->
 <section class="tab-panel active" data-panel="overview">
   <div class="chart-card full mb"><h3>الأداء الشهري — <?= e($year) ?></h3><div class="chart-box"><canvas id="chMonthly"></canvas></div></div>
+  <div class="chart-card full mb"><h3>حجم العمليات — آخر ١٤ يوم</h3><div class="chart-box"><canvas id="chTrend"></canvas></div></div>
 
   <div class="card mb" style="padding:18px">
     <div class="section-head">الأداء الشهري — <?= e($year) ?></div>
@@ -299,6 +300,8 @@ const RP = <?= js_json([
                   'expenses'=>array_map(fn($m)=>round($monthly[$m]['expenses'],2),range(1,12)),
                   'collections'=>array_map(fn($m)=>round($monthly[$m]['collections'],2),range(1,12))],
   'expenses'  => array_map(fn($r)=>['label'=>$r['label'],'value'=>(float)$r['value']], $expenses['categories']),
+  // «حجم العمليات» اتنقل من الداشبورد (المرحلة ٤)
+  'trend'     => ['labels' => $trend['labels'] ?? [], 'data' => $trend['data'] ?? []],
 ]) ?>;
 
 const C = {navy:'#15355B',navyMid:'#1E4B7A',gold:'#C9A227',green:'#1E6E3C',red:'#9B2C2C',teal:'#14746F',purple:'#5B3E7A'};
@@ -318,6 +321,9 @@ function draw(id){
       {label:'المصاريف',data:RP.monthly.expenses,borderColor:C.red,backgroundColor:'rgba(155,44,44,.06)',tension:.35,fill:true,borderWidth:2},
       {label:'المدفوعات',data:RP.monthly.collections,borderColor:C.green,backgroundColor:'rgba(30,110,60,.08)',tension:.35,fill:true,borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{y:{ticks:{callback:fmt}}},plugins:{legend:{position:'top'}}}});
+  if (id==='chTrend') new Chart(document.getElementById('chTrend'),{type:'bar',
+    data:{labels:RP.trend.labels,datasets:[{label:'عدد العمليات',data:RP.trend.data,backgroundColor:'rgba(21,53,91,.85)',hoverBackgroundColor:C.gold,borderRadius:6,maxBarThickness:22}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{precision:0}},x:{grid:{display:false}}},plugins:{legend:{display:false}}}});
   if (id==='chExp') new Chart(document.getElementById('chExp'),{type:'doughnut',
     data:{labels:RP.expenses.map(r=>r.label),datasets:[{data:RP.expenses.map(r=>r.value),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right'}}}});

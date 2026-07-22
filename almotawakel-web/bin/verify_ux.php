@@ -770,6 +770,63 @@ str_contains($cssSrc, '.pb-mode.on')
     ? ok('الوضع الحالي مُعلَّم بصريًا')
     : bad('الوضع الحالي مش مُعلَّم');
 
+/* ══════════════ ١٩) الداشبورد ══════════════ */
+sec('١٩) الداشبورد (المرحلة ٤)');
+
+$dashView = (string) file_get_contents($root . '/app/Views/dashboard/index.php');
+$dashCtrl = php_code((string) file_get_contents($root . '/app/Controllers/DashboardController.php'));
+
+str_contains($dashView, 'd-todo')
+    ? ok('قسم «محتاج منك» موجود على رأس الصفحة')
+    : bad('مفيش قسم «محتاج منك» — الداشبورد لسه مش بيجاوب على «أعمل إيه؟»');
+str_contains($dashView, 'Notification::feed()')
+    ? ok('«محتاج منك» من نفس مجمّع الإشعارات — مفيش تعريف تاني للأرقام')
+    : bad('«محتاج منك» بيحسب أرقامه لوحده — ممكن يختلف عن الجرس');
+
+// الشريط المتحرك كان بيخبّي معلومات
+!str_contains($dashView, 'd-live')
+    ? ok('الشريط المتحرك اتشال (كان بيعرض بند واحد ويلفّ كل ٣ ثواني)')
+    : bad('الشريط المتحرك لسه موجود');
+
+// الرسوم اتنقلت للتقارير — ٤ استعلامات ثقيلة + 200KB جافاسكريبت
+$chartLeft = [];
+foreach (['chMonthly', 'chTrend', 'chExpenses', 'chClients'] as $c) {
+    if (str_contains($dashView, $c)) { $chartLeft[] = $c; }
+}
+$chartLeft ? bad('رسوم لسه في الداشبورد: ' . implode('، ', $chartLeft))
+           : ok('كل الرسوم اتنقلت للتقارير (٤ استعلامات ثقيلة اتشالت)');
+!str_contains($dashView, 'chart.umd.js')
+    ? ok('Chart.js (200KB) مش بيتحمّل في الداشبورد')
+    : bad('Chart.js لسه بيتحمّل في الداشبورد بلا داعي');
+$deadQueries = [];
+foreach (['activityTrend', 'clientDebts', 'monthlyExpensePayments', 'expenseReport'] as $q) {
+    if (str_contains($dashCtrl, 'Metrics::' . $q)) { $deadQueries[] = $q; }
+}
+$deadQueries ? bad('استعلامات رسوم ميتة لسه في كنترولر الداشبورد: ' . implode('، ', $deadQueries))
+             : ok('كنترولر الداشبورد ما بقاش بينفّذ استعلامات الرسوم');
+
+/* ⚠️ قرار صاحب المشروع الموثَّق: الداشبورد **بلا نولون وبلا «المتبقي للعملاء»**.
+   رسم «المتبقي للعملاء» كان راجع بالغلط — الفحص ده بيمنع رجوعه تاني.
+   ⚠️ لازم نشيل التعليقات الأول: الشرح اللي بيوثّق القاعدة بيذكر النص نفسه،
+   وأول نسخة من الفحص فشلت بإنذار كاذب بسببه (نفس مصيدة `code_only`). */
+!preg_match('/المتبقي للعملاء/u', php_code($dashView))
+    ? ok('مفيش «المتبقي للعملاء» في الداشبورد (قرار صاحب المشروع)')
+    : bad('«المتبقي للعملاء» رجع للداشبورد — بيخالف قرار صاحب المشروع الموثَّق');
+
+// الرسم المنقول لازم يشتغل فعلاً في التقارير
+$repView = (string) file_get_contents($root . '/app/Views/reports/index.php');
+$repCtrl = php_code((string) file_get_contents($root . '/app/Controllers/ReportsController.php'));
+(str_contains($repView, 'chTrend') && str_contains($repCtrl, "Metrics::activityTrend"))
+    ? ok('«حجم العمليات» اشتغل في التقارير (ماركب + بيانات)')
+    : bad('«حجم العمليات» اتشال من الداشبورد ومش شغّال في التقارير');
+
+// المؤشرات نزلت من ٦
+preg_match_all("/\['(permits_open|ready|expenses|receipts|custody|reps)'/", $dashView, $km2);
+$kpiCount = count(array_unique($km2[1]));
+$kpiCount <= 4
+    ? ok("المؤشرات بقت {$kpiCount} بدل ٦ — أرقام النهاردة بس")
+    : bad("لسه فيه {$kpiCount} مؤشر — الصفحة بتعرض كل حاجة بنفس الأهمية");
+
 /* ══════════════ الخلاصة ══════════════ */
 echo "\n" . str_repeat('=', 62) . "\n";
 echo "نجح: $pass   |   فشل: $fail   |   تخطّي: $skip\n";

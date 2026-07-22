@@ -23,12 +23,9 @@ class DashboardController extends Controller
         $year = (int) substr($date, 0, 4);
         $profile = static fn(string $name, callable $operation) => Performance::span($name, $operation);
 
-        $charts = [
-            'trend'    => $profile('dashboard.chart.trend', fn() => Metrics::activityTrend(14, $date)),
-            'clients'  => $profile('dashboard.chart.clients', fn() => Metrics::clientDebts(7)),
-            'monthly'  => $profile('dashboard.chart.monthly', fn() => array_values(Metrics::monthlyExpensePayments($year))),
-            'expenses' => $profile('dashboard.chart.expenses', fn() => Metrics::expenseReport()),
-        ];
+        /* ⚠️ استعلامات الرسوم الأربعة اتشالت (المرحلة ٤): الرسوم اتنقلت
+           لـ/reports، واتنين منها كانوا مكرَّرين هناك أصلاً. ده بيوفّر أربع
+           تجميعات ثقيلة من **كل** فتحة للداشبورد. */
         $custodyBalance = $profile('dashboard.custody', fn() => Custody::balance());
         $readyData = $profile('dashboard.ready', fn() => Metrics::readyToInvoiceDashboard(8));
         $timeline = $profile('dashboard.feed', fn() => Metrics::expenseReceiptFeed($date, 300));
@@ -67,7 +64,6 @@ class DashboardController extends Controller
             // لوحة متابعة عهدة المناديب — قراءة فقط؛ الصرف المعتمد يدخل الخزنة (v42)
             'repsPanel'=> $profile('dashboard.reps', fn() => RepCustody::dashboard($date, 6, 6)),
             'notes'    => $profile('dashboard.notes', fn() => Note::all(20)),
-            'charts'   => $charts,
             // قائمة الأذونات قد تكون مئات الصفوف؛ تُحمّل فقط عند فتح الإدخال السريع.
             'quickPermits' => [],
             'quickCards' => [],

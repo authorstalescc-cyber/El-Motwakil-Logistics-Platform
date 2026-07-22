@@ -46,6 +46,8 @@ class ReportsController extends Controller
             'monthNames' => $monthNames,
             'byCompany'  => Metrics::byCompany(15, $fromN, $toN),
             'debts'      => Metrics::clientDebts(15),
+            // «حجم العمليات» اتنقل من الداشبورد (المرحلة ٤) — مكانه الطبيعي التقارير
+            'trend'      => Metrics::activityTrend(14),
             'customers'  => Metrics::customerProfit(25, $fromN, $toN),
             'expenses'   => Metrics::expenseReport($fromN, $toN),
             'payments'   => Metrics::paymentsReport($fromN, $toN),
