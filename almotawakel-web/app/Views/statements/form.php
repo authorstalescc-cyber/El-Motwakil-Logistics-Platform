@@ -85,6 +85,18 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
 
 <form method="post" action="<?= url('statements') ?>" id="stForm">
   <?= csrfField() ?>
+  <?php
+  /* اختيار البوالص كان بيضيع كله عند الرفض؛ دلوقتي بيرجع زي ما المستخدم سابه. */
+  $fsOld  = $formState['old'] ?? [];
+  $fsErr  = $formState['errors']['_form'] ?? '';
+  $fsHas  = $fsOld !== [];
+  $remPicked  = array_map('intval', (array)($fsOld['remaining_ids'] ?? []));
+  $paidPicked = array_map('intval', (array)($fsOld['paid_ids'] ?? []));
+  $isPicked = fn(int $id, array $list) => !$fsHas || in_array($id, $list, true);
+  ?>
+  <?php if ($fsErr !== ''): ?>
+    <div class="flash error" role="alert"><?= icon('alert',18) ?> <?= e($fsErr) ?> — اختيارك زي ما هو تحت.</div>
+  <?php endif; ?>
   <input type="hidden" name="owner" value="<?= e($owner) ?>">
 
   <!-- (1) ملخّص البوالص التي سبق الدفع عليها: بند واحد مهما كان عددها -->
@@ -99,7 +111,7 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
     <?php else: ?>
       <label class="paid-summary-pick" id="paidSummary"
              data-count="<?= $paidCount ?>" data-paid="<?= e($paidTotal) ?>">
-        <input type="checkbox" id="includePaid" name="include_paid_summary" value="1" checked>
+        <input type="checkbox" id="includePaid" name="include_paid_summary" value="1" <?= (!$fsHas || ($fsOld['include_paid_summary'] ?? '') !== '') ? 'checked' : '' ?>>
         <span><b><?= intf($paidCount) ?> بوليصة</b><small>حتى تاريخ <strong id="paidUntilLabel"><?= e(dfmt(work_date())) ?></strong></small></span>
         <span><b class="pos"><?= money($paidTotal,false) ?></b><small>إجمالي المدفوع له</small></span>
         <em>سيظهر هذا الملخّص كبند واحد في الكشف بدل سرد كل البوالص.</em>
@@ -126,7 +138,7 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
         <tbody>
         <?php foreach ($remaining as $b): ?>
           <tr>
-            <td><input type="checkbox" name="remaining_ids[]" value="<?= (int)$b['id'] ?>" class="pick" data-remaining="<?= e($b['remaining']) ?>" checked></td>
+            <td><input type="checkbox" name="remaining_ids[]" value="<?= (int)$b['id'] ?>" class="pick" data-remaining="<?= e($b['remaining']) ?>" <?= $isPicked((int)$b['id'], $remPicked) ? 'checked' : '' ?>></td>
             <td style="font-weight:700"><?= e($billNo($b)) ?></td>
             <td><?= dfmt($b['bill_date']) ?></td>
             <td><?= e($b['company'] ?: '—') ?></td>
@@ -155,13 +167,13 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
     <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:end">
       <div>
         <label style="font-size:.8rem;font-weight:700;color:var(--grey)">تاريخ الكشف</label>
-        <input type="date" name="statement_date" value="<?= e(work_date()) ?>"
+        <input type="date" name="statement_date" value="<?= e($fsOld['statement_date'] ?? work_date()) ?>"
                style="display:block;margin-top:5px;padding:9px 12px;border:1px solid var(--line);border-radius:9px">
       </div>
       <div style="flex:1;min-width:240px">
         <label style="font-size:.8rem;font-weight:700;color:var(--grey)">ملاحظة على الكشف (اختياري)</label>
         <textarea name="note" rows="2"
-                  style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;font-family:inherit"></textarea>
+                  style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;font-family:inherit"><?= e($fsOld['note'] ?? '') ?></textarea>
       </div>
     </div>
 

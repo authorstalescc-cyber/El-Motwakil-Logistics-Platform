@@ -1031,15 +1031,10 @@ class PermitController extends Controller
         redirect($back);
     }
 
-    /** مسار داخلي آمن للعودة إليه بعد إجراء (يمنع إعادة التوجيه الخارجي). */
-    private static function safeBack(?string $back): ?string
-    {
-        $back = trim((string)$back);
-        if ($back === '') { return null; }
-        if (str_contains($back, '://') || str_starts_with($back, '//')) { return null; }
-        if (!preg_match('~^[A-Za-z0-9/_?=&%.\-]+$~', $back)) { return null; }
-        return ltrim($back, '/');
-    }
+    /* `safeBack()` القديمة اتشالت في المرحلة ٢: كانت **مُنضِّف خامس** مكتوب
+       بالإيد و**بصفر مستدعين** — كود ميت. وكمان كان أضيق من اللازم: الـregex
+       بتاعها بترفض أي حرف عربي، فمسار رجوع فيه استعلام عربي كان بيترفض.
+       المُنضِّف الوحيد المعتمد دلوقتي هو `safe_back()` في helpers.php. */
 
     /** إنشاء حركة جديدة داخل الإذن */
     public function createMovement(string $id): void
@@ -2000,11 +1995,10 @@ class PermitController extends Controller
     /** رجوع محلي آمن لنفس فلتر السجلات. */
     private function bulkBack(): string
     {
-        $back = trim((string)($_POST['back'] ?? 'permits?view=records'));
-        if ($back === '' || str_contains($back, '://') || str_starts_with($back, '//') || str_contains($back, "\n")) {
-            return 'permits?view=records';
-        }
-        return ltrim($back, '/');
+        // بيمرّ على safe_back() زي أي رجوع تاني في النظام. النسخة القديمة
+        // كانت بتفحص '://' و'//' والسطر الجديد بس — أضعف من المُنضِّف الموحّد.
+        // بنقبل `_back` (المعتمد) و`back` (القديم) للتوافق مع الشاشات اللي لسه بتبعته.
+        return safe_back('permits?view=records', $_POST['_back'] ?? $_POST['back'] ?? null);
     }
 
     /** يجمّع رقم السيارة من خانتَي الحروف والأرقام (حروف ثم أرقام) */

@@ -1,3 +1,6 @@
+<?php /* إعادة تعبئة نموذج التحصيل بعد الرفض (المرحلة ٢). */
+$payOld = $payState['old'] ?? []; $payErr = $payState['errors']['_form'] ?? ''; ?>
+<?php if ($payErr !== ''): ?><div class="flash error" role="alert"><?= icon('alert',18) ?> <?= e($payErr) ?> — اللي كتبته زي ما هو.</div><?php endif; ?>
 <?php
 /** @var array $agent @var array $companies @var array $summary
  *  @var array $permits @var array $invoices @var ?array $balance
@@ -77,15 +80,15 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
       <div class="cp-form-grid">
         <div class="field" style="margin:0;width:150px">
           <label>التاريخ</label>
-          <input type="date" name="pay_date" value="<?= e(work_date()) ?>">
+          <input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>">
         </div>
         <div class="field" style="margin:0;width:150px">
           <label>المبلغ *</label>
-          <input type="number" step="0.01" min="0" name="amount" placeholder="0" required>
+          <input type="number" step="0.01" min="0" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="0" required>
         </div>
         <div class="field" style="margin:0;flex:1;min-width:160px">
           <label>البيان (اختياري)</label>
-          <input type="text" name="note" placeholder="ملاحظة على الدفعة">
+          <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة على الدفعة">
         </div>
       </div>
       <div class="cp-route">

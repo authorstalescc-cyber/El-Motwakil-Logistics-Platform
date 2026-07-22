@@ -69,8 +69,7 @@ class TrackController extends Controller
 
         $billId = (int) ($_POST['bill_id'] ?? 0);
         if ($billId <= 0) {
-            flash('error', 'اختار الشحنة الأول.');
-            redirect('tracking/new');
+            $this->fail('اختار الشحنة الأول.', 'tracking/new');
         }
         try {
             $t = Track::createForBill(
@@ -80,12 +79,9 @@ class TrackController extends Controller
                 Auth::user()
             );
         } catch (\Throwable $e) {
-            flash('error', 'تعذّر توليد الرابط: ' . $e->getMessage());
-            redirect('tracking/new');
-            return;   // redirect() بيخرج فعليًا — للتوضيح بس
+            $this->fail('ما اتولّدش الرابط: ' . $e->getMessage(), 'tracking/new');
         }
-        flash('success', 'الرابط جاهز — ابعته للسائق على الواتساب.');
-        redirect('tracking/' . (int) $t['id']);
+        $this->done('الرابط جاهز — ابعته للسائق على الواتساب.', 'tracking/' . (int) $t['id']);
     }
 
     /** صفحة الرحلة: الخريطة + خط السير + سجل النقاط */
@@ -93,7 +89,7 @@ class TrackController extends Controller
     {
         $this->requireAuth();
         $t = Track::find((int) $id);
-        if (!$t) { $this->notFound(); return; }
+        if (!$t) { $this->notFound(); }
 
         $bill = Database::row('SELECT * FROM bawalis WHERE id = ?', [(int) $t['bill_id']]);
 
@@ -167,7 +163,7 @@ class TrackController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $t = Track::find((int) $id);
-        if (!$t) { $this->notFound(); return; }
+        if (!$t) { $this->notFound(); }
 
         $st = (string) ($_POST['status'] ?? '');
         if (!isset(Track::STATUSES[$st])) {
@@ -184,7 +180,7 @@ class TrackController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
-        if (!Track::find((int) $id)) { $this->notFound(); return; }
+        if (!Track::find((int) $id)) { $this->notFound(); }
 
         if (public_base_url() === '') {
             flash('error', 'مفيش رابط عام دلوقتي — شغّل «تشغيل عام على النت» الأول.');
@@ -200,7 +196,7 @@ class TrackController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $t = Track::find((int) $id);
-        if (!$t) { $this->notFound(); return; }
+        if (!$t) { $this->notFound(); }
 
         Track::setPhone((int) $id, (string) ($_POST['driver_phone'] ?? ''), (string) ($t['driver'] ?? ''));
         flash('success', 'الرقم اتحفظ.');
@@ -211,7 +207,7 @@ class TrackController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
-        if (!Track::find((int) $id)) { $this->notFound(); return; }
+        if (!Track::find((int) $id)) { $this->notFound(); }
         Track::delete((int) $id);
         flash('success', 'التتبع اتمسح (الشحنة نفسها ما اتلمستش).');
         redirect('tracking');
@@ -230,6 +226,7 @@ class TrackController extends Controller
             'coverage' => Track::destinationCoverage(),
             'edit'     => isset($_GET['edit']) ? Track::findPoint((int) $_GET['edit']) : null,
             'prefill'  => trim((string) ($_GET['name'] ?? '')),
+            'placeState' => \App\Core\FormState::consume('tracking.place', 'tracking/places'),
         ]);
     }
 
@@ -247,12 +244,22 @@ class TrackController extends Controller
                 (string) ($_POST['note'] ?? '')
             );
         } catch (\Throwable $e) {
-            flash('error', $e->getMessage());
-            redirect('tracking/places');
-            return;
+            $this->formFailure(
+                'tracking.place',
+                'tracking/places',
+                [
+                    'id'      => (string) ($_POST['id'] ?? ''),
+                    'name'    => (string) ($_POST['name'] ?? ''),
+                    'lat'     => (string) ($_POST['lat'] ?? ''),
+                    'lng'     => (string) ($_POST['lng'] ?? ''),
+                    'aliases' => (string) ($_POST['aliases'] ?? ''),
+                    'note'    => (string) ($_POST['note'] ?? ''),
+                ],
+                ['_form' => $e->getMessage()],
+                'tracking/places'
+            );
         }
-        flash('success', 'الوجهة اتحفظت — المسافات هتتحسب عليها من دلوقتي.');
-        redirect('tracking/places');
+        $this->done('الوجهة اتحفظت — المسافات هتتحسب عليها من دلوقتي.', 'tracking/places');
     }
 
     public function deletePlace(string $pid): void
@@ -441,10 +448,8 @@ class TrackController extends Controller
         return preg_match('/^[a-f0-9]{6,24}$/i', $token) ? strtolower($token) : '';
     }
 
-    private function notFound(): void
-    {
-        http_response_code(404);
-        flash('error', 'التتبع ده مش موجود.');
-        redirect('tracking');
-    }
+    /* `notFound()` الخاصة اتشالت في المرحلة ٢ — بقت في `App\Core\Controller`
+       المشتركة، وبتعرض صفحة 404 جوّه الـlayout بدل ما ترمي على القايمة.
+       ⚠️ كانت `private` والمشتركة `protected`، وده **خطأ قاتل وقت التشغيل**
+       (ممنوع تضييق مستوى الوصول) — و`php -l` ما بيمسكهوش. */
 }

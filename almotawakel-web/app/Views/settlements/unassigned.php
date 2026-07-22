@@ -86,6 +86,7 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
               <td class="<?= (float)$b['remaining'] > 0.005 ? 'neg' : '' ?>"><?= money($b['remaining'], false) ?></td>
               <td>
                 <input list="dl_owner" name="owner[<?= $b['id'] ?>]" class="owner-inp"
+                       value="<?= e(($assignState['old']['owner'][$b['id']] ?? '')) ?>"
                        placeholder="اكتب اسم صاحب البيان" autocomplete="off"
                        style="width:100%;border:1px solid var(--line2);border-radius:8px;padding:7px 10px">
               </td>

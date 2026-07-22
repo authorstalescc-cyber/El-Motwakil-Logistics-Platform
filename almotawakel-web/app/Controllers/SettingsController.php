@@ -36,6 +36,7 @@ class SettingsController extends Controller
                 'company_email'   => App::setting('company_email', ''),
             ],
             'permitCfg'  => Permit::stageConfig(),
+            'userState'  => \App\Core\FormState::consume('settings.user.add', 'settings#tab-users'),
             // قواعد مرشد الإيصالات (v32): قوائم التوكيلات — سطر لكل توكيل
             'rcpRules'   => [
                 'insurance' => implode("\n", Permit::ruleAgencies('receipt_rules_insurance_agencies')),
@@ -69,16 +70,13 @@ class SettingsController extends Controller
         $role     = Access::normalizeRole($_POST['role'] ?? 'read_only');
 
         if ($username === '' || $password === '') {
-            flash('error', 'لازم تدخل اسم المستخدم وكلمة السر.');
-            redirect('settings#tab-users');
+            $this->userFailure('لازم تدخل اسم المستخدم وكلمة السر.');
         }
         if (mb_strlen($password) < Auth::MIN_PASSWORD_LENGTH) {
-            flash('error', 'كلمة السر قصيرة جدًا — الحد الأدنى ٨ أحرف.');
-            redirect('settings#tab-users');
+            $this->userFailure('كلمة السر قصيرة — الحد الأدنى ٨ أحرف.');
         }
         if (Database::row('SELECT id FROM users WHERE username = ?', [$username])) {
-            flash('error', 'اسم المستخدم ده موجود بالفعل — اختر اسمًا آخر.');
-            redirect('settings#tab-users');
+            $this->userFailure('اسم المستخدم ده موجود بالفعل — اختار اسم تاني.');
         }
 
         Database::exec(
@@ -87,8 +85,30 @@ class SettingsController extends Controller
         );
         $newId=Database::lastId();
         Audit::log('create','users',$newId,null,Database::row('SELECT id,username,display_name,role,can_free_edit,created_at FROM users WHERE id=?',[$newId]),'إضافة مستخدم جديد');
-        flash('success', 'تمت إضافة المستخدم «' . ($display !== '' ? $display : $username) . '».');
-        redirect('settings#tab-users');
+        $this->done('تمت إضافة المستخدم «' . ($display !== '' ? $display : $username) . '».', 'settings#tab-users');
+    }
+
+    /**
+     * فشل إضافة مستخدم — بيرجّع الحقول متعبّية.
+     *
+     * ⚠️ **كلمة السر مقصود إنها ما ترجعش**: تخزينها في الجلسة عشان نعيد
+     * تعبئتها بيحطّها نصًّا صريحًا في مخزن الجلسة على الخادم بلا داعي.
+     * نفس اللي بيعمله نموذج الدخول بالظبط.
+     */
+    private function userFailure(string $msg): never
+    {
+        $this->formFailure(
+            'settings.user.add',
+            'settings#tab-users',
+            [
+                'username'      => trim((string)($_POST['username'] ?? '')),
+                'display_name'  => trim((string)($_POST['display_name'] ?? '')),
+                'role'          => (string)($_POST['role'] ?? 'read_only'),
+                'can_free_edit' => !empty($_POST['can_free_edit']) ? '1' : '',
+            ],
+            ['_form' => $msg],
+            'settings#tab-users'
+        );
     }
 
     /** تعديل مستخدم (اسم الدخول + الاسم الظاهر + كلمة السر اختيارياً) */
@@ -126,8 +146,7 @@ class SettingsController extends Controller
         }
         // لو أدخل كلمة سر جديدة لازم تكون ٨ أحرف على الأقل
         if ($password !== '' && mb_strlen($password) < Auth::MIN_PASSWORD_LENGTH) {
-            flash('error', 'كلمة السر قصيرة جدًا — الحد الأدنى ٨ أحرف.');
-            redirect('settings#tab-users');
+            $this->userFailure('كلمة السر قصيرة — الحد الأدنى ٨ أحرف.');
         }
 
         $before=['id'=>$user['id'],'username'=>$user['username'],'display_name'=>$user['display_name'],'role'=>$user['role']??'read_only','can_free_edit'=>$user['can_free_edit']??0];

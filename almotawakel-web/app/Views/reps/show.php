@@ -1,4 +1,9 @@
 <?php
+/* إعادة تعبئة نموذجي «بند السجل» و«تقفيل الحساب» بعد الرفض (المرحلة ٢). */
+$eOld = $entryState['old'] ?? []; $eErr = $entryState['errors']['_form'] ?? '';
+$sOld = $settleState['old'] ?? []; $sErr = $settleState['errors']['_form'] ?? '';
+?>
+<?php
 use App\Models\Rep;
 /**
  * كارت المندوب — بروفايل + كشف حساب بطرفين + إدخال بنود + تقفيل دوري.
@@ -65,32 +70,33 @@ $kindColor = function(string $k) use ($creditKinds): string {
 <!-- إضافة بند للسجل -->
 <div class="card mb" style="padding:16px 18px">
   <div class="section-head" style="margin:0 0 10px">➕ إضافة بند لسجل المندوب</div>
+  <?php if ($eErr !== ''): ?><div class="flash error" role="alert"><?= icon('alert',17) ?> <?= e($eErr) ?></div><?php endif; ?>
   <form method="post" action="<?= url('reps/'.$rep['id'].'/entry') ?>" class="entry-form">
     <?= csrfField() ?>
     <div class="field" style="width:150px">
       <label>التاريخ</label>
-      <input type="date" name="entry_date" value="<?= e(work_date()) ?>">
+      <input type="date" name="entry_date" value="<?= e($eOld['entry_date'] ?? work_date()) ?>">
     </div>
     <div class="field" style="min-width:200px">
       <label>النوع</label>
       <select name="kind" required>
         <optgroup label="مستحقات له (+)">
-          <?php foreach ($creditKinds as $k): ?><option value="<?= $k ?>"><?= e($kinds[$k]) ?></option><?php endforeach; ?>
+          <?php foreach ($creditKinds as $k): ?><option value="<?= $k ?>" <?= ($eOld['kind'] ?? '') === $k ? 'selected' : '' ?>><?= e($kinds[$k]) ?></option><?php endforeach; ?>
         </optgroup>
         <optgroup label="خصومات / صرف عليه (−)">
-          <option value="expense_deducted"><?= e($kinds['expense_deducted']) ?></option>
-          <option value="deduction"><?= e($kinds['deduction']) ?></option>
-          <option value="advance"><?= e($kinds['advance']) ?> — كاش من الخزنة</option>
+          <option value="expense_deducted" <?= ($eOld['kind'] ?? '') === 'expense_deducted' ? 'selected' : '' ?>><?= e($kinds['expense_deducted']) ?></option>
+          <option value="deduction" <?= ($eOld['kind'] ?? '') === 'deduction' ? 'selected' : '' ?>><?= e($kinds['deduction']) ?></option>
+          <option value="advance" <?= ($eOld['kind'] ?? '') === 'advance' ? 'selected' : '' ?>><?= e($kinds['advance']) ?> — كاش من الخزنة</option>
         </optgroup>
       </select>
     </div>
     <div class="field" style="width:140px">
       <label>المبلغ</label>
-      <input type="number" step="0.01" name="amount" placeholder="0" required>
+      <input type="number" step="0.01" name="amount" value="<?= e($eOld['amount'] ?? '') ?>" placeholder="0" required>
     </div>
     <div class="field" style="flex:1;min-width:160px">
       <label>البيان / ملاحظة</label>
-      <input type="text" name="note" placeholder="اختياري">
+      <input type="text" name="note" value="<?= e($eOld['note'] ?? '') ?>" placeholder="اختياري">
     </div>
     <label class="visa-toggle" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;padding-bottom:8px">
       <input type="checkbox" name="is_visa" value="1" style="width:16px;height:16px;accent-color:var(--gold)">💳 فيزا
@@ -145,19 +151,20 @@ $kindColor = function(string $k) use ($creditKinds): string {
 <div class="two-col">
   <div class="card" style="padding:16px 18px">
     <div class="section-head" style="margin:0 0 10px">🧾 تقفيل الحساب (يدوي من–إلى)</div>
+    <?php if ($sErr !== ''): ?><div class="flash error" role="alert"><?= icon('alert',17) ?> <?= e($sErr) ?></div><?php endif; ?>
     <form method="post" action="<?= url('reps/'.$rep['id'].'/settle') ?>" class="confirm-financial" data-confirm="تقفيل حساب المندوب عن الفترة المحدّدة وتسجيل دفعة التسوية؟">
       <?= csrfField() ?>
       <div class="form-grid" style="grid-template-columns:1fr 1fr">
-        <div class="field"><label>من تاريخ</label><input type="date" name="period_from"></div>
-        <div class="field"><label>إلى تاريخ</label><input type="date" name="period_to"></div>
-        <div class="field"><label>تاريخ الدفع</label><input type="date" name="pay_date" value="<?= e(work_date()) ?>"></div>
+        <div class="field"><label>من تاريخ</label><input type="date" name="period_from" value="<?= e($sOld['period_from'] ?? '') ?>"></div>
+        <div class="field"><label>إلى تاريخ</label><input type="date" name="period_to" value="<?= e($sOld['period_to'] ?? '') ?>"></div>
+        <div class="field"><label>تاريخ الدفع</label><input type="date" name="pay_date" value="<?= e($sOld['pay_date'] ?? work_date()) ?>"></div>
         <div class="field">
           <label>طريقة الدفع</label>
           <label class="visa-toggle" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;padding-top:8px">
             <input type="checkbox" name="is_visa" value="1" style="width:16px;height:16px;accent-color:var(--gold)">💳 فيزا (لا يُخصم من العهدة)
           </label>
         </div>
-        <div class="field" style="grid-column:1/-1"><label>ملاحظة على التسوية</label><input type="text" name="note" placeholder="اختياري"></div>
+        <div class="field" style="grid-column:1/-1"><label>ملاحظة على التسوية</label><input type="text" name="note" value="<?= e($sOld['note'] ?? '') ?>" placeholder="اختياري"></div>
       </div>
       <div style="color:var(--grey);font-size:.82rem;margin:6px 0 12px">
         سيبها فاضية عشان تحاسب على كل البنود غير المتحاسبة. الصافي = المستحقات − الخصومات − السُلف.

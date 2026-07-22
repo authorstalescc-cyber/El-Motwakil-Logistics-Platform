@@ -229,6 +229,7 @@ class SettlementController extends Controller
             'bills'        => $bills,
             'tot'          => $tot,
             'ownerOptions' => $this->ownerOptions(),
+            'assignState'  => FormState::consume('settlements.assign', 'settlements?unassigned=1'),
         ]);
     }
 
@@ -251,11 +252,18 @@ class SettlementController extends Controller
             );
             $count += $n;
         }
-        flash(
-            $count ? 'success' : 'error',
-            $count ? "تم تعيين صاحب البيان لـ $count بوليصة." : 'لم تُدخَل أي أسماء لحفظها.'
-        );
-        redirect('settlements?unassigned=1');
+        if (!$count) {
+            // ⚠️ كان بيضيّع كل الأسماء المكتوبة في الشبكة — المستخدم بيملّي
+            // عشرات الصفوف بإيده وأول رفض بيرجّعها فاضية.
+            $this->formFailure(
+                'settlements.assign',
+                'settlements?unassigned=1',
+                ['owner' => array_map(fn($v) => trim((string) $v), (array) $owners)],
+                ['_form' => 'ما اتحفظش ولا اسم — يمكن البوالص دي اتحطّ لها صاحب بيان من مكان تاني.'],
+                'settlements?unassigned=1'
+            );
+        }
+        $this->done("تم تعيين صاحب البيان لـ $count بوليصة.", 'settlements?unassigned=1');
     }
 
     /** أسماء أصحاب البيان المقترحة (الموجودون فعلاً + الوكلاء) لضمان توحيد التهجئة */

@@ -22,35 +22,38 @@ $e = $edit ?: null;
     <b style="display:block;margin-bottom:10px;color:var(--navy)">
       <?= icon($e ? 'edit' : 'plus', 15) ?> <?= $e ? 'تعديل: ' . e($e['name']) : 'وجهة جديدة' ?>
     </b>
+    <?php /* اللي اتكتب بيرجع بعد الرفض بدل ما يضيع (المرحلة ٢). */
+       $pOld = $placeState['old'] ?? []; $pErr = $placeState['errors']['_form'] ?? ''; ?>
+    <?php if ($pErr !== ''): ?><div class="flash error" role="alert"><?= icon('alert',17) ?> <?= e($pErr) ?></div><?php endif; ?>
     <form method="post" action="<?= url('tracking/places') ?>" class="no-confirm" id="plForm">
       <?= csrfField() ?>
-      <input type="hidden" name="id" value="<?= (int) ($e['id'] ?? 0) ?>">
+      <input type="hidden" name="id" value="<?= (int) ($pOld['id'] ?? $e['id'] ?? 0) ?>">
 
       <label class="fld">
         <span>اسم الوجهة</span>
         <input type="text" name="name" id="plName" required maxlength="120"
-               value="<?= e($e['name'] ?? $prefill) ?>" placeholder="مثلاً: مدينة السادات">
+               value="<?= e($pOld['name'] ?? $e['name'] ?? $prefill) ?>" placeholder="مثلاً: مدينة السادات">
       </label>
 
       <label class="fld">
         <span>أسماء بديلة <small>(الاختصارات اللي بتكتبها في البوالص — افصلها بفاصلة)</small></span>
         <input type="text" name="aliases" maxlength="400"
-               value="<?= e(str_replace('|', '، ', (string) ($e['aliases'] ?? ''))) ?>"
+               value="<?= e($pOld['aliases'] ?? str_replace('|', '، ', (string) ($e['aliases'] ?? ''))) ?>"
                placeholder="مثلاً: السادات، م السادات">
       </label>
 
       <div class="fld-row">
         <label class="fld"><span>خط العرض (lat)</span>
           <input type="text" name="lat" id="plLat" required inputmode="decimal"
-                 value="<?= e($e['lat'] ?? '') ?>" placeholder="30.3661"></label>
+                 value="<?= e($pOld['lat'] ?? $e['lat'] ?? '') ?>" placeholder="30.3661"></label>
         <label class="fld"><span>خط الطول (lng)</span>
           <input type="text" name="lng" id="plLng" required inputmode="decimal"
-                 value="<?= e($e['lng'] ?? '') ?>" placeholder="30.5289"></label>
+                 value="<?= e($pOld['lng'] ?? $e['lng'] ?? '') ?>" placeholder="30.5289"></label>
       </div>
 
       <label class="fld">
         <span>ملاحظة <small>(اختياري)</small></span>
-        <input type="text" name="note" maxlength="160" value="<?= e($e['note'] ?? '') ?>">
+        <input type="text" name="note" maxlength="160" value="<?= e($pOld['note'] ?? $e['note'] ?? '') ?>">
       </label>
 
       <p class="pl-hint">

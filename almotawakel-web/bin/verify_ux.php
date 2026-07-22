@@ -544,6 +544,99 @@ str_contains($clView, '$reconErr')
     ? ok('مفتاح الرندر مش بيتصادم مع $reconState اللي في الشاشة')
     : bad('مفتاح render اسمه reconState — هيتصادم مع متغيّر الشاشة');
 
+/* ══════════════ ١٣) كل نموذج بيحافظ على مُدخَله ══════════════ */
+sec('١٣) كل الوحدات بتحافظ على المُدخَل (المرحلة ٢ج)');
+
+/* كل وحدة: [الكنترولر، معرّف حقيبة النموذج، الشاشة، مفتاح الاسترجاع فيها] */
+$preserve = [
+    'كشف صاحب البيان' => ['OwnerStatementController.php', 'statements.form.',  'statements/form.php',        '$fsOld'],
+    'توزيع أصحاب البيان' => ['SettlementController.php',  'settlements.assign', 'settlements/unassigned.php', '$assignState'],
+    'مستخدمو الإعدادات' => ['SettingsController.php',     'settings.user.add',  'settings/index.php',        '$userState'],
+    'كارت المندوب'     => ['RepController.php',           'reps.create',        'reps/form.php',             '$formErr'],
+    'بنود المندوب'     => ['RepController.php',           'reps.entry.',        'reps/show.php',             '$eOld'],
+    'تسوية المندوب'    => ['RepController.php',           'reps.settle.',       'reps/show.php',             '$sOld'],
+    'وجهات الخريطة'    => ['TrackController.php',         'tracking.place',     'tracking/places.php',       '$pOld'],
+    'تحصيل العميل'     => ['DirectoryController.php',     'directory.pay.',     'directory/agent.php',       '$payOld'],
+];
+foreach ($preserve as $label => [$ctrl, $formId, $view, $marker]) {
+    $cSrc = php_code((string) file_get_contents($root . '/app/Controllers/' . $ctrl));
+    $vSrc = (string) file_get_contents($root . '/app/Views/' . $view);
+    $hasCtrl = str_contains($cSrc, "'" . $formId);
+    $hasView = str_contains($vSrc, $marker);
+    ($hasCtrl && $hasView)
+        ? ok("{$label}: بيحفظ المُدخَل والشاشة بترجّعه")
+        : bad("{$label}: " . (!$hasCtrl ? 'الكنترولر مش بيحفظ' : 'الشاشة مش بترجّع') . " المُدخَل");
+}
+
+// حقلا الملاحظة في كارت المندوب لازم يبقوا من حقيبتين مختلفتين (اتصادفت غلطة فعلية)
+$repShow = (string) file_get_contents($root . '/app/Views/reps/show.php');
+(substr_count($repShow, "\$eOld['note']") === 1 && substr_count($repShow, "\$sOld['note']") === 1)
+    ? ok('ملاحظة البند وملاحظة التسوية كل واحدة من حقيبتها')
+    : bad('حقلا الملاحظة في كارت المندوب بيقروا من نفس الحقيبة');
+
+/* ══════════════ ١٤) مُنضِّف رجوع واحد ══════════════ */
+sec('١٤) مُنضِّف واحد للرجوع (المرحلة ٢د)');
+
+$weak = [];
+foreach (glob($root . '/app/Controllers/*.php') ?: [] as $file) {
+    $src = php_code((string) file_get_contents($file));
+    // النمط القديم: فحص يدوي بـ'://' بدل ما يعدّي على safe_back
+    if (preg_match("/str_contains\(\\\$back, ':\/\/'\)/", $src)) {
+        $weak[] = basename($file);
+    }
+}
+$weak ? bad('لسه فيه مُنضِّف رجوع مكتوب بالإيد أضعف من safe_back: ' . implode('، ', $weak))
+      : ok('كل مُنضِّفات الرجوع بتمرّ على safe_back (كانوا 4 مكتوبين بالإيد)');
+
+// سلوك فعلي — safe_back لازم ترفض كل صور الهجوم
+$attacks = [
+    'https://evil.com/x'    => 'FB',
+    '//evil.com/x'          => 'FB',
+    'javascript:alert(1)'   => 'FB',
+    "permits\nSet-Cookie: x" => 'FB',
+    ''                      => 'FB',
+    'permits?view=records'  => 'permits?view=records',
+    '/permits/12/manage'    => 'permits/12/manage',
+];
+$leaks = [];
+foreach ($attacks as $in => $want) {
+    if (safe_back('FB', $in) !== $want) { $leaks[] = $in === '' ? '(فاضي)' : $in; }
+}
+$leaks ? bad('safe_back بتقبل مسارات خطر: ' . implode('، ', $leaks))
+       : ok('safe_back بترفض كل صور الرجوع الخطرة (7 حالات)');
+
+/* ══════════════ ١٥) كل الكنترولرات بتتحمّل فعلاً ══════════════ */
+sec('١٥) تحميل كل الكنترولرات (بيمسك اللي php -l ما بيمسكهوش)');
+
+/* ⚠️ اتصادفت فعليًا: إضافة `protected notFound()` للكلاس الأساسي كسرت
+   TrackController وDirectoryController اللي كان عندهم `private notFound()`
+   — **تضييق مستوى الوصول خطأ قاتل وقت التشغيل**، و`php -l` بيعدّيه لأنه
+   بيفحص كل ملف لوحده. الصفحتان كانتا بترجّعا 500 صامت. */
+$broken = [];
+foreach (glob($root . '/app/Controllers/*.php') ?: [] as $file) {
+    $class = 'App\\Controllers\\' . basename($file, '.php');
+    try {
+        if (!class_exists($class)) { $broken[] = basename($file) . ' (مش لاقي الكلاس)'; }
+    } catch (\Throwable $e) {
+        $broken[] = basename($file) . ': ' . $e->getMessage();
+    }
+}
+$broken ? bad('كنترولرات مش بتتحمّل: ' . implode(' · ', $broken))
+        : ok('كل الكنترولرات (' . count(glob($root . '/app/Controllers/*.php') ?: []) . ') بتتحمّل بلا تعارض');
+
+// ونفس الحاجة للموديلات
+$brokenM = [];
+foreach (glob($root . '/app/Models/*.php') ?: [] as $file) {
+    $class = 'App\\Models\\' . basename($file, '.php');
+    try {
+        if (!class_exists($class)) { $brokenM[] = basename($file); }
+    } catch (\Throwable $e) {
+        $brokenM[] = basename($file) . ': ' . $e->getMessage();
+    }
+}
+$brokenM ? bad('موديلات مش بتتحمّل: ' . implode(' · ', $brokenM))
+         : ok('كل الموديلات (' . count(glob($root . '/app/Models/*.php') ?: []) . ') بتتحمّل بلا تعارض');
+
 /* ══════════════ الخلاصة ══════════════ */
 echo "\n" . str_repeat('=', 62) . "\n";
 echo "نجح: $pass   |   فشل: $fail   |   تخطّي: $skip\n";

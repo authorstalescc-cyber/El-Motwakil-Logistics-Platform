@@ -6,6 +6,9 @@ $val = fn($k) => $row[$k] ?? '';
   <a class="btn ghost" href="<?= url('reps') ?>">‹ رجوع للمناديب</a>
 </div>
 
+<?php if (($formErr ?? '') !== ''): ?>
+  <div class="flash error" role="alert"><?= icon('alert',18) ?> <?= e($formErr) ?> — اللي كتبته زي ما هو تحت.</div>
+<?php endif; ?>
 <form class="form-card" method="post" action="<?= e($action) ?>">
   <?= csrfField() ?>
   <div class="form-group-title">بيانات المندوب</div>

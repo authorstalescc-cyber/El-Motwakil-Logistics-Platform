@@ -49,7 +49,7 @@ class DirectoryController extends Controller
     {
         $this->requireAuth();
         $agent = Party::agent((int)$id);
-        if (!$agent) { $this->notFound(); return; }
+        if (!$agent) { $this->notFound(); }
         $name = $agent['name'];
         $summary       = Party::summary('client', $name);
         $permitInvSum  = PermitInvoice::summaryFor('client', $name);
@@ -70,6 +70,7 @@ class DirectoryController extends Controller
             'invoices'  => Party::invoicesBy('client', $name),
             'permitInvoices' => $permitInvoices,
             'invoicedPermitIds' => $invoicedPermitIds,
+            'payState'  => \App\Core\FormState::consume('directory.pay.' . (int)$id, 'directory/agent/' . (int)$id),
             'permitInvSum'   => $permitInvSum,
             'balance'   => Party::clientBalance($name),
             'payments'  => ClientPayment::forClient($name),
@@ -84,12 +85,12 @@ class DirectoryController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $agent = Party::agent((int)$id);
-        if (!$agent) { $this->notFound(); return; }
+        if (!$agent) { $this->notFound(); }
         $name  = $agent['name'];
         $back  = 'directory/agent/' . (int)$id;
 
         $amount = ($_POST['amount'] ?? '') === '' ? 0 : (float) $_POST['amount'];
-        if ($amount <= 0) { flash('error', 'أدخل مبلغ الدفعة.'); redirect($back); }
+        if ($amount <= 0) { $this->payFailure((int)$id, 'اكتب مبلغ الدفعة الأول.'); }
 
         $date  = trim($_POST['pay_date'] ?? '');
         $date  = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : work_date();
@@ -97,10 +98,10 @@ class DirectoryController extends Controller
         $card  = (int) ($_POST['visa_card_id'] ?? 0);
 
         if ($route === 'visa' && $card <= 0) {
-            flash('error', 'اختر كارت الفيزا لتوجيه الدفعة إليه.'); redirect($back);
+            $this->payFailure((int)$id, 'اختار كارت الفيزا اللي الدفعة هتتوجّه له.');
         }
         // العهدة النقدية تدخل التقفيل اليومي → امنع الكتابة على يوم متقفل
-        if ($route === 'cash' && ($err = Closing::guard($date))) { flash('error', $err); redirect($back); }
+        if ($route === 'cash' && ($err = Closing::guard($date))) { $this->payFailure((int)$id, $err); }
 
         try {
             ClientPayment::create([
@@ -113,9 +114,28 @@ class DirectoryController extends Controller
                 'visa_card_id' => $card,
                 'auto_allocate'=> !empty($_POST['auto_allocate']),
             ]);
-            flash('success', 'تم تسجيل التحصيل.');
-        } catch (\Throwable $e) { flash('error',$e->getMessage()); }
-        redirect($back);
+        } catch (\Throwable $e) { $this->payFailure((int)$id, $e->getMessage()); }
+        $this->done('تم تسجيل التحصيل.', $back);
+    }
+
+    /** فشل تسجيل تحصيل — بيرجّع المبلغ والتاريخ والملاحظة بدل ما يضيعوا. */
+    private function payFailure(int $agentId, string $msg): never
+    {
+        $path = 'directory/agent/' . $agentId;
+        $this->formFailure(
+            'directory.pay.' . $agentId,
+            $path,
+            [
+                'amount'        => (string) ($_POST['amount'] ?? ''),
+                'pay_date'      => (string) ($_POST['pay_date'] ?? ''),
+                'note'          => (string) ($_POST['note'] ?? ''),
+                'route'         => (string) ($_POST['route'] ?? 'none'),
+                'visa_card_id'  => (string) ($_POST['visa_card_id'] ?? ''),
+                'auto_allocate' => !empty($_POST['auto_allocate']) ? '1' : '',
+            ],
+            ['_form' => $msg],
+            $path
+        );
     }
 
     /** حذف دفعة سداد (مع السجل المرتبط بها في العهدة/الفيزا). */
@@ -146,7 +166,7 @@ class DirectoryController extends Controller
     {
         $this->requireAuth();
         $company = Party::company((int)$id);
-        if (!$company) { $this->notFound(); return; }
+        if (!$company) { $this->notFound(); }
         $name = $company['name'];
         $this->render('directory/company', [
             'title'    => 'شركة: ' . $name,
@@ -203,9 +223,6 @@ class DirectoryController extends Controller
         return $type==='company'?'companies':($type==='owner'?'owners':'agents');
     }
 
-    private function notFound(): void
-    {
-        http_response_code(404);
-        $this->render('errors/404', ['title' => 'غير موجود'], false);
-    }
+    /* `notFound()` الخاصة اتشالت في المرحلة ٢ — المشتركة في `App\Core\Controller`
+       بترندر 404 **جوّه الـlayout** (قائمة + بحث + رجوع) بدل صفحة مستقلة. */
 }

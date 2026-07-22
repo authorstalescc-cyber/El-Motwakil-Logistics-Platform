@@ -125,7 +125,31 @@ class OwnerStatementController extends Controller
             'remaining' => $cands['remaining'],
             'allBills'  => OwnerStatement::billsForOwner($owner),
             'previous'  => OwnerStatement::forOwner($owner),
+            'formState' => \App\Core\FormState::consume(
+                'statements.form.' . mb_strtolower(trim($owner)),
+                'statements/form?owner=' . urlencode($owner)
+            ),
         ]);
+    }
+
+    /**
+     * فشل إصدار الكشف — بيرجّع **اختيار البوالص كله** مع التاريخ والملاحظة.
+     */
+    private function statementFailure(string $owner, string $msg): never
+    {
+        $this->formFailure(
+            'statements.form.' . mb_strtolower(trim($owner)),
+            'statements/form?owner=' . urlencode($owner),
+            [
+                'paid_ids'             => array_map('intval', (array)($_POST['paid_ids'] ?? [])),
+                'remaining_ids'        => array_map('intval', (array)($_POST['remaining_ids'] ?? [])),
+                'include_paid_summary' => !empty($_POST['include_paid_summary']) ? '1' : '',
+                'statement_date'       => (string)($_POST['statement_date'] ?? ''),
+                'note'                 => (string)($_POST['note'] ?? ''),
+            ],
+            ['_form' => $msg],
+            'statements/form?owner=' . urlencode($owner)
+        );
     }
 
     /** حفظ الكشف كلقطة ثابتة ثم فتح صفحة الطباعة. */
@@ -134,14 +158,15 @@ class OwnerStatementController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $owner = trim((string)($_POST['owner'] ?? ''));
-        if ($owner === '') { flash('error', 'صاحب البيان مطلوب.'); redirect('statements/new'); }
+        if ($owner === '') { $this->fail('صاحب البيان مطلوب.', 'statements/new'); }
 
         $paidIds = array_map('intval', (array)($_POST['paid_ids'] ?? []));
         $remIds  = array_map('intval', (array)($_POST['remaining_ids'] ?? []));
         $includePaid = !empty($_POST['include_paid_summary']);
         if (!$includePaid && !$paidIds && !$remIds) {
-            flash('error', 'اختر بوليصة واحدة على الأقل لإدراجها في الكشف.');
-            redirect('statements/form?owner=' . urlencode($owner));
+            // ⚠️ كان بيضيّع اختيار البوالص كله — المستخدم بيراجع عشرات البوالص
+            // ويشيل ويحط، وأول رفض كان بيرجّعه للاختيار الافتراضي من أول وجديد.
+            $this->statementFailure($owner, 'اختار بوليصة واحدة على الأقل تدخل في الكشف.');
         }
 
         $id = OwnerStatement::create([
@@ -152,8 +177,7 @@ class OwnerStatementController extends Controller
             'include_paid_summary' => $includePaid,
             'remaining_ids'  => $remIds,
         ]);
-        flash('success', 'تم إصدار كشف الحساب وحفظه ✓');
-        redirect('statements/' . $id);
+        $this->done('تم إصدار كشف الحساب وحفظه ✓', 'statements/' . $id);
     }
 
     /** صفحة الطباعة A4 أفقية (مستقلة بدون التخطيط العام). */

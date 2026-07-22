@@ -265,6 +265,9 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 <!-- ============ تبويب: المستخدمون ============ -->
 <?php if ($canManageSecrets): ?>
 <div class="tab-panel" id="tab-users">
+<?php if (($userState['errors']['_form'] ?? '') !== ''): ?>
+  <div class="flash error" role="alert"><?= icon('alert',18) ?> <?= e($userState['errors']['_form']) ?> — البيانات اللي كتبتها زي ما هي (عدا كلمة السر).</div>
+<?php endif; ?>
   <div class="set-grid">
     <div class="card" style="padding:22px">
       <div class="section-head">➕ إضافة مستخدم جديد</div>
@@ -272,20 +275,20 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         <?= csrfField() ?>
         <div class="field">
           <label>اسم الدخول (username)</label>
-          <input type="text" name="username" required autocomplete="off" placeholder="مثال: ahmed">
+          <input type="text" name="username" value="<?= e($userState['old']['username'] ?? '') ?>" required autocomplete="off" placeholder="مثال: ahmed">
         </div>
         <div class="field">
           <label>الاسم الظاهر (اختياري)</label>
-          <input type="text" name="display_name" autocomplete="off" placeholder="مثال: أحمد محمد">
+          <input type="text" name="display_name" value="<?= e($userState['old']['display_name'] ?? '') ?>" autocomplete="off" placeholder="مثال: أحمد محمد">
         </div>
         <div class="field">
           <label>كلمة السر</label>
           <input type="password" name="password" required autocomplete="new-password" minlength="8" placeholder="٨ أحرف على الأقل">
         </div>
         <div class="field"><label>الدور</label><select name="role" required>
-          <?php foreach (($roleLabels ?? []) as $rk => $rl): ?><option value="<?= e($rk) ?>" <?= $rk==='read_only'?'selected':'' ?>><?= e($rl) ?></option><?php endforeach; ?>
+          <?php foreach (($roleLabels ?? []) as $rk => $rl): ?><option value="<?= e($rk) ?>" <?= $rk === ($userState['old']['role'] ?? 'read_only') ? 'selected' : '' ?>><?= e($rl) ?></option><?php endforeach; ?>
         </select></div>
-        <label class="free-login-option"><input type="checkbox" name="can_free_edit" value="1"><span><b>صلاحية الدخول الحر</b><small>تسمح بالتعديل على الأيام المقفولة؛ امنحها للمسؤولين فقط.</small></span></label>
+        <label class="free-login-option"><input type="checkbox" name="can_free_edit" value="1" <?= ($userState['old']['can_free_edit'] ?? '') !== '' ? 'checked' : '' ?>><span><b>صلاحية الدخول الحر</b><small>تسمح بالتعديل على الأيام المقفولة؛ امنحها للمسؤولين فقط.</small></span></label>
         <div style="margin-top:16px"><button class="btn gold" type="submit">➕ إضافة المستخدم</button></div>
       </form>
     </div>

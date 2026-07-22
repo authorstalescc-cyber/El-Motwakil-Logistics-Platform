@@ -291,11 +291,10 @@ class BawalisController extends CrudController
     /** رجوع محلي آمن لنفس جدول/فلتر البوالص. */
     private function bulkBack(): string
     {
-        $back = trim((string)($_POST['back'] ?? 'bawalis'));
-        if ($back === '' || str_contains($back, '://') || str_starts_with($back, '//') || str_contains($back, "\n")) {
-            return 'bawalis';
-        }
-        return ltrim($back, '/');
+        // بيمرّ على safe_back() زي أي رجوع تاني في النظام. النسخة القديمة
+        // كانت بتفحص '://' و'//' والسطر الجديد بس — أضعف من المُنضِّف الموحّد.
+        // بنقبل `_back` (المعتمد) و`back` (القديم) للتوافق مع الشاشات اللي لسه بتبعته.
+        return safe_back('bawalis', $_POST['_back'] ?? $_POST['back'] ?? null);
     }
 
     /**

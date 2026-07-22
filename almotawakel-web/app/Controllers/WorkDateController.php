@@ -52,17 +52,9 @@ class WorkDateController extends Controller
     }
 
     /** يقبل فقط مسارًا داخليًا نسبيًا (يمنع الـ open-redirect). */
+    /** يقبل مسارًا داخليًا فقط — نفس مُنضِّف كل الرجوع في النظام. */
     private function safeReturn(string $path): string
     {
-        $path = trim($path);
-        if ($path === '' || $path[0] !== '/' || str_starts_with($path, '//')) {
-            return '';
-        }
-        // نزيل قاعدة التطبيق إن وُجدت لأن redirect()/url() تعيد إضافتها.
-        $base = \App\Core\App::baseUrl();
-        if ($base && str_starts_with($path, $base)) {
-            $path = substr($path, strlen($base));
-        }
-        return ltrim($path, '/');
+        return safe_back('', $path);
     }
 }

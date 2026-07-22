@@ -40,9 +40,12 @@ class RepController extends Controller
     {
         $this->requireAuth();
         $rep = Rep::find((int) $id);
-        if (!$rep) { flash('error', 'المندوب غير موجود.'); redirect('reps'); }
+        if (!$rep) { $this->notFound('المندوب ده مش موجود أو اتمسح.'); }
 
+        $entryState = \App\Core\FormState::consume('reps.entry.' . (int) $id, 'reps/' . $id);
         $this->render('reps/show', [
+            'entryState'  => $entryState,
+            'settleState' => \App\Core\FormState::consume('reps.settle.' . (int) $id, 'reps/' . $id),
             'title'       => 'المندوب: ' . $rep['name'],
             'rep'         => $rep,
             'summary'     => Rep::summary((int) $id),
@@ -56,11 +59,16 @@ class RepController extends Controller
     public function create(): void
     {
         $this->requireAuth();
+        $fs = \App\Core\FormState::consume('reps.create', 'reps/new');
         $this->render('reps/form', [
             'title'  => 'إضافة مندوب',
-            'row'    => ['name' => '', 'phone' => '', 'monthly_salary' => '', 'hire_date' => work_date(), 'status' => 'active', 'note' => ''],
+            'row'    => array_replace(
+                ['name' => '', 'phone' => '', 'monthly_salary' => '', 'hire_date' => work_date(), 'status' => 'active', 'note' => ''],
+                $fs['old']
+            ),
             'action' => url('reps'),
             'isEdit' => false,
+            'formErr'=> $fs['errors']['_form'] ?? '',
         ]);
     }
 
@@ -69,22 +77,31 @@ class RepController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $data = $this->collectRep();
-        if ($data['name'] === '') { flash('error', 'اسم المندوب مطلوب.'); redirect('reps/new'); }
+        if ($data['name'] === '') {
+            $this->repFailure('reps.create', 'reps/new', $data, 'اسم المندوب مطلوب.');
+        }
         $id = Rep::create($data);
-        flash('success', 'تمت إضافة المندوب.');
-        redirect('reps/' . $id);
+        $this->done('تمت إضافة المندوب.', 'reps/' . $id);
+    }
+
+    /** فشل في نموذج مندوب — بيرجّع كل اللي اتكتب بدل ما يضيع. */
+    private function repFailure(string $formId, string $path, array $old, string $msg): never
+    {
+        $this->formFailure($formId, $path, $old, ['_form' => $msg], $path);
     }
 
     public function edit(string $id): void
     {
         $this->requireAuth();
         $row = Rep::find((int) $id);
-        if (!$row) { flash('error', 'المندوب غير موجود.'); redirect('reps'); }
+        if (!$row) { $this->notFound('المندوب ده مش موجود أو اتمسح.'); }
+        $fs = \App\Core\FormState::consume('reps.edit.' . (int) $id, 'reps/' . $id . '/edit');
         $this->render('reps/form', [
             'title'  => 'تعديل مندوب',
-            'row'    => $row,
+            'row'    => array_replace($row, $fs['old']),
             'action' => url('reps/' . $id),
             'isEdit' => true,
+            'formErr'=> $fs['errors']['_form'] ?? '',
         ]);
     }
 
@@ -92,9 +109,11 @@ class RepController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
-        if (!Rep::find((int) $id)) { flash('error', 'المندوب غير موجود.'); redirect('reps'); }
+        if (!Rep::find((int) $id)) { $this->fail('المندوب ده مش موجود أو اتمسح.', 'reps'); }
         $data = $this->collectRep();
-        if ($data['name'] === '') { flash('error', 'اسم المندوب مطلوب.'); redirect('reps/' . $id . '/edit'); }
+        if ($data['name'] === '') {
+            $this->repFailure('reps.edit.' . (int) $id, 'reps/' . $id . '/edit', $data, 'اسم المندوب مطلوب.');
+        }
         Rep::update((int) $id, $data);
         flash('success', 'تم حفظ التعديلات.');
         redirect('reps/' . $id);
@@ -119,16 +138,15 @@ class RepController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $rep = Rep::find((int) $id);
-        if (!$rep) { flash('error', 'المندوب غير موجود.'); redirect('reps'); }
+        if (!$rep) { $this->fail('المندوب ده مش موجود أو اتمسح.', 'reps'); }
 
         $data = $this->collectEntry();
         // الكاش (سُلفة/تسوية) بس هو اللي بيدخل العهدة/الإقفال → احرس قفل اليوم عليه
         if (Rep::isCashKind($data['kind']) && ($err = Closing::guard($data['entry_date']))) {
-            flash('error', $err); redirect('reps/' . $id);
+            $this->repFailure('reps.entry.' . (int) $id, 'reps/' . $id, $data, $err);
         }
         Rep::createEntry((int) $id, $data);
-        flash('success', 'تمت إضافة البند لسجل المندوب.');
-        redirect('reps/' . $id);
+        $this->done('تمت إضافة البند لسجل المندوب.', 'reps/' . $id, 'entries');
     }
 
     public function deleteEntry(string $eid): void
@@ -136,10 +154,10 @@ class RepController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $entry = Rep::findEntry((int) $eid);
-        if (!$entry) { flash('error', 'البند غير موجود.'); redirect('reps'); }
+        if (!$entry) { $this->fail('البند ده مش موجود أو اتمسح.', 'reps'); }
         // امنع حذف كاش داخل يوم متقفل (يغيّر الرصيد المرحّل)
         if (Rep::isCashKind($entry['kind']) && ($err = Closing::guard($entry['entry_date']))) {
-            flash('error', $err); redirect('reps/' . $entry['rep_id']);
+            $this->fail($err, 'reps/' . $entry['rep_id']);
         }
         Rep::deleteEntry((int) $eid);
         flash('success', 'تم حذف البند.');
@@ -152,7 +170,7 @@ class RepController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $rep = Rep::find((int) $id);
-        if (!$rep) { flash('error', 'المندوب غير موجود.'); redirect('reps'); }
+        if (!$rep) { $this->fail('المندوب ده مش موجود أو اتمسح.', 'reps'); }
 
         $from    = $this->cleanDate($_POST['period_from'] ?? '');
         $to      = $this->cleanDate($_POST['period_to'] ?? '');
@@ -161,16 +179,17 @@ class RepController extends Controller
         $note    = trim($_POST['note'] ?? '');
 
         // دفعة التسوية كاش يخرج فعلاً → احرس قفل يوم الدفع
-        if (!$isVisa && ($err = Closing::guard($payDate))) { flash('error', $err); redirect('reps/' . $id); }
+        $settleOld = ['period_from' => $from, 'period_to' => $to, 'pay_date' => $payDate, 'is_visa' => $isVisa ? '1' : '', 'note' => $note];
+        if (!$isVisa && ($err = Closing::guard($payDate))) {
+            $this->repFailure('reps.settle.' . (int) $id, 'reps/' . $id, $settleOld, $err);
+        }
 
         $pre = Rep::settlementPreview((int) $id, $from ?: null, $to ?: null);
         if ($pre['count'] === 0) {
-            flash('error', 'مفيش بنود غير متحاسبة في الفترة دي للتقفيل.');
-            redirect('reps/' . $id);
+            $this->repFailure('reps.settle.' . (int) $id, 'reps/' . $id, $settleOld, 'مفيش بنود غير متحاسبة في الفترة دي عشان تتقفل.');
         }
         $sid = Rep::settle((int) $id, $from ?: null, $to ?: null, $payDate, $isVisa, $note);
-        flash('success', 'تم تقفيل الحساب على صافي ' . money($pre['net']) . '.');
-        redirect('reps/' . $id . '/settlement/' . $sid . '/print');
+        $this->done('تم تقفيل الحساب على صافي ' . money($pre['net']) . '.', 'reps/' . $id . '/settlement/' . $sid . '/print');
     }
 
     public function settlementPrint(string $id, string $sid): void
@@ -179,7 +198,7 @@ class RepController extends Controller
         $rep = Rep::find((int) $id);
         $s   = Rep::settlement((int) $sid);
         if (!$rep || !$s || (int) $s['rep_id'] !== (int) $id) {
-            flash('error', 'التقفيل غير موجود.'); redirect('reps/' . $id);
+            $this->notFound('التقفيل ده مش موجود أو اتمسح.');
         }
         $this->render('reps/settlement_print', [
             'title'   => 'تسوية حساب المندوب',

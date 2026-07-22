@@ -79,8 +79,7 @@ class MovementController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $id = $this->save(null);
-        flash('success', 'تمت إضافة الحركة.');
-        redirect('movements');
+        $this->done('تمت إضافة الحركة.', 'movements', 'mv-' . $id);
     }
 
     public function update(string $id): void
@@ -88,8 +87,7 @@ class MovementController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $this->save((int)$id);
-        flash('success', 'تم حفظ الحركة.');
-        redirect('movements');
+        $this->done('تم حفظ الحركة.', 'movements', 'mv-' . (int)$id);
     }
 
     private function save(?int $id): int
