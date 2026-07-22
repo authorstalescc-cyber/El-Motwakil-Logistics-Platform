@@ -1384,3 +1384,34 @@ html:not(.js) .sec-head h2::after,html:not(.js) .sub-head h3::after{width:70px}
 /* خريطة المسارات بعرض كامل حين لا توجد لوحة جانبية */
 .routes.routes-solo{grid-template-columns:1fr}
 .routes.routes-solo .routes-map{max-width:600px;margin-inline:auto;width:100%}
+
+/* ── زر اختيار اللغة بالهيدر ─────────────────────── */
+.nav a.lang-btn{
+  display:inline-flex !important;align-items:center !important;justify-content:center !important;
+  gap:8px !important;font-family:var(--body) !important;font-size:14px !important;font-weight:600 !important;
+  color:#ffffff !important;background:rgba(255,255,255,.14) !important;
+  border:1px solid rgba(255,255,255,.3) !important;padding:6px 16px !important;
+  border-radius:20px !important;margin-inline-start:10px !important;
+  text-decoration:none !important;transition:all .2s ease !important;
+  white-space:nowrap !important;height:36px !important;line-height:1 !important;
+}
+.nav a.lang-btn::after{display:none !important}
+.nav a.lang-btn:hover{
+  background:rgba(255,255,255,.28) !important;border-color:var(--signal) !important;
+  color:var(--signal) !important;transform:translateY(-1px);
+}
+.nav a.lang-btn svg{
+  width:18px !important;height:18px !important;max-width:18px !important;max-height:18px !important;
+  min-width:18px !important;min-height:18px !important;
+  flex:none !important;display:inline-block !important;vertical-align:middle !important;
+  stroke:currentColor !important;
+}
+.nav a.lang-btn span{
+  display:inline-block !important;vertical-align:middle !important;line-height:1 !important;
+}
+@media (max-width:760px){
+  .nav a.lang-btn{
+    margin-inline-start:0 !important;margin-top:12px !important;
+    width:100% !important;max-width:100% !important;
+  }
+}

@@ -733,6 +733,43 @@ $stillReads > 0
     ? ok("بيانات shamil لسه بتتقرا في المجاميع ({$stillReads} موضع) — الأرشفة عرض بس")
     : bad('استعلامات shamil اتشالت! ده بيغيّر الإجماليات التاريخية');
 
+/* ══════════════ ١٨) شاشتا الإذن ══════════════ */
+sec('١٨) شاشتا الإذن: مصدر واحد للمشترك (المرحلة ٣)');
+
+$vSrc = (string) file_get_contents($root . '/app/Views/permits/view.php');
+$mSrc = (string) file_get_contents($root . '/app/Views/permits/manage.php');
+
+foreach (['_hero.php' => 'الهيرو', '_bar.php' => 'شريط الإجراءات'] as $part => $label) {
+    is_file($root . '/app/Views/permits/' . $part)
+        ? ok("جزء {$label} المشترك موجود")
+        : bad("جزء {$label} المشترك مش موجود");
+}
+(str_contains($vSrc, "include __DIR__ . '/_hero.php'") && str_contains($mSrc, "include __DIR__ . '/_hero.php'"))
+    ? ok('الشاشتان بتستخدما نفس الهيرو (كان مكرَّرًا حرفيًا ٣٥ سطر × ٢)')
+    : bad('واحدة من الشاشتين لسه بتكرّر ماركب الهيرو');
+(str_contains($vSrc, "include __DIR__ . '/_bar.php'") && str_contains($mSrc, "include __DIR__ . '/_bar.php'"))
+    ? ok('الشاشتان بتستخدما نفس شريط الإجراءات')
+    : bad('واحدة من الشاشتين لسه بتكرّر الشريط');
+
+/* ⚠️ ما ينفعش الماركب يرجع يتكرَّر: لو حد نسخ الهيرو في شاشة تاني هيرجع
+   التفرّع اللي كان بيخلّي الشاشتين تختلفا من غير ما حد ياخد باله. */
+$dupHero = 0;
+foreach ([$vSrc, $mSrc] as $src) {
+    $dupHero += substr_count($src, 'class="permit-hero');
+}
+$dupHero === 0
+    ? ok('مفيش أي نسخة مكرَّرة من ماركب الهيرو في الشاشتين')
+    : bad("ماركب الهيرو اترجع اتكتب في الشاشات ({$dupHero} مرة)");
+
+// مفتاح الوضع بيوضّح إنها شاشة واحدة بوضعين
+$barSrc = (string) file_get_contents($root . '/app/Views/permits/_bar.php');
+(str_contains($barSrc, 'pb-modes') && str_contains($barSrc, "\$mode==='view'") && str_contains($barSrc, "\$mode==='manage'"))
+    ? ok('مفتاح وضع واضح (عرض/تعديل) بدل لينكين باسمين مختلفين')
+    : bad('مفيش مفتاح وضع — المستخدم لسه لازم يقرّر قبل ما يشوف');
+str_contains($cssSrc, '.pb-mode.on')
+    ? ok('الوضع الحالي مُعلَّم بصريًا')
+    : bad('الوضع الحالي مش مُعلَّم');
+
 /* ══════════════ الخلاصة ══════════════ */
 echo "\n" . str_repeat('=', 62) . "\n";
 echo "نجح: $pass   |   فشل: $fail   |   تخطّي: $skip\n";

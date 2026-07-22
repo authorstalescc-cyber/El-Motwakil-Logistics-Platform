@@ -2831,3 +2831,26 @@ button.d-hchip{cursor:pointer;font-family:inherit}
 /* صف نشاط بلا رابط (أرشيف) — يفضل بنفس الشكل بس بلا مؤشر يد */
 .activity .act-flat{cursor:default}
 .activity .act-flat:hover{background:inherit;transform:none}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   مفتاح وضع الإذن (عرض / تعديل) — المرحلة ٣
+   بيوضّح إن دي **شاشة واحدة بوضعين** مش شاشتين مختلفتين، والوضع الحالي
+   مُعلَّم فالمستخدم مش محتاج يقرّر قبل ما يشوف اللي جوّه.
+   ══════════════════════════════════════════════════════════════════════════ */
+.pb-modes{
+  display:inline-flex;gap:2px;padding:3px;border-radius:var(--radius-2);
+  background:var(--bg);border:1px solid var(--line)
+}
+.pb-mode{
+  display:inline-flex;align-items:center;gap:var(--space-1);
+  padding:var(--space-1) var(--space-3);border-radius:var(--radius-1);
+  font-size:var(--fs-1);font-weight:var(--fw-black);color:var(--grey);
+  white-space:nowrap;transition:var(--dur-fast) var(--ease)
+}
+.pb-mode:hover{color:var(--navy);background:var(--white)}
+.pb-mode.on{background:var(--navy);color:var(--white);box-shadow:var(--shadow-1)}
+.pb-mode.on:hover{background:var(--navy-dark);color:var(--white)}
+@media(max-width:560px){
+  .pb-modes{order:9}
+  .pb-mode span:not(.ic){display:none}
+}
