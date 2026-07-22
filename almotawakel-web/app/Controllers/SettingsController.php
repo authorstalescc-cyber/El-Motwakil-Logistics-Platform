@@ -3,6 +3,8 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\App;
+use App\Core\Access;
+use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Groq;
 use App\Models\Lookup;
@@ -15,7 +17,8 @@ class SettingsController extends Controller
 {
     public function index(): void
     {
-        $this->requireAuth();
+        $this->requireRole(['owner', 'manager']);
+        $owner = Auth::isOwner();
         $this->render('settings/index', [
             'title'   => 'الإعدادات',
             'lookups' => Lookup::withIds(),
@@ -44,28 +47,33 @@ class SettingsController extends Controller
                 'inspection_creditor' => Debt::inspectionAccount()['name'],   // مستحق الكشف
                 'guarantee_creditor'  => Debt::guaranteeAccount()['name'],    // مستحق الضمان
             ],
-            'ai' => $this->aiSettings(),
-            'users'  => Database::all('SELECT id, username, display_name, can_free_edit, created_at FROM users ORDER BY id'),
+            'ai' => $owner ? $this->aiSettings() : [],
+            'users'  => $owner
+                ? Database::all('SELECT id, username, display_name, role, can_free_edit, created_at FROM users ORDER BY id')
+                : [],
             'currentUid' => (int)($_SESSION['uid'] ?? 0),
+            'canManageSecrets' => $owner,
+            'roleLabels' => Access::ROLES,
         ]);
     }
 
     /** إضافة مستخدم جديد (اسم دخول + كلمة سر) */
     public function addUser(): void
     {
-        $this->requireAuth();
+        $this->requireRole('owner');
         $this->requireCsrf();
         $username = trim($_POST['username'] ?? '');
         $password = (string)($_POST['password'] ?? '');
         $display  = trim($_POST['display_name'] ?? '');
         $canFree  = !empty($_POST['can_free_edit']) ? 1 : 0;
+        $role     = Access::normalizeRole($_POST['role'] ?? 'read_only');
 
         if ($username === '' || $password === '') {
             flash('error', 'لازم تدخل اسم المستخدم وكلمة السر.');
             redirect('settings#tab-users');
         }
-        if (mb_strlen($password) < 4) {
-            flash('error', 'كلمة السر قصيرة جدًا — الحد الأدنى ٤ أحرف.');
+        if (mb_strlen($password) < Auth::MIN_PASSWORD_LENGTH) {
+            flash('error', 'كلمة السر قصيرة جدًا — الحد الأدنى ٨ أحرف.');
             redirect('settings#tab-users');
         }
         if (Database::row('SELECT id FROM users WHERE username = ?', [$username])) {
@@ -74,11 +82,11 @@ class SettingsController extends Controller
         }
 
         Database::exec(
-            'INSERT INTO users (username, password_hash, display_name, can_free_edit) VALUES (?, ?, ?, ?)',
-            [$username, password_hash($password, PASSWORD_DEFAULT), $display !== '' ? $display : null, $canFree]
+            'INSERT INTO users (username, password_hash, display_name, role, can_free_edit) VALUES (?, ?, ?, ?, ?)',
+            [$username, password_hash($password, PASSWORD_DEFAULT), $display !== '' ? $display : null, $role, $canFree]
         );
         $newId=Database::lastId();
-        Audit::log('create','users',$newId,null,Database::row('SELECT id,username,display_name,can_free_edit,created_at FROM users WHERE id=?',[$newId]),'إضافة مستخدم جديد');
+        Audit::log('create','users',$newId,null,Database::row('SELECT id,username,display_name,role,can_free_edit,created_at FROM users WHERE id=?',[$newId]),'إضافة مستخدم جديد');
         flash('success', 'تمت إضافة المستخدم «' . ($display !== '' ? $display : $username) . '».');
         redirect('settings#tab-users');
     }
@@ -86,7 +94,7 @@ class SettingsController extends Controller
     /** تعديل مستخدم (اسم الدخول + الاسم الظاهر + كلمة السر اختيارياً) */
     public function updateUser(string $id): void
     {
-        $this->requireAuth();
+        $this->requireRole('owner');
         $this->requireCsrf();
         $id = (int)$id;
 
@@ -100,6 +108,7 @@ class SettingsController extends Controller
         $password = (string)($_POST['password'] ?? '');
         $display  = trim($_POST['display_name'] ?? '');
         $canFree  = !empty($_POST['can_free_edit']) ? 1 : 0;
+        $role     = Access::normalizeRole($_POST['role'] ?? 'read_only');
 
         if ($username === '') {
             flash('error', 'اسم المستخدم مطلوب.');
@@ -110,29 +119,35 @@ class SettingsController extends Controller
             flash('error', 'اسم المستخدم ده مستخدَم بالفعل — اختر اسمًا آخر.');
             redirect('settings#tab-users');
         }
-        // لو أدخل كلمة سر جديدة لازم تكون ٤ أحرف على الأقل
-        if ($password !== '' && mb_strlen($password) < 4) {
-            flash('error', 'كلمة السر قصيرة جدًا — الحد الأدنى ٤ أحرف.');
+        if (($user['role'] ?? '') === 'owner' && $role !== 'owner'
+            && (int) Database::scalar("SELECT COUNT(*) FROM users WHERE role='owner'") <= 1) {
+            flash('error', 'لا يمكن تغيير دور آخر مالك في النظام. عيّن مالكًا آخر أولًا.');
+            redirect('settings#tab-users');
+        }
+        // لو أدخل كلمة سر جديدة لازم تكون ٨ أحرف على الأقل
+        if ($password !== '' && mb_strlen($password) < Auth::MIN_PASSWORD_LENGTH) {
+            flash('error', 'كلمة السر قصيرة جدًا — الحد الأدنى ٨ أحرف.');
             redirect('settings#tab-users');
         }
 
-        $before=['id'=>$user['id'],'username'=>$user['username'],'display_name'=>$user['display_name'],'can_free_edit'=>$user['can_free_edit']??0];
+        $before=['id'=>$user['id'],'username'=>$user['username'],'display_name'=>$user['display_name'],'role'=>$user['role']??'read_only','can_free_edit'=>$user['can_free_edit']??0];
         if ($password !== '') {
             Database::exec(
-                'UPDATE users SET username = ?, display_name = ?, can_free_edit = ?, password_hash = ? WHERE id = ?',
-                [$username, $display !== '' ? $display : null, $canFree, password_hash($password, PASSWORD_DEFAULT), $id]
+                'UPDATE users SET username = ?, display_name = ?, role = ?, can_free_edit = ?, password_hash = ? WHERE id = ?',
+                [$username, $display !== '' ? $display : null, $role, $canFree, password_hash($password, PASSWORD_DEFAULT), $id]
             );
         } else {
             Database::exec(
-                'UPDATE users SET username = ?, display_name = ?, can_free_edit = ? WHERE id = ?',
-                [$username, $display !== '' ? $display : null, $canFree, $id]
+                'UPDATE users SET username = ?, display_name = ?, role = ?, can_free_edit = ? WHERE id = ?',
+                [$username, $display !== '' ? $display : null, $role, $canFree, $id]
             );
         }
-        Audit::log('update','users',$id,$before,Database::row('SELECT id,username,display_name,can_free_edit FROM users WHERE id=?',[$id]),'تعديل صلاحيات/بيانات مستخدم');
+        Audit::log('update','users',$id,$before,Database::row('SELECT id,username,display_name,role,can_free_edit FROM users WHERE id=?',[$id]),'تعديل صلاحيات/بيانات مستخدم');
 
         // لو عدّل حسابه الحالي، حدّث الاسم الظاهر في الجلسة
         if ($id === (int)($_SESSION['uid'] ?? 0)) {
             $_SESSION['uname'] = $display !== '' ? $display : $username;
+            $_SESSION['role'] = $role;
             $_SESSION['can_free_edit'] = $canFree;
             if (!$canFree) { \App\Core\Auth::setFreeEditMode(false); }
         }
@@ -144,7 +159,7 @@ class SettingsController extends Controller
     /** حذف مستخدم (لا يُسمح بحذف نفسك ولا آخر مستخدم) */
     public function deleteUser(string $id): void
     {
-        $this->requireAuth();
+        $this->requireRole('owner');
         $this->requireCsrf();
         $id = (int)$id;
 
@@ -159,6 +174,11 @@ class SettingsController extends Controller
 
         $user=Database::row('SELECT * FROM users WHERE id=?',[$id]);
         if (!$user) { flash('error','المستخدم غير موجود.'); redirect('settings#tab-users'); }
+        if (($user['role'] ?? '') === 'owner'
+            && (int) Database::scalar("SELECT COUNT(*) FROM users WHERE role='owner'") <= 1) {
+            flash('error', 'لا يمكن حذف آخر مالك في النظام.');
+            redirect('settings#tab-users');
+        }
         $pdo=Database::conn();$pdo->beginTransaction();
         try{Audit::trash('users',$user,$user['display_name']?:$user['username']);Database::exec('DELETE FROM users WHERE id=?',[$id]);$pdo->commit();}
         catch(\Throwable $e){if($pdo->inTransaction())$pdo->rollBack();flash('error','تعذّر حذف المستخدم: '.$e->getMessage());redirect('settings#tab-users');}
@@ -175,9 +195,13 @@ class SettingsController extends Controller
             'enabled'    => App::setting('ai_enabled', !empty($file['enabled']) ? '1' : '0'),
             'active'     => App::setting('ai_active', '1') === '2' ? '2' : '1',
             'model'      => App::setting('ai_model', $file['model'] ?? 'llama-3.3-70b-versatile'),
-            'key1'       => App::setting('ai_key_1', $file['api_key'] ?? ''),
+            'key1'       => '',
+            'key1_set'   => $this->aiKey(1) !== '',
+            'key1_hint'  => $this->maskedKey($this->aiKey(1)),
             'key1_label' => App::setting('ai_key_1_label', 'مفتاح ١'),
-            'key2'       => App::setting('ai_key_2', ''),
+            'key2'       => '',
+            'key2_set'   => $this->aiKey(2) !== '',
+            'key2_hint'  => $this->maskedKey($this->aiKey(2)),
             'key2_label' => App::setting('ai_key_2_label', 'مفتاح ٢'),
             'models'     => [
                 'llama-3.3-70b-versatile',
@@ -193,13 +217,19 @@ class SettingsController extends Controller
     /** حفظ إعدادات المساعد الذكي (المفاتيح + النشط + الموديل) */
     public function saveAi(): void
     {
-        $this->requireAuth();
+        $this->requireRole('owner');
         $this->requireCsrf();
         App::setSetting('ai_enabled', isset($_POST['ai_enabled']) ? '1' : '0');
         App::setSetting('ai_active',  ($_POST['ai_active'] ?? '1') === '2' ? '2' : '1');
         App::setSetting('ai_model',   trim($_POST['ai_model'] ?? '') ?: 'llama-3.3-70b-versatile');
-        App::setSetting('ai_key_1',   trim($_POST['ai_key_1'] ?? ''));
-        App::setSetting('ai_key_2',   trim($_POST['ai_key_2'] ?? ''));
+        foreach ([1, 2] as $slot) {
+            $posted = trim((string) ($_POST['ai_key_'.$slot] ?? ''));
+            if (!empty($_POST['clear_ai_key_'.$slot])) {
+                App::setSetting('ai_key_'.$slot, '');
+            } elseif ($posted !== '') {
+                App::setSetting('ai_key_'.$slot, $posted);
+            }
+        }
         App::setSetting('ai_key_1_label', trim($_POST['ai_key_1_label'] ?? '') ?: 'مفتاح ١');
         App::setSetting('ai_key_2_label', trim($_POST['ai_key_2_label'] ?? '') ?: 'مفتاح ٢');
         flash('success', 'تم حفظ إعدادات المساعد الذكي.');
@@ -209,9 +239,11 @@ class SettingsController extends Controller
     /** اختبار مفتاح + موديل (AJAX JSON) — قبل الاعتماد عليه */
     public function testAi(): void
     {
-        $this->requireAuth();
+        $this->requireRole('owner');
         $this->requireCsrf();
+        $slot  = (int) ($_POST['slot'] ?? 0);
         $key   = trim($_POST['key'] ?? '');
+        if ($key === '' && in_array($slot, [1, 2], true)) { $key = $this->aiKey($slot); }
         $model = trim($_POST['model'] ?? '');
         $this->json(Groq::ping($key, $model));
     }
@@ -219,7 +251,7 @@ class SettingsController extends Controller
     /** حفظ إعدادات الأذونات والتايم لاين */
     public function savePermits(): void
     {
-        $this->requireAuth();
+        $this->requireRole(['owner', 'manager']);
         $this->requireCsrf();
 
         // سعر الكشف والضمان لم يعد إعداداً عاماً — يُدخَل لكل إذن في صفحته.
@@ -268,7 +300,7 @@ class SettingsController extends Controller
 
     public function saveGeneral(): void
     {
-        $this->requireAuth();
+        $this->requireRole(['owner', 'manager']);
         $this->requireCsrf();
         App::setSetting('company_name', trim($_POST['company_name'] ?? 'شركة المتوكل'));
         $vat = (float)($_POST['vat_rate'] ?? 0.14);
@@ -290,7 +322,7 @@ class SettingsController extends Controller
 
     public function addLookup(): void
     {
-        $this->requireAuth();
+        $this->requireRole(['owner', 'manager']);
         $this->requireCsrf();
         $type  = $_POST['list_type'] ?? '';
         $value = trim($_POST['value'] ?? '');
@@ -303,7 +335,7 @@ class SettingsController extends Controller
 
     public function deleteLookup(string $id): void
     {
-        $this->requireAuth();
+        $this->requireRole(['owner', 'manager']);
         $this->requireCsrf();
         Lookup::delete((int)$id);
         flash('success', 'تم الحذف.');
@@ -313,7 +345,7 @@ class SettingsController extends Controller
     /** توحيد المسميات المكررة تلقائياً (أداة صيانة) */
     public function normalizeNames(): void
     {
-        $this->requireAuth();
+        $this->requireRole(['owner', 'manager']);
         $this->requireCsrf();
         $rep = Maintenance::normalizeNames(false);
         $t = $rep['totals'];
@@ -324,5 +356,19 @@ class SettingsController extends Controller
             flash('success', 'لا توجد مسميات مكرَّرة — كل الأسماء موحَّدة بالفعل ✓');
         }
         redirect('settings#tab-maint');
+    }
+
+    private function aiKey(int $slot): string
+    {
+        $file = App::config('groq');
+        $fallback = $slot === 1 && is_array($file) ? (string) ($file['api_key'] ?? '') : '';
+        return (string) App::setting('ai_key_'.$slot, $fallback);
+    }
+
+    private function maskedKey(string $key): string
+    {
+        if ($key === '') { return ''; }
+        $tail = mb_substr($key, -4, null, 'UTF-8');
+        return '••••••••' . $tail;
     }
 }

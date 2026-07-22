@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Auth;
+use App\Core\FormState;
 use App\Models\Audit;
 
 class AuthController extends Controller
@@ -10,7 +11,8 @@ class AuthController extends Controller
     public function showLogin(): void
     {
         if (Auth::check()) { redirect(''); }
-        $this->render('auth/login', ['title' => 'تسجيل الدخول'], false);
+        $state = FormState::consume('auth.login', 'login');
+        $this->render('auth/login', ['title' => 'تسجيل الدخول', 'formState'=>$state], false);
     }
 
     public function login(): void
@@ -30,13 +32,16 @@ class AuthController extends Controller
             unset($_SESSION['work_date']); // اسأل عن تاريخ العمل من جديد في كل دخول
             redirect('work-date');
         }
-        flash('error', 'اسم المستخدم أو كلمة السر غير صحيحة.');
-        $_SESSION['_old']['username'] = $username;
-        redirect('login');
+        $this->formFailure('auth.login', 'login', [
+            'username'=>$username,
+            'free_edit_mode'=>!empty($_POST['free_edit_mode']) ? '1' : '',
+        ], ['_form'=>Auth::failureMessage()], 'login');
     }
 
     public function logout(): void
     {
+        $this->requireAuth();
+        $this->requireCsrf();
         Auth::logout();
         redirect('login');
     }

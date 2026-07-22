@@ -23,6 +23,7 @@ class VisaCard
         'permits' => 'الإصدارات',
         'bawalis' => 'البوالص',
         'debt'    => 'سداد مديونية',
+        'rep_misc'=> 'نثريات المناديب',   // v45
     ];
 
     // ─────────────────────────────────────────────── الكروت (CRUD)
@@ -37,6 +38,17 @@ class VisaCard
     public static function find(int $id): ?array
     {
         return Database::row("SELECT * FROM visa_cards WHERE id = ?", [$id]);
+    }
+
+    /**
+     * هل الكارت موجود وشغّال؟ — للتحقق من أي اختيار جاي من فورم (v45).
+     * المصدر الوحيد لفحص صلاحية كارت مختار؛ الفورم مش مصدر ثقة.
+     */
+    public static function isActive(int $id): bool
+    {
+        if ($id <= 0) { return false; }
+        return (string) Database::scalar(
+            "SELECT status FROM visa_cards WHERE id = ?", [$id]) === 'active';
     }
 
     /** خريطة [id => name] للعرض السريع في الجداول والسجلات. */
@@ -69,7 +81,11 @@ class VisaCard
     /** حذف الكارت + فكّ نسبة عملياته (visa_card_id → NULL) حتى لا تختفي من السجلات. */
     public static function delete(int $id): void
     {
-        foreach (['manual_expenses', 'permit_stages', 'movement_items', 'debt_payments'] as $t) {
+        $tables = ['manual_expenses', 'permit_stages', 'movement_items', 'debt_payments'];
+        // v45: نثريات المناديب مصدر خامس — لازم تتفكّ هي كمان وإلا بتفضل منسوبة
+        // لكارت اتمسح، فتختفي من كشوف الكروت وتبقى يتيمة.
+        if (RepMiscExpense::visaReady()) { $tables[] = 'rep_misc_expenses'; }
+        foreach ($tables as $t) {
             Database::exec("UPDATE $t SET visa_card_id = NULL WHERE visa_card_id = ?", [$id]);
         }
         Database::exec("DELETE FROM visa_deposits WHERE card_id = ?", [$id]);
@@ -177,6 +193,30 @@ class VisaCard
             FROM debt_payments dp
             JOIN debt_accounts da ON da.id = dp.account_id
             WHERE dp.is_visa = 1 AND dp.visa_card_id IS NOT NULL AND dp.amount <> 0
+        " . self::repMiscLeg();
+    }
+
+    /**
+     * الجزء الخامس (v45) — نثريات المناديب المدفوعة بكارت (`rep_misc_expenses`).
+     *
+     * ⚠️ بيرجع '' قبل migrate_v45 فالاتحاد يفضل رباعي زي ما كان بالظبط.
+     *    من غير الجزء ده، النثرية المدفوعة بالفيزا كانت هتتستثنى من الخزنة
+     *    (RepMiscExpense::cashOnlySql) **ومن غير ما تتخصم من أي كارت** — يعني
+     *    فلوس تتبخّر من النظام. الاتنين لازم يمشوا مع بعض.
+     */
+    private static function repMiscLeg(): string
+    {
+        if (!RepMiscExpense::visaReady()) { return ''; }
+        return "
+            UNION ALL
+
+            SELECT 'rep_misc', x.visa_card_id, x.rep_id, x.exp_date,
+                   COALESCE(NULLIF(x.category,''),'" . RepMiscExpense::CATEGORY . "'),
+                   COALESCE(NULLIF(r.name,''),''),
+                   x.amount, COALESCE(x.note, x.ref_no), x.created_at
+            FROM rep_misc_expenses x
+            JOIN reps r ON r.id = x.rep_id
+            WHERE x.is_visa = 1 AND x.visa_card_id IS NOT NULL AND x.amount <> 0
         ";
     }
 

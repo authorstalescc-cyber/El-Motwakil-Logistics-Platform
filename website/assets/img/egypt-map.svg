@@ -1,0 +1,44 @@
+<svg viewBox="0 0 1000 820" xmlns="http://www.w3.org/2000/svg" class="egmap" role="img" aria-label="خريطة تبيّن مسارات النقل من ميناء الإسكندرية إلى محافظات الجمهورية">
+<defs><linearGradient id="land" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#14567F"/><stop offset="1" stop-color="#0A3157"/></linearGradient>
+<filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<path d="M 31.2 31.5 L 109.4 39.4 L 206.2 51.2 L 304.7 74.9 L 343.7 90.7 L 390.6 78.8 L 429.7 47.3 L 468.8 43.4 L 507.8 31.5 L 539.1 43.4 L 566.4 39.4 L 601.6 59.1 L 656.2 71.0 L 753.9 61.5 L 804.7 197.1 L 793.0 268.1 L 753.9 337.5 L 703.1 268.1 L 664.1 212.9 L 625.0 159.3 L 648.4 244.4 L 671.9 299.6 L 718.7 370.6 L 765.6 457.3 L 812.5 567.7 L 851.6 662.3 L 890.6 717.5 L 960.9 788.5 L 31.2 788.5 L 31.2 31.5 Z" fill="url(#land)" stroke="#3B8FCC" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="M 648.4 623.7 L 648.4 528.3 L 628.1 497.5 L 585.9 441.5 L 554.7 429.7 L 514.1 380.0 L 492.2 307.5 L 507.8 231.0 L 518.7 153.7" fill="none" stroke="#2E86C8" stroke-width="2.6" opacity=".45" stroke-linecap="round"/>
+<path d="M 518.7 153.7 L 492.2 110.4 L 453.1 71.0 L 429.7 47.3" fill="none" stroke="#2E86C8" stroke-width="2.6" opacity=".45" stroke-linecap="round"/>
+<path d="M 518.7 153.7 L 531.2 102.5 L 546.9 71.0 L 563.3 45.7" fill="none" stroke="#2E86C8" stroke-width="2.6" opacity=".45" stroke-linecap="round"/>
+<path class="rt" d="M 415.6 63.1 Q 453.6 123.9 518.7 153.7" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:0"/>
+<path class="rt" d="M 415.6 63.1 Q 475.9 120.3 557.8 134.8" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:1"/>
+<path class="rt" d="M 415.6 63.1 Q 440.2 124.6 494.5 162.4" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:2"/>
+<path class="rt" d="M 415.6 63.1 Q 397.8 69.8 386.7 85.2" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:3"/>
+<path class="rt" d="M 415.6 63.1 Q 429.4 102.4 462.5 127.7" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:4"/>
+<path class="rt" d="M 415.6 63.1 Q 500.2 114.7 599.2 111.2" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:5"/>
+<path class="rt" d="M 415.6 63.1 Q 503.0 142.2 619.5 160.1" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:6"/>
+<path class="rt" d="M 415.6 63.1 Q 436.5 160.9 507.8 231.0" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:7"/>
+<path class="rt" d="M 415.6 63.1 Q 417.3 236.3 514.1 380.0" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:8"/>
+<path class="rt" d="M 415.6 63.1 Q 430.2 267.3 554.7 429.7" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:9"/>
+<path class="rt" d="M 415.6 63.1 Q 464.4 308.4 628.1 497.5" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:10"/>
+<path class="rt" d="M 415.6 63.1 Q 472.9 367.9 648.4 623.7" fill="none" stroke="#F5B301" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="8 12" style="--i:11"/>
+<circle class="dot" cx="518.7" cy="153.7" r="3.8" fill="#9BD6FF" style="--i:0"/>
+<text class="lbl" x="527.7" y="158.2">القاهرة</text>
+<circle class="dot" cx="557.8" cy="134.8" r="3.8" fill="#9BD6FF" style="--i:1"/>
+<circle class="dot" cx="494.5" cy="162.4" r="3.8" fill="#9BD6FF" style="--i:2"/>
+<circle class="dot" cx="386.7" cy="85.2" r="3.8" fill="#9BD6FF" style="--i:3"/>
+<text class="lbl" x="395.7" y="89.7">برج العرب</text>
+<circle class="dot" cx="462.5" cy="127.7" r="3.8" fill="#9BD6FF" style="--i:4"/>
+<circle class="dot" cx="599.2" cy="111.2" r="3.8" fill="#9BD6FF" style="--i:5"/>
+<circle class="dot" cx="619.5" cy="160.1" r="3.8" fill="#9BD6FF" style="--i:6"/>
+<text class="lbl" x="628.5" y="164.6">السويس</text>
+<circle class="dot" cx="507.8" cy="231.0" r="3.8" fill="#9BD6FF" style="--i:7"/>
+<circle class="dot" cx="514.1" cy="380.0" r="3.8" fill="#9BD6FF" style="--i:8"/>
+<text class="lbl" x="523.1" y="384.5">أسيوط</text>
+<circle class="dot" cx="554.7" cy="429.7" r="3.8" fill="#9BD6FF" style="--i:9"/>
+<circle class="dot" cx="628.1" cy="497.5" r="3.8" fill="#9BD6FF" style="--i:10"/>
+<text class="lbl" x="637.1" y="502.0">الأقصر</text>
+<circle class="dot" cx="648.4" cy="623.7" r="3.8" fill="#9BD6FF" style="--i:11"/>
+<text class="lbl" x="657.4" y="628.2">أسوان</text>
+<circle cx="404.7" cy="69.4" r="4.5" fill="#F5B301" opacity=".75"/>
+<circle class="ping" cx="415.6" cy="63.1" r="13" fill="none" stroke="#F5B301" stroke-width="2"/>
+<circle cx="415.6" cy="63.1" r="7" fill="#F5B301" filter="url(#glow)"/>
+<text class="lbl port" x="402.6" y="49.1" text-anchor="end">ميناء الإسكندرية</text>
+<text class="lbl sm" x="396.7" y="85.4" text-anchor="end">الدخيلة</text>
+</svg>

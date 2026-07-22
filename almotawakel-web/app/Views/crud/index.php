@@ -1,4 +1,6 @@
 <?php
+use App\Core\FormState;
+$returnPath = current_app_path();
 // الأعمدة المعروضة: list_fields إن وُجدت، وإلا كل الحقول
 $allFields = $ent['fields'];
 if (!empty($ent['list_fields'])) {
@@ -71,8 +73,9 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
   <div class="spacer"></div>
   <span class="count-badge"><?= intf($total) ?> سجل</span>
   <?php if ($bulkBills): ?><button class="btn ghost" type="button" id="openBillPaste">📋 لصق من Excel</button><?php endif; ?>
-  <?php if (!empty($ent['has_legacy'])): ?><a class="btn ghost" href="<?= url('bawalis/new-legacy') ?>">🗂️ إضافة بوليصة قديمة</a><?php endif; ?>
-  <a class="btn gold" href="<?= url($ent['route'].'/new'.(!empty($ent['has_source'])&&$source?('?source='.$source):'')) ?>">➕ إضافة<?= !empty($ent['has_legacy'])?' بوليصة حالية':'' ?></a>
+  <?php if (!empty($ent['has_legacy'])): ?><a class="btn ghost" href="<?= url('bawalis/new-legacy?back=' . rawurlencode($returnPath)) ?>">🗂️ إضافة بوليصة قديمة</a><?php endif; ?>
+  <?php $newQuery = array_filter(['source'=>(!empty($ent['has_source']) ? $source : ''),'back'=>$returnPath], fn($v)=>$v!==''); ?>
+  <a class="btn gold" href="<?= url($ent['route'].'/new?'.http_build_query($newQuery)) ?>">➕ إضافة<?= !empty($ent['has_legacy'])?' بوليصة حالية':'' ?></a>
 </div>
 
 <?php if ($bulkBills) { require __DIR__ . '/../bawalis/_bulk_actions.php'; } ?>
@@ -124,9 +127,10 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
               <div class="actions">
                 <?php if ($detail): ?><a href="<?= url($ent['route'].'/'.$row['id']) ?>" title="تفاصيل">👁️</a><?php endif; ?>
                 <?php if (!empty($ent['invoice'])): ?><a href="<?= url($ent['route'].'/'.$row['id'].'/invoice') ?>" target="_blank" title="فاتورة (طباعة / PDF)">🧾</a><?php endif; ?>
-                <a class="edit" href="<?= url($ent['route'].'/'.$row['id'].'/edit') ?>" title="تعديل">✏️</a>
+                <a class="edit" href="<?= url($ent['route'].'/'.$row['id'].'/edit?back=' . rawurlencode($returnPath)) ?>" title="تعديل">✏️</a>
                 <form class="confirm-delete" method="post" action="<?= url($ent['route'].'/'.$row['id'].'/delete') ?>" style="margin:0">
                   <?= csrfField() ?>
+                  <?= formStateFields(FormState::token(), $returnPath) ?>
                   <button class="del" type="submit" title="حذف">🗑️</button>
                 </form>
               </div>

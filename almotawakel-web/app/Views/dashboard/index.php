@@ -17,6 +17,11 @@ $kpis = [
   ['receipts',     'إيصالات اليوم',   'gold',   'clipboard',     $daily['receipts_cnt'], 0, 'إيصال', 'إيصالات '.dfmt($date)],
   ['custody',      'رصيد العهدة',     'purple', 'briefcase',     $custody,               1, $cur,    'تفاصيل رصيد العهدة'],
 ];
+/* عهدة المناديب — كارت سادس يظهر بس لو الوحدة متاحة (v35) */
+$rp = $repsPanel;
+if ($rp['available']) {
+  $kpis[] = ['reps','عهدة المناديب','sader','users',$rp['totals']['outstanding'],1,$cur,'متابعة عهدة المناديب ومدخلاتهم'];
+}
 
 /* خريطة أنواع سجل النشاط */
 $kindMeta = [
@@ -63,6 +68,43 @@ $rowFeed = function(array $f, int $i = 0) {
   </div>
   <?php return ob_get_clean();
 };
+
+/* صف مُدخَل مندوب — مشترك بين اللوحة والبوب-أب */
+$subMeta = [
+  'pending'  => ['hourglass',    'مستنّي',  'wait'],
+  'approved' => ['check-circle', 'معتمد',   'ok'],
+  'rejected' => ['alert',        'مرفوض',   'no'],
+];
+$rowSub = function(array $s) use ($subMeta) {
+  [$sic,$slbl,$scls] = $subMeta[$s['status']] ?? ['clock','—','wait'];
+  $isRc = ($s['kind'] === 'receipt');
+  ob_start(); ?>
+  <div class="rp-sub <?= $scls ?>">
+    <span class="rp-sub-ic <?= $isRc?'rc':'ex' ?>"><?= icon($isRc?'clipboard':'trending-down',15) ?></span>
+    <div class="rp-sub-body">
+      <div class="rp-sub-t">
+        <b><?= e($s['note'] ?: ($isRc?'إيصال':'مصروف')) ?></b>
+        <?php if ((int)($s['qty'] ?? 1) > 1): ?><span class="rp-qty">×<?= intf($s['qty']) ?></span><?php endif; ?>
+        <?php if (!empty($s['photo'])): ?><span class="rp-cam" title="مرفق صورة">📎</span><?php endif; ?>
+      </div>
+      <div class="rp-sub-m">
+        <span class="rp-who"><?= icon('user',11) ?> <?= e($s['rep_name']) ?></span>
+        <?php if (!empty($s['permit_no'])): ?>
+          <a class="rp-ref" href="<?= url('permits/'.$s['permit_id']) ?>"><?= icon('folder',11) ?> إذن #<?= e($s['permit_no']) ?></a>
+        <?php endif; ?>
+        <span><?= icon('calendar',11) ?> <?= e(dfmt($s['entry_date'])) ?></span>
+      </div>
+      <?php if ($s['status']==='rejected' && !empty($s['review_note'])): ?>
+        <span class="rp-why"><?= icon('alert',11) ?> <?= e($s['review_note']) ?></span>
+      <?php endif; ?>
+    </div>
+    <div class="rp-sub-side">
+      <b><?= money0($s['amount']) ?></b>
+      <span class="rp-pill <?= $scls ?>"><?= icon($sic,11) ?> <?= e($slbl) ?></span>
+    </div>
+  </div>
+  <?php return ob_get_clean();
+};
 ?>
 <div class="dash2">
 
@@ -106,7 +148,7 @@ $rowFeed = function(array $f, int $i = 0) {
 </section>
 
 <!-- ═══════════════ مؤشرات (عدّاد متحرك، تفتح بوب-أب) ═══════════════ -->
-<div class="d-kpis five">
+<div class="d-kpis <?= count($kpis)>=6 ? 'six' : 'five' ?>">
   <?php foreach ($kpis as [$pop,$lbl,$cls,$ic,$val,$dec,$suf,$ttl]): ?>
   <button type="button" class="d-kpi <?= $cls ?>" data-pop="<?= e($pop) ?>" data-title="<?= e($ttl) ?>">
     <span class="d-kpi-ic"><?= icon($ic,20) ?></span>
@@ -121,9 +163,9 @@ $rowFeed = function(array $f, int $i = 0) {
   <div class="d-card">
     <div class="d-card-head">
       <h3><?= icon('receipt',18) ?> جاهز للفوترة<?php if ($readySum['count']>0): ?><span class="d-badge red"><?= intf($readySum['count']) ?></span><?php endif; ?></h3>
-      <button type="button" class="btn ghost sm" data-pop="ready" data-title="الأذونات الجاهزة للفوترة">عرض الكل <?= icon('chevron',15) ?></button>
+      <button type="button" class="btn ghost sm" data-pop="ready" data-title="الأذونات الجاهزة للفوترة">عرض التفاصيل <?= icon('chevron',15) ?></button>
     </div>
-    <div class="d-list">
+    <div class="d-list" id="dashReadyList">
       <?php if (!$ready): ?>
         <div class="d-empty"><?= icon('check',26) ?><b>تمام!</b><span>مفيش أذونات مُغلقة مستنية فاتورة.</span></div>
       <?php else: foreach (array_slice($ready,0,8) as $p) echo $rowPermit($p,'ready'); endif; ?>
@@ -132,15 +174,91 @@ $rowFeed = function(array $f, int $i = 0) {
   <div class="d-card">
     <div class="d-card-head">
       <h3><?= icon('folder',18) ?> أذونات مفتوحة <span class="d-badge navy"><?= intf($permits['open']) ?></span></h3>
-      <button type="button" class="btn ghost sm" data-pop="permits_open" data-title="الأذونات المفتوحة">عرض الكل <?= icon('chevron',15) ?></button>
+      <button type="button" class="btn ghost sm" data-pop="permits_open" data-title="الأذونات المفتوحة">عرض التفاصيل <?= icon('chevron',15) ?></button>
     </div>
-    <div class="d-list">
+    <div class="d-list" id="dashOpenList">
       <?php if (!$openList): ?>
         <div class="d-empty"><?= icon('folder',26) ?><b>لا يوجد</b><span>مفيش أذونات مفتوحة حاليًا.</span></div>
       <?php else: foreach (array_slice($openList,0,8) as $p) echo $rowPermit($p,'open'); endif; ?>
     </div>
   </div>
 </div>
+
+<!-- ═══════════════ عهدة المناديب ومدخلاتهم (قراءة فقط؛ الصرف المعتمد يدخل الخزنة) ═══════════════ -->
+<?php if ($rp['available']): $rt = $rp['totals']; $rd = $rp['day']; ?>
+<div class="d-sec-head">
+  <?= icon('users',17) ?><span>عهدة المناديب ومدخلاتهم</span>
+  <?php if ($rt['pending_cnt']>0): ?><em class="d-sec-year alert"><?= intf($rt['pending_cnt']) ?> مستنّي المراجعة</em><?php endif; ?>
+</div>
+
+<div class="rp-panel mb" id="dashRepsPanel">
+  <!-- شريط الملخّص -->
+  <div class="rp-strip">
+    <div class="rp-stat"><span><?= icon('wallet',15) ?> نازل للمناديب</span><b><?= money0($rt['deposits']) ?></b></div>
+    <div class="rp-stat"><span><?= icon('trending-down',15) ?> مصروف معتمد</span><b class="ex"><?= money0($rt['spent']) ?></b></div>
+    <div class="rp-stat"><span><?= icon('hourglass',15) ?> مستنّي المراجعة</span><b class="wait"><?= money0($rt['pending_sum']) ?><small><?= intf($rt['pending_cnt']) ?> بند</small></b></div>
+    <div class="rp-stat hi"><span><?= icon('users',15) ?> برّه مع المناديب</span><b><?= money0($rt['outstanding']) ?><small><?= intf($rt['reps']) ?> مندوب</small></b></div>
+  </div>
+
+  <div class="rp-grid">
+    <!-- كروت المناديب -->
+    <div class="d-card">
+      <div class="d-card-head">
+        <h3><?= icon('briefcase',18) ?> أرصدة العهدة<?php if ($rt['low']>0): ?><span class="d-badge red"><?= intf($rt['low']) ?> محتاج تنزيل</span><?php endif; ?></h3>
+        <a class="btn ghost sm" href="<?= url('rep-custody') ?>">إدارة العهدة <?= icon('chevron',15) ?></a>
+      </div>
+      <div class="rp-cards">
+        <?php if (!$rp['reps']): ?>
+          <div class="d-empty"><?= icon('users',26) ?><b>مفيش عهدة نازلة</b><span>نزّل عهدة لأي مندوب من صفحة عهدة المناديب.</span></div>
+        <?php else: foreach ($rp['reps'] as $c): ?>
+        <a class="rp-card<?= $c['low']?' low':'' ?>" href="<?= url('rep-custody/'.$c['id']) ?>">
+          <div class="rp-card-top">
+            <span class="rp-av"><?= e(mb_substr(trim($c['name']),0,1,'UTF-8')) ?></span>
+            <div class="rp-id">
+              <b><?= e($c['name']) ?></b>
+              <span><?php if ($c['last_spend']): ?>آخر حركة <?= e(dfmt($c['last_spend'])) ?><?php else: ?>لسه مفيش حركة<?php endif; ?></span>
+            </div>
+            <div class="rp-bal">
+              <b class="<?= $c['balance']>0?'pos':($c['balance']<0?'neg':'') ?>"><?= money0($c['balance']) ?></b>
+              <span>فاضل معاه</span>
+            </div>
+          </div>
+          <!-- شريط استهلاك العهدة: مصروف / مستنّي / مرتجع -->
+          <div class="rp-bar" title="نازل <?= money0($c['deposits']) ?> · مصروف <?= money0($c['spent']) ?>">
+            <i class="sp" style="width:<?= $c['pc_spent'] ?>%"></i>
+            <i class="pd" style="width:<?= $c['pc_pending'] ?>%"></i>
+            <i class="rt" style="width:<?= $c['pc_return'] ?>%"></i>
+          </div>
+          <div class="rp-card-foot">
+            <span class="rp-tag"><?= icon('wallet',11) ?> نازل <?= money0($c['deposits']) ?></span>
+            <span class="rp-tag ex"><?= icon('trending-down',11) ?> صرف <?= money0($c['spent']) ?></span>
+            <?php if ($c['pending_cnt']>0): ?><span class="rp-tag wait"><?= icon('hourglass',11) ?> <?= intf($c['pending_cnt']) ?> مستنّي · <?= money0($c['pending_sum']) ?></span><?php endif; ?>
+            <?php if ($c['low']): ?><span class="rp-tag low"><?= icon('alert',11) ?> محتاج تنزيل</span><?php endif; ?>
+          </div>
+        </a>
+        <?php endforeach; endif; ?>
+      </div>
+    </div>
+
+    <!-- آخر المدخلات -->
+    <div class="d-card">
+      <div class="d-card-head">
+        <h3><?= icon('inbox',18) ?> آخر مدخلات المناديب<?php if ($rt['pending_cnt']>0): ?><span class="d-badge red"><?= intf($rt['pending_cnt']) ?></span><?php endif; ?></h3>
+        <a class="btn ghost sm" href="<?= url('rep-custody/inbox') ?>">صندوق المراجعة <?= icon('chevron',15) ?></a>
+      </div>
+      <div class="rp-day">
+        <div><span><?= icon('send',13) ?> اتبعت في <?= e(dfmt($date)) ?></span><b><?= intf($rd['sent_cnt']) ?> بند · <?= money0($rd['sent_sum']) ?></b></div>
+        <div><span><?= icon('check-circle',13) ?> معتمد بتاريخه</span><b class="ok"><?= intf($rd['paid_cnt']) ?> بند · <?= money0($rd['paid_sum']) ?></b></div>
+      </div>
+      <div class="rp-subs">
+        <?php if (!$rp['feed']): ?>
+          <div class="d-empty"><?= icon('inbox',26) ?><b>الصندوق فاضي</b><span>المناديب لسه مبعتوش أي بند من الموبايل.</span></div>
+        <?php else: foreach (array_slice($rp['feed'],0,7) as $s) echo $rowSub($s); endif; ?>
+      </div>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <!-- ═══════════════ سجل المصروفات/الإيصالات + الملاحظات ═══════════════ -->
 <div class="d-grid-feed mb">
@@ -348,25 +466,27 @@ $rowFeed = function(array $f, int $i = 0) {
   <div data-pop="permits_open">
     <?php if (!$openList): ?><div class="d-empty"><?= icon('folder',26) ?><span>مفيش أذونات مفتوحة.</span></div>
     <?php else: ?><div class="d-modal-strip"><?= icon('folder',14) ?> <b><?= intf($permits['open']) ?></b> إذن مفتوح · <b><?= intf($permits['containers']) ?></b> حاوية</div>
-      <div class="d-list flat"><?php foreach ($openList as $p) echo $rowPermit($p,'open'); ?></div><?php endif; ?>
+      <div data-clone="#dashOpenList"></div><a class="btn ghost sm" style="margin:12px 14px" href="<?= url('permits') ?>">فتح متابعة كل الأذونات <?= icon('chevron',15) ?></a><?php endif; ?>
   </div>
   <!-- جاهز للفوترة -->
   <div data-pop="ready">
     <?php if (!$ready): ?><div class="d-empty"><?= icon('check',26) ?><b>تمام!</b><span>مفيش أذونات مستنية فاتورة.</span></div>
     <?php else: ?><div class="d-modal-strip gold"><?= icon('receipt',14) ?> <b><?= intf($readySum['count']) ?></b> إذن مُغلق جاهز للفوترة · <b><?= intf($readySum['containers']) ?></b> حاوية</div>
-      <div class="d-list flat"><?php foreach ($ready as $p) echo $rowPermit($p,'ready'); ?></div><?php endif; ?>
+      <div data-clone="#dashReadyList"></div><a class="btn ghost sm" style="margin:12px 14px" href="<?= url('invoices/new') ?>">فتح كل الجاهز للفوترة <?= icon('chevron',15) ?></a><?php endif; ?>
   </div>
   <!-- مصروفات اليوم -->
   <div data-pop="expenses">
     <?php if (!$dayExp): ?><div class="d-empty"><?= icon('trending-down',26) ?><span>مفيش مصروفات على <?= e(dfmt($date)) ?>.</span></div>
     <?php else: ?><div class="d-modal-strip red"><?= icon('trending-down',14) ?> <b><?= intf(count($dayExp)) ?></b> بند · إجمالي <b><?= money0($daily['expenses']) ?></b></div>
-      <div class="d-feed flat"><?php foreach ($dayExp as $i=>$f) echo $rowFeed($f,$i); ?></div><?php endif; ?>
+      <div class="d-feed flat"><?php foreach (array_slice($dayExp,0,12) as $i=>$f) echo $rowFeed($f,$i); ?></div>
+      <?php if(count($dayExp)>12): ?><a class="btn ghost sm" style="margin:12px 14px" href="<?= url('expenses?from='.rawurlencode($date).'&to='.rawurlencode($date)) ?>">عرض سجل اليوم كاملًا <?= icon('chevron',15) ?></a><?php endif; ?><?php endif; ?>
   </div>
   <!-- إيصالات اليوم -->
   <div data-pop="receipts">
     <?php if (!$dayRec): ?><div class="d-empty"><?= icon('clipboard',26) ?><span>مفيش إيصالات على <?= e(dfmt($date)) ?>.</span></div>
     <?php else: ?><div class="d-modal-strip gold"><?= icon('clipboard',14) ?> <b><?= intf($daily['receipts_cnt']) ?></b> إيصال · إجمالي <b><?= money0($daily['receipts_val']) ?></b></div>
-      <div class="d-feed flat"><?php foreach ($dayRec as $i=>$f) echo $rowFeed($f,$i); ?></div><?php endif; ?>
+      <div class="d-feed flat"><?php foreach (array_slice($dayRec,0,12) as $i=>$f) echo $rowFeed($f,$i); ?></div>
+      <?php if(count($dayRec)>12): ?><a class="btn ghost sm" style="margin:12px 14px" href="<?= url('expenses?from='.rawurlencode($date).'&to='.rawurlencode($date)) ?>">عرض سجل اليوم كاملًا <?= icon('chevron',15) ?></a><?php endif; ?><?php endif; ?>
   </div>
   <!-- رصيد العهدة -->
   <div data-pop="custody">
@@ -387,6 +507,19 @@ $rowFeed = function(array $f, int $i = 0) {
     <?php else: ?><div class="d-empty sm"><?= icon('briefcase',22) ?><span>مفيش حركة عهدة على <?= e(dfmt($date)) ?>.</span></div><?php endif; ?>
     <a class="btn ghost sm" style="margin:12px 14px" href="<?= url('custody') ?>">فتح محفظة العهدة <?= icon('chevron',15) ?></a>
   </div>
+  <!-- عهدة المناديب -->
+  <?php if ($rp['available']): $rt = $rp['totals']; ?>
+  <div data-pop="reps">
+    <div class="d-cust-hero"><span>الفلوس اللي برّه مع المناديب دلوقتي</span><b class="<?= $rt['outstanding']<0?'neg':'pos' ?>"><?= money0($rt['outstanding']) ?></b></div>
+    <div class="d-modal-strip">تنزيل العهدة لا يخصم من الخزنة؛ المصروف المعتمد يُخصم بتاريخ صرفه، والمرتجع لا يُضاف للخزنة.</div>
+    <div class="d-cust-grid">
+      <div class="d-cust-tile"><span><?= icon('wallet',16) ?> نازل للمناديب</span><b class="pos"><?= money0($rt['deposits']) ?></b></div>
+      <div class="d-cust-tile"><span><?= icon('trending-down',16) ?> مصروف معتمد</span><b class="neg">- <?= money0($rt['spent']) ?></b></div>
+      <div class="d-cust-tile"><span><?= icon('hourglass',16) ?> مستنّي المراجعة</span><b><?= money0($rt['pending_sum']) ?></b></div>
+    </div>
+    <a class="btn ghost sm" style="margin:12px 14px" href="<?= url('rep-custody') ?>">فتح عهدة المناديب <?= icon('chevron',15) ?></a>
+  </div>
+  <?php endif; ?>
 </div>
 
 <script src="<?= url('assets/js/chart.umd.js') ?>"></script>
@@ -397,10 +530,24 @@ $rowFeed = function(array $f, int $i = 0) {
   if(!modal||!form||!rowsEl)return;
   const browser=document.getElementById('qePermitBrowser'),permitSearch=document.getElementById('qePermitSearch'),permitResults=document.getElementById('qePermitResults'),permitEmpty=document.getElementById('qePermitEmpty');
   const movementBrowser=document.getElementById('qeMovementBrowser'),movementResults=document.getElementById('qeMovementResults'),movementTitle=document.getElementById('qeMovementPermitTitle');
-  const permits=<?= json_encode($quickPermits, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
-  const cards=<?= json_encode(array_map(fn($c)=>['id'=>(int)$c['id'],'label'=>$c['name'].($c['owner']?' — '.$c['owner']:'')], $quickCards), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
-  const old=<?= json_encode($quickOld, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
-  const permitMap=new Map(permits.map(p=>[String(p.id),p]));
+  let permits=<?= js_json($quickPermits) ?>;
+  let cards=<?= js_json(array_map(fn($c)=>['id'=>(int)$c['id'],'label'=>$c['name'].($c['owner']?' — '.$c['owner']:'')], $quickCards)) ?>;
+  const old=<?= js_json($quickOld) ?>;
+  let permitMap=new Map(permits.map(p=>[String(p.id),p]));
+  let permitsLoaded=permits.length>0, permitsPromise=null;
+  function fillDatalist(id,values){const list=document.getElementById(id);if(list)list.innerHTML=values.map(value=>`<option value="${esc(value)}"></option>`).join('');}
+  function refreshCardOptions(){[...rowsEl.querySelectorAll('[name="visa_card_id[]"]')].forEach(select=>{const selected=select.value;select.innerHTML=cardOptions(selected);select.value=selected;});}
+  async function loadPermits(){
+    if(permitsLoaded)return permits;
+    if(permitsPromise)return permitsPromise;
+    permitsPromise=fetch(<?= js_json(url('dashboard/quick-options')) ?>,{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'},credentials:'same-origin'})
+      .then(async response=>{if(!response.ok)throw new Error('HTTP '+response.status);const data=await response.json();if(!data.ok||!Array.isArray(data.permits)||!Array.isArray(data.cards)||!Array.isArray(data.receipts)||!Array.isArray(data.expenses))throw new Error('invalid payload');
+        permits=data.permits;cards=data.cards;permitMap=new Map(permits.map(p=>[String(p.id),p]));permitsLoaded=true;
+        fillDatalist('qeReceiptNames',data.receipts);fillDatalist('qeExpenseNames',data.expenses);refreshCardOptions();
+        [...rowsEl.children].forEach(row=>{paintPermitButton(row);paintMovementButton(row);});return permits;})
+      .catch(error=>{permitsPromise=null;throw error;});
+    return permitsPromise;
+  }
   /* ── حفظ تلقائي للمسودة (يمنع ضياع البيانات لو انتهت الجلسة أو اتقفلت الصفحة) ── */
   const DRAFT_KEY='almotawakel-quick-entry-draft';
   const quickApplied=<?= !empty($quickApplied)?'true':'false' ?>;
@@ -412,7 +559,7 @@ $rowFeed = function(array $f, int $i = 0) {
   function scheduleDraftSave(){if(!autosaveOn||pendingRestore)return;clearTimeout(draftTimer);draftTimer=setTimeout(writeDraft,500);}
   function draftTimeLabel(t){try{return new Date(t).toLocaleString('ar-EG',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
   function removeRestore(){pendingRestore=false;if(restoreBanner){restoreBanner.remove();restoreBanner=null;}}
-  function doRestore(draft){rowsEl.innerHTML='';(draft.rows||[]).forEach(d=>addRow(d));if(!rowsEl.children.length)addRow({entry_date:<?= json_encode($date) ?>,qty:1});removeRestore();updateLive();}
+  function doRestore(draft){rowsEl.innerHTML='';(draft.rows||[]).forEach(d=>addRow(d));if(!rowsEl.children.length)addRow({entry_date:<?= js_json($date) ?>,qty:1});removeRestore();updateLive();}
   function offerRestore(){
     if(restoreOffered)return;restoreOffered=true;
     if(oldCount)return;const draft=loadDraft();if(!draft)return;
@@ -458,7 +605,7 @@ $rowFeed = function(array $f, int $i = 0) {
       <label class="qe-qty"><span>الكمية</span><input type="number" name="qty[]" value="${esc(data.qty||1)}" min="1" max="10000" step="1" required></label>
       <label><span>سعر الوحدة</span><input type="number" name="amount[]" value="${esc(data.amount||'')}" min="0.01" step="0.01" placeholder="0" required></label>
       <label class="qe-actual" ${kind==='expense'?'hidden':''}><span>الفعلي للوحدة <small>اختياري</small></span><input type="number" name="actual_amount[]" value="${kind==='expense'?'':esc(data.actual_amount||'')}" min="0" step="0.01" placeholder="—"></label>
-      <label><span>التاريخ</span><input type="date" name="entry_date[]" value="${esc(data.entry_date||<?= json_encode($date) ?>)}" required></label>
+      <label><span>التاريخ</span><input type="date" name="entry_date[]" value="${esc(data.entry_date||<?= js_json($date) ?>)}" required></label>
       <label><span>رقم مرجعي <small>اختياري</small></span><input name="ref_no[]" value="${esc(data.ref_no||'')}" maxlength="120" placeholder="رقم الإيصال"></label>
       <label><span>طريقة الدفع</span><select name="payment_method[]" class="qe-payment"><option value="cash" ${payment==='cash'?'selected':''}>نقدي</option><option value="visa" ${payment==='visa'?'selected':''}>فيزا</option></select></label>
       <label class="qe-card" ${payment==='visa'?'':'hidden'}><span>كارت الفيزا</span><select name="visa_card_id[]">${cardOptions(data.visa_card_id||'')}</select></label>
@@ -483,7 +630,9 @@ $rowFeed = function(array $f, int $i = 0) {
       <span class="qe-option-meta"><small>العميل: ${esc(p.client)}</small>${p.date?`<small>التاريخ: ${esc(p.date)}</small>`:''}</span>
       <span class="qe-option-containers"><u>الحاويات</u>${containerChips(p)}</span></button>`).join('');
     permitEmpty.hidden=matches.length>0;}
-  function openPermitBrowser(row){activePermitRow=row;permitSearch.value='';renderPermitResults();browser.hidden=false;setTimeout(()=>permitSearch.focus(),30);}
+  async function openPermitBrowser(row){activePermitRow=row;permitSearch.value='';browser.hidden=false;permitSearch.disabled=true;permitEmpty.hidden=true;permitResults.innerHTML='<div class="qe-browser-empty">جارٍ تحميل الأذونات…</div>';
+    try{await loadPermits();if(activePermitRow!==row)return;permitSearch.disabled=false;renderPermitResults();setTimeout(()=>permitSearch.focus(),30);}
+    catch(error){permitResults.innerHTML='<div class="qe-browser-empty">تعذّر تحميل الأذونات. أغلق النافذة وحاول مرة أخرى.</div>';}}
   function closePermitBrowser(){browser.hidden=true;activePermitRow=null;}
   function selectPermit(pid){if(!activePermitRow)return;const row=activePermitRow,input=row.querySelector('[name="permit_id[]"]'),movement=row.querySelector('[name="movement_id[]"]'),p=permitMap.get(String(pid));if(!p)return;
     input.value=String(p.id);movement.value=p.movements?.length===1?String(p.movements[0].id):'';paintPermitButton(row);paintMovementButton(row);dirty=true;updateLive();closePermitBrowser();}
@@ -507,7 +656,7 @@ $rowFeed = function(array $f, int $i = 0) {
       const tr=document.createElement('tr');tr.innerHTML=`<td>${i+1}</td><td><b>${esc(p?.no||'—')}</b><small>الشركة: ${esc(p?.company||'—')} · ${esc(p?.container_label||'')}</small><small>${esc(m?.label||'—')}</small></td><td><span class="qe-kind-pill ${r.kind}">${r.kind==='receipt'?'إيصال':'مصروف'}</span></td><td><b>${esc(r.note)}</b>${r.ref_no?`<small>#${esc(r.ref_no)}</small>`:''}</td><td><b>${qty}</b></td><td>${money(r.amount)}</td><td><b>${money(lineTotal)}</b></td><td>${r.actual_amount?money((+r.actual_amount)*qty):'—'}</td><td>${esc(r.entry_date)}</td><td>${r.payment_method==='visa'?'فيزا':'نقدي'}</td>`;body.appendChild(tr);});
     document.getElementById('qeReviewCount').textContent=rs.length;document.getElementById('qeReceiptTotal').textContent=money(rec);document.getElementById('qeExpenseTotal').textContent=money(exp);showStep('review');}
   function showStep(step){modal.querySelectorAll('[data-qe-step]').forEach(s=>s.hidden=s.dataset.qeStep!==step);modal.querySelectorAll('[data-qe-dot]').forEach(s=>s.classList.toggle('active',s.dataset.qeDot===step));}
-  function open(){modal.hidden=false;modal.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';showStep('edit');autosaveOn=true;offerRestore();setTimeout(()=>rowsEl.querySelector('.qe-permit-pick')?.focus(),60);}
+  function open(){modal.hidden=false;modal.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';showStep('edit');autosaveOn=true;offerRestore();void loadPermits();setTimeout(()=>rowsEl.querySelector('.qe-permit-pick')?.focus(),60);}
   function close(force){if(!movementBrowser.hidden){closeMovementBrowser();return;}if(!browser.hidden){closePermitBrowser();return;}if(force!==true&&dirty&&filledRows().length){window.AppUI.confirm('ستفقد الصفوف غير المطبقة. هل تريد الإغلاق؟',()=>close(true),{title:'إغلاق شاشة الإدخال',okText:'نعم، أغلق'});return;}modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.style.overflow='';}
   document.getElementById('quickEntryOpen').addEventListener('click',open);modal.querySelectorAll('[data-qe-close]').forEach(el=>el.addEventListener('click',close));
   document.getElementById('quickEntryAdd').addEventListener('click',()=>{const last=rowsEl.lastElementChild,d=last?rowData(last):{};d.note='';d.qty='1';d.amount='';d.actual_amount='';d.ref_no='';addRow(d).querySelector('.qe-note').focus();});
@@ -519,7 +668,7 @@ $rowFeed = function(array $f, int $i = 0) {
   // لو المستخدم بدأ يكتب والبانر ظاهر → يعتبره «ابدأ من جديد» فتُحفظ كتابته الجديدة
   rowsEl.addEventListener('input',()=>{if(pendingRestore){clearDraft();removeRestore();scheduleDraftSave();}});
   if(quickApplied)clearDraft();   // تأكيد نجاح الحفظ من السيرفر → امسح المسودة
-  if(oldCount){for(let i=0;i<oldCount;i++)addRow({permit_id:val('permit_id',i),movement_id:val('movement_id',i),kind:val('kind',i,'receipt'),note:val('note',i),qty:val('qty',i,'1'),amount:val('amount',i),actual_amount:val('actual_amount',i),entry_date:val('entry_date',i,<?= json_encode($date) ?>),ref_no:val('ref_no',i),payment_method:val('payment_method',i,'cash'),visa_card_id:val('visa_card_id',i)});dirty=true;}else addRow({entry_date:<?= json_encode($date) ?>,qty:1});
+  if(oldCount){for(let i=0;i<oldCount;i++)addRow({permit_id:val('permit_id',i),movement_id:val('movement_id',i),kind:val('kind',i,'receipt'),note:val('note',i),qty:val('qty',i,'1'),amount:val('amount',i),actual_amount:val('actual_amount',i),entry_date:val('entry_date',i,<?= js_json($date) ?>),ref_no:val('ref_no',i),payment_method:val('payment_method',i,'cash'),visa_card_id:val('visa_card_id',i)});dirty=true;}else addRow({entry_date:<?= js_json($date) ?>,qty:1});
   <?php if(!empty($_GET['quick'])): ?>open();<?php endif; ?>
 })();
 
@@ -551,7 +700,7 @@ $rowFeed = function(array $f, int $i = 0) {
   const modal=document.getElementById('dModal'), body=document.getElementById('dModalBody'),
         titleEl=document.getElementById('dModalTitle'), store=document.getElementById('popStore');
   function open(key,title){ const src=store.querySelector('[data-pop="'+key+'"]'); if(!src)return;
-    body.innerHTML=src.innerHTML; titleEl.textContent=title||''; modal.hidden=false;
+    body.innerHTML=src.innerHTML;body.querySelectorAll('[data-clone]').forEach(slot=>{const source=document.querySelector(slot.dataset.clone);if(!source)return;const clone=source.cloneNode(true);clone.removeAttribute('id');clone.classList.add('flat');slot.replaceWith(clone);});titleEl.textContent=title||''; modal.hidden=false;
     document.body.style.overflow='hidden'; }
   function close(){ modal.hidden=true; body.innerHTML=''; document.body.style.overflow=''; }
   document.querySelectorAll('[data-pop]').forEach(el=>{
@@ -576,7 +725,7 @@ $rowFeed = function(array $f, int $i = 0) {
 })();
 
 /* ── الرسوم ── */
-const CH=<?= json_encode($charts, JSON_UNESCAPED_UNICODE) ?>;
+const CH=<?= js_json($charts) ?>;
 const C={navy:'#15355B',navyMid:'#1E4B7A',gold:'#C9A227',green:'#1E6E3C',red:'#9B2C2C',teal:'#14746F',purple:'#5B3E7A',slate:'#4a5a70'};
 Chart.defaults.font.family="'Segoe UI','Tahoma',sans-serif"; Chart.defaults.font.size=12; Chart.defaults.color='#5A6472';
 Chart.defaults.plugins.legend.rtl=true; Chart.defaults.plugins.tooltip.rtl=true;

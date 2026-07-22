@@ -7,6 +7,7 @@ use App\Models\Custody;
 use App\Models\Movement;
 use App\Models\Permit;
 use App\Core\Database;
+use App\Core\FormState;
 use App\Calc;
 use App\Schema;
 use App\Models\Audit;
@@ -124,7 +125,8 @@ class BawalisController extends CrudController
         $this->requireAuth();
         $ent = $this->entity();
         $row = $this->emptyRow($ent);
-        if (!empty($_SESSION['_old']) && is_array($_SESSION['_old'])) { $row=array_replace($row,$_SESSION['_old']); }
+        $state = FormState::consume('bawalis.legacy.create', 'bawalis?legacy=1');
+        if ($state['old']) { $row=array_replace($row,$state['old']); }
         $this->render('crud/form', [
             'title'        => 'إضافة بوليصة قديمة',
             'ent'          => $ent,
@@ -133,10 +135,11 @@ class BawalisController extends CrudController
             'action'       => url('bawalis/legacy'),
             'isEdit'       => false,
             'legacyCreate' => true,
-            'legacyPaid'   => $_SESSION['_legacy_paid'] ?? 0,
-            'errors'       => $_SESSION['_form_errors'] ?? [],
+            'legacyPaid'   => $state['old']['legacy_paid'] ?? 0,
+            'errors'       => $state['errors'],
+            'formToken'    => $state['token'],
+            'back'         => $state['back'],
         ]);
-        unset($_SESSION['_old'],$_SESSION['_legacy_paid'],$_SESSION['_form_errors']);
     }
 
     /** حفظ بوليصة قديمة مع دفعتها التاريخية الاختيارية داخل معاملة واحدة. */
@@ -150,15 +153,13 @@ class BawalisController extends CrudController
         $data = $this->prepareSaveData($data,null);
         $paidRaw = trim((string)($_POST['legacy_paid'] ?? ''));
         if ($paidRaw !== '' && (!is_numeric($paidRaw) || (float)$paidRaw < 0)) {
-            $_SESSION['_old']=$data; $_SESSION['_legacy_paid']=$paidRaw; $_SESSION['_form_errors']=['_form'=>'قيمة المدفوع التاريخي غير صحيحة.'];
-            flash('error', 'قيمة المدفوع التاريخي غير صحيحة.');
-            redirect('bawalis/new-legacy');
+            $this->formFailure('bawalis.legacy.create', 'bawalis/new-legacy', $_POST,
+                ['legacy_paid'=>'قيمة المدفوع التاريخي غير صحيحة.'], 'bawalis?legacy=1');
         }
         if ($err = $this->validate($data, null)) {
-            $_SESSION['_old']=$data; $_SESSION['_legacy_paid']=$paidRaw; $_SESSION['_form_errors']=['_form'=>$err];
-            if (str_contains($err,'رقم البوليصة')) { $_SESSION['_form_errors']['bill_number']=$err; }
-            flash('error', $err);
-            redirect('bawalis/new-legacy');
+            $errors=['_form'=>$err];
+            if (str_contains($err,'رقم البوليصة')) { $errors['bill_number']=$err; }
+            $this->formFailure('bawalis.legacy.create', 'bawalis/new-legacy', $_POST, $errors, 'bawalis?legacy=1');
         }
 
         // أعمدة العزل تُفرض من الخادم ولا تؤخذ من النموذج إطلاقًا.
@@ -168,6 +169,7 @@ class BawalisController extends CrudController
         $data['legacy_id'] = null;
         $paid = $paidRaw === '' ? 0.0 : round((float)$paidRaw, 2);
 
+        $this->claimForm('bawalis?legacy=1');
         $pdo = Database::conn();
         try {
             $pdo->beginTransaction();
@@ -185,11 +187,11 @@ class BawalisController extends CrudController
             Audit::log('create', 'bawalis', $id, null, Database::row('SELECT * FROM bawalis WHERE id=?', [$id]), 'إضافة بوليصة قديمة يدويًا');
             $pdo->commit();
             flash('success', 'تمت إضافة البوليصة القديمة معزولة عن العهدة والتقفيل، وبدون إذن أو حركة.');
-            redirect('bawalis?legacy=1');
+            redirect(safe_back('bawalis?legacy=1', $_POST['_back'] ?? null));
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
-            flash('error', 'لم تُضف البوليصة: ' . $e->getMessage());
-            redirect('bawalis/new-legacy');
+            $this->formFailure('bawalis.legacy.create', 'bawalis/new-legacy', $_POST,
+                ['_form'=>'لم تُضف البوليصة: ' . $e->getMessage()], 'bawalis?legacy=1');
         }
     }
 

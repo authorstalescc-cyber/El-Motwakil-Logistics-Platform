@@ -63,54 +63,56 @@ class Metrics
     /** العدّادات */
     public static function counters(): array
     {
-        $containers = (int) Database::scalar("SELECT COALESCE(SUM(containers),0) FROM shamil")
-                    + (int) Database::scalar("SELECT COUNT(*) FROM bawalis WHERE is_legacy = 0 AND container_no IS NOT NULL AND container_no <> ''");
+        $row = Database::row(
+            "SELECT
+                (SELECT COUNT(*) FROM bawalis WHERE is_legacy = 0) AS bawalis,
+                (SELECT COUNT(*) FROM shamil) AS invoices,
+                ((SELECT COALESCE(SUM(containers),0) FROM shamil)
+                  + (SELECT COUNT(*) FROM bawalis
+                      WHERE is_legacy = 0 AND container_no IS NOT NULL AND container_no <> '')) AS containers,
+                (SELECT COALESCE(SUM(gen_count),0) FROM generators) AS generators,
+                (SELECT COUNT(*) FROM takhlis) AS certs"
+        ) ?: [];
         return [
-            'bawalis'    => (int) Database::scalar("SELECT COUNT(*) FROM bawalis WHERE is_legacy = 0"),
-            'invoices'   => (int) Database::scalar("SELECT COUNT(*) FROM shamil"),
-            'containers' => $containers,
-            'generators' => (int) Database::scalar("SELECT COALESCE(SUM(gen_count),0) FROM generators"),
-            'certs'      => (int) Database::scalar("SELECT COUNT(*) FROM takhlis"),
+            'bawalis'    => (int) ($row['bawalis'] ?? 0),
+            'invoices'   => (int) ($row['invoices'] ?? 0),
+            'containers' => (int) ($row['containers'] ?? 0),
+            'generators' => (int) ($row['generators'] ?? 0),
+            'certs'      => (int) ($row['certs'] ?? 0),
         ];
     }
 
     /** ملخص الأذونات (لشريط الهايلايتس في لوحة التحكم) */
     public static function permitsSummary(): array
     {
+        $today = date('Y-m-d');
+        $expSql = \App\Models\Permit::expenseSql('s');
         $c = Database::row(
             "SELECT COUNT(*) total,
-                    COALESCE(SUM(status='open'),0)   AS open_cnt,
-                    COALESCE(SUM(status='closed'),0) AS closed_cnt
-             FROM permits"
-        ) ?: ['total'=>0,'open_cnt'=>0,'closed_cnt'=>0];
-
-        $incomplete = (int) Database::scalar(
-            "SELECT COUNT(*) FROM permits p WHERE p.status='open' AND (
-                (SELECT COUNT(*) FROM bawalis b WHERE b.is_legacy=0 AND b.permit_id=p.id)=0
-                OR (SELECT COUNT(*) FROM permit_stages s WHERE s.permit_id=p.id)=0
-                OR (SELECT COUNT(*) FROM permit_stages s WHERE s.permit_id=p.id AND s.status='pending')>0)"
-        );
-
-        // إجمالي الحاويات (على مستوى الأذونات)
-        $containers = (int) Database::scalar("SELECT COALESCE(SUM(containers),0) FROM permits");
-
-        $today = date('Y-m-d');
-        $todayExpense = (float) Database::scalar(
-            "SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE " . \App\Models\Permit::expenseSql('s') . " AND s.entry_date = ?",
-            [$today]
-        );
-        $todayCustody = (float) Database::scalar(
-            "SELECT COALESCE(SUM(custody),0) FROM bawalis WHERE is_legacy = 0 AND bill_date = ?", [$today]
-        );
+                    COALESCE(SUM(p.status='open'),0) AS open_cnt,
+                    COALESCE(SUM(p.status='closed'),0) AS closed_cnt,
+                    COALESCE(SUM(p.containers),0) AS containers,
+                    (SELECT COUNT(*) FROM permits p2 WHERE p2.status='open' AND (
+                        (SELECT COUNT(*) FROM bawalis b WHERE b.is_legacy=0 AND b.permit_id=p2.id)=0
+                        OR (SELECT COUNT(*) FROM permit_stages s WHERE s.permit_id=p2.id)=0
+                        OR (SELECT COUNT(*) FROM permit_stages s WHERE s.permit_id=p2.id AND s.status='pending')>0
+                    )) AS incomplete,
+                    (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s
+                      WHERE $expSql AND s.entry_date = ?) AS today_expense,
+                    (SELECT COALESCE(SUM(b.custody),0) FROM bawalis b
+                      WHERE b.is_legacy=0 AND b.bill_date = ?) AS today_custody
+             FROM permits p",
+            [$today, $today]
+        ) ?: [];
 
         return [
-            'total'      => (int)$c['total'],
-            'open'       => (int)$c['open_cnt'],
-            'closed'     => (int)$c['closed_cnt'],
-            'incomplete' => $incomplete,
-            'containers' => $containers,
-            'today_expense' => round($todayExpense, 2),
-            'today_custody' => round($todayCustody, 2),
+            'total'      => (int) ($c['total'] ?? 0),
+            'open'       => (int) ($c['open_cnt'] ?? 0),
+            'closed'     => (int) ($c['closed_cnt'] ?? 0),
+            'incomplete' => (int) ($c['incomplete'] ?? 0),
+            'containers' => (int) ($c['containers'] ?? 0),
+            'today_expense' => round((float) ($c['today_expense'] ?? 0), 2),
+            'today_custody' => round((float) ($c['today_custody'] ?? 0), 2),
         ];
     }
 
@@ -121,19 +123,54 @@ class Metrics
      */
     public static function readyToInvoice(int $limit = 8): array
     {
+        return self::readyToInvoiceDashboard($limit)['rows'];
+    }
+
+    /** قائمة الجاهز + إجمالي كل الجاهز في الاستعلام نفسه (قبل LIMIT). */
+    public static function readyToInvoiceDashboard(int $limit = 8): array
+    {
         $rows = Database::all(
             "SELECT p.id, p.permit_no, p.permit_type, p.permit_date,
                     p.company, p.client, p.destination, p.containers, p.container_type,
                     COALESCE(NULLIF(p.company,''), NULLIF(p.client,''), '—') AS party,
-                    (SELECT COUNT(*) FROM bawalis b WHERE b.is_legacy=0 AND b.permit_id = p.id) AS bills
+                    COALESCE(bs.bills,0) AS bills,
+                    COALESCE(NULLIF(ct.ct_label,''),
+                        CASE WHEN p.containers>0 AND COALESCE(p.container_type,'')<>'' THEN CONCAT(p.containers,'×',p.container_type)
+                             WHEN p.containers>0 THEN CONCAT(p.containers,' حاوية') ELSE '' END) AS ct_label,
+                    COUNT(*) OVER() AS _summary_count,
+                    COALESCE(SUM(COALESCE(bs.freight,0)) OVER(),0) AS _summary_freight,
+                    COALESCE(SUM(p.containers) OVER(),0) AS _summary_containers
              FROM permits p
+             LEFT JOIN (
+                SELECT permit_id, COUNT(*) bills, SUM(freight) freight
+                FROM bawalis WHERE is_legacy=0 GROUP BY permit_id
+             ) bs ON bs.permit_id=p.id
+             LEFT JOIN (
+                SELECT z.permit_id,
+                       GROUP_CONCAT(CONCAT(z.cnt,'×',z.type) ORDER BY z.type SEPARATOR '، ') ct_label
+                FROM (
+                    SELECT permit_id, container_type type, SUM(container_count) cnt
+                    FROM bawalis
+                    WHERE is_legacy=0 AND container_type IS NOT NULL AND container_type<>'' AND container_count>0
+                    GROUP BY permit_id, container_type
+                ) z GROUP BY z.permit_id
+             ) ct ON ct.permit_id=p.id
              WHERE p.status = 'closed'
                AND NOT EXISTS (SELECT 1 FROM permit_invoices i WHERE i.permit_id = p.id)
              ORDER BY p.permit_date DESC, p.id DESC
              LIMIT $limit"
         );
-        self::attachContainerLabels($rows);
-        return $rows;
+        $first = $rows[0] ?? [];
+        $summary = [
+            'count' => (int) ($first['_summary_count'] ?? 0),
+            'freight' => round((float) ($first['_summary_freight'] ?? 0), 2),
+            'containers' => (int) ($first['_summary_containers'] ?? 0),
+        ];
+        foreach ($rows as &$row) {
+            unset($row['_summary_count'], $row['_summary_freight'], $row['_summary_containers']);
+        }
+        unset($row);
+        return ['rows' => $rows, 'summary' => $summary];
     }
 
     /**
@@ -152,13 +189,25 @@ class Metrics
                         COALESCE(p.permit_date, '1900-01-01'),
                         COALESCE((SELECT MAX(s.entry_date) FROM permit_stages s WHERE s.permit_id = p.id), '1900-01-01'),
                         COALESCE((SELECT MAX(b.bill_date)  FROM bawalis b       WHERE b.is_legacy=0 AND b.permit_id = p.id), '1900-01-01')
-                    ) AS last_activity
+                    ) AS last_activity,
+                    COALESCE(NULLIF(ct.ct_label,''),
+                        CASE WHEN p.containers>0 AND COALESCE(p.container_type,'')<>'' THEN CONCAT(p.containers,'×',p.container_type)
+                             WHEN p.containers>0 THEN CONCAT(p.containers,' حاوية') ELSE '' END) AS ct_label
              FROM permits p
+             LEFT JOIN (
+                SELECT z.permit_id,
+                       GROUP_CONCAT(CONCAT(z.cnt,'×',z.type) ORDER BY z.type SEPARATOR '، ') ct_label
+                FROM (
+                    SELECT permit_id, container_type type, SUM(container_count) cnt
+                    FROM bawalis
+                    WHERE is_legacy=0 AND container_type IS NOT NULL AND container_type<>'' AND container_count>0
+                    GROUP BY permit_id, container_type
+                ) z GROUP BY z.permit_id
+             ) ct ON ct.permit_id=p.id
              WHERE p.status = 'open'
              ORDER BY last_activity DESC, p.id DESC
              LIMIT $limit"
         );
-        self::attachContainerLabels($rows);
         return $rows;
     }
 
@@ -195,22 +244,15 @@ class Metrics
      */
     public static function dashDaily(string $date): array
     {
-        $expenses = Expense::totals(['from'=>$date,'to'=>$date])['grand'];
-        $receipts = Database::row(
-            "SELECT COUNT(*) c, COALESCE(SUM(amount),0) v FROM permit_stages
-             WHERE stage_key='receipts' AND entry_date = ?", [$date]
-        ) ?: ['c'=>0,'v'=>0];
+        $summary = Expense::dashboardDay($date);
         return [
             'date'         => $date,
-            'expenses'     => round((float)$expenses, 2),
-            'receipts_cnt' => (int)$receipts['c'],
-            'receipts_val' => round((float)$receipts['v'], 2),
-            'payments'     => (float) Database::scalar(
-                "SELECT COALESCE(SUM(amount),0) FROM bill_payments WHERE is_legacy = 0 AND pay_date = ?", [$date]),
-            'permits_new'  => (int) Database::scalar(
-                "SELECT COUNT(*) FROM permits WHERE permit_date = ?", [$date]),
-            'movements'    => (int) Database::scalar(
-                "SELECT COUNT(*) FROM movements WHERE movement_date = ?", [$date]),
+            'expenses'     => $summary['expenses'],
+            'receipts_cnt' => $summary['receipts_cnt'],
+            'receipts_val' => $summary['receipts_val'],
+            'payments'     => $summary['payments'],
+            'permits_new'  => $summary['permits_new'],
+            'movements'    => $summary['movements'],
         ];
     }
 
@@ -278,19 +320,31 @@ class Metrics
     }
 
     /** تفصيل رصيد العهدة لليوم المحدَّد (للبوب-أب) — الرصيد + حركة اليوم. */
-    public static function custodyDay(string $date): array
+    public static function custodyDay(string $date, ?float $currentBalance = null): array
     {
-        $topups = Database::all(
-            "SELECT cust_date d, driver, amount, note FROM manual_custody
-             WHERE cust_date = ? ORDER BY id DESC", [$date]);
-        $drivers = Database::all(
-            "SELECT custody_date d, driver, amount, note FROM driver_custody
-             WHERE custody_date = ? ORDER BY id DESC", [$date]);
-        $dayExpense = (float) Database::scalar(
-            "SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE " .
-            \App\Models\Permit::expenseSql('s') . " AND s.entry_date = ?", [$date]);
+        $rows = Database::all(
+            "SELECT kind, d, driver, amount, note FROM (
+                SELECT 'topup' kind, cust_date d, driver, amount, note, id
+                FROM manual_custody WHERE cust_date = ?
+                UNION ALL
+                SELECT 'driver', custody_date, driver, amount, note, id
+                FROM driver_custody WHERE custody_date = ?
+                UNION ALL
+                SELECT 'expense', NULL, NULL, COALESCE(SUM(s.amount),0), NULL, 0
+                FROM permit_stages s WHERE " . \App\Models\Permit::expenseSql('s') . " AND s.entry_date = ?
+             ) x ORDER BY kind, id DESC",
+            [$date, $date, $date]
+        );
+        $topups = []; $drivers = []; $dayExpense = 0.0;
+        foreach ($rows as $row) {
+            $kind = $row['kind'];
+            unset($row['kind']);
+            if ($kind === 'topup') { $topups[] = $row; }
+            elseif ($kind === 'driver') { $drivers[] = $row; }
+            else { $dayExpense = (float) $row['amount']; }
+        }
         return [
-            'balance'      => \App\Models\Custody::balance(),
+            'balance'      => $currentBalance ?? \App\Models\Custody::balance(),
             'topups'       => $topups,
             'topups_sum'   => array_sum(array_map(fn($r)=>(float)$r['amount'], $topups)),
             'drivers'      => $drivers,
@@ -324,16 +378,16 @@ class Metrics
      */
     public static function monthlyExpensePayments(int $year): array
     {
-        $exp = Expense::monthlyExpenses($year);
         $out = [];
         for ($m = 1; $m <= 12; $m++) {
-            $out[$m] = ['expenses' => $exp[$m] ?? 0.0, 'collections' => 0.0];
+            $out[$m] = ['expenses' => 0.0, 'collections' => 0.0];
         }
-        foreach (Database::all(
-            "SELECT MONTH(pay_date) m, COALESCE(SUM(amount),0) a
-             FROM bill_payments WHERE is_legacy = 0 AND YEAR(pay_date) = ? GROUP BY MONTH(pay_date)", [$year]) as $r) {
+        foreach (Expense::monthlyDashboard($year) as $r) {
             $m = (int) $r['m'];
-            if ($m >= 1 && $m <= 12) { $out[$m]['collections'] = round((float) $r['a'], 2); }
+            if ($m >= 1 && $m <= 12) {
+                $out[$m]['expenses'] = round((float) $r['expenses'], 2);
+                $out[$m]['collections'] = round((float) $r['collections'], 2);
+            }
         }
         return $out;
     }
@@ -505,31 +559,57 @@ class Metrics
     /** تقرير المصروفات — تفصيل بنود مصروفات الحركات حسب الفئة + مصروفات التخليص والفواتير */
     public static function expenseReport(?string $from = null, ?string $to = null): array
     {
+        $parts = []; $params = [];
         $p=[]; $w=self::dateCond('m.movement_date',$from,$to,$p);
-        $categories = Database::all("
-            SELECT mi.category            AS label,
-                   COUNT(*)               AS cnt,
-                   COALESCE(SUM(mi.amount),0) AS value
+        $parts[] = "
+            SELECT 'category' AS source, mi.category AS label,
+                   COUNT(*) AS cnt, COALESCE(SUM(mi.amount),0) AS value
             FROM movement_items mi
             JOIN movements m ON m.id = mi.movement_id
             WHERE mi.item_type = 'expense' AND mi.category IS NOT NULL AND mi.category <> ''" . ($w ? " AND $w" : "") . "
-            GROUP BY mi.category
-            ORDER BY value DESC", $p);
-        // مصروفات الأذونات (بنود permit_stages المصروفة) في المدى الزمني — على entry_date
+            GROUP BY mi.category";
+        array_push($params, ...$p);
+
         $pp = []; $pw = self::dateCond('s.entry_date', $from, $to, $pp);
-        $permits = (float) Database::scalar(
-            "SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s
-             WHERE " . \App\Models\Permit::expenseSql('s') . " AND s.amount <> 0" . ($pw ? " AND $pw" : ""),
-            $pp
-        );
+        $parts[] = "
+            SELECT 'permits', '', COUNT(*), COALESCE(SUM(s.amount),0)
+            FROM permit_stages s
+            WHERE " . \App\Models\Permit::expenseSql('s') . " AND s.amount <> 0" . ($pw ? " AND $pw" : "");
+        array_push($params, ...$pp);
+
+        foreach ([
+            ['takhlis', 'takhlis', 't', 'cert_date', 'expenses'],
+            ['shamil', 'shamil', 'sh', 'invoice_date', 'expense'],
+            ['manual', 'manual_expenses', 'me', 'exp_date', 'amount'],
+            ['debt', 'debt_payments', 'dp', 'pay_date', 'amount'],
+        ] as [$source, $table, $alias, $dateColumn, $amountColumn]) {
+            $sp = []; $sw = self::dateCond("$alias.$dateColumn", $from, $to, $sp);
+            $parts[] = "SELECT " . Database::conn()->quote($source) . ", '', COUNT(*),
+                               COALESCE(SUM($alias.$amountColumn),0)
+                        FROM $table $alias" . ($sw ? " WHERE $sw" : '');
+            array_push($params, ...$sp);
+        }
+
+        $categories = [];
+        $totals = ['takhlis'=>0.0, 'shamil'=>0.0, 'permits'=>0.0, 'manual'=>0.0, 'debt'=>0.0];
+        foreach (Database::all(implode("\nUNION ALL\n", $parts), $params) as $row) {
+            if ($row['source'] === 'category') {
+                $categories[] = [
+                    'label' => $row['label'], 'cnt' => (int)$row['cnt'], 'value' => (float)$row['value'],
+                ];
+            } elseif (array_key_exists($row['source'], $totals)) {
+                $totals[$row['source']] = (float)$row['value'];
+            }
+        }
+        usort($categories, static fn(array $a, array $b): int => $b['value'] <=> $a['value']);
 
         return [
-            'categories' => $categories,                                                   // مصروفات حركات البوالص (بالفئة)
-            'takhlis'    => self::sumD('takhlis','expenses','cert_date',$from,$to),
-            'shamil'     => self::sumD('shamil','expense','invoice_date',$from,$to),
-            'permits'    => round($permits, 2),                                            // مصروفات الأذونات
-            'manual'     => self::sumD('manual_expenses','amount','exp_date',$from,$to),   // مصاريف يدوية
-            'debt'       => self::sumD('debt_payments','amount','pay_date',$from,$to),     // سداد مديونيات
+            'categories' => $categories,
+            'takhlis'    => $totals['takhlis'],
+            'shamil'     => $totals['shamil'],
+            'permits'    => round($totals['permits'], 2),
+            'manual'     => $totals['manual'],
+            'debt'       => $totals['debt'],
         ];
     }
 
@@ -795,14 +875,16 @@ class Metrics
             $map[$d]  = 0;
         }
         $from = date('Y-m-d', strtotime("$anchor -" . ($days - 1) . " days"));
+        $parts = []; $params = [];
         foreach ([['bawalis','bill_date'],['shamil','invoice_date'],
                   ['takhlis','cert_date'],['generators','gen_date'],['permits','permit_date']] as [$tbl,$col]) {
             $extra = $tbl === 'bawalis' ? " AND is_legacy = 0" : "";
-            foreach (Database::all(
-                "SELECT `$col` d, COUNT(*) c FROM `$tbl` WHERE `$col` BETWEEN ? AND ?$extra GROUP BY `$col`",
-                [$from, $anchor]) as $r) {
-                if (isset($map[$r['d']])) $map[$r['d']] += (int)$r['c'];
-            }
+            $parts[] = "SELECT `$col` d, COUNT(*) c FROM `$tbl`
+                        WHERE `$col` BETWEEN ? AND ?$extra GROUP BY `$col`";
+            array_push($params, $from, $anchor);
+        }
+        foreach (Database::all(implode("\nUNION ALL\n", $parts), $params) as $r) {
+            if (isset($map[$r['d']])) $map[$r['d']] += (int)$r['c'];
         }
         return ['labels' => $labels, 'data' => array_values($map)];
     }

@@ -28,12 +28,7 @@ class Database
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ]);
         } catch (PDOException $e) {
-            http_response_code(500);
-            die('<div style="font-family:sans-serif;direction:rtl;padding:40px;text-align:center">'
-                . '<h2>تعذّر الاتصال بقاعدة البيانات</h2>'
-                . '<p>تأكد أن خادم MySQL يعمل وأن بيانات الاتصال في <code>config/config.php</code> صحيحة.</p>'
-                . '<p style="color:#9b2c2c">' . htmlspecialchars($e->getMessage()) . '</p>'
-                . '<p>شغّل التثبيت أولاً: <code>php bin/install.php</code></p></div>');
+            throw new \RuntimeException('تعذّر الاتصال بقاعدة البيانات.', 0, $e);
         }
         return self::$pdo;
     }
@@ -51,38 +46,52 @@ class Database
     /** تنفيذ استعلام مُعامَل وإرجاع كل الصفوف */
     public static function all(string $sql, array $params = []): array
     {
-        $st = self::conn()->prepare($sql);
-        $st->execute($params);
-        return $st->fetchAll();
+        return Performance::measure($sql, static function () use ($sql, $params): array {
+            $st = self::conn()->prepare($sql);
+            $st->execute($params);
+            return $st->fetchAll();
+        });
     }
 
     /** إرجاع صف واحد */
     public static function row(string $sql, array $params = []): ?array
     {
-        $st = self::conn()->prepare($sql);
-        $st->execute($params);
-        $r = $st->fetch();
-        return $r === false ? null : $r;
+        return Performance::measure($sql, static function () use ($sql, $params): ?array {
+            $st = self::conn()->prepare($sql);
+            $st->execute($params);
+            $r = $st->fetch();
+            return $r === false ? null : $r;
+        });
     }
 
     /** إرجاع قيمة واحدة */
     public static function scalar(string $sql, array $params = [])
     {
-        $st = self::conn()->prepare($sql);
-        $st->execute($params);
-        return $st->fetchColumn();
+        return Performance::measure($sql, static function () use ($sql, $params) {
+            $st = self::conn()->prepare($sql);
+            $st->execute($params);
+            return $st->fetchColumn();
+        });
     }
 
     /** تنفيذ أمر (INSERT/UPDATE/DELETE) وإرجاع عدد الصفوف المتأثرة */
     public static function exec(string $sql, array $params = []): int
     {
-        $st = self::conn()->prepare($sql);
-        $st->execute($params);
-        return $st->rowCount();
+        return Performance::measure($sql, static function () use ($sql, $params): int {
+            $st = self::conn()->prepare($sql);
+            $st->execute($params);
+            return $st->rowCount();
+        });
     }
 
     public static function lastId(): int
     {
         return (int) self::conn()->lastInsertId();
+    }
+
+    /** قطع الاتصال بين مراحل اختبار الاستعادة أو تبديل قاعدة CLI المعزولة. */
+    public static function disconnect(): void
+    {
+        self::$pdo = null;
     }
 }

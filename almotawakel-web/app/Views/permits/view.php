@@ -76,7 +76,7 @@ $roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0
                 <td style="text-align:right"><?= e($en['note'] ?: '—') ?></td>
                 <td><?= e($en['ref_no'] ?: '—') ?></td>
                 <td><?= $statusBadge($en['status']) ?></td>
-                <td><?php if($en['attachment']): ?><a href="<?= url($en['attachment']) ?>" target="_blank">📎</a><?php else: ?>—<?php endif; ?></td>
+                <td><?php if($en['attachment']): ?><a href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank">📎</a><?php else: ?>—<?php endif; ?></td>
               </tr>
             <?php endforeach; ?>
             </tbody></table></div>

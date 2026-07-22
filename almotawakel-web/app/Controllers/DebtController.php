@@ -2,6 +2,7 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\FormState;
 use App\Models\Debt;
 use App\Models\Expense;
 use App\Models\Lookup;
@@ -51,6 +52,15 @@ class DebtController extends Controller
             'to'     => $this->cleanDate($_GET['to'] ?? ''),
         ];
 
+        $paymentStates = [];
+        foreach ([$inspAcc, $guarAcc] as $account) {
+            $paymentStates[(int) $account['id']] = FormState::consume(
+                'debts.payment.' . (int) $account['id'], 'debts?tab=inspection'
+            );
+        }
+        $accountState = FormState::consume('debts.account.create', 'debts?tab=others');
+        $visaState = FormState::consume('debts.visa.create', 'debts?tab=visa');
+
         $this->render('debts/index', [
             'title'        => 'المديونيات',
             'tab'          => $tab,
@@ -74,6 +84,9 @@ class DebtController extends Controller
             'visaTotals'   => Debt::visaTotals($vf),
             'visaSources'  => Debt::VISA_SOURCES,
             'visaCats'     => Lookup::ofType('expense_cat'),
+            'paymentStates'=> $paymentStates,
+            'accountState' => $accountState,
+            'visaState'    => $visaState,
         ]);
     }
 
@@ -83,11 +96,13 @@ class DebtController extends Controller
         $this->requireAuth();
         $acc = Debt::account((int) $id);
         if (!$acc) { flash('error', 'حساب المديونية غير موجود.'); redirect('debts?tab=others'); }
+        $state = FormState::consume('debts.payment.' . (int) $id, 'debts/account/' . (int) $id);
         $this->render('debts/account', [
             'title'    => 'مديونية — ' . $acc['name'],
             'acc'      => $acc,
             'totals'   => Debt::accountTotals($acc),
             'payments' => Debt::payments((int) $acc['id']),
+            'paymentState' => $state,
         ]);
     }
 
@@ -99,9 +114,20 @@ class DebtController extends Controller
         $acc = Debt::account((int) $id);
         if (!$acc) { flash('error', 'حساب المديونية غير موجود.'); redirect('debts'); }
 
+        $fallback = (($acc['kind'] ?? '') === 'manual')
+            ? 'debts/account/' . (int) $acc['id']
+            : 'debts?tab=inspection';
+        $path = safe_back($fallback, $_POST['_back'] ?? ($_POST['back'] ?? null));
+        $amount = (float) ($_POST['amount'] ?? 0);
+        if ($amount <= 0) {
+            $this->formFailure('debts.payment.' . (int) $id, $path, $_POST,
+                ['amount' => 'اكتب مبلغ سداد أكبر من صفر.'], $fallback);
+        }
+        $this->claimForm($path);
+
         Debt::addPayment(
             (int) $id,
-            (float) ($_POST['amount'] ?? 0),
+            $amount,
             $this->cleanDate($_POST['pay_date'] ?? '') ?: null,
             trim($_POST['note'] ?? '') ?: 'سداد',
             !empty($_POST['is_visa']),
@@ -115,9 +141,10 @@ class DebtController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->claimForm('debts?tab=inspection');
         Debt::deletePayment((int) $paymentId);
         flash('success', 'تم حذف الدفعة.');
-        redirect(trim($_POST['back'] ?? '') ?: 'debts?tab=inspection');
+        redirect(safe_back('debts?tab=inspection', $_POST['_back'] ?? ($_POST['back'] ?? null)));
     }
 
     // ---------------------------------------------------------------- حسابات يدوية (مديونيات أخرى)
@@ -127,9 +154,10 @@ class DebtController extends Controller
         $this->requireCsrf();
         $name = trim($_POST['name'] ?? '');
         if ($name === '') {
-            flash('error', 'اكتب اسم الجهة الدائنة.');
-            redirect('debts?tab=others');
+            $this->formFailure('debts.account.create', 'debts?tab=others', $_POST,
+                ['name' => 'اكتب اسم الجهة الدائنة.'], 'debts?tab=others');
         }
+        $this->claimForm('debts?tab=others');
         $opening = ($_POST['opening'] ?? '') === '' ? 0 : (float) $_POST['opening'];
         Debt::createManualAccount($name, $opening, trim($_POST['note'] ?? ''));
         flash('success', 'تمت إضافة المديونية.');
@@ -140,6 +168,7 @@ class DebtController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->claimForm('debts?tab=others');
         Debt::deleteManualAccount((int) $id);
         flash('success', 'تم حذف المديونية.');
         redirect('debts?tab=others');
@@ -161,9 +190,10 @@ class DebtController extends Controller
             'visa_card_id'=> !empty($_POST['visa_card_id']) ? (int) $_POST['visa_card_id'] : null,
         ];
         if ($data['amount'] == 0) {
-            flash('error', 'اكتب مبلغ العملية.');
-            redirect('debts?tab=visa');
+            $this->formFailure('debts.visa.create', 'debts?tab=visa', $_POST,
+                ['amount' => 'اكتب مبلغ العملية.'], 'debts?tab=visa');
         }
+        $this->claimForm('debts?tab=visa');
         Expense::createManual($data);
         if ($data['category'] !== '') { Lookup::add('expense_cat', $data['category']); }
         flash('success', 'تمت إضافة عملية الفيزا.');
@@ -174,7 +204,7 @@ class DebtController extends Controller
     /** رجوع بعد دفعة: لحساب يدوي → صفحته، للكشف والضمان → تبويبه */
     private function redirectBack(array $acc): void
     {
-        $back = trim($_POST['back'] ?? '');
+        $back = safe_back('', $_POST['_back'] ?? ($_POST['back'] ?? null));
         if ($back !== '') { redirect($back); }
         if (($acc['kind'] ?? '') === 'manual') {
             redirect('debts/account/' . (int) $acc['id']);

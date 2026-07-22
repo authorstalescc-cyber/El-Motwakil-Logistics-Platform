@@ -154,7 +154,7 @@ $receiptRow = function(string $key, array $st, array $S, int $mid) use ($receipt
           <b class="ms-amt <?= $dirCls ?>"><?= money($en['amount'],false) ?></b>
           <?php if (isset($en['actual_amount']) && $en['actual_amount']!==null && $en['actual_amount']!==''): ?><span class="te-actual" title="السعر الفعلي (للعميل)">👤 <?= money($en['actual_amount'],false) ?></span><?php endif; ?>
           <?php if (!empty($en['is_visa'])): ?><span class="tl-visa-badge">💳 فيزا</span><?php endif; ?>
-          <?php if ($en['attachment']): ?><a class="te-clip" href="<?= url($en['attachment']) ?>" target="_blank" title="المرفق">📎</a><?php endif; ?>
+          <?php if ($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank" title="المرفق">📎</a><?php endif; ?>
           <?= $statusBadge($en['status']) ?>
           <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل">✏️</button>
           <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit" title="حذف">🗑️</button></form>
@@ -235,7 +235,7 @@ $customBlock = function(string $key, array $st, array $S, int $mid) use ($status
                   <?php if(isset($en['actual_amount'])&&$en['actual_amount']!==null&&$en['actual_amount']!==''): ?><span class="te-actual">👤 <?= money($en['actual_amount'],false) ?></span><?php endif; ?>
                   <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge">💳</span><?php endif; ?>
                   <?php if($en['note']): ?><span class="te-note"><?= e($en['note']) ?></span><?php endif; ?>
-                  <?php if($en['attachment']): ?><a class="te-clip" href="<?= url($en['attachment']) ?>" target="_blank">📎</a><?php endif; ?>
+                  <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank">📎</a><?php endif; ?>
                   <span class="ms-sp"></span>
                   <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل البند">✏️</button>
                   <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit">🗑️</button></form>
@@ -279,7 +279,7 @@ $receiptsBlock = function(string $key, array $st, array $S, int $mid) use ($stat
                   <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge">💳</span><?php endif; ?>
                   <?php if($en['ref_no']): ?><span class="te-ref">#<?= e($en['ref_no']) ?></span><?php endif; ?>
                   <?= $statusBadge($en['status']) ?>
-                  <?php if($en['attachment']): ?><a class="te-clip" href="<?= url($en['attachment']) ?>" target="_blank" title="المرفق">📎</a><?php endif; ?>
+                  <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank" title="المرفق">📎</a><?php endif; ?>
                   <span class="ms-sp"></span>
                   <?php if($canMoveReceipts): ?><button type="button" class="btn ghost xs receipt-transfer-btn"
                     data-transfer-action="<?= url('permits/stage/'.$en['id'].'/move') ?>"

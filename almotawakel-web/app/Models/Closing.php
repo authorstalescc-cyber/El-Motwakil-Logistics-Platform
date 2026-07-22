@@ -72,6 +72,19 @@ class Closing
      *   بنود الإصدارات + المصاريف اليدوية + كاش المناديب (سُلف + دفعات تسوية).
      * كاش المناديب هو الوحيد اللي بيطلّع فلوس من الخزنة من وحدة المناديب — لازم يمشي
      * مع Expense (مصدر reps) و Rep::CASH_KINDS وإلا العهدة تبوظ.
+     *
+     * ⚠️ استثناء واحد من بنود الإصدارات — is_visa = 0: المدفوع بالفيزا بيتخصم
+     *    من كارت الفيزا (v22) لأن الفيزا **بنك**، فلوس تانية خالص مش من الدرج.
+     *
+     * ⚠️ **v42 — بنود عهدة المناديب بقت تتخصم هنا** (كانت مستثناة في v35):
+     *    الفلوس اللي بتنزل للمندوب بتطلع من الدرج بإيد المالك، فنسخ نموذج كروت
+     *    الفيزا (اللي بيستثني) كان بيسيب فتحة: لا التنزيل ولا الصرف بيتخصم، فالخزنة
+     *    تفضل مضخّمة بقيمة اللي في جيب المناديب. القاعدة الجديدة:
+     *      • تنزيل العهدة للمندوب  → مالوش أثر على الخزنة (تحويل داخلي).
+     *      • صرف المندوب (اعتماده) → بيتخصم من الخزنة يوم الصرف زي أي مصروف.
+     *      • مرتجع العهدة          → مالوش أثر (الفلوس أصلاً ماخرجتش وقت التنزيل).
+     *    فعلى مدار الدورة الكاملة الخزنة بتنقص بالظبط اللي اتصرف فعلاً.
+     *    عهدة المندوب نفسها فضلت محفظة منفصلة (RepCustody::balance) زي ما هي.
      */
     private static function sumExpenses(?string $gt, bool $gte, ?string $lt, ?string $eq = null): float
     {
@@ -84,7 +97,25 @@ class Closing
         $manual = (float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM manual_expenses WHERE is_visa = 0 AND $w2", $p2);
         $reps = self::sumRepCash($gt, $gte, $lt, $eq);
-        return round($stage + $manual + $reps, 2);
+        $misc = self::sumRepMisc($gt, $gte, $lt, $eq);
+        return round($stage + $manual + $reps + $misc, 2);
+    }
+
+    /**
+     * إجمالي نثريات المناديب (v39) في نطاق/يوم — كاش خرج من الخزنة عبر عهدة المندوب.
+     * بترجع 0 قبل migrate_v39 فالنظام يفضل يشتغل بسلوكه القديم بدل ما يكسر.
+     *
+     * ⚠️ v45: **الكاش بس** — النثرية المدفوعة بالفيزا خرجت من كارت المكتب مش من
+     *    الخزنة، فبتتستثنى هنا زي أي بند `is_visa=1` في باقي المصادر.
+     *    الشرط من `RepMiscExpense::cashOnlySql()` — ممنوع تكتبه بإيدك.
+     */
+    private static function sumRepMisc(?string $gt, bool $gte, ?string $lt, ?string $eq = null): float
+    {
+        if (!self::tableExists('rep_misc_expenses')) { return 0.0; }
+        [$w, $p] = self::whereDate('exp_date', $gt, $gte, $lt, $eq);
+        $cash = RepMiscExpense::cashOnlySql();
+        return round((float) Database::scalar(
+            "SELECT COALESCE(SUM(amount),0) FROM rep_misc_expenses WHERE $cash AND $w", $p), 2);
     }
 
     /** إجمالي كاش المناديب النقدي (سُلف + دفعات تسوية، بلا فيزا) في نطاق/يوم. */
@@ -122,6 +153,56 @@ class Closing
         return round((float) Database::scalar($sql, $params), 2);
     }
 
+    /**
+     * يجمع مصادر حركة الخزنة الستة في استعلام واحد. هذا هو المسار السريع للأرصدة
+     * الحية؛ الدوال المفردة تبقى لعمليات الإقفال والتدقيق التي تحتاج كل رقم وحده.
+     *
+     * @return array{topups:float,expenses:float,driver:float}
+     */
+    private static function movementTotals(?string $gt, bool $gte, ?string $lt, ?string $eq = null, int $excludeBill = 0): array
+    {
+        $parts = []; $params = [];
+        $append = static function (string $kind, string $sql, array $sqlParams) use (&$parts, &$params): void {
+            $parts[] = "SELECT '$kind' kind, COALESCE(SUM(amount),0) total FROM ($sql) source_rows";
+            array_push($params, ...$sqlParams);
+        };
+
+        [$w, $p] = self::whereDate('cust_date', $gt, $gte, $lt, $eq);
+        $append('topups', "SELECT amount FROM manual_custody WHERE $w", $p);
+
+        $expenseParts = []; $expenseParams = [];
+        [$w, $p] = self::whereDate('s.entry_date', $gt, $gte, $lt, $eq);
+        $expenseParts[] = "SELECT s.amount FROM permit_stages s WHERE " . Permit::expenseSql('s') . " AND s.is_visa=0 AND $w";
+        array_push($expenseParams, ...$p);
+        [$w, $p] = self::whereDate('exp_date', $gt, $gte, $lt, $eq);
+        $expenseParts[] = "SELECT amount FROM manual_expenses WHERE is_visa=0 AND $w";
+        array_push($expenseParams, ...$p);
+        [$w, $p] = self::whereDate('entry_date', $gt, $gte, $lt, $eq);
+        $expenseParts[] = "SELECT amount FROM rep_entries WHERE kind IN (" . Rep::cashKindsList() . ") AND is_visa=0 AND $w";
+        array_push($expenseParams, ...$p);
+        if (RepMiscExpense::available()) {
+            [$w, $p] = self::whereDate('exp_date', $gt, $gte, $lt, $eq);
+            // v45: الكاش بس — المدفوع بالفيزا خرج من الكارت مش من الخزنة.
+            $expenseParts[] = "SELECT amount FROM rep_misc_expenses WHERE "
+                            . RepMiscExpense::cashOnlySql() . " AND $w";
+            array_push($expenseParams, ...$p);
+        }
+        $append('expenses', implode(' UNION ALL ', $expenseParts), $expenseParams);
+
+        [$dedSql, $dedParams] = Custody::deductionSql('custody', 'car_no');
+        [$w, $p] = self::whereDate('bill_date', $gt, $gte, $lt, $eq);
+        $driverSql = "SELECT $dedSql amount FROM bawalis WHERE is_legacy=0 AND custody>0 AND $w";
+        $driverParams = array_merge($dedParams, $p);
+        if ($excludeBill > 0) { $driverSql .= ' AND id <> ?'; $driverParams[] = $excludeBill; }
+        $append('driver', $driverSql, $driverParams);
+
+        $totals = ['topups' => 0.0, 'expenses' => 0.0, 'driver' => 0.0];
+        foreach (Database::all(implode(' UNION ALL ', $parts), $params) as $row) {
+            $totals[$row['kind']] = round((float) $row['total'], 2);
+        }
+        return $totals;
+    }
+
     // ───────────────────────────────────────────── نقطة الارتكاز
 
     /**
@@ -131,15 +212,21 @@ class Closing
      */
     private static function anchor(?string $beforeDate): array
     {
-        if (self::available()) {
+        // نجرب قراءة الجدول مباشرةً؛ النجاح يثبت الجاهزية ويوفّر استعلام
+        // information_schema إضافيًا في كل تحميل للداشبورد.
+        try {
             $sql = "SELECT closing_balance, close_date FROM daily_closings";
             $params = [];
             if ($beforeDate !== null) { $sql .= " WHERE close_date < ?"; $params[] = $beforeDate; }
             $sql .= " ORDER BY close_date DESC LIMIT 1";
             $row = Database::row($sql, $params);
+            self::$tableAvailable = true;
             if ($row) {
                 return ['base' => round((float) $row['closing_balance'], 2), 'gt' => $row['close_date'], 'gte' => false];
             }
+        } catch (\PDOException $error) {
+            if ((string) $error->getCode() !== '42S02') { throw $error; }
+            self::$tableAvailable = false;
         }
         // لا إقفال سابق — الرصيد الافتتاحي من الإعدادات (نفس منطق التقفيل القديم)
         $bal = (float) App::setting('opening_balance', '0');
@@ -156,10 +243,8 @@ class Closing
     public static function openingFor(string $date): float
     {
         $a = self::anchor($date);
-        $t = self::sumTopups($a['gt'], $a['gte'], $date);
-        $e = self::sumExpenses($a['gt'], $a['gte'], $date);
-        $d = self::sumDriverCustody($a['gt'], $a['gte'], $date);
-        return round($a['base'] + $t - $e - $d, 2);
+        $movement = self::movementTotals($a['gt'], $a['gte'], $date);
+        return round($a['base'] + $movement['topups'] - $movement['expenses'] - $movement['driver'], 2);
     }
 
     /**
@@ -169,10 +254,8 @@ class Closing
     public static function currentBalance(int $excludeBill = 0): float
     {
         $a = self::anchor(null);
-        $t = self::sumTopups($a['gt'], $a['gte'], null);
-        $e = self::sumExpenses($a['gt'], $a['gte'], null);
-        $d = self::sumDriverCustody($a['gt'], $a['gte'], null, null, $excludeBill);
-        return round($a['base'] + $t - $e - $d, 2);
+        $movement = self::movementTotals($a['gt'], $a['gte'], null, null, $excludeBill);
+        return round($a['base'] + $movement['topups'] - $movement['expenses'] - $movement['driver'], 2);
     }
 
     /**
@@ -183,16 +266,14 @@ class Closing
     public static function currentBreakdown(): array
     {
         $a = self::anchor(null);
-        $t = self::sumTopups($a['gt'], $a['gte'], null);
-        $e = self::sumExpenses($a['gt'], $a['gte'], null);
-        $d = self::sumDriverCustody($a['gt'], $a['gte'], null);
+        $movement = self::movementTotals($a['gt'], $a['gte'], null);
         return [
             'anchor'     => $a['base'],
             'anchorDate' => $a['gt'],   // آخر يوم متقفل (أو تاريخ الرصيد الافتتاحي)، null لو من البداية
-            'topups'     => $t,
-            'expenses'   => $e,
-            'driver'     => $d,
-            'balance'    => round($a['base'] + $t - $e - $d, 2),
+            'topups'     => $movement['topups'],
+            'expenses'   => $movement['expenses'],
+            'driver'     => $movement['driver'],
+            'balance'    => round($a['base'] + $movement['topups'] - $movement['expenses'] - $movement['driver'], 2),
         ];
     }
 
@@ -306,6 +387,12 @@ class Closing
             [$w, $p] = self::whereDate('entry_date', $afterClosed, false, $beforeDate, null);
             if (Database::scalar("SELECT COUNT(*) FROM rep_entries WHERE kind IN ($cash) AND is_visa=0 AND $w", $p)) { return true; }
         }
+        // نثريات المناديب (v39) بقت حركة خزنة من v42 — الكاش بس (v45)
+        if (self::tableExists('rep_misc_expenses')) {
+            [$w, $p] = self::whereDate('exp_date', $afterClosed, false, $beforeDate, null);
+            $cash = RepMiscExpense::cashOnlySql();
+            if (Database::scalar("SELECT COUNT(*) FROM rep_misc_expenses WHERE $cash AND $w", $p)) { return true; }
+        }
         return false;
     }
 
@@ -416,11 +503,15 @@ class Closing
     {
         $dates = array_filter([
             Database::scalar("SELECT MIN(cust_date) FROM manual_custody"),
-            Database::scalar("SELECT MIN(entry_date) FROM permit_stages"),
+            Database::scalar("SELECT MIN(s.entry_date) FROM permit_stages s"),
             Database::scalar("SELECT MIN(exp_date) FROM manual_expenses"),
             Database::scalar("SELECT MIN(bill_date) FROM bawalis WHERE is_legacy = 0 AND custody > 0"),
             self::tableExists('rep_entries')
                 ? Database::scalar("SELECT MIN(entry_date) FROM rep_entries WHERE kind IN (" . Rep::cashKindsList() . ")")
+                : null,
+            self::tableExists('rep_misc_expenses')
+                ? Database::scalar("SELECT MIN(exp_date) FROM rep_misc_expenses WHERE "
+                    . RepMiscExpense::cashOnlySql())
                 : null,
         ], fn($d) => $d !== null && $d !== false && $d !== '');
         if (!$dates) { return null; }

@@ -1,9 +1,13 @@
 <?php
+use App\Core\FormState;
 use App\Models\PermitInvoice;
 /** @var array $rows @var array $sums */
 // رابط العودة لنفس السياق (الفلترة/الصفحة) بعد الحذف
 $backQs  = http_build_query(array_filter(['q'=>$q,'kind'=>$kind,'tax'=>$tax,'status'=>$status,'from'=>$from,'to'=>$to,'page'=>$page]));
 $backUrl = 'invoices' . ($backQs ? '?'.$backQs : '');
+$bulkState = $bulkState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>$backUrl];
+$voidState = $voidState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>$backUrl];
+$voidOldId = (int)($voidState['old']['_void_id'] ?? 0);
 ?>
 <div class="page-head">
   <div><h1 style="margin:0">🧾 إصدار الفواتير</h1></div>
@@ -48,12 +52,19 @@ $backUrl = 'invoices' . ($backQs ? '?'.$backQs : '');
 </form>
 
 <!-- إلغاء جماعي: لا حذف للمستندات المالية الصادرة -->
-<form id="bulkForm" method="post" action="<?= url('invoices/delete') ?>"
+<?= formErrorSummary($bulkState['errors']) ?>
+<form id="bulkForm" class="js-dirty-form" method="post" action="<?= url('invoices/delete') ?>"
       data-danger="1" data-confirm="إلغاء المستندات المحددة مع الاحتفاظ بأرقامها وسجلها؟">
   <?= csrfField() ?>
-  <input type="hidden" name="back" value="<?= e($backUrl) ?>">
-  <input type="text" name="reason" required placeholder="سبب الإلغاء" style="margin:8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px">
+  <?= formStateFields($bulkState['token'], $bulkState['back']) ?>
+  <div class="field" style="display:inline-block;margin:8px">
+    <input type="text" name="reason" value="<?= e($bulkState['old']['reason'] ?? '') ?>" required placeholder="سبب الإلغاء" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"<?= fieldErrorAttrs('reason', $bulkState['errors']) ?>>
+    <?= fieldError('reason', $bulkState['errors']) ?>
+    <?= fieldError('ids', $bulkState['errors']) ?>
+  </div>
 </form>
+
+<?php if ($voidState['errors']): ?><?= formErrorSummary($voidState['errors']) ?><?php endif; ?>
 
 <!-- الجدول -->
 <div class="card" style="padding:0;overflow:hidden">
@@ -92,8 +103,8 @@ $backUrl = 'invoices' . ($backQs ? '?'.$backQs : '');
             <a class="edit" href="<?= url('permits/'.$iv['permit_id'].'/invoice') ?>" title="إصدار مستند آخر لنفس الإذن">➕</a>
             <?php if($iv['status']!=='void'): ?><form method="post" action="<?= url('permits/invoice/'.$iv['id'].'/delete') ?>" style="display:inline"
                   data-danger="1" data-confirm="إلغاء هذا المستند؟ سيظل رقمه محفوظاً.">
-              <?= csrfField() ?><input type="hidden" name="back" value="<?= e($backUrl) ?>"><input type="hidden" name="lock_version" value="<?= (int)$iv['lock_version'] ?>">
-              <input type="text" name="reason" required placeholder="سبب الإلغاء" style="width:110px"><button class="del" title="إلغاء">⛔</button>
+              <?= csrfField() ?><?= formStateFields($voidState['token'], $voidState['back']) ?><input type="hidden" name="_void_id" value="<?= (int)$iv['id'] ?>"><input type="hidden" name="lock_version" value="<?= (int)$iv['lock_version'] ?>">
+              <span class="field" style="display:inline-block;margin:0"><input type="text" name="reason" value="<?= $voidOldId===(int)$iv['id'] ? e($voidState['old']['reason'] ?? '') : '' ?>" required placeholder="سبب الإلغاء" style="width:110px"<?= $voidOldId===(int)$iv['id'] ? fieldErrorAttrs('reason', $voidState['errors']) : '' ?>><?= $voidOldId===(int)$iv['id'] ? fieldError('reason', $voidState['errors']) : '' ?></span><button class="del" type="submit" data-primary-submit title="إلغاء">⛔</button>
             </form><?php endif; ?>
           </div></td>
         </tr>

@@ -136,7 +136,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;back
 
 <script>
 (function(){
-  var POST = <?= json_encode($postUrl, JSON_UNESCAPED_SLASHES) ?>;
+  var POST = <?= js_json($postUrl) ?>;
   var LIVE_MS = <?= (int) $liveSecs ?> * 1000;
   var btn = document.getElementById('send'), msg = document.getElementById('msg'),
       sw = document.getElementById('sw'), liveBox = document.getElementById('liveBox'),

@@ -2,6 +2,7 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\FormState;
 use App\Models\ClientPayment;
 use App\Models\Closing;
 use App\Models\Party;
@@ -28,6 +29,7 @@ class PaymentController extends Controller
             'to'     => trim($_GET['to'] ?? ''),
             'q'      => trim($_GET['q'] ?? ''),
         ];
+        $state = FormState::consume('payments.pay', current_app_path());
         $this->render('payments/index', [
             'title'     => 'تحصيلات العملاء',
             'f'         => $f,
@@ -35,6 +37,7 @@ class PaymentController extends Controller
             'summary'   => ClientPayment::summary($f),
             'agents'    => Party::agents(),
             'visaCards' => VisaCard::all(true),
+            'formState' => $state,
         ]);
     }
 
@@ -44,21 +47,25 @@ class PaymentController extends Controller
         $this->requireCsrf();
 
         $name = trim($_POST['client_name'] ?? '');
-        if ($name === '') { flash('error', 'اختر العميل أولاً.'); redirect('payments'); }
 
         $amount = ($_POST['amount'] ?? '') === '' ? 0 : (float) $_POST['amount'];
-        if ($amount <= 0) { flash('error', 'أدخل مبلغ الدفعة.'); redirect('payments'); }
 
         $date  = trim($_POST['pay_date'] ?? '');
         $date  = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : work_date();
         $route = in_array($_POST['route'] ?? 'none', ['cash', 'visa'], true) ? $_POST['route'] : 'none';
         $card  = (int) ($_POST['visa_card_id'] ?? 0);
 
-        if ($route === 'visa' && $card <= 0) {
-            flash('error', 'اختر كارت الفيزا لتوجيه الدفعة إليه.'); redirect('payments');
+        $errors = [];
+        if ($name === '') { $errors['client_name'] = 'اختر العميل أولاً.'; }
+        if ($amount <= 0) { $errors['amount'] = 'أدخل مبلغًا أكبر من صفر.'; }
+        if ($route === 'visa' && $card <= 0) { $errors['visa_card_id'] = 'اختر كارت الفيزا لتوجيه الدفعة إليه.'; }
+        $back = safe_back('payments', $_POST['_back'] ?? null);
+        if ($errors) { $this->formFailure('payments.pay', $back, $_POST, $errors, 'payments'); }
+        if ($route === 'cash' && ($err = Closing::guard($date))) {
+            $this->formFailure('payments.pay', $back, $_POST, ['pay_date'=>$err], 'payments');
         }
-        if ($route === 'cash' && ($err = Closing::guard($date))) { flash('error', $err); redirect('payments'); }
 
+        $this->claimForm('payments');
         try {
             ClientPayment::create([
                 'client_name'  => $name,
@@ -72,9 +79,9 @@ class PaymentController extends Controller
             ]);
             flash('success', 'تم تسجيل التحصيل' . (!empty($_POST['auto_allocate']) ? ' وتخصيصه على أقدم الفواتير المستحقة.' : '.'));
         } catch (\Throwable $e) {
-            flash('error', $e->getMessage());
+            $this->formFailure('payments.pay', $back, $_POST, ['_form'=>$e->getMessage()], 'payments');
         }
-        redirect('payments');
+        redirect($back);
     }
 
     public function delete(string $id): void
@@ -82,16 +89,18 @@ class PaymentController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $pay = ClientPayment::find((int) $id);
-        if (!$pay) { flash('error', 'الدفعة غير موجودة.'); redirect('payments'); }
+        $back = safe_back('payments', $_POST['_back'] ?? null);
+        if (!$pay) { flash('error', 'الدفعة غير موجودة.'); redirect($back); }
         if ($pay['route'] === 'cash' && ($err = Closing::guard($pay['pay_date']))) {
-            flash('error', $err); redirect('payments');
+            flash('error', $err); redirect($back);
         }
+        $this->claimForm('payments');
         try {
             ClientPayment::reverse((int)$id, trim($_POST['reason'] ?? ''));
             flash('success', 'تم عكس التحصيل مع الاحتفاظ بسجله.');
         } catch (\Throwable $e) {
             flash('error', $e->getMessage());
         }
-        redirect('payments');
+        redirect($back);
     }
 }

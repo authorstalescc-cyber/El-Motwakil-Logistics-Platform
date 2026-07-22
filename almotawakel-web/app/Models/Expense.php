@@ -12,6 +12,7 @@ use App\Core\Database;
  *   • bawalis  — بنود مصروفات حركات البوالص (movement_items)
  *   • takhlis  — مصروفات شهادات التخليص (takhlis.expenses)
  *   • shamil   — مصروفات الفواتير (shamil.expense)
+ *   • rep_misc — نثريات المناديب (rep_misc_expenses) — مصروف عام بلا إذن (v39)
  *
  * كل صف مُوحَّد الأعمدة: source | ref_id | d | category | party | amount | note
  * المصادر عدا manual للعرض فقط (تُعدَّل من وحداتها الأصلية).
@@ -26,6 +27,7 @@ class Expense
         'takhlis' => 'التخليص',
         'shamil'  => 'الفواتير',
         'reps'    => 'المناديب',
+        'rep_misc'=> 'نثريات المناديب',
         'debt'    => 'سداد مديونيات',
     ];
 
@@ -39,6 +41,8 @@ class Expense
             'takhlis' => $id ? url('takhlis/' . $id . '/edit') : null,
             'shamil'  => $id ? url('shamil/' . $id . '/edit') : null,
             'reps'    => $id ? url('reps/' . $id) : url('reps'),
+            // نثرية المندوب مالهاش إذن، فالرابط بيوّدي لكارت عهدته (v39)
+            'rep_misc'=> $id ? url('rep-custody/' . $id) : url('rep-custody'),
             'debt'    => $id ? url('debts/account/' . $id) : url('debts'),
             default   => null,
         };
@@ -59,6 +63,9 @@ class Expense
         $stageCase .= " ELSE COALESCE(NULLIF(s.note,''),'بند مخصّص') END";
 
         $expSql = Permit::expenseSql('s');
+
+        // نثريات المناديب (v39) — '' قبل تشغيل migrate_v39 فتتخطّى بأمان
+        $miscSql = RepMiscExpense::expenseUnionSql();
 
         $sql = "
             SELECT 'manual' AS source, me.id AS ref_id, me.exp_date AS d,
@@ -109,6 +116,8 @@ class Expense
             UNION ALL
 
             " . Rep::expenseUnionSql() . "
+
+            " . ($miscSql !== '' ? "UNION ALL\n\n            $miscSql\n" : '') . "
 
             UNION ALL
 
@@ -219,6 +228,58 @@ class Expense
             if ($m >= 1 && $m <= 12) { $out[$m] = round((float) $r['v'], 2); }
         }
         return $out;
+    }
+
+    /** المصروفات ومدفوعات البوالص الشهرية في استعلام واحد لرسم الداشبورد. */
+    public static function monthlyDashboard(int $year): array
+    {
+        [$union, $up] = self::unionSql();
+        return Database::all(
+            "SELECT x.m, COALESCE(SUM(x.expenses),0) expenses,
+                    COALESCE(SUM(x.collections),0) collections
+             FROM (
+                SELECT MONTH(t.d) m, t.amount expenses, 0 collections
+                FROM ($union) t
+                WHERE t.source <> 'debt' AND t.d IS NOT NULL AND YEAR(t.d)=?
+                UNION ALL
+                SELECT MONTH(bp.pay_date), 0, bp.amount
+                FROM bill_payments bp
+                WHERE bp.is_legacy=0 AND YEAR(bp.pay_date)=?
+             ) x
+             GROUP BY x.m",
+            array_merge($up, [$year, $year])
+        );
+    }
+
+    /**
+     * أرقام ملخص يوم الداشبورد في رحلة واحدة لقاعدة البيانات.
+     * المصروفات تستخدم نفس اتحاد صفحة المصروفات وتستبعد سداد المديونيات كما هو.
+     */
+    public static function dashboardDay(string $date): array
+    {
+        [$union, $up] = self::unionSql();
+        $row = Database::row(
+            "SELECT
+                (SELECT COALESCE(SUM(t.amount),0) FROM ($union) t
+                 WHERE t.source <> 'debt' AND t.d = ?) AS expenses,
+                (SELECT COUNT(*) FROM permit_stages s
+                 WHERE s.stage_key='receipts' AND s.entry_date = ?) AS receipts_cnt,
+                (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s
+                 WHERE s.stage_key='receipts' AND s.entry_date = ?) AS receipts_val,
+                (SELECT COALESCE(SUM(bp.amount),0) FROM bill_payments bp
+                 WHERE bp.is_legacy = 0 AND bp.pay_date = ?) AS payments,
+                (SELECT COUNT(*) FROM permits p WHERE p.permit_date = ?) AS permits_new,
+                (SELECT COUNT(*) FROM movements m WHERE m.movement_date = ?) AS movements",
+            array_merge($up, [$date, $date, $date, $date, $date, $date])
+        ) ?: [];
+        return [
+            'expenses'     => round((float) ($row['expenses'] ?? 0), 2),
+            'receipts_cnt' => (int) ($row['receipts_cnt'] ?? 0),
+            'receipts_val' => round((float) ($row['receipts_val'] ?? 0), 2),
+            'payments'     => (float) ($row['payments'] ?? 0),
+            'permits_new'  => (int) ($row['permits_new'] ?? 0),
+            'movements'    => (int) ($row['movements'] ?? 0),
+        ];
     }
 
     /** السنوات المتاحة في السجل (لفلتر سريع) */

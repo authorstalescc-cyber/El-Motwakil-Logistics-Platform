@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Database;
+use App\Core\FormState;
 use App\Calc;
 use App\Schema;
 use App\Models\Lookup;
@@ -123,7 +124,9 @@ abstract class CrudController extends Controller
         $this->requireAuth();
         $ent = $this->entity();
         $row = $this->prepareCreateRow($ent, $this->emptyRow($ent));
-        if (!empty($_SESSION['_old']) && is_array($_SESSION['_old'])) { $row = array_replace($row, $_SESSION['_old']); }
+        $formId = 'crud.' . $ent['route'] . '.create';
+        $state = FormState::consume($formId, $ent['route']);
+        if ($state['old']) { $row = array_replace($row, $state['old']); }
         $this->render('crud/form', [
             'title'   => 'إضافة — ' . $ent['title'],
             'ent'     => $ent,
@@ -131,9 +134,10 @@ abstract class CrudController extends Controller
             'lookups' => Lookup::allGrouped(),
             'action'  => url($ent['route']),
             'isEdit'  => false,
-            'errors'  => $_SESSION['_form_errors'] ?? [],
+            'errors'  => $state['errors'],
+            'formToken' => $state['token'],
+            'back'    => $state['back'],
         ]);
-        unset($_SESSION['_old'], $_SESSION['_form_errors']);
     }
 
     // ------------------------------------------------------------ حفظ جديد
@@ -146,21 +150,22 @@ abstract class CrudController extends Controller
         $data = Calc::apply($ent['calc'], $data);
         $data = $this->prepareSaveData($data, null);
         if ($err = $this->validate($data, null)) {
-            $_SESSION['_old'] = $data;
-            $_SESSION['_form_errors'] = ['_form' => $err];
-            if (str_contains($err, 'رقم البوليصة')) { $_SESSION['_form_errors']['bill_number'] = $err; }
-            flash('error', $err);
-            redirect($ent['route'] . '/new');
+            $errors = ['_form' => $err];
+            if (str_contains($err, 'رقم البوليصة')) { $errors['bill_number'] = $err; }
+            $this->formFailure('crud.' . $ent['route'] . '.create', $ent['route'] . '/new', $_POST, $errors, $ent['route']);
         }
+        $this->claimForm($ent['route']);
         $this->insert($ent['table'], $data);
         $id = Database::lastId();
         $this->learnLookups($ent, $data);
         $this->afterSave($id, $data, true);
         $saved = Database::row("SELECT * FROM `{$ent['table']}` WHERE id = ?", [$id]);
         Audit::log('create', $ent['table'], $id, null, $saved, 'إضافة سجل جديد');
-        unset($_SESSION['_old'], $_SESSION['_form_errors']);
         flash('success', 'تمت الإضافة بنجاح.');
-        redirect($ent['route']);
+        if (!empty($_POST['save_and_new'])) {
+            redirect($ent['route'] . '/new?back=' . rawurlencode(safe_back($ent['route'], $_POST['_back'] ?? null)));
+        }
+        redirect(safe_back($ent['route'], $_POST['_back'] ?? null));
     }
 
     // ------------------------------------------------------------ تعديل
@@ -170,7 +175,9 @@ abstract class CrudController extends Controller
         $ent = $this->entity();
         $row = Database::row("SELECT * FROM `{$ent['table']}` WHERE id = ?", [(int)$id]);
         if (!$row) { redirect($ent['route']); }
-        if (!empty($_SESSION['_old']) && is_array($_SESSION['_old'])) { $row = array_replace($row, $_SESSION['_old']); }
+        $formId = 'crud.' . $ent['route'] . '.edit.' . (int) $id;
+        $state = FormState::consume($formId, $ent['route']);
+        if ($state['old']) { $row = array_replace($row, $state['old']); }
         $this->render('crud/form', [
             'title'   => 'تعديل — ' . $ent['title'],
             'ent'     => $ent,
@@ -178,9 +185,10 @@ abstract class CrudController extends Controller
             'lookups' => Lookup::allGrouped(),
             'action'  => url($ent['route'] . '/' . $id),
             'isEdit'  => true,
-            'errors'  => $_SESSION['_form_errors'] ?? [],
+            'errors'  => $state['errors'],
+            'formToken' => $state['token'],
+            'back'    => $state['back'],
         ]);
-        unset($_SESSION['_old'], $_SESSION['_form_errors']);
     }
 
     // ------------------------------------------------------------ تحديث
@@ -194,17 +202,17 @@ abstract class CrudController extends Controller
         $data = Calc::apply($ent['calc'], $data);
         $data = $this->prepareSaveData($data, (int)$id);
         if ($err = $this->validate($data, (int)$id)) {
-            $_SESSION['_old'] = $data;
-            $_SESSION['_form_errors'] = ['_form' => $err];
-            if (str_contains($err, 'رقم البوليصة')) { $_SESSION['_form_errors']['bill_number'] = $err; }
-            flash('error', $err);
-            redirect($ent['route'] . '/' . $id . '/edit');
+            $errors = ['_form' => $err];
+            if (str_contains($err, 'رقم البوليصة')) { $errors['bill_number'] = $err; }
+            $this->formFailure('crud.' . $ent['route'] . '.edit.' . (int) $id,
+                $ent['route'] . '/' . (int) $id . '/edit', $_POST, $errors, $ent['route']);
         }
+        $this->claimForm($ent['route']);
         $expectedVersion = array_key_exists('lock_version',$before) ? (int)($_POST['lock_version'] ?? 0) : null;
         if (!$this->updateRow($ent['table'], (int)$id, $data, $expectedVersion)) {
-            $_SESSION['_old']=$data;
-            flash('error','عدّل مستخدم آخر هذا السجل. أعد تحميله وراجع التغييرات قبل الحفظ.');
-            redirect($ent['route'].'/'.$id.'/edit');
+            $this->formFailure('crud.' . $ent['route'] . '.edit.' . (int) $id,
+                $ent['route'] . '/' . (int) $id . '/edit', $_POST,
+                ['_form'=>'عدّل مستخدم آخر هذا السجل. أعد تحميله وراجع التغييرات قبل الحفظ.'], $ent['route']);
         }
         $this->learnLookups($ent, $data);
         $this->afterSave((int)$id, $data, false);
@@ -212,9 +220,8 @@ abstract class CrudController extends Controller
         $canUndo = $ent['table'] !== 'bawalis' || !empty($before['is_legacy']);
         $auditId=Audit::log('update', $ent['table'], (int)$id, $before, $after, 'تعديل بيانات السجل', [], $canUndo);
         if ($canUndo) { $_SESSION['_last_undo_audit']=$auditId; }
-        unset($_SESSION['_old'], $_SESSION['_form_errors']);
         flash('success', 'تم حفظ التعديلات.');
-        redirect($ent['route']);
+        redirect(safe_back($ent['route'], $_POST['_back'] ?? null));
     }
 
     // ------------------------------------------------------------ حذف
@@ -224,7 +231,9 @@ abstract class CrudController extends Controller
         $this->requireCsrf();
         $ent = $this->entity();
         $row = Database::row("SELECT * FROM `{$ent['table']}` WHERE id = ?", [(int)$id]);
-        if (!$row) { redirect($ent['route']); }
+        $back = safe_back($ent['route'], $_POST['_back'] ?? null);
+        if (!$row) { redirect($back); }
+        $this->claimForm($back);
         $related = [];
         if ($ent['table'] === 'bawalis') {
             $related['bill_payments'] = Database::all('SELECT * FROM bill_payments WHERE bill_id=? ORDER BY id', [(int)$id]);
@@ -240,10 +249,10 @@ abstract class CrudController extends Controller
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
             flash('error', 'تعذّر نقل السجل إلى سلة المحذوفات: '.$e->getMessage());
-            redirect($ent['route']);
+            redirect($back);
         }
         flash('success', 'تم نقل السجل إلى سلة المحذوفات ويمكن استرجاعه.');
-        redirect($ent['route']);
+        redirect($back);
     }
 
     /** خطّاف يُستدعى بعد الحفظ (تُعيد تعريفه المتحكّمات الخاصة) */

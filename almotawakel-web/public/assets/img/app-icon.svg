@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="المتوكل">
+  <!-- خلفية كحلي مع لمعة خفيفة، وحرف «م» ذهبي — أيقونة التطبيق للمندوب -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#173254"/>
+      <stop offset="1" stop-color="#0C1B2E"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.28" r="0.7">
+      <stop offset="0" stop-color="#D4AF37" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#D4AF37" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <!-- شاحنة مبسّطة ذهبية -->
+  <g fill="none" stroke="#D4AF37" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M104 190h150v132H104z"/>
+    <path d="M254 232h64l46 44v46h-110z"/>
+    <circle cx="168" cy="352" r="26" fill="#0C1B2E"/>
+    <circle cx="322" cy="352" r="26" fill="#0C1B2E"/>
+  </g>
+  <path d="M150 150l24 26 24-26" fill="none" stroke="#F3E9C6" stroke-width="16"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+</svg>

@@ -1,212 +1,305 @@
 <?php
+// ═══ حارس: سطر الأوامر فقط ═══
+// السكربتات دي بتعدّل القاعدة وبتاخد نسخ احتياطية، ومفيش فيها تسجيل دخول.
+// حمايتها الأساسية إن .htaccess بيمنع مجلد bin/ من الويب — والسطر ده طبقة
+// تانية مستقلة تشتغل حتى لو ذلك المنع وقع (صيانة استضافة، ملف اتمسح…).
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /**
- * تثبيت نظام المتوكل:
- *   1) إنشاء قاعدة البيانات والجداول
- *   2) إنشاء مستخدم الدخول الافتراضي
- *   3) نقل بيانات النظام القديم من old_data.json (إن وُجد) مع حسابات مطابقة
+ * إدارة دورة قاعدة البيانات بأوضاع صريحة وآمنة.
  *
- * التشغيل:  php bin/install.php          (تثبيت/تحديث)
- *           php bin/install.php --fresh   (حذف كل شيء والبدء من جديد)
+ *   php bin/install.php install
+ *   php bin/install.php update
+ *   php bin/install.php update --adopt-existing --adopt-through=40
+ *   php bin/install.php import-legacy --fresh --import-legacy --confirm-database=NAME
  */
 require dirname(__DIR__) . '/app/bootstrap.php';
 
 use App\Core\App;
 use App\Core\Database;
-use App\Calc;
-use App\Models\PartyMaster;
+use App\Core\DatabaseBackup;
+use App\Core\LegacyImporter;
+use App\Core\MigrationRunner;
 
-$fresh = in_array('--fresh', $argv);
-$cfg = App::config('db');
+function cliSay(string $message, string $color = ''): void
+{
+    $colors = ['ok' => "\033[32m", 'err' => "\033[31m", 'hi' => "\033[36m", 'warn' => "\033[33m"];
+    echo ($colors[$color] ?? '') . $message . ($color ? "\033[0m" : '') . PHP_EOL;
+}
 
-function say(string $s, string $c = ''){ $codes=['ok'=>"\033[32m",'err'=>"\033[31m",'hi'=>"\033[36m",'y'=>"\033[33m"];
-    echo ($codes[$c]??'') . $s . "\033[0m\n"; }
+function cliUsage(): void
+{
+    echo <<<'TXT'
+الاستخدام:
+  php bin/install.php install [--fresh --confirm-database=NAME] [--dry-run|--verify-only]
+  php bin/install.php update [--dry-run|--verify-only]
+  php bin/install.php update --adopt-existing --adopt-through=N [--dry-run|--verify-only]
+  php bin/install.php import-legacy --fresh --import-legacy --confirm-database=NAME [--dry-run|--verify-only]
 
-say("═══════════════════════════════════════════════", 'hi');
-say("  تثبيت نظام المتوكل لإدارة النقل والتخليص", 'hi');
-say("═══════════════════════════════════════════════", 'hi');
+الأمان:
+  --fresh لا يعمل على قاعدة موجودة إلا مع --confirm-database المطابق حرفيًا.
+  وجود old_data.json لا يسبب أي استيراد تلقائي.
+  --dry-run و--verify-only لا يكتبان في القاعدة ولا ينشئان نسخة احتياطية.
+TXT;
+}
 
-// (1) إنشاء قاعدة البيانات
-try {
-    $srv = Database::serverConn();
-    if ($fresh) {
-        $srv->exec("DROP DATABASE IF EXISTS `{$cfg['name']}`");
-        say("• حُذفت القاعدة القديمة (--fresh)", 'y');
+/** @return array{mode:string,flags:array<string,bool>,values:array<string,string>} */
+function cliParse(array $arguments): array
+{
+    array_shift($arguments);
+    $mode = '';
+    $flags = [];
+    $values = [];
+    foreach ($arguments as $argument) {
+        if (!str_starts_with($argument, '--')) {
+            if ($mode !== '') { throw new RuntimeException("معامل غير معروف: $argument"); }
+            $mode = $argument;
+            continue;
+        }
+        $option = substr($argument, 2);
+        if (str_contains($option, '=')) {
+            [$name, $value] = explode('=', $option, 2);
+            $values[$name] = $value;
+        } else {
+            $flags[$option] = true;
+        }
     }
-    $srv->exec("CREATE DATABASE IF NOT EXISTS `{$cfg['name']}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-    say("✓ قاعدة البيانات: {$cfg['name']}", 'ok');
-} catch (Throwable $e) {
-    say("✗ تعذّر الاتصال بخادم MySQL: " . $e->getMessage(), 'err');
-    say("  تأكد أن الخادم يعمل:  brew services start mysql", 'y');
+    return ['mode' => $mode, 'flags' => $flags, 'values' => $values];
+}
+
+function cliHas(array $options, string $name): bool
+{
+    return isset($options['flags'][$name]);
+}
+
+function cliValue(array $options, string $name): ?string
+{
+    return $options['values'][$name] ?? null;
+}
+
+function assertKnownOptions(array $options): void
+{
+    $allowedFlags = ['fresh', 'import-legacy', 'adopt-existing', 'dry-run', 'verify-only', 'help'];
+    $allowedValues = ['confirm-database', 'adopt-through'];
+    foreach (array_keys($options['flags']) as $name) {
+        if (!in_array($name, $allowedFlags, true)) { throw new RuntimeException("خيار غير معروف: --$name"); }
+    }
+    foreach (array_keys($options['values']) as $name) {
+        if (!in_array($name, $allowedValues, true)) { throw new RuntimeException("خيار غير معروف: --$name"); }
+    }
+}
+
+function assertPrerequisites(bool $backupRequired): void
+{
+    foreach (['pdo_mysql', 'json', 'mbstring'] as $extension) {
+        if (!extension_loaded($extension)) { throw new RuntimeException("امتداد PHP المطلوب غير موجود: $extension"); }
+    }
+    foreach (['database/schema.sql', 'config/config.php'] as $relative) {
+        if (!is_readable(App::basePath($relative))) { throw new RuntimeException("ملف مطلوب غير مقروء: $relative"); }
+    }
+    if ($backupRequired && !DatabaseBackup::findBinary('mysqldump')) {
+        throw new RuntimeException('mysqldump مطلوب قبل أي عملية تغيّر قاعدة موجودة.');
+    }
+}
+
+function safeDatabaseName(): string
+{
+    $name = (string) App::config('db')['name'];
+    if (!preg_match('/^[a-zA-Z0-9_]{1,64}$/', $name)) {
+        throw new RuntimeException('اسم قاعدة البيانات في الإعدادات غير آمن.');
+    }
+    return $name;
+}
+
+function databaseExists(PDO $server, string $name): bool
+{
+    $statement = $server->prepare('SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name=?');
+    $statement->execute([$name]);
+    return (bool) $statement->fetchColumn();
+}
+
+function requireExactConfirmation(array $options, string $database): void
+{
+    if (cliValue($options, 'confirm-database') !== $database) {
+        throw new RuntimeException("العملية مدمّرة؛ أعدها مع --confirm-database=$database");
+    }
+}
+
+function loadSchema(): int
+{
+    $schema = (string) file_get_contents(App::basePath('database/schema.sql'));
+    $lines = array_filter(explode("\n", $schema), fn(string $line): bool => !preg_match('/^\s*--/', $line));
+    $statements = array_filter(array_map('trim', explode(';', implode("\n", $lines))));
+    foreach ($statements as $statement) { Database::conn()->exec($statement); }
+    return count($statements);
+}
+
+function seedOwner(): void
+{
+    $default = App::config('default_user');
+    $username = trim((string) ($default['username'] ?? ''));
+    $password = (string) ($default['password'] ?? '');
+    if ($username === '' || strlen($password) < 8 || $password === 'CHANGE_ME') {
+        throw new RuntimeException('اضبط default_user باسم صالح وكلمة مرور أولية قوية (8 أحرف على الأقل) قبل التثبيت.');
+    }
+    if (!Database::scalar('SELECT COUNT(*) FROM users WHERE username=?', [$username])) {
+        Database::exec(
+            'INSERT INTO users(username,password_hash,display_name,role) VALUES(?,?,?,?)',
+            [$username, password_hash($password, PASSWORD_DEFAULT), 'المالك', 'owner']
+        );
+    }
+}
+
+function assertAdoptable(int $through): void
+{
+    $requirements = [
+        2 => ['tables' => ['users', 'bawalis', 'takhlis', 'generators'], 'columns' => []],
+        35 => ['tables' => ['rep_users', 'permit_assignments', 'rep_custody_deposits', 'rep_custody_settlements', 'rep_submissions'], 'columns' => []],
+        36 => ['tables' => [], 'columns' => [['rep_submissions', 'client_token'], ['rep_submissions', 'review_started_at']]],
+        37 => ['tables' => [], 'columns' => [['rep_submissions', 'actual_unit'], ['rep_submissions', 'edited_at']]],
+        39 => ['tables' => ['rep_misc_expenses'], 'columns' => [['rep_submissions', 'misc_id']]],
+        40 => ['tables' => ['auth_login_attempts'], 'columns' => [['users', 'role'], ['users', 'locked_until'], ['users', 'last_login_at']]],
+    ];
+    foreach ($requirements as $version => $checks) {
+        if ($version > $through) { continue; }
+        foreach ($checks['tables'] as $table) {
+            if (!Database::scalar(
+                'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?', [$table]
+            )) { throw new RuntimeException("لا يمكن اعتماد v$through: الجدول $table مفقود."); }
+        }
+        foreach ($checks['columns'] as [$table, $column]) {
+            if (!Database::scalar(
+                'SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?',
+                [$table, $column]
+            )) { throw new RuntimeException("لا يمكن اعتماد v$through: العمود $table.$column مفقود."); }
+        }
+    }
+}
+
+function printMigrationPreview(array $migrations, array $pending): void
+{
+    $all = array_keys($migrations);
+    $waiting = array_keys($pending);
+    cliSay('• الترحيلات المكتشفة: ' . count($all) . ($all ? ' (v' . min($all) . '…v' . max($all) . ')' : ''), 'hi');
+    cliSay('• المعلّق: ' . ($waiting ? implode(', ', array_map(fn(int $v): string => "v$v", $waiting)) : 'لا شيء'), $waiting ? 'warn' : 'ok');
+}
+
+try {
+    $options = cliParse($argv);
+    assertKnownOptions($options);
+    if (cliHas($options, 'help') || $options['mode'] === '') { cliUsage(); exit($options['mode'] === '' ? 2 : 0); }
+    $mode = $options['mode'];
+    if (!in_array($mode, ['install', 'update', 'import-legacy'], true)) {
+        throw new RuntimeException("وضع غير معروف: $mode");
+    }
+    if (cliHas($options, 'dry-run') && cliHas($options, 'verify-only')) {
+        throw new RuntimeException('اختر --dry-run أو --verify-only، وليس الاثنين معًا.');
+    }
+    $readOnly = cliHas($options, 'dry-run') || cliHas($options, 'verify-only');
+    $database = safeDatabaseName();
+    $server = Database::serverConn();
+    $exists = databaseExists($server, $database);
+    $migrations = MigrationRunner::discover();
+
+    cliSay('═══════════════════════════════════════════════', 'hi');
+    cliSay("  إدارة قاعدة المتوكل — $mode" . ($readOnly ? ' [معاينة بلا كتابة]' : ''), 'hi');
+    cliSay('═══════════════════════════════════════════════', 'hi');
+
+    if ($mode === 'install') {
+        if (cliHas($options, 'import-legacy') || cliHas($options, 'adopt-existing')) {
+            throw new RuntimeException('الاستيراد والاعتماد لهما وضعان مستقلان عن install.');
+        }
+        $fresh = cliHas($options, 'fresh');
+        if ($exists && !$fresh) { throw new RuntimeException('القاعدة موجودة؛ استخدم update، أو --fresh مع التأكيد لإعادة إنشائها.'); }
+        if ($fresh) { requireExactConfirmation($options, $database); }
+        assertPrerequisites($exists);
+        printMigrationPreview($migrations, $migrations);
+        if ($readOnly) { cliSay('✓ متطلبات التثبيت سليمة، ولم تُنفذ أي كتابة.', 'ok'); exit(0); }
+        if ($exists) {
+            $backup = DatabaseBackup::create('pre-fresh-install');
+            cliSay("✓ نسخة احتياطية: {$backup['path']} ({$backup['sha256']})", 'ok');
+            $server->exec("DROP DATABASE `$database`");
+        }
+        $server->exec("CREATE DATABASE `$database` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        cliSay('✓ أُنشئت قاعدة البيانات.', 'ok');
+        cliSay('✓ نُفذ المخطط الأساسي: ' . loadSchema() . ' أمر.', 'ok');
+        seedOwner();
+        $result = MigrationRunner::runPending($migrations);
+        cliSay("✓ طُبّق {$result['count']} ترحيل بترتيب صارم.", 'ok');
+    } elseif ($mode === 'update') {
+        if (!$exists) { throw new RuntimeException('القاعدة غير موجودة؛ استخدم install أولًا.'); }
+        if (cliHas($options, 'fresh') || cliHas($options, 'import-legacy')) {
+            throw new RuntimeException('update لا يقبل --fresh أو --import-legacy.');
+        }
+        $adopt = cliHas($options, 'adopt-existing');
+        $throughText = cliValue($options, 'adopt-through');
+        if ($adopt && ($throughText === null || !ctype_digit($throughText))) {
+            throw new RuntimeException('--adopt-existing يتطلب --adopt-through=N صريحًا.');
+        }
+        if (!$adopt && $throughText !== null) { throw new RuntimeException('--adopt-through لا يُستخدم دون --adopt-existing.'); }
+        assertPrerequisites(true);
+        $ledgerExists = MigrationRunner::ledgerExists();
+        if (!$ledgerExists && !$adopt) {
+            throw new RuntimeException('قاعدة قديمة بلا سجل ترحيلات؛ افحصها ثم استخدم --adopt-existing --adopt-through=N مرة واحدة.');
+        }
+        if ($ledgerExists && $adopt) { throw new RuntimeException('سجل الترحيلات موجود بالفعل؛ لا حاجة إلى adopt-existing.'); }
+        if ($adopt) {
+            $through = (int) $throughText;
+            if (!isset($migrations[$through])) { throw new RuntimeException("لا يوجد ملف ترحيل v$through."); }
+            assertAdoptable($through);
+            $adoptSet = array_filter($migrations, fn(array $migration): bool => $migration['version'] <= $through);
+            $pending = array_filter($migrations, fn(array $migration): bool => $migration['version'] > $through);
+            printMigrationPreview($migrations, $pending);
+            cliSay('• سيُعتمد دون تشغيل: ' . count($adoptSet) . " ترحيل حتى v$through.", 'warn');
+            if ($readOnly) { cliSay('✓ القاعدة قابلة للاعتماد، ولم تُنفذ أي كتابة.', 'ok'); exit(0); }
+            $backup = DatabaseBackup::create('pre-adopt-update');
+            cliSay("✓ نسخة احتياطية: {$backup['path']} ({$backup['sha256']})", 'ok');
+            cliSay('✓ اعتُمد في السجل: ' . MigrationRunner::adoptExisting($adoptSet) . ' ترحيل.', 'ok');
+        } else {
+            MigrationRunner::assertLedgerMatches($migrations);
+            $pending = MigrationRunner::pending($migrations);
+            printMigrationPreview($migrations, $pending);
+            if ($readOnly) { cliSay('✓ سجل الترحيلات متسق، ولم تُنفذ أي كتابة.', 'ok'); exit(0); }
+            if ($pending) {
+                $backup = DatabaseBackup::create('pre-update');
+                cliSay("✓ نسخة احتياطية: {$backup['path']} ({$backup['sha256']})", 'ok');
+            }
+        }
+        $result = MigrationRunner::runPending($migrations);
+        cliSay($result['count'] ? "✓ طُبّق {$result['count']} ترحيل." : '✓ القاعدة محدثة؛ لا توجد ترحيلات معلّقة.', 'ok');
+    } else {
+        if (!$exists) { throw new RuntimeException('القاعدة غير موجودة؛ ثبّت النظام قبل الاستيراد القديم.'); }
+        if (!cliHas($options, 'fresh') || !cliHas($options, 'import-legacy')) {
+            throw new RuntimeException('الاستيراد القديم يتطلب معًا: --fresh --import-legacy.');
+        }
+        requireExactConfirmation($options, $database);
+        if (cliHas($options, 'adopt-existing') || cliValue($options, 'adopt-through') !== null) {
+            throw new RuntimeException('اعتماد الترحيلات لا يتم داخل import-legacy.');
+        }
+        assertPrerequisites(true);
+        if (!MigrationRunner::ledgerExists()) {
+            throw new RuntimeException('شغّل update واعتمد سجل الترحيلات قبل استيراد البيانات القديمة.');
+        }
+        MigrationRunner::assertLedgerMatches($migrations);
+        if (MigrationRunner::pending($migrations)) {
+            throw new RuntimeException('حدّث القاعدة أولًا؛ لا يُسمح بالاستيراد مع ترحيلات معلّقة.');
+        }
+        $legacyPath = App::basePath('database/old_data.json');
+        $preview = LegacyImporter::inspect($legacyPath);
+        cliSay('• محتوى الاستيراد: ' . json_encode($preview, JSON_UNESCAPED_UNICODE), 'hi');
+        if ($readOnly) { cliSay('✓ ملف الاستيراد والقاعدة صالحان، ولم تُنفذ أي كتابة.', 'ok'); exit(0); }
+        $backup = DatabaseBackup::create('pre-legacy-import');
+        cliSay("✓ نسخة احتياطية: {$backup['path']} ({$backup['sha256']})", 'ok');
+        $counts = LegacyImporter::import($legacyPath);
+        MigrationRunner::runMaintenanceFile(App::basePath('bin/migrate_v31.php'));
+        cliSay('✓ اكتمل الاستيراد والتسوية: ' . json_encode($counts, JSON_UNESCAPED_UNICODE), 'ok');
+    }
+
+    cliSay('═══════════════════════════════════════════════', 'hi');
+    cliSay('  اكتملت العملية بنجاح ✓', 'ok');
+    cliSay('═══════════════════════════════════════════════', 'hi');
+    exit(0);
+} catch (Throwable $exception) {
+    cliSay('✗ ' . $exception->getMessage(), 'err');
+    cliSay('توقفت العملية عند أول خطأ؛ لم تُطبع رسالة اكتمال.', 'warn');
     exit(1);
 }
-
-// (2) تحميل المخطط
-$schema = file_get_contents(App::basePath('database/schema.sql'));
-// إزالة أسطر التعليقات ثم التقسيم على ';'
-$lines = array_filter(explode("\n", $schema), fn($l) => !preg_match('/^\s*--/', $l));
-$sql = implode("\n", $lines);
-$statements = array_filter(array_map('trim', explode(";", $sql)));
-$pdo = Database::conn();
-foreach ($statements as $st) {
-    if ($st !== '') { $pdo->exec($st); }
-}
-say("✓ الجداول أُنشئت (" . count($statements) . " أمر)", 'ok');
-
-// (2ب) تشغيل كل الهجرات تلقائياً بالترتيب — شبكة أمان تمنع أي عمود/جدول ناقص.
-//      كل الهجرات آمنة لإعادة التشغيل (idempotent)، وتُنفَّذ كعمليات منفصلة لأن
-//      كل ملف يعرّف دواله الخاصة (say/colExists...) فلا يصحّ تضمينها في عملية واحدة.
-$migFiles = glob(App::basePath('bin/migrate_v*.php'));
-usort($migFiles, function ($a, $b) {
-    preg_match('/migrate_v(\d+)\.php$/', $a, $ma);
-    preg_match('/migrate_v(\d+)\.php$/', $b, $mb);
-    return ((int)($ma[1] ?? 0)) <=> ((int)($mb[1] ?? 0));
-});
-$php = PHP_BINARY ?: 'php';
-$migOk = 0; $migFail = 0;
-foreach ($migFiles as $mf) {
-    $cmd = escapeshellarg($php) . ' ' . escapeshellarg($mf) . ' 2>&1';
-    exec($cmd, $out, $code);
-    $ver = preg_replace('/.*migrate_(v\d+)\.php$/', '$1', $mf);
-    if ($code === 0) { $migOk++; }
-    else {
-        $migFail++;
-        say("✗ فشلت الهجرة $ver — " . trim(implode("\n", array_slice($out, -3))), 'err');
-    }
-    $out = [];
-}
-say($migFail ? "• الهجرات: $migOk نجحت، $migFail فشلت (راجع أعلاه)" : "✓ الهجرات: $migOk هجرة (كلها ناجحة)", $migFail ? 'y' : 'ok');
-
-// (3) مستخدم الدخول الافتراضي
-$du = App::config('default_user');
-$exists = Database::scalar("SELECT COUNT(*) FROM users WHERE username = ?", [$du['username']]);
-if (!$exists) {
-    Database::exec(
-        "INSERT INTO users (username, password_hash, display_name) VALUES (?,?,?)",
-        [$du['username'], password_hash($du['password'], PASSWORD_DEFAULT), 'المدير']
-    );
-    say("✓ مستخدم الدخول: {$du['username']} / {$du['password']}", 'ok');
-} else {
-    say("• مستخدم الدخول موجود مسبقاً ({$du['username']})", 'y');
-}
-
-// (4) نقل بيانات النظام القديم
-$jsonPath = App::basePath('database/old_data.json');
-if (!is_file($jsonPath)) {
-    say("• لا يوجد old_data.json — تخطّي نقل البيانات.", 'y');
-    say("  لنقل البيانات القديمة:  python3 database/export_old_data.py  ثم أعد التشغيل.", 'y');
-} else {
-    $data = json_decode(file_get_contents($jsonPath), true);
-    if (!$data) { say("✗ ملف old_data.json تالف.", 'err'); exit(1); }
-
-    // تفريغ الجداول قبل النقل (لتجنّب التكرار عند إعادة التشغيل)
-    foreach (['bawalis','takhlis','generators','balances'] as $t) {
-        $pdo->exec("TRUNCATE TABLE `$t`");
-    }
-
-    // القوائم المنسدلة
-    $lc = 0;
-    foreach (($data['lookups'] ?? []) as $type => $values) {
-        foreach ($values as $v) {
-            if ($v !== null && $v !== '') {
-                Database::exec("INSERT IGNORE INTO lookups (list_type, value) VALUES (?,?)", [$type, $v]);
-                $lc++;
-            }
-        }
-    }
-    say("✓ القوائم المنسدلة: $lc عنصر", 'ok');
-
-    // الأرصدة
-    foreach (($data['balances'] ?? []) as $b) {
-        Database::exec("INSERT INTO balances (party_type, name, balance) VALUES (?,?,?)",
-            [$b['party_type'], $b['name'], $b['balance']]);
-    }
-    say("✓ الأرصدة: " . count($data['balances'] ?? []) . " سجل", 'ok');
-
-    // الكيانات المحسوبة
-    $importEntity = function(string $table, string $calc, array $rows) use ($pdo): int {
-        if (!$rows) return 0;
-        $pdo->beginTransaction();
-        $stmt = null; $cols = null;
-        foreach ($rows as $row) {
-            $row = Calc::apply($calc, $row);
-            if ($cols === null) {
-                $cols = array_keys($row);
-                $ph = array_map(fn($c)=>':'.$c, $cols);
-                $stmt = $pdo->prepare("INSERT INTO `$table` (`".implode('`,`',$cols)."`) VALUES (".implode(',',$ph).")");
-            }
-            $params = [];
-            foreach ($cols as $c) { $params[':'.$c] = $row[$c] ?? null; }
-            $stmt->execute($params);
-        }
-        $pdo->commit();
-        return count($rows);
-    };
-
-    $n1 = $importEntity('bawalis', 'bawalis', $data['bawalis'] ?? []);
-    say("✓ البوالص: $n1 سجل", 'ok');
-    $n2 = $importEntity('takhlis', 'takhlis', $data['takhlis'] ?? []);
-    say("✓ التخليص: $n2 سجل", 'ok');
-    $n3 = $importEntity('generators', 'generators', $data['generators'] ?? []);
-    say("✓ المولدات: $n3 سجل", 'ok');
-}
-
-// (5) دليل الوكلاء والشركات (من شيت مرجع عملاء)
-$seedPath = App::basePath('database/directory_seed.json');
-if (is_file($seedPath)) {
-    $seed = json_decode(file_get_contents($seedPath), true);
-    $agents    = $seed['agents']    ?? [];
-    $companies = $seed['companies'] ?? [];
-    $links     = $seed['links']     ?? [];
-    $renames   = $seed['renames']   ?? [];
-
-    // لا نفرّغ جداول master: قد تكون مرتبطة بأذونات وفواتير، وقد تحوي بيانات أضافها المستخدم.
-    // ensure يحترم الأسماء البديلة والدمج ويضيف فقط الناقص.
-    $agentId = [];
-    foreach ($agents as $a) {
-        $master = PartyMaster::ensure('agent', (string)$a);
-        if ($master) { $agentId[$a] = (int)$master['id']; }
-    }
-    $compId = [];
-    foreach ($companies as $c) {
-        $master = PartyMaster::ensure('company', (string)$c);
-        if ($master) { $compId[$c] = (int)$master['id']; }
-    }
-    $nLink = 0;
-    foreach ($links as [$a, $c]) {
-        if (isset($agentId[$a], $compId[$c])) {
-            Database::exec("INSERT IGNORE INTO agent_company (agent_id, company_id) VALUES (?,?)", [$agentId[$a], $compId[$c]]);
-            $nLink++;
-        }
-    }
-
-    // توحيد أملاء الوكلاء في الأرصدة (القوائم تُعاد بناؤها بعدها)
-    foreach ($renames as $old => $new) {
-        $has = Database::scalar("SELECT COUNT(*) FROM balances WHERE party_type='client' AND name=?", [$new]);
-        if ($has) { Database::exec("DELETE FROM balances WHERE party_type='client' AND name=?", [$old]); }
-        else      { Database::exec("UPDATE balances SET name=? WHERE party_type='client' AND name=?", [$new, $old]); }
-    }
-    // نضيف قيم المرجع ولا نحذف القيم المخصصة التي أضافها المستخدم.
-    foreach ($agents    as $a) { Database::exec("INSERT IGNORE INTO lookups (list_type, value) VALUES ('client', ?)",  [$a]); }
-    foreach ($companies as $c) { Database::exec("INSERT IGNORE INTO lookups (list_type, value) VALUES ('company', ?)", [$c]); }
-    say("✓ دليل الوكلاء والشركات: " . count($agents) . " وكيل، " . count($companies) . " شركة، $nLink علاقة", 'ok');
-} else {
-    say("• لا يوجد directory_seed.json — تخطّي دليل الوكلاء والشركات.", 'y');
-}
-
-// بعض البيانات القديمة والدليل تُستورَد بعد أول مرور للهجرات؛ أعد v31 في النهاية
-// لربط كل صف جديد بمعرّفات الـ master وبناء aliases. الهجرة idempotent.
-$v31 = App::basePath('bin/migrate_v31.php');
-if (is_file($v31)) {
-    $out = [];
-    exec(escapeshellarg($php) . ' ' . escapeshellarg($v31) . ' 2>&1', $out, $code);
-    if ($code !== 0) {
-        say("✗ فشلت تسوية سلامة البيانات v31 — " . trim(implode("\n", array_slice($out, -3))), 'err');
-        exit(1);
-    }
-    say('✓ تسوية معرفات الأطراف والدورة المحاسبية بعد الاستيراد', 'ok');
-}
-
-say("═══════════════════════════════════════════════", 'hi');
-say("  اكتمل التثبيت بنجاح ✓", 'ok');
-say("  شغّل النظام:  php bin/serve.php", 'hi');
-say("═══════════════════════════════════════════════", 'hi');

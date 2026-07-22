@@ -44,7 +44,30 @@ class PartyMaster
             [$type, $key]
         );
         if (!$alias) { return null; }
-        $row = self::find($type, (int)$alias['party_id']);
+        return self::followMerge($type, self::find($type, (int)$alias['party_id']));
+    }
+
+    /**
+     * يبحث في جدول الأطراف نفسه بالاسم أو بمفتاح التطبيع، بلا المرور على party_aliases.
+     * لازم لأن الهجرة v31 عبّت normalized_name بتطبيع SQL مبسّط (LOWER/TRIM فقط)
+     * بينما normkey() بتوحّد الألف والتاء المربوطة — فسجلات زي «المصرية الألمانية»
+     * موجودة في companies لكن alias بتاعها بمفتاح مختلف فـresolve() ما بتلاقيهاش.
+     */
+    private static function findByName(string $type, string $name): ?array
+    {
+        $table = self::table($type);
+        $name = trim($name);
+        $norm = self::normalizeName($name);
+        if ($name === '' || $norm === '') { return null; }
+        foreach (Database::all("SELECT * FROM `$table` WHERE name=? OR normalized_name=? OR normalized_name=?", [$name, $norm, $name]) as $row) {
+            if (self::normalizeName((string)$row['name']) === $norm) { return $row; }
+        }
+        return null;
+    }
+
+    /** يتبع سلسلة الدمج حتى السجل النهائي الفعّال. */
+    private static function followMerge(string $type, ?array $row): ?array
+    {
         $seen = [];
         while ($row && !empty($row['merged_into_id'])) {
             if (isset($seen[$row['id']])) { throw new RuntimeException('حلقة غير صالحة في دمج الأطراف.'); }
@@ -61,6 +84,14 @@ class PartyMaster
         if ($name === '') { return null; }
         $found = self::resolve($type, $name);
         if ($found) { return $found; }
+
+        // سجل قديم بلا alias مطابق: تبنّاه واستكمل الـalias الناقص بدل إنشاء نسخة مكرّرة.
+        $existing = self::followMerge($type, self::findByName($type, $name));
+        if ($existing) {
+            self::insertAlias($type, (int)$existing['id'], $name, false);
+            return self::find($type, (int)$existing['id']);
+        }
+
         $id = self::create($type, ['name' => $name]);
         return self::find($type, $id);
     }
@@ -72,6 +103,8 @@ class PartyMaster
         $norm = self::normalizeName($name);
         if ($name === '' || $norm === '') { throw new RuntimeException('اسم الطرف مطلوب.'); }
         if (self::resolve($type, $name)) { throw new RuntimeException('الاسم أو أحد أشكاله مسجّل بالفعل.'); }
+        // رسالة واضحة بدل خطأ MySQL «Duplicate entry» لو السجل موجود بلا alias مطابق.
+        if (self::findByName($type, $name)) { throw new RuntimeException('«' . $name . '» مسجّل بالفعل في ' . self::label($type) . '. افتحه من البيانات الأساسية بدل إضافته من جديد.'); }
 
         $pdo = Database::conn();
         $started = !$pdo->inTransaction();

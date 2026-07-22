@@ -135,6 +135,29 @@ class PermitInvoice
     }
 
     /**
+     * هل للإذن مستند مالي صادر غير ملغى؟
+     * المصدر الوحيد لقاعدة «أي إذن صدرت له فاتورة يفضل مقفول» — لا تكتب الشرط بيدك في مكان آخر.
+     */
+    public static function hasActive(int $permitId): bool
+    {
+        return (int) Database::scalar(
+            "SELECT COUNT(*) FROM permit_invoices WHERE permit_id = ? AND status <> 'void'",
+            [$permitId]
+        ) > 0;
+    }
+
+    /** أي الأذونات (من قائمة) لها مستند مالي غير ملغى — يرجع مصفوفة معرّفات. */
+    public static function permitsWithActive(array $permitIds): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $permitIds)));
+        if (!$ids) { return []; }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        return array_map('intval', array_column(Database::all(
+            "SELECT DISTINCT permit_id FROM permit_invoices WHERE permit_id IN ($ph) AND status <> 'void'", $ids
+        ), 'permit_id'));
+    }
+
+    /**
      * يبني اللقطة الثابتة (صفّ الفاتورة كما سيُحفَظ) من $data **بلا أي كتابة في القاعدة**.
      * $data يجب أن يحوي: permit_id, doc_kind, taxable, internal_no, invoice_date,
      *   client, company, destination, permit_no, permit_type, agency, port, containers,

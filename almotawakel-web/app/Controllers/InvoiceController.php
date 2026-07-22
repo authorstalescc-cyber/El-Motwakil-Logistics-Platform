@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Database;
+use App\Core\FormState;
 use App\Models\PermitInvoice;
 
 /**
@@ -60,6 +61,10 @@ class InvoiceController extends Controller
             "SELECT * FROM permit_invoices $where ORDER BY id DESC LIMIT " . self::PER_PAGE . " OFFSET $offset",
             $params
         );
+        $backQs = http_build_query(array_filter(['q'=>$q,'kind'=>$kind,'tax'=>$tax,'status'=>$status,'from'=>$from,'to'=>$to,'page'=>$page]));
+        $backPath = 'invoices' . ($backQs ? '?' . $backQs : '');
+        $bulkState = FormState::consume('invoices.bulk.void', $backPath);
+        $voidState = FormState::consume('invoices.void', $backPath);
 
         $this->render('invoices/index', [
             'title'  => 'إصدار الفواتير',
@@ -69,6 +74,8 @@ class InvoiceController extends Controller
             'page'   => $page,
             'pages'  => $pages,
             'q' => $q, 'kind' => $kind, 'tax' => $tax, 'from' => $from, 'to' => $to, 'status'=>$status,
+            'bulkState' => $bulkState,
+            'voidState' => $voidState,
         ]);
     }
 
@@ -83,7 +90,14 @@ class InvoiceController extends Controller
             fn($v) => $v > 0
         )));
         $reason = trim($_POST['reason'] ?? '');
-        if ($reason === '') { flash('error','سبب الإلغاء مطلوب.'); redirect('invoices'); }
+        $back = safe_back('invoices', $_POST['_back'] ?? ($_POST['back'] ?? null));
+        $errors = [];
+        if ($reason === '') { $errors['reason'] = 'سبب الإلغاء مطلوب.'; }
+        if (!$ids) { $errors['ids'] = 'حدّد مستندًا واحدًا على الأقل.'; }
+        if ($errors) {
+            $this->formFailure('invoices.bulk.void', $back, $_POST, $errors, 'invoices');
+        }
+        $this->claimForm($back);
         $n = 0;
         foreach ($ids as $id) {
             try { if (PermitInvoice::void($id,$reason) !== null) { $n++; } }
@@ -92,12 +106,7 @@ class InvoiceController extends Controller
         flash($n ? 'success' : 'error', $n ? "تم إلغاء $n مستند مع الاحتفاظ بأرقامها." : 'لم يتم إلغاء أي مستند.');
 
         // العودة لسجل الفواتير بنفس الفلترة/الصفحة إن وُجدت
-        $back = trim((string)($_POST['back'] ?? ''));
-        if ($back !== '' && !str_contains($back, '://') && !str_starts_with($back, '//')
-            && preg_match('~^[A-Za-z0-9/_?=&%.\-]+$~', $back)) {
-            redirect(ltrim($back, '/'));
-        }
-        redirect('invoices');
+        redirect($back);
     }
 
     /** اختيار إذن لإصدار فاتورة له. */

@@ -34,13 +34,12 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
     if (is_file(App::basePath('public/' . $cand))) { $logoRel = $cand; break; }
 }
 
-// QR تلقائي صغير: يظهر رقم المستند/الفاتورة ورقم الإذن (يُولَّد كصورة)
-$qrLines = [$company . ' — لمقاولات النقل', $docWord . ': ' . ($inv['doc_no'] ?: ('#'.$inv['id']))];
-if (!empty($inv['internal_no'])) { $qrLines[] = 'رقم الفاتورة: ' . $inv['internal_no']; }
-if (!empty($inv['permit_no'])) { $qrLines[] = $noLabel . ': ' . $inv['permit_no']; }
-$qrLines[] = 'الإجمالي: ' . number_format($total, 2) . ' ' . $currency;
-$qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data='
-       . rawurlencode(implode("\n", $qrLines));
+// ⚠️ اتشال كود الـQR (2026-07-22، المرحلة 3 من خطة الأمان). كان بيتولّد من
+//    `https://api.qrserver.com/...?data=<اسم الشركة + رقم الفاتورة + اسم العميل
+//    + الإجمالي>` — يعني **بيانات كل فاتورة كانت بتتبعت لشركة تانية وتتسجّل في
+//    سجلاتها كل مرة يتطبع مستند**. والكود ما كانش بيضيف أي معلومة: كل اللي فيه
+//    مكتوب على الورقة أصلاً. قرار المالك: يتشال خالص بدل ما نستضيفه محليًّا.
+//    **ما ترجّعش أي `<img>` بمصدر خارجي في المستندات المطبوعة.**
 ?><!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -281,12 +280,8 @@ $qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data
       <div class="note-box"><div class="t">ملاحظة</div><?= e($inv['note']) ?></div>
     <?php endif; ?>
 
-    <!-- شريط التواصل + QR -->
+    <!-- شريط التواصل (اتشال الـQR — كان بيتولّد من موقع خارجي) -->
     <div class="contact-bar">
-      <div class="qr">
-        <img src="<?= $qrSrc ?>" alt="QR" width="88" height="88" loading="lazy">
-        <span>للتحقّق</span>
-      </div>
       <div class="contact">
         <?php if ($phone): ?><div class="cline"><span class="ci">📞</span> <bdi dir="ltr"><?= e($phone) ?></bdi></div><?php endif; ?>
         <?php if ($email): ?><div class="cline"><span class="ci">✉️</span> <bdi dir="ltr"><?= e($email) ?></bdi></div><?php endif; ?>

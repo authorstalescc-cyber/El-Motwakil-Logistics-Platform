@@ -2,7 +2,7 @@
   <div class="section-head" style="margin:0">💳 رصيد المكتب — كروت الفيزا</div>
   <div class="spacer"></div>
   <button type="button" class="btn ghost secret-toggle">👁 إظهار الأرصدة</button>
-  <a class="btn gold" href="<?= url('office/new') ?>">➕ إضافة كارت</a>
+  <a class="btn gold" href="<?= url('office/new') ?>?back=<?= urlencode(current_app_path() ?: 'office') ?>">➕ إضافة كارت</a>
 </div>
 
 <!-- بطاقات النظرة العامة -->
@@ -51,7 +51,7 @@
           <td style="font-weight:800" class="<?= $c['balance']<0?'neg':'pos' ?>" data-secret data-val="<?= e(money($c['balance'],false)) ?>">••••••</td>
           <td style="white-space:nowrap">
             <a class="edit" href="<?= url('office/'.$c['id']) ?>" title="التفاصيل والسجل">🔎</a>
-            <a class="edit" href="<?= url('office/'.$c['id'].'/edit') ?>" title="تعديل">✏️</a>
+            <a class="edit" href="<?= url('office/'.$c['id'].'/edit') ?>?back=<?= urlencode(current_app_path() ?: 'office') ?>" title="تعديل">✏️</a>
           </td>
         </tr>
       <?php endforeach; endif; ?>

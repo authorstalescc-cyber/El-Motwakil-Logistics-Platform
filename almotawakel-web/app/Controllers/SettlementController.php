@@ -3,6 +3,7 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Database;
+use App\Core\FormState;
 use App\Models\Bill;
 use App\Models\Lookup;
 
@@ -126,6 +127,8 @@ class SettlementController extends Controller
         // العودة لنفس البحث بعد الدفع
         $qs = [];
         foreach ($f as $k => $v) { if ($v !== '') { $qs[$k] = $v; } }
+        $backPath = 'settlements' . ($qs ? '?' . http_build_query($qs) : '');
+        $payState = FormState::consume('settlements.bulk.pay', $backPath);
 
         $this->render('settlements/index', [
             'title'     => 'سداد البوالص — نتائج البحث',
@@ -134,6 +137,7 @@ class SettlementController extends Controller
             'resTot'    => $tot,
             'f'         => $f,
             'backQS'    => http_build_query($qs),
+            'payState'  => $payState,
         ] + $this->lookups());
     }
 
@@ -183,6 +187,8 @@ class SettlementController extends Controller
         // العودة لنفس السياق (صاحب البيان + الفلاتر) بعد الدفع
         $qs = ['owner' => $owner];
         foreach ($f as $k => $v) { if ($v !== '') { $qs[$k] = $v; } }
+        $backPath = 'settlements?' . http_build_query($qs);
+        $payState = FormState::consume('settlements.bulk.pay', $backPath);
 
         $this->render('settlements/owner', [
             'title'      => 'سداد بوالص — ' . $ownerLabel,
@@ -194,6 +200,7 @@ class SettlementController extends Controller
             'f'          => $f,
             'filtered'   => $this->anyFilter($f),
             'backQS'     => http_build_query($qs),
+            'payState'   => $payState,
         ] + $this->lookups());
     }
 
@@ -230,6 +237,7 @@ class SettlementController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->claimForm('settlements?unassigned=1');
         $owners = $_POST['owner'] ?? [];   // owner[bill_id] = اسم صاحب البيان
         $count = 0;
         foreach ($owners as $billId => $name) {
@@ -261,20 +269,61 @@ class SettlementController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
-        $payDate = $_POST['pay_date'] ?? work_date();
+        $payDate = trim((string)($_POST['pay_date'] ?? '')) ?: work_date();
         $note    = trim($_POST['note'] ?? '') ?: 'سداد';
         $amounts = $_POST['amount'] ?? [];   // amount[bill_id] = القيمة
-        $count = 0; $total = 0.0;
-        foreach ($amounts as $billId => $amt) {
-            $amt = (float)$amt;
-            if ($amt != 0) {
-                Bill::addPayment((int)$billId, $amt, $payDate, $note);
-                $count++; $total += $amt;
+        $back = trim($_POST['back'] ?? '');
+        $fallback = 'settlements' . ($back !== '' ? '?' . $back : '');
+        $path = safe_back($fallback, $_POST['_back'] ?? null);
+        $selected = [];
+        $errors = [];
+        foreach ((array)$amounts as $billId => $raw) {
+            if ($raw === '' || $raw === null || (float)$raw === 0.0) { continue; }
+            $amount = (float)$raw;
+            if (!is_finite($amount) || $amount < 0) {
+                $errors['amount.' . (int)$billId] = 'مبلغ السداد يجب أن يكون رقمًا موجبًا.';
+                continue;
             }
+            $selected[(int)$billId] = round($amount, 2);
+        }
+        if (!$selected && !$errors) {
+            $errors['amount'] = 'حدّد بوليصة واحدة على الأقل واكتب مبلغ سداد أكبر من صفر.';
+        }
+        if (!self::validDate($payDate)) { $errors['pay_date'] = 'تاريخ السداد غير صحيح.'; }
+        if ($errors) {
+            $this->formFailure('settlements.bulk.pay', $path, $_POST,
+                $errors, $fallback);
+        }
+        $this->claimForm($path);
+
+        $pdo = Database::conn();
+        $pdo->beginTransaction();
+        try {
+            foreach ($selected as $billId => $amount) {
+                $bill = Database::row('SELECT id, remaining FROM bawalis WHERE id=? FOR UPDATE', [$billId]);
+                if (!$bill) { $errors['amount.' . $billId] = 'البوليصة لم تعد موجودة.'; continue; }
+                $remaining = max(0.0, round((float)$bill['remaining'], 2));
+                if ($amount > $remaining + 0.005) {
+                    $errors['amount.' . $billId] = 'المبلغ أكبر من المتبقي على البوليصة (' . money($remaining, false) . ').';
+                }
+            }
+            if ($errors) {
+                $pdo->rollBack();
+                $this->formFailure('settlements.bulk.pay', $path, $_POST, $errors, $fallback);
+            }
+            $count = 0; $total = 0.0;
+            foreach ($selected as $billId => $amount) {
+                Bill::addPayment($billId, $amount, $payDate, $note);
+                $count++; $total += $amount;
+            }
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            $this->formFailure('settlements.bulk.pay', $path, $_POST,
+                ['_form' => 'تعذّر تسجيل الدفعات كاملة. لم يُحفظ أي جزء؛ حاول مرة أخرى.'], $fallback);
         }
         flash('success', $count ? "تم تسجيل $count دفعة بإجمالي " . money($total) : 'لم تُحدَّد أي بوالص للدفع.');
 
-        $back = trim($_POST['back'] ?? '');
         redirect('settlements' . ($back !== '' ? '?' . $back : ''));
     }
 
@@ -284,10 +333,12 @@ class SettlementController extends Controller
         $this->requireAuth();
         $bill = Database::row("SELECT * FROM bawalis WHERE id = ?", [(int)$id]);
         if (!$bill) { redirect('settlements'); }
+        $state = FormState::consume('settlements.payment.' . (int) $id, 'settlements/' . (int) $id);
         $this->render('settlements/show', [
             'title'    => 'سداد بوليصة ' . ($bill['bill_number'] ?: '#' . $id),
             'bill'     => $bill,
             'payments' => Bill::payments((int)$id),
+            'paymentState' => $state,
         ]);
     }
 
@@ -295,7 +346,41 @@ class SettlementController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
-        Bill::addPayment((int)$id, (float)($_POST['amount'] ?? 0), $_POST['pay_date'] ?? null, trim($_POST['note'] ?? '') ?: 'سداد');
+        $amount = round((float) ($_POST['amount'] ?? 0), 2);
+        $payDate = trim((string)($_POST['pay_date'] ?? '')) ?: work_date();
+        $errors = [];
+        if (!is_finite($amount) || $amount <= 0) {
+            $errors['amount'] = 'اكتب مبلغ سداد أكبر من صفر.';
+        }
+        if (!self::validDate($payDate)) { $errors['pay_date'] = 'تاريخ السداد غير صحيح.'; }
+        if ($errors) {
+            $this->formFailure('settlements.payment.' . (int) $id, 'settlements/' . (int) $id, $_POST,
+                $errors, 'settlements/' . (int) $id);
+        }
+        $this->claimForm('settlements/' . (int) $id);
+        $pdo = Database::conn();
+        $pdo->beginTransaction();
+        try {
+            $bill = Database::row('SELECT id, remaining FROM bawalis WHERE id=? FOR UPDATE', [(int)$id]);
+            if (!$bill) {
+                $pdo->rollBack();
+                $this->formFailure('settlements.payment.' . (int) $id, 'settlements/' . (int) $id, $_POST,
+                    ['_form' => 'البوليصة لم تعد موجودة.'], 'settlements/' . (int) $id);
+            }
+            $remaining = max(0.0, round((float)$bill['remaining'], 2));
+            if ($amount > $remaining + 0.005) {
+                $pdo->rollBack();
+                $this->formFailure('settlements.payment.' . (int) $id, 'settlements/' . (int) $id, $_POST,
+                    ['amount' => 'المبلغ أكبر من المتبقي على البوليصة (' . money($remaining, false) . ').'],
+                    'settlements/' . (int) $id);
+            }
+            Bill::addPayment((int)$id, $amount, $payDate, trim($_POST['note'] ?? '') ?: 'سداد');
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            $this->formFailure('settlements.payment.' . (int) $id, 'settlements/' . (int) $id, $_POST,
+                ['_form' => 'تعذّر تسجيل الدفعة. لم تُحفظ؛ حاول مرة أخرى.'], 'settlements/' . (int) $id);
+        }
         flash('success', 'تم تسجيل الدفعة.');
         redirect('settlements/' . (int)$id);
     }
@@ -304,6 +389,12 @@ class SettlementController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $payment = Database::row('SELECT bill_id FROM bill_payments WHERE id=?', [(int)$paymentId]);
+        if (!$payment || (int)$payment['bill_id'] !== (int)$id) {
+            flash('error', 'الدفعة لا تتبع هذه البوليصة.');
+            redirect('settlements/' . (int)$id);
+        }
+        $this->claimForm('settlements/' . (int) $id);
         $deleted = Bill::deletePayment((int)$paymentId);
         flash($deleted ? 'success' : 'error', $deleted
             ? 'تم حذف الدفعة.'
@@ -326,6 +417,13 @@ class SettlementController extends Controller
             'classification' => trim($_GET['classification'] ?? ''),
             'container_type' => trim($_GET['container_type'] ?? ''),
         ];
+    }
+
+    private static function validDate(string $value): bool
+    {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) { return false; }
+        [$year, $month, $day] = array_map('intval', explode('-', $value));
+        return checkdate($month, $day, $year);
     }
 
     /** بناء شروط البوالص من الفلاتر (فوق شروط أساسية اختيارية) */

@@ -2,6 +2,7 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\FormState;
 use App\Models\Closing;
 use App\Models\Expense;
 use App\Models\Lookup;
@@ -64,10 +65,12 @@ class ExpenseController extends Controller
     {
         $this->requireAuth();
         $day = work_date();
+        $state = FormState::consume('expenses.receipts', 'expenses/receipts');
         $this->render('expenses/receipts_complete', [
             'title' => 'استكمال بيانات الإيصالات',
             'day'   => $day,
             'rows'  => Permit::receiptsMissingData($day),
+            'formState' => $state,
         ]);
     }
 
@@ -81,6 +84,18 @@ class ExpenseController extends Controller
         $actuals = $_POST['actual_unit']  ?? [];
         $refs    = $_POST['ref_no']       ?? [];
 
+        $errors = [];
+        foreach ((array) $ids as $i => $rawId) {
+            $aRaw = trim((string) ($actuals[$i] ?? ''));
+            if ($aRaw !== '' && (!is_numeric($aRaw) || (float) $aRaw <= 0)) {
+                $errors['actual_' . $i] = 'السعر الفعلي في الصف ' . ((int) $i + 1) . ' يجب أن يكون أكبر من صفر.';
+            }
+        }
+        if ($errors) {
+            $this->formFailure('expenses.receipts', 'expenses/receipts', $_POST, $errors, 'expenses/receipts');
+        }
+
+        $this->claimForm('expenses/receipts');
         $done = 0;
         $pdo  = \App\Core\Database::conn();
         $pdo->beginTransaction();
@@ -98,8 +113,8 @@ class ExpenseController extends Controller
             $pdo->commit();
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
-            flash('error', 'تعذّر حفظ الاستكمال: ' . $e->getMessage());
-            redirect('expenses/receipts');
+            $this->formFailure('expenses.receipts', 'expenses/receipts', $_POST,
+                ['_form' => 'تعذّر حفظ الاستكمال: ' . $e->getMessage()], 'expenses/receipts');
         }
 
         flash($done > 0 ? 'success' : 'error',
@@ -111,15 +126,20 @@ class ExpenseController extends Controller
     public function create(): void
     {
         $this->requireAuth();
+        $state = FormState::consume('expenses.create', 'expenses');
+        $defaults = ['exp_date' => work_date(), 'category' => '', 'beneficiary' => '', 'amount' => '', 'note' => ''];
         $this->render('expenses/form', [
             'title'    => 'إضافة مصروف يدوي',
-            'row'      => ['exp_date' => work_date(), 'category' => '', 'beneficiary' => '', 'amount' => '', 'note' => ''],
+            'row'      => array_replace($defaults, $state['old']),
             'cats'     => Lookup::ofType('expense_cat'),
             'action'   => url('expenses'),
             'isEdit'   => false,
             'reps'     => Rep::all(),
             'repKinds' => Rep::KINDS,
-            'repPre'   => (int) ($_GET['rep'] ?? 0),   // اختيار مسبق للمندوب (رابط سريع من كارت المندوب)
+            'repPre'   => (int) ($state['old']['rep_id'] ?? ($_GET['rep'] ?? 0)),
+            'errors'   => $state['errors'],
+            'formToken'=> $state['token'],
+            'back'     => $state['back'],
         ]);
     }
 
@@ -139,18 +159,26 @@ class ExpenseController extends Controller
         }
 
         $data = $this->collect();
-        if ($err = Closing::guard($data['exp_date'])) { flash('error', $err); redirect('expenses'); }
+        $errors = $this->validateExpense($data);
+        if ($errors) { $this->formFailure('expenses.create', 'expenses/new', $_POST, $errors, 'expenses'); }
+        if ($err = Closing::guard($data['exp_date'])) {
+            $this->formFailure('expenses.create', 'expenses/new', $_POST, ['exp_date' => $err], 'expenses');
+        }
+        $this->claimForm('expenses');
         Expense::createManual($data);
         if ($data['category'] !== '') { Lookup::add('expense_cat', $data['category']); }
         flash('success', 'تمت إضافة المصروف بنجاح.');
-        redirect('expenses');
+        if (!empty($_POST['save_and_new'])) {
+            redirect('expenses/new?back=' . rawurlencode(safe_back('expenses', $_POST['_back'] ?? null)));
+        }
+        redirect(safe_back('expenses', $_POST['_back'] ?? null));
     }
 
     /** حفظ بند لمندوب من صفحة المصروفات (سُلفة / مصروف لوجيستي / خصم…). */
     private function storeForRep(int $repId): void
     {
         $rep = Rep::find($repId);
-        if (!$rep) { flash('error', 'المندوب غير موجود.'); redirect('expenses/new'); }
+        if (!$rep) { $this->formFailure('expenses.create', 'expenses/new', $_POST, ['rep_id'=>'المندوب غير موجود.'], 'expenses'); }
 
         $kind = trim($_POST['rep_kind'] ?? '');
         if (!isset(Rep::KINDS[$kind]) || $kind === 'settlement') { $kind = 'advance'; }
@@ -162,14 +190,19 @@ class ExpenseController extends Controller
             'is_visa'    => !empty($_POST['is_visa']) ? 1 : 0,
             'note'       => trim($_POST['note'] ?? '') ?: trim($_POST['beneficiary'] ?? ''),
         ];
+        $errors = [];
+        if ($entry['entry_date'] === '') { $errors['exp_date'] = 'أدخل تاريخًا صحيحًا.'; }
+        if ($entry['amount'] <= 0) { $errors['amount'] = 'أدخل مبلغًا أكبر من صفر.'; }
+        if ($errors) { $this->formFailure('expenses.create', 'expenses/new', $_POST, $errors, 'expenses'); }
 
         // الكاش (سُلفة/تسوية) بس هو اللي بيدخل العهدة/الإقفال → احرس قفل اليوم عليه
         if (Rep::isCashKind($kind) && !$entry['is_visa'] && ($err = Closing::guard($entry['entry_date']))) {
-            flash('error', $err); redirect('reps/' . $repId);
+            $this->formFailure('expenses.create', 'expenses/new', $_POST, ['exp_date'=>$err], 'expenses');
         }
+        $this->claimForm('expenses');
         Rep::createEntry($repId, $entry);
         flash('success', 'تم تسجيل «' . Rep::kindLabel($kind) . '» في حساب المندوب ' . $rep['name'] . '.');
-        redirect('reps/' . $repId);
+        redirect(safe_back('reps/' . $repId, $_POST['_back'] ?? null));
     }
 
     // ------------------------------------------------------------ تعديل
@@ -178,12 +211,17 @@ class ExpenseController extends Controller
         $this->requireAuth();
         $row = Expense::findManual((int)$id);
         if (!$row) { flash('error', 'المصروف غير موجود أو ليس مصروفاً يدوياً.'); redirect('expenses'); }
+        $state = FormState::consume('expenses.edit.' . (int) $id, 'expenses');
+        if ($state['old']) { $row = array_replace($row, $state['old']); }
         $this->render('expenses/form', [
             'title'   => 'تعديل مصروف يدوي',
             'row'     => $row,
             'cats'    => Lookup::ofType('expense_cat'),
             'action'  => url('expenses/' . $id),
             'isEdit'  => true,
+            'errors'  => $state['errors'],
+            'formToken'=> $state['token'],
+            'back'    => $state['back'],
         ]);
     }
 
@@ -193,15 +231,18 @@ class ExpenseController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $data = $this->collect();
+        $errors = $this->validateExpense($data);
+        if ($errors) { $this->formFailure('expenses.edit.' . (int) $id, 'expenses/' . (int) $id . '/edit', $_POST, $errors, 'expenses'); }
         $old  = Expense::findManual((int)$id);
         // امنع لو التاريخ الجديد أو القديم يقع ضمن فترة متقفلة
         if ($err = (Closing::guard($data['exp_date']) ?? ($old ? Closing::guard($old['exp_date']) : null))) {
-            flash('error', $err); redirect('expenses');
+            $this->formFailure('expenses.edit.' . (int) $id, 'expenses/' . (int) $id . '/edit', $_POST, ['exp_date'=>$err], 'expenses');
         }
+        $this->claimForm('expenses');
         Expense::updateManual((int)$id, $data);
         if ($data['category'] !== '') { Lookup::add('expense_cat', $data['category']); }
         flash('success', 'تم حفظ التعديلات.');
-        redirect('expenses');
+        redirect(safe_back('expenses', $_POST['_back'] ?? null));
     }
 
     // ------------------------------------------------------------ حذف
@@ -210,10 +251,11 @@ class ExpenseController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $old = Expense::findManual((int)$id);
-        if ($old && ($err = Closing::guard($old['exp_date']))) { flash('error', $err); redirect('expenses'); }
+        if ($old && ($err = Closing::guard($old['exp_date']))) { flash('error', $err); redirect(safe_back('expenses', $_POST['_back'] ?? null)); }
+        $this->claimForm('expenses');
         Expense::deleteManual((int)$id);
         flash('success', 'تم حذف المصروف.');
-        redirect('expenses');
+        redirect(safe_back('expenses', $_POST['_back'] ?? null));
     }
 
     // ------------------------------------------------------------ أدوات
@@ -234,5 +276,13 @@ class ExpenseController extends Controller
     {
         $v = trim((string)$v);
         return preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : '';
+    }
+
+    private function validateExpense(array $data): array
+    {
+        $errors = [];
+        if ($data['exp_date'] === '') { $errors['exp_date'] = 'أدخل تاريخًا صحيحًا.'; }
+        if ((float) $data['amount'] <= 0) { $errors['amount'] = 'أدخل مبلغًا أكبر من صفر.'; }
+        return $errors;
     }
 }

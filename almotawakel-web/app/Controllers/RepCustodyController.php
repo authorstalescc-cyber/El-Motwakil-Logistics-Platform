@@ -1,0 +1,706 @@
+<?php
+namespace App\Controllers;
+
+use App\Core\Controller;
+use App\Core\FormState;
+use App\Core\RepAuth;
+use App\Models\Closing;
+use App\Models\Rep;
+use App\Models\RepAssignment;
+use App\Models\RepCustody;
+use App\Models\RepInbox;
+
+/**
+ * عهدة المناديب (v35) — الفلوس النازلة للمناديب عشان يدفعوا بيها إيصالات الأذونات.
+ *
+ * ⚠️ **v42 (قرار المالك — عكس v35):** المحفظة فضلت منفصلة (رصيد كل مندوب لوحده)،
+ *    لكن **وقت الخصم من الخزنة اتغيّر**:
+ *      • تنزيل العهدة للمندوب → مالوش أثر على الخزنة (تحويل داخلي).
+ *      • صرف المندوب المعتمَد  → بيتخصم من الخزنة **يوم صرفه** زي أي مصروف،
+ *        وبيدخل التقفيل اليومي ومطابقة v28 — عشان كده الاعتماد بيمرّ بـ
+ *        Closing::guard ويترفض لو اليوم متقفل.
+ *      • مرتجع التسوية         → مالوش أثر (الفلوس ماخرجتش أصلاً وقت التنزيل،
+ *        فترحيلها كان هيبقى تحسيبًا مزدوجًا — الخيار اتشال).
+ */
+class RepCustodyController extends Controller
+{
+    // ─────────────────────────────────────────── اللوحة
+    public function index(): void
+    {
+        $this->requireAuth();
+        if (!RepCustody::available()) {
+            flash('error', 'جداول عهدة المناديب غير موجودة. شغّل php bin/migrate_v35.php أولاً.');
+            redirect('reps');
+        }
+        $q = trim((string) ($_GET['q'] ?? ''));
+        $cards = RepCustody::cards(false, $q);
+
+        $sum = ['deposits' => 0.0, 'spent' => 0.0, 'returned' => 0.0, 'balance' => 0.0];
+        foreach ($cards as $c) {
+            $sum['deposits'] += $c['deposits'];
+            $sum['spent']    += $c['spent'];
+            $sum['returned'] += $c['returned'];
+            $sum['balance']  += $c['balance'];
+        }
+        $this->render('rep_custody/index', [
+            'title' => 'عهدة المناديب',
+            'cards' => $cards,
+            'sum'   => $sum,
+            'q'     => $q,
+        ]);
+    }
+
+    // ─────────────────────────────────────────── كارت مندوب
+    public function card(string $id): void
+    {
+        $this->requireAuth();
+        $repId = (int) $id;
+        $rep = Rep::find($repId);
+        if (!$rep) { flash('error', 'المندوب غير موجود.'); redirect('rep-custody'); }
+
+        // بيانات دخول لسه اتعملت دلوقتي — تُعرض مرة واحدة بس عشان تتبعت واتساب
+        $cred = null;
+        if (!empty($_SESSION['_rep_cred']) && (int) $_SESSION['_rep_cred']['rep_id'] === $repId) {
+            $c = $_SESSION['_rep_cred'];
+            $link = rtrim(public_base_url() ?: url(''), '/') . '/m';
+            $msg  = RepAuth::waSetupMessage($rep['name'], $c['username'], $c['pin'], $link);
+            $cred = [
+                'username' => $c['username'],
+                'pin'      => $c['pin'],
+                'link'     => $link,
+                'message'  => $msg,
+                'wa'       => RepAuth::waLink((string) ($rep['phone'] ?? ''), $msg),
+                'public'   => public_base_url() !== '',
+            ];
+        }
+        unset($_SESSION['_rep_cred']);   // one-shot — عمره ما يتعرض تاني
+
+        $cardBack = 'rep-custody/' . $repId;
+        $depositState = FormState::consume('rep_custody.deposit.' . $repId, $cardBack);
+        $settleState = FormState::consume('rep_custody.settle.' . $repId, $cardBack);
+        $accountState = FormState::consume('rep_custody.account.' . $repId, $cardBack);
+        $resetState = FormState::consume('rep_custody.account_reset.' . $repId, $cardBack);
+        $assignState = FormState::consume('rep_custody.assign.' . $repId, $cardBack);
+
+        $this->render('rep_custody/card', [
+            'title'       => 'عهدة: ' . $rep['name'],
+            'rep'         => $rep,
+            'b'           => RepCustody::breakdown($repId),
+            'deposits'    => RepCustody::deposits($repId),
+            'spending'    => RepCustody::spending($repId),
+            'settlements' => RepCustody::settlements($repId),
+            'account'     => RepAuth::accountFor($repId),
+            'cred'        => $cred,
+            'transfersIn' => \App\Models\RepTransfer::incomingFor($repId),   // v46 — استلمها من زملائه
+            'canAddPermit'=> Rep::canCreatePermit($repId),      // v44
+            'permPermReady' => Rep::permitPermReady(),          // قبل الهجرة بنقول للمالك يشغّلها
+            'canWatchTeam'  => Rep::canWatchReps($repId),       // v47 — متابعة المناديب (عرض فقط)
+            'watchPermReady'=> Rep::watchPermReady(),
+            'assigns'     => RepAssignment::forRep($repId),
+            'openPermits' => RepAssignment::available($repId),
+            'pending'     => RepInbox::listing('pending', $repId),
+            'depositState'=> $depositState,
+            'settleState' => $settleState,
+            'accountState'=> $accountState,
+            'resetState'  => $resetState,
+            'assignState' => $assignState,
+        ]);
+    }
+
+    // ═══════════════════════════════════════════ صندوق المراجعة
+
+    /** بنود المناديب المستنية الاعتماد — مجمّعة بالمندوب واليوم. */
+    public function inbox(): void
+    {
+        $this->requireAuth();
+        if (!RepCustody::available()) {
+            flash('error', 'شغّل php bin/migrate_v35.php أولاً.');
+            redirect('reps');
+        }
+        $status = (string) ($_GET['status'] ?? 'pending');
+        if (!in_array($status, ['pending', 'approved', 'rejected', 'all'], true)) { $status = 'pending'; }
+        $inboxBack = 'rep-custody/inbox?status=' . $status;
+        $inboxState = FormState::consume('rep_custody.inbox', $inboxBack);
+
+        $this->render('rep_custody/inbox', [
+            'title'   => 'مراجعة بنود المناديب',
+            'status'  => $status,
+            'groups'  => $status === 'pending' ? RepInbox::pendingGrouped() : [],
+            'rows'    => $status === 'pending' ? [] : RepInbox::listing($status === 'all' ? '' : $status),
+            'pending' => RepInbox::pendingCount(),
+            'inboxState' => $inboxState,
+        ]);
+    }
+
+    public function approve(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $id = (int) $sid;
+        $this->claimForm($this->inboxBack());
+        try {
+            RepInbox::approve($id);
+            flash('success', 'تم الاعتماد — البند اتحط على الإذن واتخصم من عهدة المندوب.');
+        } catch (\Throwable $e) {
+            $this->inboxFailure('approve', ['submission_id' => $id], ['_form' => $e->getMessage()], 'submission-' . $id);
+        }
+        redirect($this->inboxBack());
+    }
+
+    /** يبدأ المراجعة ويقفل تعديل/حذف البند عند المندوب. */
+    public function startReview(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $id = (int) $sid;
+        $this->claimForm($this->inboxBack());
+        try {
+            RepInbox::startReview($id);
+            flash('success', 'بدأت المراجعة — البند اتقفل عند المندوب لحد قرارك.');
+        } catch (\Throwable $e) {
+            $this->inboxFailure('review-start', ['submission_id' => $id], ['_form' => $e->getMessage()], 'submission-' . $id);
+        }
+        redirect($this->inboxBack());
+    }
+
+    public function approveMany(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $ids = $this->postedIds();
+        $group = trim((string) ($_POST['_group'] ?? ''));
+        if (!$ids) {
+            $this->inboxFailure('approve-many', ['ids' => [], '_group' => $group],
+                ['ids' => 'علّم بندًا واحدًا على الأقل.'], $group);
+        }
+        $this->claimForm($this->inboxBack());
+        try {
+            $n = RepInbox::approveMany($ids);
+            flash('success', "تم اعتماد $n بند — اتحطوا على أذوناتهم واتخصموا من عهدة المندوب.");
+        } catch (\Throwable $e) {
+            $this->inboxFailure('approve-many', ['ids' => $ids, '_group' => $group],
+                ['_form' => $e->getMessage()], $group);
+        }
+        redirect($this->inboxBack());
+    }
+
+    public function reject(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $id = (int) $sid;
+        $reason = trim((string) ($_POST['reason'] ?? ''));
+        if ($reason === '') {
+            $this->inboxFailure('reject', ['submission_id' => $id, 'reason' => ''],
+                ['reason' => 'اكتب سبب الرفض — المندوب هيشوفه.'], 'submission-' . $id);
+        }
+        $this->claimForm($this->inboxBack());
+        try {
+            RepInbox::reject($id, $reason);
+            flash('success', 'تم الرفض — المندوب هيشوف السبب على موبايله.');
+        } catch (\Throwable $e) {
+            $this->inboxFailure('reject', ['submission_id' => $id, 'reason' => $reason],
+                ['_form' => $e->getMessage()], 'submission-' . $id);
+        }
+        redirect($this->inboxBack());
+    }
+
+    public function rejectMany(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $ids = $this->postedIds();
+        $reason = trim((string) ($_POST['reason'] ?? ''));
+        $group = trim((string) ($_POST['_group'] ?? ''));
+        $errors = [];
+        if (!$ids) { $errors['ids'] = 'علّم بندًا واحدًا على الأقل.'; }
+        if ($reason === '') { $errors['reason'] = 'اكتب سبب الرفض — المندوب هيشوفه.'; }
+        if ($errors) {
+            $this->inboxFailure('reject-many', ['ids' => $ids, 'reason' => $reason, '_group' => $group],
+                $errors, $group);
+        }
+        $this->claimForm($this->inboxBack());
+        try {
+            $n = RepInbox::rejectMany($ids, $reason);
+            flash('success', "تم رفض $n بند — المندوب هيشوف السبب على موبايله.");
+        } catch (\Throwable $e) {
+            $this->inboxFailure('reject-many', ['ids' => $ids, 'reason' => $reason, '_group' => $group],
+                ['_form' => $e->getMessage()], $group);
+        }
+        redirect($this->inboxBack());
+    }
+
+    // ═══════════════════════════════════════════ تعديل البند قبل الاعتماد (v37)
+
+    /** تعديل بند واحد — المالك بيصلّحه بدل ما يرفضه ويستنى المندوب يعيده. */
+    public function editSubmission(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $id = (int) $sid;
+        $old = [
+            'submission_id' => $id,
+            'note' => trim((string) ($_POST['note'] ?? '')),
+            'kind' => (string) ($_POST['kind'] ?? ''),
+            'qty' => (string) ($_POST['qty'] ?? ''),
+            'unit_amount' => (string) ($_POST['unit_amount'] ?? ''),
+            'actual_unit' => (string) ($_POST['actual_unit'] ?? ''),
+            'entry_date' => trim((string) ($_POST['entry_date'] ?? '')),
+            'ref_no' => trim((string) ($_POST['ref_no'] ?? '')),
+            'movement_id' => (string) ($_POST['movement_id'] ?? ''),
+            // v45 — وسم الفيزا والكارت؛ RepInbox::update بيتحقق إن الكارت شغّال
+            'is_visa' => !empty($_POST['is_visa']) ? '1' : '',
+            'visa_card_id' => (string) ($_POST['visa_card_id'] ?? ''),
+            'approve_now' => !empty($_POST['approve_now']) ? '1' : '',
+        ];
+        $errors = [];
+        if ($old['note'] === '') { $errors['note'] = 'اكتب البيان.'; }
+        elseif (mb_strlen($old['note']) > 255) { $errors['note'] = 'البيان أطول من 255 حرفًا.'; }
+        if (!preg_match('/^\d+$/', $old['qty']) || (int) $old['qty'] < 1 || (int) $old['qty'] > 10000) {
+            $errors['qty'] = 'الكمية لازم تكون عددًا صحيحًا من 1 لـ10000.';
+        }
+        if (!is_numeric($old['unit_amount']) || (float) $old['unit_amount'] <= 0) {
+            $errors['unit_amount'] = 'المبلغ لازم يكون رقمًا أكبر من صفر.';
+        }
+        if ($old['actual_unit'] !== '' && (!is_numeric($old['actual_unit']) || (float) $old['actual_unit'] < 0)) {
+            $errors['actual_unit'] = 'السعر الفعلي لازم يكون رقمًا صفرًا أو أكبر.';
+        }
+        if (!self::validDate($old['entry_date'])) { $errors['entry_date'] = 'التاريخ غير صحيح.'; }
+        if ($errors) { $this->inboxFailure('edit', $old, $errors, 'edit-' . $id); }
+        $this->claimForm($this->inboxBack());
+        try {
+            RepInbox::update($id, [
+                'note'        => $old['note'],
+                'kind'        => $old['kind'],
+                'qty'         => $old['qty'],
+                'unit_amount' => $old['unit_amount'],
+                'actual_unit' => $old['actual_unit'],
+                'entry_date'  => $old['entry_date'],
+                'ref_no'      => $old['ref_no'],
+                'movement_id' => $old['movement_id'],
+            ]);
+            // اعتماد فوري بعد التعديل لو المالك طلب كده
+            if (!empty($_POST['approve_now'])) {
+                RepInbox::approve($id);
+                flash('success', 'اتعدّل واتعتمد — البند اتحط على الإذن واتخصم من عهدة المندوب.');
+            } else {
+                flash('success', 'اتحفظ التعديل. البند لسه مستني اعتمادك.');
+            }
+        } catch (\Throwable $e) {
+            $this->inboxFailure('edit', $old, ['_form' => $e->getMessage()], 'edit-' . $id);
+        }
+        redirect($this->inboxBack());
+    }
+
+    /** تعديل جماعي — تاريخ/نوع/سعر فعلي لكل البنود المعلَّمة مرة واحدة. */
+    public function bulkEdit(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $ids = $this->postedIds();
+        $group = trim((string) ($_POST['_group'] ?? ''));
+        $old = [
+            'ids' => $ids,
+            '_group' => $group,
+            'entry_date' => trim((string) ($_POST['entry_date'] ?? '')),
+            'kind' => trim((string) ($_POST['kind'] ?? '')),
+            'actual_unit' => trim((string) ($_POST['actual_unit'] ?? '')),
+        ];
+        $errors = [];
+        if (!$ids) { $errors['ids'] = 'علّم بندًا واحدًا على الأقل.'; }
+        if ($old['entry_date'] === '' && $old['kind'] === '' && $old['actual_unit'] === '') {
+            $errors['_form'] = 'اختر حاجة واحدة على الأقل تعدّلها.';
+        }
+        if ($old['entry_date'] !== '' && !self::validDate($old['entry_date'])) {
+            $errors['entry_date'] = 'التاريخ غير صحيح.';
+        }
+        if ($old['actual_unit'] !== '' && (!is_numeric($old['actual_unit']) || (float) $old['actual_unit'] < 0)) {
+            $errors['actual_unit'] = 'السعر الفعلي لازم يكون رقمًا صفرًا أو أكبر.';
+        }
+        if ($errors) { $this->inboxFailure('bulk-edit', $old, $errors, $group); }
+        $this->claimForm($this->inboxBack());
+        try {
+            $n = RepInbox::bulkUpdate($ids, [
+                'entry_date'  => $old['entry_date'],
+                'kind'        => $old['kind'],
+                'actual_unit' => $old['actual_unit'],
+            ]);
+            flash('success', "اتعدّل $n بند.");
+        } catch (\Throwable $e) {
+            $this->inboxFailure('bulk-edit', $old, ['_form' => $e->getMessage()], $group);
+        }
+        redirect($this->inboxBack());
+    }
+
+    // ═══════════════════════════════════════════ حساب دخول المندوب
+
+    public function saveAccount(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) $id;
+        if (!Rep::find($repId)) { flash('error', 'المندوب غير موجود.'); redirect('rep-custody'); }
+
+        $username = trim((string) ($_POST['username'] ?? ''));
+        $pin      = trim((string) ($_POST['pin'] ?? ''));
+        // لا نمرر $_POST إلى FormState هنا: الرقم السري لا يُحفظ مطلقًا في old.
+        $safeOld = ['username' => $username];
+        $errors = [];
+        if (!preg_match('/^[A-Za-z0-9._-]{3,60}$/', $username)) {
+            $errors['username'] = 'اسم الدخول لازم يكون حروف إنجليزية وأرقام (3 خانات على الأقل) بلا مسافات.';
+        }
+        if ($pin === '' && !RepAuth::accountFor($repId)) {
+            $errors['pin'] = 'اكتب رقم سري للحساب الجديد (من 4 لـ12 رقم).';
+        } elseif ($pin !== '' && !preg_match('/^\d{4,12}$/', $pin)) {
+            $errors['pin'] = 'الرقم السري لازم يكون أرقام من 4 لـ12 خانة.';
+        }
+        if ($errors) {
+            $this->formFailure('rep_custody.account.' . $repId, 'rep-custody/' . $repId . '#account-form',
+                $safeOld, $errors, 'rep-custody/' . $repId);
+        }
+        $this->claimForm('rep-custody/' . $repId . '#account-form');
+        try {
+            $res = RepAuth::setCredentials($repId, $username, $pin);
+        } catch (\Throwable $e) {
+            $this->formFailure('rep_custody.account.' . $repId, 'rep-custody/' . $repId . '#account-form',
+                $safeOld, ['_form' => $e->getMessage()], 'rep-custody/' . $repId);
+        }
+        if (!$res['ok']) {
+            $field = str_contains((string) $res['msg'], 'اسم الدخول') ? 'username' : 'pin';
+            $this->formFailure('rep_custody.account.' . $repId, 'rep-custody/' . $repId . '#account-form',
+                $safeOld, [$field => $res['msg']], 'rep-custody/' . $repId);
+        }
+        // بيانات الواتساب تتعرض بس لو الرقم السري اتغيّر فعلاً — لو غيّر الاسم
+        // لوحده مفيش رقم سري نبعته (متشفّر ومش معانا).
+        if ($res['ok'] && $res['pin_changed']) { $this->stashCred($repId, $username, $pin); }
+        flash('success', $res['msg']);
+        redirect('rep-custody/' . $repId);
+    }
+
+    /** يولّد رقم سري جديد ويجهّز رسالة الواتساب فورًا (بضغطة واحدة). */
+    public function resetPin(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) $id;
+        if (!Rep::find($repId)) { flash('error', 'المندوب غير موجود.'); redirect('rep-custody'); }
+
+        $acc = RepAuth::accountFor($repId);
+        $username = $acc['username'] ?? RepAuth::suggestUsername($repId);
+        $pin = RepAuth::randomPin();
+
+        $this->claimForm('rep-custody/' . $repId . '#account-reset-form');
+        try {
+            $res = RepAuth::setCredentials($repId, $username, $pin);
+        } catch (\Throwable $e) {
+            $this->formFailure('rep_custody.account_reset.' . $repId,
+                'rep-custody/' . $repId . '#account-reset-form', [], ['_form' => $e->getMessage()],
+                'rep-custody/' . $repId);
+        }
+        if (!$res['ok']) {
+            $this->formFailure('rep_custody.account_reset.' . $repId,
+                'rep-custody/' . $repId . '#account-reset-form', [], ['_form' => $res['msg']],
+                'rep-custody/' . $repId);
+        }
+
+        $this->stashCred($repId, $username, $pin);
+        flash('success', 'اتعمل رقم سري جديد. ابعتهوله دلوقتي — مش هتقدر تشوفه تاني بعد ما تسيب الصفحة.');
+        redirect('rep-custody/' . $repId);
+    }
+
+    /**
+     * بيحطّ البيانات في الجلسة لعرضة واحدة بس.
+     * ⚠️ الرقم السري متشفّر في القاعدة ومستحيل نستخرجه بعدين، فالطريقة الوحيدة
+     *    لبعته إننا نمسكه في اللحظة دي. بيتمسح أول ما الصفحة تعرضه (one-shot).
+     */
+    private function stashCred(int $repId, string $username, string $pin): void
+    {
+        $_SESSION['_rep_cred'] = ['rep_id' => $repId, 'username' => $username, 'pin' => $pin];
+    }
+
+    public function toggleAccount(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) $id;
+        $acc = RepAuth::accountFor($repId);
+        if (!$acc) { flash('error', 'مفيش حساب للمندوب ده.'); redirect('rep-custody/' . $repId); }
+        $this->claimForm('rep-custody/' . $repId . '#account-form');
+        $activate = $acc['status'] !== 'active';
+        RepAuth::setStatus($repId, $activate);
+        flash('success', $activate ? 'تم تفعيل دخول المندوب.' : 'تم إيقاف دخول المندوب.');
+        redirect('rep-custody/' . $repId);
+    }
+
+    /** المالك بيلغي تحويل عهدة بين مندوبين (v46) — مرفوض لو المستقبِل صرفه. */
+    public function deleteTransfer(string $tid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $row = \App\Models\RepTransfer::find((int) $tid);
+        $back = 'rep-custody' . ($row ? '/' . (int) $row['from_rep_id'] : '');
+        try {
+            \App\Models\RepTransfer::delete((int) $tid);
+            flash('success', 'اتلغى التحويل — رجع لعهدة المُرسِل.');
+        } catch (\Throwable $e) {
+            flash('error', $e->getMessage());
+        }
+        redirect($back);
+    }
+
+    /**
+     * المالك بيدّي/بيسحب حق «فتح إذن من الموبايل» لمندوب واحد (v44).
+     * ⚠️ وصفي بحت — مفيش أي أثر مالي، والمنع الحقيقي بيتفرض في
+     *    `RepPortal::createPermit` مش في إخفاء الزرار.
+     */
+    public function togglePermitPerm(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) $id;
+        $rep = Rep::find($repId);
+        if (!$rep) { flash('error', 'المندوب غير موجود.'); redirect('rep-custody'); }
+        $this->claimForm('rep-custody/' . $repId . '#permit-perm');
+        try {
+            $allow = !Rep::canCreatePermit($repId);
+            Rep::setCanCreatePermit($repId, $allow);
+            flash('success', $allow
+                ? $rep['name'] . ' بقى يقدر يفتح إذن من موبايله.'
+                : $rep['name'] . ' ما بقاش يقدر يفتح إذن من موبايله.');
+        } catch (\Throwable $e) {
+            flash('error', $e->getMessage());
+        }
+        redirect('rep-custody/' . $repId . '#permit-perm');
+    }
+
+    /**
+     * المالك بيدّي/بيسحب حق «متابعة المناديب من الموبايل» لمندوب واحد (v47).
+     * ⚠️ وصفي بحت — الشاشة قراءة فقط، والمنع الحقيقي بيتفرض في
+     *    `RepWatch::assertAllowed` مش في إخفاء التبويب.
+     */
+    public function toggleWatchPerm(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) $id;
+        $rep = Rep::find($repId);
+        if (!$rep) { flash('error', 'المندوب غير موجود.'); redirect('rep-custody'); }
+        $this->claimForm('rep-custody/' . $repId . '#watch-perm');
+        try {
+            $allow = !Rep::canWatchReps($repId);
+            Rep::setCanWatchReps($repId, $allow);
+            flash('success', $allow
+                ? $rep['name'] . ' بقى يتابع باقي المناديب من موبايله (عرض فقط).'
+                : $rep['name'] . ' ما بقاش يتابع باقي المناديب.');
+        } catch (\Throwable $e) {
+            flash('error', $e->getMessage());
+        }
+        redirect('rep-custody/' . $repId . '#watch-perm');
+    }
+
+    // ═══════════════════════════════════════════ تنزيل الأذونات
+
+    public function assign(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) $id;
+        $ids = array_values(array_unique(array_filter(array_map('intval', (array) ($_POST['permit_ids'] ?? [])))));
+        $note = trim((string) ($_POST['note'] ?? ''));
+        $old = ['permit_ids' => $ids, 'note' => $note];
+        $errors = [];
+        if (!$ids) { $errors['permit_ids'] = 'اختر إذنًا واحدًا على الأقل.'; }
+        if (mb_strlen($note) > 255) { $errors['note'] = 'الملاحظة أطول من 255 حرفًا.'; }
+        if ($errors) {
+            $this->formFailure('rep_custody.assign.' . $repId, 'rep-custody/' . $repId . '#assign-form',
+                $old, $errors, 'rep-custody/' . $repId);
+        }
+        $this->claimForm('rep-custody/' . $repId . '#assign-form');
+
+        // النجاح الجزئي لا يعيد إرسال الناجح: حقيبة المحاولة التالية تحمل المعرفات المرفوضة فقط.
+        $ok = 0; $failedIds = []; $bad = [];
+        foreach ($ids as $pid) {
+            try {
+                RepAssignment::assign($pid, $repId, $note);
+                $ok++;
+            } catch (\Throwable $e) {
+                $failedIds[] = $pid;
+                $bad[] = $e->getMessage();
+            }
+        }
+        if ($ok) {
+            flash('success', 'تم تنزيل ' . $ok . ' إذن للمندوب — هيلاقيهم على موبايله فورًا.');
+        }
+        if ($failedIds) {
+            $this->formFailure('rep_custody.assign.' . $repId, 'rep-custody/' . $repId . '#assign-form',
+                ['permit_ids' => $failedIds, 'note' => $note],
+                ['permit_ids' => 'تعذر تنزيل ' . count($failedIds) . ' إذن: ' . implode(' · ', array_slice(array_unique($bad), 0, 5))],
+                'rep-custody/' . $repId);
+        }
+        redirect('rep-custody/' . $repId);
+    }
+
+    public function assignDone(string $aid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) ($_POST['rep_id'] ?? 0);
+        $this->claimForm('rep-custody/' . $repId);
+        RepAssignment::markDone((int) $aid);
+        flash('success', 'اتقفل التنزيل — الإذن ما بقاش يظهر على موبايل المندوب.');
+        redirect('rep-custody/' . $repId);
+    }
+
+    public function assignBack(string $aid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) ($_POST['rep_id'] ?? 0);
+        $this->claimForm('rep-custody/' . $repId);
+        try {
+            RepAssignment::reactivate((int) $aid);
+            flash('success', 'رجع التنزيل نشط.');
+        } catch (\Throwable $e) {
+            flash('error', $e->getMessage());
+        }
+        redirect('rep-custody/' . $repId);
+    }
+
+    public function assignRemove(string $aid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) ($_POST['rep_id'] ?? 0);
+        $this->claimForm('rep-custody/' . $repId);
+        try {
+            RepAssignment::remove((int) $aid);
+            flash('success', 'اتشال التنزيل.');
+        } catch (\Throwable $e) {
+            flash('error', $e->getMessage());
+        }
+        redirect('rep-custody/' . $repId);
+    }
+
+    /** سياق صندوق المراجعة بعد تنقيته؛ يحفظ التبويب ولا يقبل رجوعًا خارجيًا. */
+    private function inboxBack(): string
+    {
+        return safe_back('rep-custody/inbox?status=pending', $_POST['_back'] ?? null);
+    }
+
+    /** يعيد فتح نموذج الصندوق المتعثر وحده داخل حقيبة الصفحة الموحدة. */
+    private function inboxFailure(string $action, array $old, array $errors, string $anchor = ''): never
+    {
+        $old['_action'] = $action;
+        $back = $this->inboxBack();
+        $path = preg_replace('/#.*/', '', $back) ?: 'rep-custody/inbox?status=pending';
+        $anchor = ltrim($anchor, '#');
+        if ($anchor !== '' && preg_match('/^[A-Za-z0-9_-]+$/', $anchor)) { $path .= '#' . $anchor; }
+        $this->formFailure('rep_custody.inbox', $path, $old, $errors, $back);
+    }
+
+    /** @return int[] */
+    private function postedIds(): array
+    {
+        return array_values(array_unique(array_filter(array_map('intval', (array) ($_POST['ids'] ?? [])))));
+    }
+
+    // ─────────────────────────────────────────── تنزيل عهدة
+    public function storeDeposit(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) $id;
+        if (!Rep::find($repId)) { flash('error', 'المندوب غير موجود.'); redirect('rep-custody'); }
+
+        $amount = round((float) ($_POST['amount'] ?? 0), 2);
+        $date   = trim((string) ($_POST['dep_date'] ?? '')) ?: work_date();
+        $note   = trim((string) ($_POST['note'] ?? ''));
+
+        if ($amount <= 0) {
+            $this->formFailure('rep_custody.deposit.' . $repId, 'rep-custody/' . $repId . '#deposit-form',
+                $_POST, ['amount' => 'اكتب مبلغ العهدة (أكبر من صفر).'], 'rep-custody/' . $repId);
+        }
+        if (!self::validDate($date)) {
+            $this->formFailure('rep_custody.deposit.' . $repId, 'rep-custody/' . $repId . '#deposit-form',
+                $_POST, ['dep_date' => 'التاريخ غير صحيح.'], 'rep-custody/' . $repId);
+        }
+        // ملحوظة: مفيش Closing::guard هنا عن قصد — تنزيل العهدة ما بيمسّش الخزنة إطلاقًا.
+        $this->claimForm('rep-custody/' . $repId . '#deposit-form');
+        RepCustody::createDeposit($repId, $amount, $date, $note);
+        flash('success', 'تم تنزيل عهدة ' . money($amount, false) . ' للمندوب.');
+        redirect('rep-custody/' . $repId);
+    }
+
+    public function deleteDeposit(string $depId): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $dep = RepCustody::findDeposit((int) $depId);
+        if (!$dep) { flash('error', 'التنزيل غير موجود.'); redirect('rep-custody'); }
+        $repId = (int) $dep['rep_id'];
+        $this->claimForm('rep-custody/' . $repId);
+        RepCustody::deleteDeposit((int) $depId);
+        flash('success', 'تم حذف تنزيل العهدة.');
+        redirect('rep-custody/' . $repId);
+    }
+
+    // ─────────────────────────────────────────── تسوية
+    public function settle(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) $id;
+        $rep = Rep::find($repId);
+        if (!$rep) { flash('error', 'المندوب غير موجود.'); redirect('rep-custody'); }
+
+        $returned  = round((float) ($_POST['returned'] ?? 0), 2);
+        $date      = trim((string) ($_POST['settle_date'] ?? '')) ?: work_date();
+        $note      = trim((string) ($_POST['note'] ?? ''));
+
+        if (!self::validDate($date)) {
+            $this->formFailure('rep_custody.settle.' . $repId, 'rep-custody/' . $repId . '#settle-form',
+                $_POST, ['settle_date' => 'التاريخ غير صحيح.'], 'rep-custody/' . $repId);
+        }
+        if ($returned < 0) {
+            $this->formFailure('rep_custody.settle.' . $repId, 'rep-custody/' . $repId . '#settle-form',
+                $_POST, ['returned' => 'المبلغ المرتجع لا يصح أن يكون سالبًا.'], 'rep-custody/' . $repId);
+        }
+        $balance = RepCustody::balance($repId);
+        if ($returned > $balance + 0.005) {
+            $this->formFailure('rep_custody.settle.' . $repId, 'rep-custody/' . $repId . '#settle-form',
+                $_POST, ['returned' => 'المرتجع (' . money($returned, false) . ') أكبر من الباقي مع المندوب ('
+                    . money($balance, false) . '). راجع الرقم.'], 'rep-custody/' . $repId);
+        }
+        // v42: التسوية بقت في محفظة المندوب بس ومابتمسّش الخزنة، فمفيش داعي لفحص القفل.
+        // (الفلوس اللي رجعت ماخرجتش من الخزنة أصلاً — الخصم بيحصل وقت الصرف.)
+        $this->claimForm('rep-custody/' . $repId . '#settle-form');
+        RepCustody::settle($repId, $returned, $date, false, $note);
+        flash('success', 'تمت التسوية وخلص حساب العهدة مع المندوب.');
+        redirect('rep-custody/' . $repId);
+    }
+
+    public function deleteSettlement(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $row = RepCustody::findSettlement((int) $sid);
+        if (!$row) { flash('error', 'التسوية غير موجودة.'); redirect('rep-custody'); }
+        $repId = (int) $row['rep_id'];
+        // لو المرتجع كان اترحّل للخزنة، حذفه بيغيّر رصيدها → احترم القفل
+        if (!empty($row['custody_id']) && ($err = Closing::guard($row['settle_date']))) {
+            flash('error', $err);
+            redirect('rep-custody/' . $repId);
+        }
+        $this->claimForm('rep-custody/' . $repId);
+        RepCustody::deleteSettlement((int) $sid);
+        flash('success', 'تم حذف التسوية.');
+        redirect('rep-custody/' . $repId);
+    }
+
+    private static function validDate(string $v): bool
+    {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) { return false; }
+        [$y, $m, $d] = array_map('intval', explode('-', $v));
+        return checkdate($m, $d, $y);
+    }
+}

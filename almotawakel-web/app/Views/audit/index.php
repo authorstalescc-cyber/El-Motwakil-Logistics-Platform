@@ -42,6 +42,10 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
 <div class="audit-tabs">
   <a class="audit-tab <?= !$isEntries?'active':'' ?>" href="<?= url('audit') ?>">🧾 سجل العمليات</a>
   <a class="audit-tab <?= $isEntries?'active':'' ?>" href="<?= url('audit?mode=entries') ?>">✍️ سجل الإدخالات</a>
+  <?php /* للمالك بس — والمنع الحقيقي في Access::OWNER_ONLY مش في الإخفاء ده */ ?>
+  <?php if (App\Core\Auth::isOwner()): ?>
+    <a class="audit-tab" href="<?= url('security') ?>">🛡️ المراقبة الأمنية</a>
+  <?php endif; ?>
 </div>
 
 <?php if($isEntries): ?>

@@ -1,0 +1,154 @@
+<?php
+namespace App\Core;
+
+/**
+ * سياسة صلاحيات المكتب المركزية.
+ *
+ * الراوتر يطبقها قبل استدعاء الكنترولر. الحراس داخل الكنترولرات الحساسة
+ * يظلون دفاعًا إضافيًا، وإخفاء الروابط في الواجهة ليس وسيلة حماية.
+ */
+class Access
+{
+    public const ROLES = [
+        'owner'      => 'مالك',
+        'manager'    => 'مدير',
+        'accountant' => 'محاسب',
+        'operator'   => 'تشغيل',
+        'read_only'  => 'قراءة فقط',
+    ];
+
+    private const COMMON_POST = [
+        'AuthController@logout',
+        'WorkDateController@save',
+        'AssistantController@ask',
+        'PermitController@invoicePreview',
+    ];
+
+    private const OWNER_ONLY = [
+        // لوحة المراقبة الأمنية: بتعرض مين بيحاول يدخل على أنهي حساب وإمتى.
+        // ⚠️ لازم تفضل هنا — القايمة دي بتتفحص **قبل** السماح العام لطلبات GET
+        //    تحت، فده المكان الوحيد اللي بيمنع باقي الأدوار من قراءتها.
+        'SecurityController@*',
+        'BackupController@*',
+        'SettingsController@addUser',
+        'SettingsController@updateUser',
+        'SettingsController@deleteUser',
+        'SettingsController@saveAi',
+        'SettingsController@testAi',
+    ];
+
+    /** وحدات الكتابة المالية المسموحة للمحاسب (والمدير والمالك). */
+    private const FINANCIAL_CONTROLLERS = [
+        'BawalisController', 'PaymentController', 'SettlementController',
+        'DebtController', 'CustodyController', 'OfficeController',
+        'DailyClosingController', 'OwnerStatementController',
+        'InvoiceController', 'ExpenseController', 'RepController',
+        'RepCustodyController', 'StatementsController',
+    ];
+
+    /** وحدات الكتابة التشغيلية المسموحة لدور التشغيل. */
+    private const OPERATIONAL_CONTROLLERS = [
+        'BawalisController', 'TakhlisController', 'GeneratorsController',
+        'TrackController', 'DashboardController',
+    ];
+
+    /** إجراءات الإذن المالية التي لا ينفذها دور التشغيل. */
+    private const PERMIT_FINANCIAL_ACTIONS = [
+        'invoiceStore', 'invoiceDelete', 'createBill', 'updateBill',
+        'deleteBill', 'copyBill',
+    ];
+
+    public static function normalizeRole(?string $role): string
+    {
+        return isset(self::ROLES[$role ?? '']) ? (string) $role : 'read_only';
+    }
+
+    public static function label(?string $role): string
+    {
+        $role = self::normalizeRole($role);
+        return self::ROLES[$role];
+    }
+
+    /** يطبق السياسة على handler بصيغة Controller@action. */
+    public static function enforce(string $handler, string $httpMethod): void
+    {
+        // الجلسات العامة/بوابة المندوب يطبق كنترولرها حارسها الخاص.
+        if (!Auth::check()) { return; }
+        if (self::allows(Auth::role(), $handler, strtoupper($httpMethod))) { return; }
+
+        self::deny();
+    }
+
+    public static function allows(string $role, string $handler, string $httpMethod): bool
+    {
+        $role = self::normalizeRole($role);
+        [$controller, $action] = array_pad(explode('@', $handler, 2), 2, '');
+        $method = strtoupper($httpMethod);
+
+        if ($role === 'owner') { return true; }
+        if (self::matchesAny($handler, self::OWNER_ONLY)) { return false; }
+
+        // الإعدادات غير السرية للمدير فقط، ولا تظهر لباقي الأدوار.
+        if ($controller === 'SettingsController') {
+            return $role === 'manager';
+        }
+
+        // كل الأدوار المسجلة تستطيع القراءة، عدا الصفحات الحساسة المحجوبة أعلاه.
+        if ($method === 'GET' || $method === 'HEAD') { return true; }
+        if (in_array($handler, self::COMMON_POST, true)) { return true; }
+
+        if ($role === 'manager') { return true; }
+        if ($role === 'read_only') { return false; }
+
+        if ($role === 'accountant') {
+            if (in_array($controller, self::FINANCIAL_CONTROLLERS, true)) { return true; }
+            if ($controller === 'PermitController' && in_array($action, self::PERMIT_FINANCIAL_ACTIONS, true)) { return true; }
+            if ($controller === 'DirectoryController' && in_array($action, ['addPayment', 'deletePayment'], true)) { return true; }
+            return false;
+        }
+
+        if ($role === 'operator') {
+            if (in_array($controller, self::OPERATIONAL_CONTROLLERS, true)) { return true; }
+            if ($controller === 'PermitController') {
+                return !in_array($action, self::PERMIT_FINANCIAL_ACTIONS, true);
+            }
+        }
+
+        return false;
+    }
+
+    public static function canOpenSettings(): bool
+    {
+        return Auth::check() && in_array(Auth::role(), ['owner', 'manager'], true);
+    }
+
+    public static function canManageSecrets(): bool
+    {
+        return Auth::check() && Auth::role() === 'owner';
+    }
+
+    private static function matchesAny(string $handler, array $patterns): bool
+    {
+        foreach ($patterns as $pattern) {
+            if (str_ends_with($pattern, '@*') && str_starts_with($handler, substr($pattern, 0, -1))) {
+                return true;
+            }
+            if ($handler === $pattern) { return true; }
+        }
+        return false;
+    }
+
+    private static function deny(): void
+    {
+        http_response_code(403);
+        $json = strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest'
+            || str_contains(strtolower($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+        if ($json) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'error' => 'ليست لديك صلاحية لتنفيذ هذا الإجراء.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        flash('error', 'ليست لديك صلاحية لتنفيذ هذا الإجراء.');
+        redirect('');
+    }
+}

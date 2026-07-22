@@ -1,10 +1,15 @@
 <?php
 use App\Models\VisaCard;
+use App\Core\FormState;
 /** صفحة كارت الفيزا — رصيد مخفي بزر إظهار + ملخّص + أداء + سجل بالوقت + كشف حساب. */
 $fmtTime = fn($ts) => $ts ? substr((string)$ts, 11, 5) : '';       // HH:MM
 $depTotal = array_sum(array_map(fn($r)=>$r['kind']==='deposit'?$r['amount']:0, $ledger));
 $payTotal = -array_sum(array_map(fn($r)=>$r['kind']==='payment'?$r['amount']:0, $ledger));
 $recent = array_slice($ledger, 0, 4);   // آخر المعاملات للملخّص
+$depositState = $depositState ?? ['token'=>FormState::token(), 'old'=>[], 'errors'=>[], 'back'=>'office/'.(int)$card['id']];
+$depositOld = $depositState['old'];
+$depositErrors = $depositState['errors'];
+$returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
 ?>
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('office') ?>">‹ رجوع لرصيد المكتب</a>
@@ -12,6 +17,7 @@ $recent = array_slice($ledger, 0, 4);   // آخر المعاملات للملخ�
   <a class="btn ghost" href="<?= url('office/'.$card['id'].'/edit') ?>">✏️ تعديل الكارت</a>
   <form method="post" action="<?= url('office/'.$card['id'].'/delete') ?>" class="confirm-delete" data-confirm="حذف الكارت؟ سيُلغى ربط عملياته بالفيزا (لا تُحذف العمليات)." style="display:inline">
     <?= csrfField() ?>
+    <?= formStateFields(FormState::token(), 'office') ?>
     <button class="btn ghost" type="submit" style="color:var(--red)">🗑️ حذف</button>
   </form>
 </div>
@@ -99,14 +105,16 @@ $recent = array_slice($ledger, 0, 4);   // آخر المعاملات للملخ�
       <tr><td style="background:var(--gold-light);font-weight:800;text-align:right">= الرصيد المتاح</td><td style="font-weight:800;background:var(--gold-light)" data-secret data-val="<?= e(money($balance)) ?>">••••••</td></tr>
     </table>
   </div>
-  <div class="card" style="padding:16px 18px">
+  <div class="card" id="deposit" style="padding:16px 18px">
     <div class="section-head" style="margin:0 0 10px">➕ شحن رصيد للكارت</div>
-    <form method="post" action="<?= url('office/'.$card['id'].'/deposit') ?>" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">
+    <?= formErrorSummary($depositErrors) ?>
+    <form class="js-dirty-form" method="post" action="<?= url('office/'.$card['id'].'/deposit') ?>" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">
       <?= csrfField() ?>
-      <div class="field" style="margin:0;width:150px"><label>التاريخ</label><input type="date" name="dep_date" value="<?= e(work_date()) ?>"></div>
-      <div class="field" style="margin:0;flex:1;min-width:160px"><label>البيان (اختياري)</label><input type="text" name="note" placeholder="مصدر الشحن"></div>
-      <div class="field" style="margin:0;width:140px"><label>المبلغ</label><input type="number" step="0.01" name="amount" placeholder="0" required></div>
-      <button class="btn gold" type="submit">شحن الرصيد</button>
+      <?= formStateFields($depositState['token'], $depositState['back']) ?>
+      <div class="field" style="margin:0;width:150px"><label>التاريخ</label><input type="date" name="dep_date" value="<?= e($depositOld['dep_date'] ?? work_date()) ?>"></div>
+      <div class="field" style="margin:0;flex:1;min-width:160px"><label>البيان (اختياري)</label><input type="text" name="note" value="<?= e($depositOld['note'] ?? '') ?>" placeholder="مصدر الشحن"></div>
+      <div class="field" style="margin:0;width:140px"><label>المبلغ</label><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($depositOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $depositErrors) ?>><?= fieldError('amount', $depositErrors) ?></div>
+      <button class="btn gold" type="submit" data-primary-submit>شحن الرصيد</button>
     </form>
   </div>
 </div>
@@ -151,6 +159,7 @@ $recent = array_slice($ledger, 0, 4);   // آخر المعاملات للملخ�
             <?php if($r['kind']==='deposit'): ?>
               <form method="post" action="<?= url('office/deposit/'.$r['id'].'/delete') ?>" class="confirm-delete" data-confirm="حذف هذا الشحن؟" style="display:inline">
                 <?= csrfField() ?>
+                <?= formStateFields(FormState::token(), $returnPath) ?>
                 <button class="edit" type="submit" title="حذف" style="background:none;border:0;cursor:pointer">🗑️</button>
               </form>
             <?php elseif($r['kind']==='payment' && !empty($r['url'])): ?>

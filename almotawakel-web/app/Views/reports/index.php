@@ -292,14 +292,14 @@ $printQs = http_build_query(array_filter(['from'=>$from,'to'=>$to]));
 
 <script src="<?= url('assets/js/chart.umd.js') ?>"></script>
 <script>
-const RP = <?= json_encode([
+const RP = <?= js_json([
   'monthly'   => ['labels'=>$monthNames,
                   'freight'=>array_map(fn($m)=>round($monthly[$m]['freight'],2),range(1,12)),
                   'custody'=>array_map(fn($m)=>round($monthly[$m]['custody'],2),range(1,12)),
                   'expenses'=>array_map(fn($m)=>round($monthly[$m]['expenses'],2),range(1,12)),
                   'collections'=>array_map(fn($m)=>round($monthly[$m]['collections'],2),range(1,12))],
   'expenses'  => array_map(fn($r)=>['label'=>$r['label'],'value'=>(float)$r['value']], $expenses['categories']),
-], JSON_UNESCAPED_UNICODE) ?>;
+]) ?>;
 
 const C = {navy:'#15355B',navyMid:'#1E4B7A',gold:'#C9A227',green:'#1E6E3C',red:'#9B2C2C',teal:'#14746F',purple:'#5B3E7A'};
 const PALETTE = [C.navy,C.gold,C.green,C.teal,C.purple,C.red,C.navyMid,'#B8922F','#2E8B57','#8B5E9B','#C97B27','#4A6FA5'];

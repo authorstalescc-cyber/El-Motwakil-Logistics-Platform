@@ -89,6 +89,82 @@ class Rep
         return Database::row("SELECT * FROM reps WHERE id = ?", [$id]);
     }
 
+    // ───────────────────────────── صلاحية فتح إذن من الموبايل (v44)
+
+    /** هل عمود الصلاحية اترحّل؟ (نمط RepCustody::available — النظام يشتغل قبل الهجرة) */
+    public static function permitPermReady(): bool
+    {
+        static $ok = null;
+        if ($ok === null) {
+            $ok = (bool) Database::scalar(
+                "SELECT COUNT(*) FROM information_schema.columns
+                 WHERE table_schema = DATABASE() AND table_name = 'reps' AND column_name = 'can_create_permit'"
+            );
+        }
+        return $ok;
+    }
+
+    /**
+     * هل المندوب ده مسموح له يفتح إذن/شهادة من موبايله؟
+     *
+     * ⚠️ **الرفض هو الافتراضي** (تحذير 5): قبل تشغيل migrate_v44 بترجّع false
+     * لكل الناس، يعني الزرار بيختفي والحفظ بيترفض — مش بيفتح للكل بالغلط.
+     * ده المصدر الوحيد للفحص؛ ممنوع تكتب الشرط بإيدك في أي مكان تاني.
+     */
+    public static function canCreatePermit(int $repId): bool
+    {
+        if ($repId <= 0 || !self::permitPermReady()) { return false; }
+        return (int) Database::scalar(
+            "SELECT can_create_permit FROM reps WHERE id = ?", [$repId]) === 1;
+    }
+
+    /** المالك بيدّي/بيسحب الصلاحية من كارت المندوب. */
+    public static function setCanCreatePermit(int $repId, bool $allowed): void
+    {
+        if (!self::permitPermReady()) {
+            throw new \RuntimeException('شغّل php bin/migrate_v44.php الأول عشان تتحكّم في الصلاحية دي.');
+        }
+        Database::exec("UPDATE reps SET can_create_permit = ? WHERE id = ?", [$allowed ? 1 : 0, $repId]);
+    }
+
+    // ───────────────────────────── صلاحية «متابعة المناديب» من الموبايل (v47)
+
+    /** هل عمود المتابعة اترحّل؟ (نفس نمط permitPermReady — النظام يشتغل قبل الهجرة) */
+    public static function watchPermReady(): bool
+    {
+        static $ok = null;
+        if ($ok === null) {
+            $ok = (bool) Database::scalar(
+                "SELECT COUNT(*) FROM information_schema.columns
+                 WHERE table_schema = DATABASE() AND table_name = 'reps' AND column_name = 'can_watch_reps'"
+            );
+        }
+        return $ok;
+    }
+
+    /**
+     * هل المندوب ده مشرف يتابع باقي المناديب من موبايله؟
+     *
+     * ⚠️ **الرفض هو الافتراضي** (تحذير 5): قبل migrate_v47 بترجّع false لكل
+     * الناس، فالتبويب بيختفي والشاشة بترفض. ده المصدر الوحيد للفحص؛ ممنوع
+     * تكتب الشرط بإيدك في أي مكان تاني.
+     */
+    public static function canWatchReps(int $repId): bool
+    {
+        if ($repId <= 0 || !self::watchPermReady()) { return false; }
+        return (int) Database::scalar(
+            "SELECT can_watch_reps FROM reps WHERE id = ?", [$repId]) === 1;
+    }
+
+    /** المالك بيدّي/بيسحب صلاحية المتابعة من كارت المندوب. */
+    public static function setCanWatchReps(int $repId, bool $allowed): void
+    {
+        if (!self::watchPermReady()) {
+            throw new \RuntimeException('شغّل php bin/migrate_v47.php الأول عشان تتحكّم في الصلاحية دي.');
+        }
+        Database::exec("UPDATE reps SET can_watch_reps = ? WHERE id = ?", [$allowed ? 1 : 0, $repId]);
+    }
+
     public static function create(array $d): int
     {
         Database::exec(
@@ -107,11 +183,34 @@ class Rep
                     hire_date=:hire_date, status=:status, note=:note WHERE id=:id", $p);
     }
 
-    public static function delete(int $id): void
+    /** حذف الكارت النظيف فقط؛ أي تاريخ يحوّل العملية إلى تعطيل يحفظ السجل. */
+    public static function delete(int $id): array
     {
-        Database::exec("DELETE FROM rep_entries    WHERE rep_id = ?", [$id]);
-        Database::exec("DELETE FROM rep_settlements WHERE rep_id = ?", [$id]);
-        Database::exec("DELETE FROM reps            WHERE id = ?",     [$id]);
+        $pdo = Database::conn();
+        $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            $rep = Database::row('SELECT * FROM reps WHERE id=? FOR UPDATE', [$id]);
+            if (!$rep) { if ($own) { $pdo->commit(); } return ['deleted' => false, 'deactivated' => false, 'history' => []]; }
+            $history = DeletionPolicy::repHistory($id);
+            if (array_sum($history) > 0) {
+                Database::exec("UPDATE reps SET status='inactive' WHERE id=?", [$id]);
+                Database::exec("UPDATE rep_users SET status='disabled' WHERE rep_id=?", [$id]);
+                Database::exec("UPDATE permit_assignments SET status='done',done_at=COALESCE(done_at,NOW()) WHERE rep_id=? AND status='active'", [$id]);
+                Audit::log('deactivate', 'reps', $id, $rep, self::find($id),
+                    'تعطيل مندوب بدل حذفه لوجود تاريخ مالي أو تشغيلي', ['history' => $history]);
+                if ($own) { $pdo->commit(); }
+                return ['deleted' => false, 'deactivated' => true, 'history' => $history];
+            }
+            Database::exec('DELETE FROM rep_users WHERE rep_id=?', [$id]);
+            Database::exec('DELETE FROM reps WHERE id=?', [$id]);
+            Audit::log('delete', 'reps', $id, $rep, null, 'حذف كارت مندوب بلا أي تاريخ', [], false);
+            if ($own) { $pdo->commit(); }
+            return ['deleted' => true, 'deactivated' => false, 'history' => $history];
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $e;
+        }
     }
 
     private static function bindRep(array $d): array

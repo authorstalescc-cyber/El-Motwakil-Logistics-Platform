@@ -255,14 +255,14 @@ if ($eta): ?>
 <script src="<?= url('assets/vendor/leaflet/leaflet.js') ?>"></script>
 <script>
 (function(){
-  L.Icon.Default.prototype.options.imagePath = <?= json_encode(url('assets/vendor/leaflet/images/'), JSON_UNESCAPED_SLASHES) ?>;
-  var FEED = <?= json_encode(url('tracking/' . (int) $t['id'] . '/feed'), JSON_UNESCAPED_SLASHES) ?>;
+  L.Icon.Default.prototype.options.imagePath = <?= js_json(url('assets/vendor/leaflet/images/')) ?>;
+  var FEED = <?= js_json(url('tracking/' . (int) $t['id'] . '/feed')) ?>;
   var LIVE = <?= $pk === 'live' ? 'true' : 'false' ?>;
-  var DEST = <?= $eta ? json_encode([
+  var DEST = <?= $eta ? js_json([
         'lat'  => (float) $eta['point']['lat'],
         'lng'  => (float) $eta['point']['lng'],
         'name' => $eta['point']['name'],
-      ], JSON_UNESCAPED_UNICODE) : 'null' ?>;
+      ]) : 'null' ?>;
 
   var map = L.map('map', {scrollWheelZoom:false});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -318,13 +318,13 @@ if ($eta): ?>
     }
   }
 
-  var initial = <?= json_encode(array_map(fn($p) => [
+  var initial = <?= js_json(array_map(fn($p) => [
         'lat'  => (float) $p['lat'],
         'lng'  => (float) $p['lng'],
         'addr' => $p['address'] ?: '',
         'at'   => date('H:i', strtotime($p['created_at'])),
         'date' => date('d/m', strtotime($p['created_at'])),
-      ], $pings), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+      ], $pings)) ?>;
 
   draw(initial, true);
 
@@ -356,12 +356,12 @@ document.querySelectorAll('.js-copy').forEach(function(b){
       var o = b.innerHTML; b.innerHTML = '✓ اتنسخ'; setTimeout(function(){ b.innerHTML = o; }, 1600);
     };
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(txt).then(done).catch(function(){ prompt('انسخ:', txt); });
+      navigator.clipboard.writeText(txt).then(done).catch(function(){ window.AppUI.ask('انسخ النص التالي:',function(){},{defaultValue:txt,readOnly:true,required:false,title:'نسخ'}); });
     } else {
       var ta = document.createElement('textarea');
       ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
       document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); done(); } catch(e) { prompt('انسخ:', txt); }
+      try { document.execCommand('copy'); done(); } catch(e) { window.AppUI.ask('انسخ النص التالي:',function(){},{defaultValue:txt,readOnly:true,required:false,title:'نسخ'}); }
       document.body.removeChild(ta);
     }
   });

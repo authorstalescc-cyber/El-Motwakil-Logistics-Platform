@@ -1,5 +1,6 @@
 <?php
 use App\Models\Bill;
+use App\Core\FormState;
 /**
  * جدول بوالص قابل للتحديد + شريط دفع جماعي (مشترك بين نتائج البحث وصفحة صاحب البيان).
  * المتغيّرات المتوقّعة: $bills (array), $backQS (string), $showOwner (bool, افتراضي false)
@@ -7,10 +8,14 @@ use App\Models\Bill;
 $showOwner = $showOwner ?? false;
 $cols      = $showOwner ? 16 : 15;
 $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
+$payState = $payState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'settlements'];
+$payOld = $payState['old'];
 ?>
 <?php require __DIR__ . '/../bawalis/_bulk_actions.php'; ?>
-<form method="post" action="<?= url('settlements/pay') ?>" id="payForm" data-confirm="تسجيل سداد للبوالص المحدّدة؟">
+<?= formErrorSummary($payState['errors']) ?>
+<form class="js-dirty-form" method="post" action="<?= url('settlements/pay') ?>" id="payForm" data-confirm="تسجيل سداد للبوالص المحدّدة؟">
   <?= csrfField() ?>
+  <?= formStateFields($payState['token'], $payState['back']) ?>
   <input type="hidden" name="back" value="<?= e($backQS ?? '') ?>">
   <div class="card">
     <div class="table-wrap">
@@ -44,7 +49,7 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
             $own  = trim((string)($b['declaration_owner'] ?? ''));
           ?>
             <tr class="bill-row<?= $due ? ' payable' : '' ?>" data-rem="<?= e(number_format($rem, 2, '.', '')) ?>">
-              <td><input type="checkbox" class="row-sel bill-pick js-bill-pick" value="<?= (int)$b['id'] ?>"
+              <td><input type="checkbox" class="row-sel bill-pick js-bill-pick" value="<?= (int)$b['id'] ?>" <?= (float)($payOld['amount'][$b['id']] ?? 0)>0?'checked':'' ?>
                 data-no="<?= e($b['bill_number'] ?: '#'.$b['id']) ?>" data-date="<?= e($b['bill_date'] ?? '') ?>"
                 data-freight="<?= e(number_format((float)($b['freight'] ?? 0),2,'.','')) ?>" data-legacy="<?= (int)($b['is_legacy'] ?? 0) ?>" title="تحديد البوليصة"></td>
               <td><?= dfmt($b['bill_date']) ?></td>
@@ -67,8 +72,9 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
               <td>
                 <?php if ($due): ?>
                   <input type="number" step="0.01" min="0" max="<?= e(number_format($rem, 2, '.', '')) ?>"
-                         name="amount[<?= $b['id'] ?>]" class="pay-amt" placeholder="0"
-                         style="width:118px;border:1px solid var(--line2);border-radius:8px;padding:6px 8px;text-align:center">
+                         name="amount[<?= $b['id'] ?>]" value="<?= e($payOld['amount'][$b['id']] ?? '') ?>" class="pay-amt" placeholder="0"
+                         style="width:118px;border:1px solid var(--line2);border-radius:8px;padding:6px 8px;text-align:center"<?= fieldErrorAttrs('amount.'.(int)$b['id'], $payState['errors']) ?>>
+                  <?= fieldError('amount.'.(int)$b['id'], $payState['errors']) ?>
                 <?php elseif ($b['pay_status'] === Bill::STATUS_PAID): ?>
                   <span style="color:var(--green)">✓ مكتمل</span>
                 <?php elseif ($b['pay_status'] === Bill::STATUS_PENDING): ?>
@@ -94,9 +100,9 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
       <button type="button" class="btn ghost sm" id="btnAllDue">تحديد كل غير المسدّد</button>
       <button type="button" class="btn ghost sm" id="btnFillRem">دفع كامل المتبقّي للمحدّد</button>
       <label style="font-weight:700;color:var(--grey)">تاريخ الدفع</label>
-      <input type="date" name="pay_date" value="<?= e(work_date()) ?>" style="border:1px solid var(--line2);border-radius:9px;padding:8px 10px">
-      <input type="text" name="note" placeholder="ملاحظة (اختياري)" style="border:1px solid var(--line2);border-radius:9px;padding:8px 10px;width:150px">
-      <button class="btn gold" type="submit" id="btnPay" disabled>💾 دفع المحدّد</button>
+      <span class="field" style="margin:0"><input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>" style="border:1px solid var(--line2);border-radius:9px;padding:8px 10px"<?= fieldErrorAttrs('pay_date', $payState['errors']) ?>><?= fieldError('pay_date', $payState['errors']) ?></span>
+      <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)" style="border:1px solid var(--line2);border-radius:9px;padding:8px 10px;width:150px">
+      <button class="btn gold" type="submit" id="btnPay" data-primary-submit disabled>💾 دفع المحدّد</button>
     </div>
   </div>
 </form>

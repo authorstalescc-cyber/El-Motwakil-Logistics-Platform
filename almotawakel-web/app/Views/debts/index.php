@@ -1,4 +1,5 @@
 <?php
+use App\Core\FormState;
 /**
  * وحدة المديونيات — صفحة موحّدة بتبويبات.
  * @var string $tab            التبويب النشط
@@ -21,6 +22,8 @@ $vqs = fn(array $ov=[]) => http_build_query(array_merge(
     ['tab'=>'visa','q'=>$vf['q'],'source'=>$vf['source'],'from'=>$vf['from'],'to'=>$vf['to']], $ov));
 $vHasFilter = $vf['q']||$vf['source']||$vf['from']||$vf['to'];
 $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','debt'=>'takhlis'];
+$accountState = $accountState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'debts?tab=others'];
+$visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'debts?tab=visa'];
 ?>
 <style>
 .debts-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 18px;border-bottom:2px solid var(--line);padding-bottom:2px}
@@ -142,7 +145,9 @@ $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','debt'
   ?>
   <div class="two-col">
     <?php foreach ($accounts as $blk): $a=$blk['a']; $t=$blk['t']; $pays=$blk['pays'];
-      $creditor = trim((string)$a['name']); ?>
+      $creditor = trim((string)$a['name']);
+      $payState = $paymentStates[(int)$a['id']] ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'debts?tab=inspection'];
+      $payOld = $payState['old']; $payErrors = $payState['errors']; ?>
       <div class="card" style="padding:18px">
         <div class="section-head">
           <?= $blk['ic'] ?> <?= e($blk['label']) ?> — <?= $creditor !== '' ? e($creditor) : '<span style="color:var(--grey);font-weight:700">غير محدّد</span>' ?>
@@ -153,16 +158,17 @@ $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','debt'
           <div class="fig"><div class="lbl">المتبقّي</div><div class="val <?= $t['remaining']>0.005?'neg':'pos' ?>"><?= intf($t['remaining']) ?></div></div>
         </div>
 
-        <form class="inline-form" method="post" action="<?= url('debts/account/'.$a['id'].'/pay') ?>">
+        <?= formErrorSummary($payErrors) ?>
+        <form class="inline-form js-dirty-form" method="post" action="<?= url('debts/account/'.$a['id'].'/pay') ?>">
           <?= csrfField() ?>
-          <input type="hidden" name="back" value="debts?tab=inspection">
-          <input type="number" step="0.01" name="amount" placeholder="المبلغ" required>
-          <input type="date" name="pay_date" value="<?= e(work_date()) ?>">
-          <input type="text" name="note" placeholder="ملاحظة (اختياري)">
+          <?= formStateFields($payState['token'], $payState['back']) ?>
+          <div class="field" style="margin:0"><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
+          <input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>">
+          <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)">
           <label style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:.85rem;white-space:nowrap">
-            <input type="checkbox" name="is_visa" value="1" style="width:16px;height:16px;accent-color:var(--gold)">💳 فيزا</label>
-          <?= visa_card_select(0, 'visa_card_id', 'max-width:160px') ?>
-          <button class="btn gold sm" type="submit">➕ دفع</button>
+            <input type="checkbox" name="is_visa" value="1" <?= !empty($payOld['is_visa'])?'checked':'' ?> style="width:16px;height:16px;accent-color:var(--gold)">💳 فيزا</label>
+          <?= visa_card_select((int)($payOld['visa_card_id'] ?? 0), 'visa_card_id', 'max-width:160px') ?>
+          <button class="btn gold sm" type="submit" data-primary-submit>➕ دفع</button>
         </form>
 
         <div class="table-wrap" style="margin-top:12px"><table class="data">
@@ -175,7 +181,7 @@ $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','debt'
                 <td><?= e($p['note']) ?></td>
                 <td>
                   <form class="confirm-delete" method="post" action="<?= url('debts/payment/'.$p['id'].'/delete') ?>" style="margin:0">
-                    <?= csrfField() ?><input type="hidden" name="back" value="debts?tab=inspection">
+                    <?= csrfField() ?><?= formStateFields(FormState::token(), 'debts?tab=inspection') ?>
                     <button class="del" type="submit" title="حذف">🗑️</button>
                   </form>
                 </td>
@@ -231,17 +237,19 @@ $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','debt'
   <div class="two-col">
     <div class="card" style="padding:18px">
       <div class="section-head">➕ إضافة مديونية جديدة</div>
-      <form class="form-card" method="post" action="<?= url('debts/account') ?>" style="box-shadow:none;padding:0;border:0">
+      <?= formErrorSummary($accountState['errors']) ?>
+      <form class="form-card js-dirty-form" method="post" action="<?= url('debts/account') ?>" style="box-shadow:none;padding:0;border:0">
         <?= csrfField() ?>
+        <?= formStateFields($accountState['token'], $accountState['back']) ?>
         <div class="form-grid" style="grid-template-columns:1fr">
           <div class="field"><label>اسم الجهة الدائنة</label>
-            <input type="text" name="name" required></div>
+            <input type="text" name="name" value="<?= e($accountState['old']['name'] ?? '') ?>" required<?= fieldErrorAttrs('name', $accountState['errors']) ?>><?= fieldError('name', $accountState['errors']) ?></div>
           <div class="field"><label>أصل المديونية</label>
-            <input type="number" step="0.01" name="opening" placeholder="0"></div>
+            <input type="number" step="0.01" name="opening" value="<?= e($accountState['old']['opening'] ?? '') ?>" placeholder="0"></div>
           <div class="field"><label>ملاحظة (اختياري)</label>
-            <input type="text" name="note"></div>
+            <input type="text" name="note" value="<?= e($accountState['old']['note'] ?? '') ?>"></div>
         </div>
-        <div class="form-actions" style="margin-top:12px"><button class="btn gold" type="submit">💾 حفظ</button></div>
+        <div class="form-actions" style="margin-top:12px"><button class="btn gold" type="submit" data-primary-submit>💾 حفظ</button></div>
       </form>
     </div>
 
@@ -263,7 +271,7 @@ $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','debt'
               <td><div class="actions">
                 <a class="edit" href="<?= url('debts/account/'.$a['id']) ?>" title="الدفعات والتفاصيل">💵</a>
                 <form class="confirm-delete" method="post" action="<?= url('debts/account/'.$a['id'].'/delete') ?>" style="margin:0">
-                  <?= csrfField() ?><button class="del" type="submit" title="حذف">🗑️</button>
+                  <?= csrfField() ?><?= formStateFields(FormState::token(), 'debts?tab=others') ?><button class="del" type="submit" title="حذف">🗑️</button>
                 </form>
               </div></td>
             </tr>
@@ -297,15 +305,17 @@ $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','debt'
   <!-- إضافة عملية فيزا -->
   <div class="card" style="padding:16px;margin-bottom:16px">
     <div class="section-head">➕ إضافة عملية مدفوعة بالفيزا</div>
-    <form class="inline-form" method="post" action="<?= url('debts/visa') ?>" style="flex-wrap:wrap">
+    <?= formErrorSummary($visaState['errors']) ?>
+    <form class="inline-form js-dirty-form" method="post" action="<?= url('debts/visa') ?>" style="flex-wrap:wrap">
       <?= csrfField() ?>
-      <input type="date" name="exp_date" value="<?= e(work_date()) ?>">
-      <input list="dl_visa_cat" name="category" placeholder="الفئة (إيجار / رسوم…)" autocomplete="off">
-      <input type="text" name="beneficiary" placeholder="الجهة / المستفيد">
-      <input type="number" step="0.01" name="amount" placeholder="المبلغ" required style="max-width:130px">
-      <input type="text" name="note" placeholder="بيان (اختياري)">
-      <?= visa_card_select(0, 'visa_card_id', 'max-width:170px') ?>
-      <button class="btn gold sm" type="submit">💳 إضافة</button>
+      <?= formStateFields($visaState['token'], $visaState['back']) ?>
+      <input type="date" name="exp_date" value="<?= e($visaState['old']['exp_date'] ?? work_date()) ?>">
+      <input list="dl_visa_cat" name="category" value="<?= e($visaState['old']['category'] ?? '') ?>" placeholder="الفئة (إيجار / رسوم…)" autocomplete="off">
+      <input type="text" name="beneficiary" value="<?= e($visaState['old']['beneficiary'] ?? '') ?>" placeholder="الجهة / المستفيد">
+      <div class="field" style="margin:0"><input type="number" step="0.01" name="amount" value="<?= e($visaState['old']['amount'] ?? '') ?>" placeholder="المبلغ" required style="max-width:130px"<?= fieldErrorAttrs('amount', $visaState['errors']) ?>><?= fieldError('amount', $visaState['errors']) ?></div>
+      <input type="text" name="note" value="<?= e($visaState['old']['note'] ?? '') ?>" placeholder="بيان (اختياري)">
+      <?= visa_card_select((int)($visaState['old']['visa_card_id'] ?? 0), 'visa_card_id', 'max-width:170px') ?>
+      <button class="btn gold sm" type="submit" data-primary-submit>💳 إضافة</button>
     </form>
     <datalist id="dl_visa_cat"><?php foreach (($visaCats ?? []) as $opt): ?><option value="<?= e($opt) ?>"><?php endforeach; ?></datalist>
   </div>

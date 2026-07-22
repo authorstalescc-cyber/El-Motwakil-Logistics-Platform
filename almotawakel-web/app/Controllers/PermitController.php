@@ -2,7 +2,9 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\FormState;
 use App\Core\Database;
+use App\Core\PrivateFile;
 use App\Core\App;
 use App\Calc;
 use App\Models\Permit;
@@ -12,6 +14,7 @@ use App\Models\Closing;
 use App\Models\Lookup;
 use App\Models\Audit;
 use App\Models\PartyMaster;
+use App\Models\DeletionPolicy;
 
 /**
  * الإصدارات (إذن للصادر / شهادة للوارد) — أكبر عملية في النظام.
@@ -20,8 +23,6 @@ use App\Models\PartyMaster;
  */
 class PermitController extends Controller
 {
-    private const UPLOAD_EXT = ['jpg','jpeg','png','webp','gif','pdf'];
-
     /**
      * تفصيل الحاويات حسب النوع من البوالص، مجمّعاً بالاستعلام الواحد.
      * $col: عمود الربط ('permit_id' أو 'movement_id')، $ids: مصفوفة المعرّفات.
@@ -43,6 +44,27 @@ class PermitController extends Controller
             $map[(int)$row['gid']][] = ['type' => $row['type'], 'cnt' => (int)$row['cnt']];
         }
         return $map;
+    }
+
+    /**
+     * أزرار الأطراف المتكررة (شركة/وكيل) داخل نتيجة معيّنة.
+     * تُرجع الأسماء التي لها أكثر من إصدار واحد فقط — لأن الزر لا معنى له لإذن يتيم.
+     * $where يبدأ بـ WHERE ويستخدم الاسم المستعار p. العرض فقط، بلا أي أثر على أي حساب.
+     */
+    private static function partyChips(string $col, string $where, array $params, int $limit = 30): array
+    {
+        $col = $col === 'client' ? 'client' : 'company';   // قائمة بيضاء
+        $rows = Database::all(
+            "SELECT p.$col AS name, COUNT(*) AS c
+               FROM permits p
+               $where AND COALESCE(p.$col,'') <> ''
+              GROUP BY p.$col
+             HAVING c > 1
+              ORDER BY c DESC, p.$col ASC
+              LIMIT $limit",
+            $params
+        );
+        return array_map(static fn($r) => ['name' => (string)$r['name'], 'c' => (int)$r['c']], $rows);
     }
 
     public function index(): void
@@ -99,7 +121,64 @@ class PermitController extends Controller
         }
 
         if ($mode === 'follow') {
-            // شاشة المتابعة: الأذونات المفتوحة + ما ينقصها + تفاصيل بصرية
+            // شاشة المتابعة: بحث/تصفية على الخادم ثم صفحة محدودة بدل تحميل كل الملفات.
+            $followQ = trim((string)($_GET['q'] ?? ''));
+            $followState = in_array($_GET['state'] ?? '', ['warn', 'ok'], true)
+                ? (string) $_GET['state'] : 'all';
+            $followSort = in_array($_GET['sort'] ?? '', ['old', 'rem-desc'], true)
+                ? (string) $_GET['sort'] : 'new';
+            // تصفية بطرف واحد (شركة/وكيل) + تجميع البطاقات حسب الشركة — عرض فقط، بلا أي أثر مالي
+            $followCo    = trim((string)($_GET['co'] ?? ''));
+            $followCl    = trim((string)($_GET['cl'] ?? ''));
+            $followGroup = ($_GET['group'] ?? '') === 'co' ? 'co' : '';
+            $incompleteSql = "(
+                NOT EXISTS (SELECT 1 FROM bawalis bx WHERE bx.permit_id=p.id)
+                OR NOT EXISTS (SELECT 1 FROM permit_stages sx WHERE sx.permit_id=p.id)
+                OR EXISTS (SELECT 1 FROM permit_stages sp WHERE sp.permit_id=p.id AND sp.status='pending')
+            )";
+            $baseConds = ["p.status='open'"];
+            $baseParams = [];
+            if ($followQ !== '') {
+                $baseConds[] = '(p.permit_no LIKE ? OR p.company LIKE ? OR p.client LIKE ?)';
+                array_push($baseParams, "%$followQ%", "%$followQ%", "%$followQ%");
+            }
+            $baseWhere = 'WHERE ' . implode(' AND ', $baseConds);
+            $followCounts = Database::row(
+                "SELECT COUNT(*) total, COALESCE(SUM($incompleteSql),0) warn
+                 FROM permits p $baseWhere",
+                $baseParams
+            ) ?: ['total'=>0, 'warn'=>0];
+            $globalIncomplete = $followQ === ''
+                ? (int)$followCounts['warn']
+                : (int)Database::scalar("SELECT COALESCE(SUM($incompleteSql),0) FROM permits p WHERE p.status='open'");
+
+            $rowConds = $baseConds;
+            $rowParams = $baseParams;
+            if ($followState === 'warn') { $rowConds[] = $incompleteSql; }
+            if ($followState === 'ok') { $rowConds[] = "NOT $incompleteSql"; }
+
+            // أزرار الأطراف المتكررة: تُحسب قبل تصفية الطرف نفسه حتى يمكن التنقّل بينها
+            $chipWhere = 'WHERE ' . implode(' AND ', $rowConds);
+            $coChips = self::partyChips('company', $chipWhere, $rowParams);
+            $clChips = self::partyChips('client',  $chipWhere, $rowParams);
+
+            if ($followCo !== '') { $rowConds[] = 'p.company = ?'; $rowParams[] = $followCo; }
+            if ($followCl !== '') { $rowConds[] = 'p.client = ?';  $rowParams[] = $followCl; }
+
+            $rowWhere = 'WHERE ' . implode(' AND ', $rowConds);
+            $followTotal = (int) Database::scalar("SELECT COUNT(*) FROM permits p $rowWhere", $rowParams);
+            $perPage = 48;
+            $followPages = max(1, (int)ceil($followTotal / $perPage));
+            $followPage = min(max(1, (int)($_GET['page'] ?? 1)), $followPages);
+            $offset = ($followPage - 1) * $perPage;
+            $order = match ($followSort) {
+                'old' => 'p.permit_date ASC, p.id ASC',
+                'rem-desc' => 'remaining DESC, p.id DESC',
+                default => 'p.permit_date DESC, p.id DESC',
+            };
+            // التجميع حسب الشركة: نرتّب بالشركة أولاً حتى تتجاور بطاقات كل شركة
+            if ($followGroup === 'co') { $order = "COALESCE(p.company,'') ASC, $order"; }
+
             $rows = Database::all(
                 "SELECT p.*,
                         (SELECT COUNT(*) FROM bawalis b WHERE b.permit_id = p.id) AS bills,
@@ -110,9 +189,10 @@ class PermitController extends Controller
                         (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.permit_id = p.id AND ".Permit::expenseSql('s').") AS expense,
                         (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.permit_id = p.id AND ".Permit::revenueSql('s').") AS fees
                  FROM permits p
-                 WHERE p.status = 'open'
-                 ORDER BY p.permit_date DESC, p.id DESC
-                 LIMIT 300"
+                 $rowWhere
+                 ORDER BY $order
+                 LIMIT $perPage OFFSET $offset",
+                $rowParams
             );
 
             // خريطة مراحل كل إذن (لعرض نقاط التقدّم)
@@ -176,7 +256,23 @@ class PermitController extends Controller
                 'mode'       => 'follow',
                 'rows'       => $rows,
                 'stats'      => $stats,
-                'incomplete' => $incomplete,
+                'incomplete' => $globalIncomplete,
+                'followQ' => $followQ,
+                'followState' => $followState,
+                'followSort' => $followSort,
+                'followCo' => $followCo,
+                'followCl' => $followCl,
+                'followGroup' => $followGroup,
+                'coChips' => $coChips,
+                'clChips' => $clChips,
+                'followCounts' => [
+                    'all' => (int)$followCounts['total'],
+                    'warn' => (int)$followCounts['warn'],
+                    'ok' => (int)$followCounts['total'] - (int)$followCounts['warn'],
+                ],
+                'followTotal' => $followTotal,
+                'followPage' => $followPage,
+                'followPages' => $followPages,
             ]);
             return;
         }
@@ -195,8 +291,23 @@ class PermitController extends Controller
         if ($type !== '') { $conds[] = 'p.permit_type = ?'; $params[] = $type; }
         if ($date !== '') { $conds[] = 'p.permit_date = ?'; $params[] = $date; }
         if ($st === 'open' || $st === 'closed') { $conds[] = 'p.status = ?'; $params[] = $st; }
+
+        // أزرار الأطراف المتكررة: قبل تصفية الطرف نفسه حتى يمكن التنقّل بينها
+        $co = trim($_GET['co'] ?? '');
+        $cl = trim($_GET['cl'] ?? '');
+        $chipWhere  = $conds ? 'WHERE ' . implode(' AND ', $conds) : 'WHERE 1';
+        $coChips = self::partyChips('company', $chipWhere, $params);
+        $clChips = self::partyChips('client',  $chipWhere, $params);
+        if ($co !== '') { $conds[] = 'p.company = ?'; $params[] = $co; }
+        if ($cl !== '') { $conds[] = 'p.client = ?';  $params[] = $cl; }
+
         $where = $conds ? 'WHERE ' . implode(' AND ', $conds) : '';
 
+        $total = (int) Database::scalar("SELECT COUNT(*) FROM permits p $where", $params);
+        $perPage = 60;
+        $pages = max(1, (int)ceil($total / $perPage));
+        $page = min(max(1, (int)($_GET['page'] ?? 1)), $pages);
+        $offset = ($page - 1) * $perPage;
         $rows = Database::all(
             "SELECT p.*,
                     (SELECT COUNT(*) FROM bawalis b WHERE b.permit_id = p.id) AS bills,
@@ -207,10 +318,24 @@ class PermitController extends Controller
              FROM permits p
              $where
              ORDER BY p.permit_date DESC, p.id DESC
-             LIMIT 400",
+             LIMIT $perPage OFFSET $offset",
             $params
         );
-        $total = (int) Database::scalar("SELECT COUNT(*) FROM permits p $where", $params);
+
+        // إجمالي كل النتائج (لا الصفحة وحدها) — عرض فقط، ويُتخطّى لو النتيجة ضخمة
+        $grand = null;
+        if ($total > count($rows) && $total <= 3000) {
+            $grand = Database::row(
+                "SELECT COALESCE(SUM((SELECT COUNT(*) FROM bawalis b WHERE b.permit_id = p.id)),0) AS bills,
+                        COALESCE(SUM(COALESCE(p.containers,0)),0) AS containers,
+                        COALESCE(SUM((SELECT COALESCE(SUM(b.custody),0)   FROM bawalis b WHERE b.permit_id = p.id)),0) AS custody,
+                        COALESCE(SUM((SELECT COALESCE(SUM(b.remaining),0) FROM bawalis b WHERE b.permit_id = p.id)),0) AS remaining,
+                        COALESCE(SUM((SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.permit_id = p.id AND ".Permit::expenseSql('s').")),0) AS expense,
+                        COALESCE(SUM((SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.permit_id = p.id AND ".Permit::revenueSql('s').")),0) AS fees
+                 FROM permits p $where",
+                $params
+            );
+        }
 
         $this->render('permits/index', [
             'title' => 'سجلات الأذونات والشهادات',
@@ -218,7 +343,14 @@ class PermitController extends Controller
             'rows'  => $rows,
             'total' => $total,
             'stats' => $stats,
+            'page' => $page, 'pages' => $pages,
             'q' => $q, 'type' => $type, 'date' => $date, 'st' => $st,
+            'co' => $co, 'cl' => $cl,
+            'coChips' => $coChips, 'clChips' => $clChips,
+            'grand' => $grand,
+            // اقتراحات أسماء لشريط الإجراءات الجماعية (تغيير الوكيل/الشركة)
+            'agentOptions'   => array_column(PartyMaster::all('agent'), 'name'),
+            'companyOptions' => array_column(PartyMaster::all('company'), 'name'),
         ]);
     }
 
@@ -238,13 +370,20 @@ class PermitController extends Controller
 
     private function form(?array $p): void
     {
+        $formId = $p ? 'permits.edit.' . (int) $p['id'] : 'permits.create';
+        $state = FormState::consume($formId, 'permits');
+        $defaults = $p ?? ['permit_type'=>'sader','permit_no'=>'','permit_date'=>work_date(),'company'=>'','client'=>'','destination'=>'','shipping_co'=>'','agency'=>'','port'=>'','containers'=>0,'container_type'=>'','inspection_rate'=>null,'guarantee_rate'=>null,'note'=>''];
+        if ($state['old']) { $defaults = array_replace($defaults, $state['old']); }
         $this->render('permits/form', [
             'title'   => $p ? 'تعديل بيانات الإصدار' : 'إصدار جديد',
-            'p'       => $p ?? ['permit_type'=>'sader','permit_no'=>'','permit_date'=>work_date(),'company'=>'','client'=>'','destination'=>'','shipping_co'=>'','agency'=>'','port'=>'','containers'=>0,'container_type'=>'','inspection_rate'=>null,'guarantee_rate'=>null,'note'=>''],
+            'p'       => $defaults,
             'action'  => $p ? url('permits/'.$p['id']) : url('permits'),
             'isEdit'  => (bool)$p,
             'lookups' => Lookup::allGrouped(),
             'nameMap' => \App\Models\Party::nameMap(),
+            'errors'  => $state['errors'],
+            'formToken' => $state['token'],
+            'back'    => $state['back'],
         ]);
     }
 
@@ -252,8 +391,9 @@ class PermitController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
-        if ($err = $this->permitNoError(null)) { flash('error', $err); redirect('permits/new'); }
-        if ($err = $this->nameGuardError(['company'=>'company','client'=>'client','destination'=>'destination'])) { flash('error', $err); redirect('permits/new'); }
+        if ($err = $this->permitNoError(null)) { $this->formFailure('permits.create', 'permits/new', $_POST, ['permit_no'=>$err], 'permits'); }
+        if ($err = $this->nameGuardError(['company'=>'company','client'=>'client','destination'=>'destination'])) { $this->formFailure('permits.create', 'permits/new', $_POST, ['_form'=>$err], 'permits'); }
+        $this->claimForm('permits');
         $id = $this->save(null);
         Permit::createMovement($id);   // أول حركة جاهزة فورًا لإضافة البوالص/البنود
         flash('success', 'تم إنشاء الإصدار — أكمِل بياناته من التايم لاين.');
@@ -264,13 +404,17 @@ class PermitController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
-        if ($err = $this->permitNoError((int)$id)) { flash('error', $err); redirect('permits/'.$id.'/edit'); }
-        if ($err = $this->nameGuardError(['company'=>'company','client'=>'client','destination'=>'destination'])) { flash('error', $err); redirect('permits/'.$id.'/edit'); }
+        $manageId = 'permits.manage.' . (int) $id;
+        $formId = ($_POST['_form_id'] ?? '') === $manageId ? $manageId : 'permits.edit.' . (int) $id;
+        $formPath = $formId === $manageId ? 'permits/' . (int) $id . '/manage#stage-data' : 'permits/' . (int) $id . '/edit';
+        if ($err = $this->permitNoError((int)$id)) { $this->formFailure($formId, $formPath, $_POST, ['permit_no'=>$err], 'permits'); }
+        if ($err = $this->nameGuardError(['company'=>'company','client'=>'client','destination'=>'destination'])) { $this->formFailure($formId, $formPath, $_POST, ['_form'=>$err], 'permits'); }
+        $this->claimForm('permits/' . (int) $id . '/manage#stage-data');
         try {
             $this->save((int)$id);
             flash('success', 'تم حفظ بيانات الإصدار.');
         } catch (\Throwable $e) {
-            flash('error',$e->getMessage());
+            $this->formFailure($formId, $formPath, $_POST, ['_form'=>$e->getMessage()], 'permits');
         }
         redirect('permits/'.$id.'/manage#stage-data');
     }
@@ -515,11 +659,14 @@ class PermitController extends Controller
     {
         $this->requireAuth();
         $data = $this->gather((int)$id);
+        $state = FormState::consume('permits.manage.' . (int) $id, 'permits/' . (int) $id . '/manage#stage-data');
+        if ($state['old']) { $data['p'] = array_replace($data['p'], $state['old']); }
         $data['title']   = 'إدارة: ' . Permit::typeLabel($data['p']['permit_type']) . ' — ' . ($data['p']['permit_no'] ?: '#'.(int)$id);
         $data['nameMap'] = \App\Models\Party::nameMap();
         $data['carMap']  = \App\Models\Party::carOwnerMap();
         $data['declOwners'] = self::declarationOwners();
         $data['receiptMoveTargets'] = Permit::receiptMoveTargets((int)$id);
+        $data['permitFormState'] = $state;
         $this->render('permits/manage', $data);
     }
 
@@ -593,6 +740,8 @@ class PermitController extends Controller
         $agentMaster = !empty($p['agent_id'])
             ? PartyMaster::find('agent', (int)$p['agent_id'])
             : PartyMaster::resolve('agent', (string)($p['client'] ?? ''));
+        $state = FormState::consume('permits.invoice.' . $pid, 'permits/' . $pid);
+        $voidState = FormState::consume('invoices.void', 'permits/' . $pid . '/invoice');
 
         $this->render('permits/invoice_form', [
             'title'         => 'إصدار فاتورة — ' . Permit::typeLabel($p['permit_type']) . ' ' . ($p['permit_no'] ?: '#'.$pid),
@@ -606,6 +755,8 @@ class PermitController extends Controller
             'currency'      => App::setting('currency', 'ج.م'),
             'invoices'      => PermitInvoice::forPermit($pid),
             'paymentTermsDays' => (int)($agentMaster['payment_terms_days'] ?? 30),
+            'formState'     => $state,
+            'voidState'     => $voidState,
         ]);
     }
 
@@ -626,9 +777,16 @@ class PermitController extends Controller
         // رقم مسلسل خاص بالعميل (اختياري) — يجب ألا يتكرّر
         $serial = trim($_POST['serial_no'] ?? '');
         if ($serial !== '' && PermitInvoice::serialExists($serial)) {
-            flash('error', 'الرقم المسلسل «' . $serial . '» مستخدَم من قبل — اختر رقماً آخر.');
-            redirect('permits/'.$pid.'/invoice');
+            $this->formFailure('permits.invoice.' . $pid, 'permits/'.$pid.'/invoice', $_POST,
+                ['serial_no' => 'الرقم المسلسل «' . $serial . '» مستخدَم من قبل — اختر رقماً آخر.'],
+                'permits/' . $pid);
         }
+
+        if (!self::invoiceRowsFromPost()) {
+            $this->formFailure('permits.invoice.' . $pid, 'permits/'.$pid.'/invoice', $_POST,
+                ['items' => 'أضف بندًا واحدًا على الأقل بقيمة أو بيان قبل الإصدار.'], 'permits/' . $pid);
+        }
+        $this->claimForm('permits/' . $pid . '/invoice');
 
         $pdo = Database::conn();
         $pdo->beginTransaction();
@@ -701,20 +859,24 @@ class PermitController extends Controller
 
         $invId = PermitInvoice::create(self::invoicePayload($p, $items, $agency, $port));
 
-        // إغلاق الإذن اختيارياً مع إصدار الفاتورة
+        // قرار المالك: أي إذن يصدر له مستند مالي يُغلَق تلقائياً — لا خيار ولا استثناء.
         $msg = 'تم إصدار المستند وحفظه ✓';
-        if (($_POST['close_permit'] ?? '') === '1' && ($p['status'] ?? 'open') !== 'closed') {
+        if (($p['status'] ?? 'open') !== 'closed') {
             Database::exec('UPDATE permits SET status = ? WHERE id = ?', ['closed', $pid]);
-            $msg .= ' وتم إغلاق الإذن.';
+            Audit::log('update', 'permits', $pid, ['status' => $p['status'] ?? 'open'], ['status' => 'closed'],
+                'إغلاق تلقائي للإذن عند إصدار مستند مالي — ' . Permit::noLabel($p['permit_type']) . ' ' . ($p['permit_no'] ?: '#'.$pid),
+                ['permit_id' => $pid, 'invoice_id' => $invId]);
+            $msg .= ' وتم إغلاق الإذن تلقائياً.';
         }
         $pdo->commit();
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
             $duplicate = (string)$e->getCode() === '23000';
-            flash('error', $duplicate
-                ? 'تعذّر الإصدار لأن رقماً فريداً استُخدم بالتزامن. أعد تحميل الصفحة وراجع رقم المسلسل.'
-                : 'تعذّر إصدار المستند، ولم تُحفظ أي تعديلات جزئية. حاول مرة أخرى.');
-            redirect('permits/'.$pid.'/invoice');
+            $this->formFailure('permits.invoice.' . $pid, 'permits/'.$pid.'/invoice', $_POST,
+                ['_form' => $duplicate
+                    ? 'تعذّر الإصدار لأن رقماً فريداً استُخدم بالتزامن. راجع رقم المسلسل.'
+                    : 'تعذّر إصدار المستند، ولم تُحفظ أي تعديلات جزئية. حاول مرة أخرى.'],
+                'permits/' . $pid);
         }
         flash('success', $msg);
         redirect('permits/invoice/'.$invId);
@@ -732,6 +894,17 @@ class PermitController extends Controller
         $pid = (int)$id;
         $p = Permit::find($pid);
         if (!$p) { redirect('permits'); }
+
+        $serial = trim($_POST['serial_no'] ?? '');
+        if ($serial !== '' && PermitInvoice::serialExists($serial)) {
+            $this->formFailure('permits.invoice.' . $pid, 'permits/'.$pid.'/invoice', $_POST,
+                ['serial_no' => 'الرقم المسلسل «' . $serial . '» مستخدَم من قبل — اختر رقماً آخر.'],
+                'permits/' . $pid);
+        }
+        if (!self::invoiceRowsFromPost()) {
+            $this->formFailure('permits.invoice.' . $pid, 'permits/'.$pid.'/invoice', $_POST,
+                ['items' => 'أضف بندًا واحدًا على الأقل بقيمة أو بيان قبل المعاينة.'], 'permits/' . $pid);
+        }
 
         // نفس تحليل البنود المستخدَم في الإصدار، لكن بلا أي كتابة (نبني البنود فقط)
         $items = [];
@@ -833,6 +1006,15 @@ class PermitController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $inv = PermitInvoice::find((int) $invId);
+        $pid = (int) ($inv['permit_id'] ?? 0);
+        $fallback = $pid ? 'permits/' . $pid . '/invoice' : 'invoices';
+        $back = safe_back($fallback, $_POST['_back'] ?? ($_POST['back'] ?? null));
+        if (trim($_POST['reason'] ?? '') === '') {
+            $this->formFailure('invoices.void', $back, $_POST,
+                ['reason' => 'اكتب سبب إلغاء المستند.'], $fallback);
+        }
+        $this->claimForm($back);
         try {
             $pid = PermitInvoice::void(
                 (int)$invId,
@@ -845,8 +1027,7 @@ class PermitController extends Controller
             flash('error', $e->getMessage());
         }
         // العودة للمكان الذي جاء منه الحذف (back آمن داخلي)، وإلا شاشة فاتورة الإذن.
-        $back = self::safeBack($_POST['back'] ?? '');
-        redirect($back ?: ($pid ? 'permits/'.$pid.'/invoice' : 'invoices'));
+        redirect($back);
     }
 
     /** مسار داخلي آمن للعودة إليه بعد إجراء (يمنع إعادة التوجيه الخارجي). */
@@ -868,6 +1049,7 @@ class PermitController extends Controller
         $permit = Permit::find($pid);
         if (!$permit) { redirect('permits'); }
         [$ctCount, $ctType] = $this->movementContainerInput();
+        $this->claimForm('permits/'.$pid.'/manage');
         $mid = Permit::createMovement($pid, trim($_POST['note'] ?? '') ?: null, $ctCount, $ctType);
         if ($ctType !== null) { Lookup::add('container_type', $ctType); }
         if ($this->wantsJson()) { $this->ajaxMovement($mid, 'تمت إضافة حركة جديدة.'); return; }
@@ -884,6 +1066,7 @@ class PermitController extends Controller
         if (!$mv) { redirect('permits'); }
         $pid = (int)$mv['permit_id'];
         [$ctCount, $ctType] = $this->movementContainerInput();
+        $this->claimForm('permits/'.$pid.'/manage#movement-'.(int)$mid);
         Permit::updateMovement((int)$mid, trim($_POST['note'] ?? '') ?: null, $ctCount, $ctType);
         if ($ctType !== null) { Lookup::add('container_type', $ctType); }
         if ($this->wantsJson()) { $this->ajaxMovement((int)$mid, 'تم حفظ بيانات الحركة.'); return; }
@@ -923,6 +1106,7 @@ class PermitController extends Controller
         $maxClosed = Closing::lastClosedDate();
         if ($maxClosed !== null) {
             $expSql = Permit::expenseSql('s');
+            // v42: بنود عهدة المناديب بقت تدخل التقفيل، فحذفها بيغيّر رصيدًا مقفولاً — امنعه زي أي بند.
             $blocked = (int) Database::scalar(
                 "SELECT COUNT(*) FROM permit_stages s
                  WHERE s.movement_id = ? AND s.is_visa = 0 AND $expSql AND s.entry_date <= ?",
@@ -935,9 +1119,13 @@ class PermitController extends Controller
             }
         }
 
+        $this->claimForm('permits/'.$pid.'/manage#movement-'.(int)$mid);
+
         // احذف مرفقات بنود الحركة
-        foreach (Database::all('SELECT attachment FROM permit_stages WHERE movement_id = ?', [(int)$mid]) as $s) {
+        foreach (Database::all('SELECT id, attachment FROM permit_stages WHERE movement_id = ?', [(int)$mid]) as $s) {
             $this->deleteFile($s['attachment']);
+            // فكّ ارتباط أي اعتماد مندوب قبل الحذف — السجل يفضل محفوظًا (قرار المالك)
+            DeletionPolicy::detachStage((int) $s['id']);
         }
         Database::exec('DELETE FROM permit_stages WHERE movement_id = ?', [(int)$mid]);
 
@@ -961,6 +1149,7 @@ class PermitController extends Controller
 
         $key = trim($_POST['stage_key'] ?? '');
         if (!in_array($key, Permit::stageKeys(), true)) {
+            if ($this->wantsJson()) { $this->jsonFormFailure(['stage_key' => 'مرحلة غير معروفة.']); }
             flash('error', 'مرحلة غير معروفة.');
             redirect('permits/'.$pid.'/manage');
         }
@@ -982,7 +1171,7 @@ class PermitController extends Controller
                 if ($oldEntry) { $lockErr = Closing::guard($oldEntry); }
             }
             if ($lockErr) {
-                if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$lockErr]); return; }
+                if ($this->wantsJson()) { $this->jsonFormFailure(['entry_date' => $lockErr]); }
                 flash('error', $lockErr);
                 redirect('permits/'.$pid.'/manage');
             }
@@ -990,6 +1179,7 @@ class PermitController extends Controller
 
         // «لا يوجد»: تعليم المرحلة كمكتملة بلا بند (صف علامة بمبلغ 0 وحالة none)
         if (!empty($_POST['mark_none'])) {
+            $this->claimForm('permits/'.$pid.'/manage');
             // امسح أي علامة سابقة لنفس المرحلة/الحركة ثم أدرج واحدة (منع التكرار)
             if ($movementId) {
                 Database::exec("DELETE FROM permit_stages WHERE permit_id=? AND movement_id=? AND stage_key=? AND status='none'", [$pid, $movementId, $key]);
@@ -1045,8 +1235,10 @@ class PermitController extends Controller
             'visa_card_id' => (!empty($_POST['is_visa']) && !empty($_POST['visa_card_id'])) ? (int)$_POST['visa_card_id'] : null,
         ];
 
+        $this->claimForm('permits/'.$pid.'/manage'.($movementId ? '#movement-'.$movementId : '#stage-'.$key));
+
         // رفع مرفق إن وُجد
-        $attach = $this->handleUpload('attachment');
+        $attach = $this->handleUpload('attachment', $pid);
 
         $beforeStage = $stageId > 0
             ? Database::row('SELECT * FROM permit_stages WHERE id = ? AND permit_id = ?', [$stageId, $pid])
@@ -1113,6 +1305,9 @@ class PermitController extends Controller
         $this->requireCsrf();
         $row = Database::row('SELECT permit_id, movement_id, attachment, entry_date, stage_key, direction, is_visa FROM permit_stages WHERE id = ?', [(int)$sid]);
         if ($row) {
+            // بند ناتج عن اعتماد مندوب: الأدمن له حرية الحذف (قرار المالك) — بنفكّ الربط
+            // وسجل الاعتماد نفسه بيفضل محفوظ في `rep_submissions` بحالته ومعاه ملاحظة الحذف.
+            $repSubmission = DeletionPolicy::stageSubmission((int) $sid);
             // القفل الصارم: لا حذف لبند مصروف نقدي تاريخه في يوم متقفل (يغيّر رقمًا مثبّتًا)
             $affects = ((int)$row['is_visa'] === 0)
                 && (in_array($row['stage_key'], Permit::expenseKeys(), true)
@@ -1122,8 +1317,10 @@ class PermitController extends Controller
                 flash('error', $err);
                 redirect('permits/'.(int)$row['permit_id'].'/manage');
             }
-            $this->deleteFile($row['attachment']);
+            $this->claimForm('permits/'.(int)$row['permit_id'].'/manage');
+            if ($repSubmission) { DeletionPolicy::detachStage((int) $sid); }
             Database::exec('DELETE FROM permit_stages WHERE id = ?', [(int)$sid]);
+            $this->deleteFile($row['attachment']);
             $mvId = $row['movement_id'] ? (int)$row['movement_id'] : null;
             if ($this->wantsJson()) {
                 if ($mvId) { $this->ajaxMovement($mvId, 'تم حذف البند.'); } else { $this->json(['ok'=>true, 'flash'=>'تم حذف البند.', 'reload'=>true]); }
@@ -1153,16 +1350,21 @@ class PermitController extends Controller
                 [$billNo]
             );
             if ($bill) {
+                $this->claimForm('permits/'.$pid.'/manage'.($movementId ? '#movement-'.$movementId : '#stage-bills'));
                 Database::exec('UPDATE bawalis SET permit_id = ?, movement_id = ? WHERE id = ?', [$pid, $movementId, (int)$bill['id']]);
                 $ok = true; $msg = 'تم ربط البوليصة ' . $billNo . ' بالحركة.';
                 flash('success', $msg);
             } else {
                 $msg = 'لم يتم العثور على بوليصة بالرقم ' . $billNo . '.';
-                flash('error', $msg);
+                if (!$this->wantsJson()) { flash('error', $msg); }
             }
+        } else {
+            $msg = 'اكتب رقم البوليصة المراد ربطها.';
         }
         if ($this->wantsJson()) {
-            if ($ok && $movementId) { $this->ajaxMovement($movementId, $msg); } else { $this->json(['ok'=>$ok, 'flash'=>$msg]); }
+            if ($ok && $movementId) { $this->ajaxMovement($movementId, $msg); return; }
+            if (!$ok) { $this->jsonFormFailure(['bill_number'=>$msg]); }
+            $this->json(['ok'=>true, 'flash'=>$msg, 'reload'=>true]);
             return;
         }
         redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-bills'));
@@ -1194,6 +1396,7 @@ class PermitController extends Controller
                 flash('error', $err);
                 redirect('permits/'.$pid.'/manage');
             }
+            $this->claimForm('permits/'.$pid.'/manage');
             Database::exec('DELETE FROM bawalis WHERE id = ?', [$billId]);   // bill_payments تُحذف بالـ CASCADE
             $mvId = $bill['movement_id'] ? (int)$bill['movement_id'] : null;
             if ($this->wantsJson()) {
@@ -1220,14 +1423,14 @@ class PermitController extends Controller
         $movementId = (int)($_POST['movement_id'] ?? 0) ?: null;
         if ($movementId && !Database::scalar('SELECT id FROM permit_movements WHERE id=? AND permit_id=?', [$movementId, $pid])) {
             $err = 'الحركة المختارة لا تتبع هذا الإذن. أعد تحميل الصفحة وحاول مرة أخرى.';
-            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+            if ($this->wantsJson()) { $this->jsonFormFailure(['movement_id'=>$err]); }
             flash('error', $err); redirect('permits/'.$pid.'/manage#stage-bills');
         }
 
         // القفل الصارم: لا عهدة سائق ببوليصة تاريخها في يوم متقفل (تغيّر عهد يوم مثبّت)
         $billDate = ($_POST['bill_date'] ?? '') ?: work_date();
         if ((float)($_POST['custody'] ?? 0) > 0 && ($err = Closing::guard($billDate))) {
-            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+            if ($this->wantsJson()) { $this->jsonFormFailure(['bill_date'=>$err]); }
             flash('error', $err);
             redirect('permits/'.$pid.'/manage'.($movementId?'#movement-'.$movementId:'#stage-bills'));
         }
@@ -1236,14 +1439,14 @@ class PermitController extends Controller
         $billNo = trim($_POST['bill_number'] ?? '');
         if ($billNo !== '' && Bill::numberExists($billNo)) {
             $err = 'رقم البوليصة «'.$billNo.'» مُستخدَم من قبل — لا يمكن تكراره. اختر رقمًا مختلفًا.';
-            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+            if ($this->wantsJson()) { $this->jsonFormFailure(['bill_number'=>$err]); }
             flash('error', $err);
             redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-bills'));
         }
 
         // حوكمة الأسماء: توحيد التهجئة تلقائيًا + إيقاف الأسماء القريبة غير المؤكَّدة
         if ($err = $this->nameGuardError(['declaration_owner'=>'owner','driver'=>'driver','car_owner'=>'car_owner'])) {
-            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+            if ($this->wantsJson()) { $this->jsonFormFailure(['_form'=>$err]); }
             flash('error', $err);
             redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-bills'));
         }
@@ -1257,7 +1460,7 @@ class PermitController extends Controller
                 $whereLabel = $capacity['scope'] === 'movement' ? 'الحركة' : 'إجمالي الإذن';
                 $err = 'عدد الحاويات ('.$newCount.') يتجاوز المتبقّي من '.$whereLabel.' (المتبقّي '.
                     $capacity['left'].' من '.$capacity['total'].'). لم تُحفظ البوليصة.';
-                if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return; }
+                if ($this->wantsJson()) { $this->jsonFormFailure(['container_count'=>$err]); }
                 flash('error', $err);
                 redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-bills'));
             }
@@ -1269,6 +1472,7 @@ class PermitController extends Controller
         $discDefault = (float)($discField['default'] ?? 0);
         $discount    = ($_POST['discount'] ?? '') === '' ? $discDefault : (float)$_POST['discount'];
 
+        $this->claimForm('permits/'.$pid.'/manage'.($movementId?'#movement-'.$movementId:'#stage-bills'));
         $ownerMaster = \App\Models\PartyMaster::ensure('owner', trim($_POST['declaration_owner'] ?? ''));
         $data = [
             'permit_id'         => $pid,
@@ -1349,8 +1553,8 @@ class PermitController extends Controller
         $anchor = $movementId ? '#movement-'.$movementId : '#stage-bills';
 
         // مساعد إظهار خطأ (JSON أو flash+redirect) — يُرجِع true دائمًا لإيقاف المتابعة
-        $fail = function (string $err) use ($pid, $anchor): bool {
-            if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>$err]); return true; }
+        $fail = function (string $err, string $field = '_form') use ($pid, $anchor): bool {
+            if ($this->wantsJson()) { $this->jsonFormFailure([$field=>$err]); }
             flash('error', $err);
             redirect('permits/'.$pid.'/manage'.$anchor);
             return true;
@@ -1360,20 +1564,20 @@ class PermitController extends Controller
         $newCustody = (float)($_POST['custody'] ?? 0);
 
         // (1) القفل الصارم: لا كتابة على يوم متقفل (التاريخ الجديد أو القديم)
-        if ($err = Closing::guard($newDate))        { if ($fail($err)) return; }
-        if ($err = Closing::guard($bill['bill_date'])) { if ($fail($err)) return; }
+        if ($err = Closing::guard($newDate))        { if ($fail($err, 'bill_date')) return; }
+        if ($err = Closing::guard($bill['bill_date'])) { if ($fail($err, 'bill_date')) return; }
 
         // (2) منع تكرار رقم البوليصة (باستثناء نفسها)
         $billNo = trim($_POST['bill_number'] ?? '');
         if ($billNo !== '' && Bill::numberExists($billNo, $billId)) {
-            if ($fail('رقم البوليصة «'.$billNo.'» مُستخدَم من قبل — لا يمكن تكراره. اختر رقمًا مختلفًا.')) return;
+            if ($fail('رقم البوليصة «'.$billNo.'» مُستخدَم من قبل — لا يمكن تكراره. اختر رقمًا مختلفًا.', 'bill_number')) return;
         }
 
         // (3) عهدة السائق لا تتجاوز رصيد العهدة المتاح (باستثناء خصم هذه البوليصة)
         if ($newCustody > 0) {
             $available = \App\Models\Custody::availableForBill($billId);
             if ($newCustody > $available + 0.005) {
-                if ($fail('عهدة السائق ('.number_format($newCustody,0).') تتجاوز رصيد العهدة المتاح ('.number_format($available,0).').')) return;
+                if ($fail('عهدة السائق ('.number_format($newCustody,0).') تتجاوز رصيد العهدة المتاح ('.number_format($available,0).').', 'custody')) return;
             }
         }
 
@@ -1384,7 +1588,7 @@ class PermitController extends Controller
             if ($capacity['allocated'] + $newCount > $capacity['total']) {
                 $whereLabel = $capacity['scope'] === 'movement' ? 'الحركة' : 'إجمالي الإذن';
                 if ($fail('عدد الحاويات ('.$newCount.') يتجاوز المتبقّي من '.$whereLabel.' (المتبقّي '.
-                    $capacity['left'].' من '.$capacity['total'].').')) return;
+                    $capacity['left'].' من '.$capacity['total'].').', 'container_count')) return;
             }
         }
 
@@ -1394,6 +1598,7 @@ class PermitController extends Controller
         }
 
         $discount = ($_POST['discount'] ?? '') === '' ? (float)$bill['discount'] : (float)$_POST['discount'];
+        $this->claimForm('permits/'.$pid.'/manage'.$anchor);
         $ownerMaster = \App\Models\PartyMaster::ensure('owner', trim($_POST['declaration_owner'] ?? ''));
         $data = [
             'bill_date'         => $newDate,
@@ -1513,6 +1718,11 @@ class PermitController extends Controller
         $p = Permit::find($pid);
         if (!$p) { redirect('permits'); }
         $new = ($p['status'] ?? 'open') === 'closed' ? 'open' : 'closed';
+        // أي إذن له مستند مالي غير ملغى يفضل مقفولاً — لإعادة فتحه ألغِ المستند أولاً.
+        if ($new === 'open' && PermitInvoice::hasActive($pid)) {
+            flash('error', 'لا يمكن إعادة فتح الإذن لأن له مستنداً مالياً صادراً. ألغِ المستند أولاً ثم أعد الفتح.');
+            redirect('permits/'.$pid);
+        }
         Database::exec('UPDATE permits SET status = ? WHERE id = ?', [$new, $pid]);
         flash('success', $new === 'closed' ? 'تم إتمام الإذن وإغلاقه ✓' : 'تم إعادة فتح الإذن.');
         redirect('permits/'.$pid);   // صفحة العرض
@@ -1523,16 +1733,279 @@ class PermitController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $pid = (int)$id;
-        if ((int)Database::scalar("SELECT COUNT(*) FROM permit_invoices WHERE permit_id=? AND status<>'void'",[$pid]) > 0) {
+        $blockers = DeletionPolicy::permit($pid);
+        if ($blockers['invoices'] > 0) {
             flash('error','لا يمكن حذف إذن له مستندات مالية صادرة. ألغِ المستندات أولاً أو اترك الإذن محفوظاً.');
             redirect('permits/'.$pid);
         }
-        // احذف مرفقات المراحل أولاً
-        foreach (Permit::stages($pid) as $s) { $this->deleteFile($s['attachment']); }
-        Database::exec('UPDATE bawalis SET permit_id = NULL WHERE permit_id = ?', [$pid]);
-        Database::exec('DELETE FROM permits WHERE id = ?', [$pid]);   // permit_stages تُحذف بالـ CASCADE
+        if ($blockers['submissions'] > 0) {
+            flash('error','لا يمكن حذف الإذن لأن له سجل إدخال من مندوب. أغلق الإذن واترك السجل محفوظًا.');
+            redirect('permits/'.$pid);
+        }
+        $permit = Permit::find($pid);
+        if (!$permit) { redirect('permits'); }
+        $files = array_column(Permit::stages($pid), 'attachment');
+        $pdo = Database::conn();
+        try {
+            $pdo->beginTransaction();
+            Database::row('SELECT id FROM permits WHERE id=? FOR UPDATE', [$pid]);
+            Database::exec('DELETE FROM permit_assignments WHERE permit_id=?', [$pid]);
+            Database::exec('UPDATE bawalis SET permit_id = NULL WHERE permit_id = ?', [$pid]);
+            Database::exec('DELETE FROM permits WHERE id = ?', [$pid]);
+            Audit::log('delete', 'permits', $pid, $permit, null, 'حذف إذن بلا مستندات أو إدخالات مناديب', [], false);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            flash('error', 'لم يُحذف الإذن: ' . $e->getMessage());
+            redirect('permits/'.$pid);
+        }
+        foreach ($files as $file) { $this->deleteFile($file); }
         flash('success', 'تم حذف الإصدار.');
         redirect('permits');
+    }
+
+    // ------------------------------------------------------------------
+    //  الإجراءات الجماعية على الأذونات المحدَّدة (وضع السجلات)
+    //  نقطة دخول واحدة POST /permits/bulk تتفرّع على op — نفس نمط بوالص bulk.
+    // ------------------------------------------------------------------
+
+    public function bulk(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $op  = trim((string)($_POST['op'] ?? ''));
+        $ids = $this->bulkIds((array)($_POST['ids'] ?? []));
+        if (!$ids) {
+            flash('error', 'حدّد إذنًا واحدًا على الأقل (أو العدد أكبر من المسموح).');
+            redirect($this->bulkBack());
+        }
+        switch ($op) {
+            case 'close':  $this->bulkStatus($ids, 'closed'); return;
+            case 'reopen': $this->bulkStatus($ids, 'open');   return;
+            case 'delete': $this->bulkDelete($ids);           return;
+            case 'party':  $this->bulkParty($ids);            return;
+            case 'csv':    $this->bulkCsv($ids);              return;
+        }
+        flash('error', 'إجراء غير معروف.');
+        redirect($this->bulkBack());
+    }
+
+    /** إغلاق/إعادة فتح دفعة واحدة — نفس منطق close() لكن بلا قلب حالة كل إذن على حدة. */
+    private function bulkStatus(array $ids, string $status): void
+    {
+        $ph    = implode(',', array_fill(0, count($ids), '?'));
+        $found = Database::all("SELECT id,status,permit_no FROM permits WHERE id IN ($ph)", $ids);
+        if (!$found) { flash('error', 'لم يُعثر على الأذونات المحدَّدة.'); redirect($this->bulkBack()); }
+
+        $changed = array_values(array_filter($found, fn($p) => ($p['status'] ?? 'open') !== $status));
+        // إعادة الفتح الجماعية تتخطّى أي إذن له مستند مالي غير ملغى (نفس قاعدة close()).
+        $blocked = 0;
+        if ($status === 'open' && $changed) {
+            $invoiced = PermitInvoice::permitsWithActive(array_map(fn($p) => (int)$p['id'], $changed));
+            if ($invoiced) {
+                $before  = count($changed);
+                $changed = array_values(array_filter($changed, fn($p) => !in_array((int)$p['id'], $invoiced, true)));
+                $blocked = $before - count($changed);
+            }
+        }
+        if (!$changed) {
+            if ($blocked) {
+                flash('error', 'لم تُفتح أي أذونات: ' . $blocked . ' منها له مستند مالي صادر. ألغِ المستند أولاً.');
+                redirect($this->bulkBack());
+            }
+            flash('success', 'كل الأذونات المحدَّدة بالفعل ' . ($status === 'closed' ? 'مقفولة.' : 'مفتوحة.'));
+            redirect($this->bulkBack());
+        }
+        $cids = array_map(fn($p) => (int)$p['id'], $changed);
+        $cph  = implode(',', array_fill(0, count($cids), '?'));
+
+        $pdo = Database::conn();
+        try {
+            $pdo->beginTransaction();
+            Database::exec("UPDATE permits SET status = ? WHERE id IN ($cph)", array_merge([$status], $cids));
+            Audit::log('bulk_update', 'permits', null, ['before' => $changed], ['status' => $status],
+                $status === 'closed' ? 'إغلاق مجموعة أذونات' : 'إعادة فتح مجموعة أذونات', ['ids' => $cids]);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            flash('error', 'لم يتم تغيير أي إذن: ' . $e->getMessage());
+            redirect($this->bulkBack());
+        }
+
+        $skipped = count($found) - count($changed);
+        flash('success', ($status === 'closed' ? 'تم إتمام وإغلاق ' : 'تمت إعادة فتح ') . count($cids) . ' إذن ✓'
+            . ($skipped ? ' (تم تخطّي ' . $skipped . ' كانت بالفعل بنفس الحالة)' : '')
+            . ($blocked ? ' — وتم منع فتح ' . $blocked . ' لأن له مستندات مالية صادرة.' : ''));
+        redirect($this->bulkBack());
+    }
+
+    /**
+     * حذف جماعي بنفس حماية destroy(): أي إذن له مستند مالي صادر (غير ملغى) يُتخطّى ويُبلَّغ.
+     * الحذف نفسه transaction واحدة، والمرفقات تُمسح بعد نجاحها فقط (لا نفقد ملفات على rollback).
+     */
+    private function bulkDelete(array $ids): void
+    {
+        $ph      = implode(',', array_fill(0, count($ids), '?'));
+        $found   = Database::all("SELECT * FROM permits WHERE id IN ($ph)", $ids);
+        if (!$found) { flash('error', 'لم يُعثر على الأذونات المحدَّدة.'); redirect($this->bulkBack()); }
+
+        $blockedInvoices = array_column(Database::all(
+            "SELECT DISTINCT permit_id FROM permit_invoices WHERE permit_id IN ($ph) AND status <> 'void'", $ids
+        ), 'permit_id');
+        $blockedHistory = array_column(Database::all(
+            "SELECT DISTINCT permit_id FROM rep_submissions WHERE permit_id IN ($ph)", $ids
+        ), 'permit_id');
+        $blocked = array_values(array_unique(array_map('intval', array_merge($blockedInvoices, $blockedHistory))));
+
+        $target = array_values(array_filter($found, fn($p) => !in_array((int)$p['id'], $blocked, true)));
+        if (!$target) {
+            flash('error', 'كل الأذونات المحدَّدة لها مستندات مالية صادرة — ألغِ المستندات أولاً أو اترك الأذونات محفوظة.');
+            redirect($this->bulkBack());
+        }
+        $tids  = array_map(fn($p) => (int)$p['id'], $target);
+        $tph   = implode(',', array_fill(0, count($tids), '?'));
+
+        // مسارات المرفقات تُقرأ قبل الحذف (permit_stages تُحذف بالـ CASCADE)
+        $files = array_column(Database::all(
+            "SELECT attachment FROM permit_stages WHERE permit_id IN ($tph) AND attachment IS NOT NULL AND attachment <> ''", $tids
+        ), 'attachment');
+
+        $pdo = Database::conn();
+        try {
+            $pdo->beginTransaction();
+            Database::exec("DELETE FROM permit_assignments WHERE permit_id IN ($tph)", $tids);
+            Database::exec("UPDATE bawalis SET permit_id = NULL WHERE permit_id IN ($tph)", $tids);
+            Database::exec("DELETE FROM permits WHERE id IN ($tph)", $tids);
+            Audit::log('bulk_delete', 'permits', null, ['permits' => $target], null,
+                'حذف مجموعة أذونات', ['ids' => $tids], false);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            flash('error', 'لم يُحذف أي إذن: ' . $e->getMessage());
+            redirect($this->bulkBack());
+        }
+
+        foreach ($files as $f) { $this->deleteFile($f); }
+        flash('success', 'تم حذف ' . count($tids) . ' إصدار.'
+            . ($blocked ? ' وتم تخطّي ' . count($blocked) . ' لها مستندات مالية أو سجل مناديب محفوظ.' : ''));
+        redirect($this->bulkBack());
+    }
+
+    /** توحيد الوكيل و/أو الشركة لمجموعة أذونات — يمرّ على حوكمة الأسماء زي فورم الإذن. */
+    private function bulkParty(array $ids): void
+    {
+        $client  = trim((string)($_POST['client'] ?? ''));
+        $company = trim((string)($_POST['company'] ?? ''));
+        if ($client === '' && $company === '') {
+            flash('error', 'اكتب الوكيل أو الشركة (أو الاتنين) قبل الحفظ.');
+            redirect($this->bulkBack());
+        }
+        $map = [];
+        if ($client !== '')  { $map['client']  = 'client'; }
+        if ($company !== '') { $map['company'] = 'company'; }
+        if ($err = $this->nameGuardError($map)) { flash('error', $err); redirect($this->bulkBack()); }
+        // nameGuardError وحّد التهجئة في $_POST — أعِد القراءة منها
+        $client  = trim((string)($_POST['client'] ?? ''));
+        $company = trim((string)($_POST['company'] ?? ''));
+
+        $ph    = implode(',', array_fill(0, count($ids), '?'));
+        $found = Database::all("SELECT id,permit_no,client,agent_id,company,company_id FROM permits WHERE id IN ($ph)", $ids);
+        if (!$found) { flash('error', 'لم يُعثر على الأذونات المحدَّدة.'); redirect($this->bulkBack()); }
+
+        $pdo = Database::conn();
+        try {
+            $pdo->beginTransaction();
+            $sets = []; $params = []; $labels = [];
+            if ($client !== '') {
+                $agent = PartyMaster::ensure('agent', $client);
+                $sets[] = 'client = ?'; $sets[] = 'agent_id = ?';
+                $params[] = $agent['name'] ?? null; $params[] = $agent['id'] ?? null;
+                $labels[] = 'الوكيل «' . ($agent['name'] ?? $client) . '»';
+            }
+            if ($company !== '') {
+                $co = PartyMaster::ensure('company', $company);
+                $sets[] = 'company = ?'; $sets[] = 'company_id = ?';
+                $params[] = $co['name'] ?? null; $params[] = $co['id'] ?? null;
+                $labels[] = 'الشركة «' . ($co['name'] ?? $company) . '»';
+            }
+            Database::exec('UPDATE permits SET ' . implode(', ', $sets) . " WHERE id IN ($ph)",
+                array_merge($params, $ids));
+            Audit::log('bulk_update', 'permits', null, ['before' => $found],
+                ['client' => $client ?: null, 'company' => $company ?: null],
+                'تغيير الوكيل/الشركة لمجموعة أذونات', ['ids' => $ids]);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            flash('error', 'لم يتم تعديل أي إذن: ' . $e->getMessage());
+            redirect($this->bulkBack());
+        }
+
+        flash('success', 'تم ضبط ' . implode(' و', $labels) . ' لعدد ' . count($found) . ' إذن ✓');
+        redirect($this->bulkBack());
+    }
+
+    /** تصدير المحدَّد CSV بنفس أعمدة جدول السجلات (أرقام خام بلا تنسيق لتفتح في إكسل). */
+    private function bulkCsv(array $ids): void
+    {
+        $ph   = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::all(
+            "SELECT p.*,
+                    (SELECT COUNT(*) FROM bawalis b WHERE b.permit_id = p.id) AS bills,
+                    (SELECT COALESCE(SUM(b.container_count),0) FROM bawalis b WHERE b.permit_id = p.id) AS containers,
+                    (SELECT COALESCE(SUM(b.custody),0) FROM bawalis b WHERE b.permit_id = p.id) AS custody,
+                    (SELECT COALESCE(SUM(b.remaining),0) FROM bawalis b WHERE b.permit_id = p.id) AS remaining,
+                    (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.permit_id = p.id AND ".Permit::expenseSql('s').") AS expense,
+                    (SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s WHERE s.permit_id = p.id AND ".Permit::revenueSql('s').") AS fees
+             FROM permits p WHERE p.id IN ($ph)
+             ORDER BY p.permit_date DESC, p.id DESC",
+            $ids
+        );
+        if (!$rows) { flash('error', 'لم يُعثر على الأذونات المحدَّدة.'); redirect($this->bulkBack()); }
+
+        while (ob_get_level() > 0) { ob_end_clean(); }   // لا تسمح لأي مخرَج سابق بإفساد الملف
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="permits-' . date('Ymd-His') . '.csv"');
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF");   // BOM — إكسل يقرأ العربي صح
+        fputcsv($out, ['النوع','الرقم','التاريخ','لصالح شركة','الوكيل','الوجهة','بوالص','حاويات','التصنيف',
+                       'العهدة','مصروفات','محصّل إضافي','متبقٍ البوالص','الحالة']);
+        foreach ($rows as $r) {
+            fputcsv($out, [
+                Permit::typeLabel($r['permit_type'] ?? ''),
+                $r['permit_no'] ?: '#'.(int)$r['id'],
+                $r['permit_date'] ?? '',
+                $r['company'] ?? '',
+                $r['client'] ?? '',
+                $r['destination'] ?? '',
+                (int)$r['bills'],
+                (int)$r['containers'],
+                $r['container_type'] ?? '',
+                (float)$r['custody'],
+                (float)$r['expense'],
+                (float)$r['fees'],
+                (float)$r['remaining'],
+                ($r['status'] ?? 'open') === 'closed' ? 'مقفول' : 'جارٍ',
+            ]);
+        }
+        fclose($out);
+        exit;
+    }
+
+    /** IDs موجبة فريدة مع سقف يحمي POST/SQL من الأحجام غير المقصودة. */
+    private function bulkIds(array $raw): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $raw), fn($id) => $id > 0)));
+        return count($ids) <= 400 ? $ids : [];
+    }
+
+    /** رجوع محلي آمن لنفس فلتر السجلات. */
+    private function bulkBack(): string
+    {
+        $back = trim((string)($_POST['back'] ?? 'permits?view=records'));
+        if ($back === '' || str_contains($back, '://') || str_starts_with($back, '//') || str_contains($back, "\n")) {
+            return 'permits?view=records';
+        }
+        return ltrim($back, '/');
     }
 
     /** يجمّع رقم السيارة من خانتَي الحروف والأرقام (حروف ثم أرقام) */
@@ -1546,40 +2019,27 @@ class PermitController extends Controller
     }
 
     // ------------------------------------------------------------------
-    //  رفع/حذف المرفقات (تُخزَّن في public/uploads/permits)
+    //  رفع/حذف المرفقات الخاصة خارج public
     // ------------------------------------------------------------------
-    private function uploadDir(): string
-    {
-        $dir = App::basePath('public/uploads/permits');
-        if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
-        return $dir;
-    }
-
-    private function handleUpload(string $field): ?string
+    private function handleUpload(string $field, int $permitId): ?string
     {
         if (empty($_FILES[$field]) || ($_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
             return null;
         }
-        $f = $_FILES[$field];
-        if ($f['error'] !== UPLOAD_ERR_OK) { return null; }
-        $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, self::UPLOAD_EXT, true)) {
-            flash('error', 'نوع الملف غير مسموح (صور أو PDF فقط).');
-            return null;
+        try {
+            return PrivateFile::storeUploaded($_FILES[$field], 'permits', PrivateFile::PERMIT_MIME, 12 * 1024 * 1024);
+        } catch (\RuntimeException $e) {
+            if ($this->wantsJson()) {
+                $this->json(['ok' => false, 'flash' => $e->getMessage()]);
+                exit;
+            }
+            flash('error', $e->getMessage());
+            redirect('permits/' . $permitId . '/manage');
         }
-        // اسم آمن فريد (بدون Date/random — نعتمد على uniqid المتاح)
-        $name = 'p' . uniqid('', true) . '.' . $ext;
-        $dest = $this->uploadDir() . '/' . $name;
-        if (@move_uploaded_file($f['tmp_name'], $dest)) {
-            return 'uploads/permits/' . $name;   // مسار نسبي من public/
-        }
-        return null;
     }
 
     private function deleteFile(?string $rel): void
     {
-        if (!$rel) { return; }
-        $path = App::basePath('public/' . $rel);
-        if (is_file($path)) { @unlink($path); }
+        PrivateFile::delete($rel);
     }
 }

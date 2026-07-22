@@ -6,6 +6,10 @@
 require dirname(__DIR__) . '/app/bootstrap.php';
 
 use App\Core\Router;
+use App\Core\Performance;
+
+$performanceBuffer = Performance::enabled();
+if ($performanceBuffer) { ob_start(); }
 
 $r = new Router();
 
@@ -20,7 +24,11 @@ $r->post('/work-date', 'WorkDateController@save');
 
 // لوحة التحكم
 $r->get('/', 'DashboardController@index');
+$r->get('/dashboard/quick-options','DashboardController@quickOptions');
 $r->post('/dashboard/quick-entries','DashboardController@quickEntries');
+// مركز الإشعارات — قراءة فقط، بلا جدول. مسار حرفي (مفيش /notifications/{id} أصلاً)
+$r->get('/notifications/ping', 'NotificationController@ping');
+
 $r->post('/notes',            'DashboardController@addNote');
 $r->post('/notes/{id}/toggle','DashboardController@toggleNote');
 $r->post('/notes/{id}/delete','DashboardController@deleteNote');
@@ -68,6 +76,7 @@ $r->post('/invoices/delete',          'InvoiceController@bulkDelete');   // حذ
 // الإصدارات (إذن للصادر / شهادة للوارد) — أكبر عملية في النظام، بتايم لاين
 $r->get('/permits',                   'PermitController@index');
 $r->get('/permits/print-batch',       'PermitController@printBatch'); // طباعة عدة أذونات دفعة واحدة (قبل الجشع /{id})
+$r->post('/permits/bulk',             'PermitController@bulk');     // إجراءات جماعية على المحدَّد (قبل الجشع /{id})
 $r->get('/permits/new',               'PermitController@create');
 $r->post('/permits',                  'PermitController@store');
 $r->get('/permits/{id}/edit',         'PermitController@edit');
@@ -108,6 +117,7 @@ $r->get('/tracking/feed',         'TrackController@feedAll');  // JSON — خر�
 $r->get('/tracking/places',              'TrackController@places');
 $r->post('/tracking/places',             'TrackController@savePlace');
 $r->post('/tracking/places/auto',        'TrackController@autoPlace');   // حرفي قبل /{pid}/delete
+$r->post('/tracking/places/lookup',      'TrackController@lookupPlace'); // حرفي قبل /{pid}/delete
 $r->post('/tracking/places/{pid}/delete','TrackController@deletePlace');
 $r->get('/tracking/{id}/feed',    'TrackController@feed');     // JSON — تحديث رحلة واحدة
 $r->post('/tracking/{id}/status', 'TrackController@setStatus');
@@ -115,6 +125,35 @@ $r->post('/tracking/{id}/renew',  'TrackController@renew');
 $r->post('/tracking/{id}/phone',  'TrackController@updatePhone');
 $r->post('/tracking/{id}/delete', 'TrackController@destroy');
 $r->get('/tracking/{id}',         'TrackController@show');     // الجشع أخيرًا
+
+// بوابة المندوب على الموبايل (v35) — جلسة منفصلة تمامًا (RepAuth) ما بتحطش uid،
+// فكل صفحات المكتب بترفضه تلقائيًا. المسارات الحرفية قبل الجشعة.
+$r->get('/m/login',   'RepPortalController@showLogin');
+$r->post('/m/login',  'RepPortalController@login');
+$r->post('/m/logout', 'RepPortalController@logout');
+$r->get('/m/ping', 'RepPortalController@ping');   // إشعارات حيّة (قراءة فقط) — حرفي قبل الجشع
+// متابعة المناديب للمشرف (v47) — قراءة فقط، حرفي قبل الجشع
+$r->get('/m/team',       'RepPortalController@team');
+$r->get('/m/team/{rid}', 'RepPortalController@teamRep');
+// تحويل عهدة لمندوب (v46) — حرفي قبل الجشع
+$r->get('/m/transfer',  'RepPortalController@transferForm');
+$r->post('/m/transfer', 'RepPortalController@transferStore');
+$r->post('/m/transfer/{tid}/delete', 'RepPortalController@transferDelete');
+// تسليم عهدة لسائق (v45) — حرفي قبل الجشع `/m/permit/{id}` وقبل `/m/entry/{sid}`
+$r->get('/m/handover',  'RepPortalController@handoverForm');
+$r->post('/m/handover', 'RepPortalController@handoverStore');
+$r->post('/m/handover/{hid}/delete', 'RepPortalController@handoverDelete');
+$r->get('/m/misc',    'RepPortalController@miscForm');   // نثرية عامة بلا إذن (v39)
+$r->post('/m/misc',   'RepPortalController@miscStore');
+// فتح إذن من الموبايل (v43) — **حرفي قبل الجشع `/m/permit/{id}`** (تحذير 4).
+$r->get('/m/permit/new',  'RepPortalController@permitForm');
+$r->post('/m/permit/new', 'RepPortalController@permitStore');
+$r->get('/m/entry/{sid}/edit', 'RepPortalController@entryEditForm');
+$r->post('/m/entry/{sid}/delete', 'RepPortalController@entryDelete');
+$r->post('/m/entry/{sid}', 'RepPortalController@entryUpdate');
+$r->get('/m/permit/{id}',  'RepPortalController@entryForm');
+$r->post('/m/permit/{id}', 'RepPortalController@entryStore');
+$r->get('/m', 'RepPortalController@home');
 
 // المسار العام للسائق — **بلا auth وبلا CSRF عن قصد** (التوكن العشوائي هو الصلاحية).
 // قصير عمدًا عشان يبقى مقروء في رسالة الواتساب. راجع TrackController للتفاصيل.
@@ -165,6 +204,33 @@ $r->get('/reps/{id}/settlement/{sid}/print', 'RepController@settlementPrint');
 $r->post('/reps/entry/{eid}/delete',         'RepController@deleteEntry');
 $r->post('/reps/{id}',                       'RepController@update');   // بعد كل مسارات /reps/{id}/*
 $r->get('/reps/{id}',                        'RepController@show');     // الجشع أخيرًا
+
+// عهدة المناديب (v35) — محفظة منفصلة تمامًا عن الخزنة (زي كروت الفيزا).
+// المسارات الحرفية قبل الجشعة /{id}
+$r->get('/rep-custody',                            'RepCustodyController@index');
+$r->get('/rep-custody/inbox',                      'RepCustodyController@inbox');   // حرفي قبل /{id}
+$r->post('/rep-custody/approve-many',              'RepCustodyController@approveMany');
+$r->post('/rep-custody/reject-many',               'RepCustodyController@rejectMany');
+$r->post('/rep-custody/bulk-edit',                 'RepCustodyController@bulkEdit');
+$r->post('/rep-custody/deposit/{depId}/delete',    'RepCustodyController@deleteDeposit');
+$r->post('/rep-custody/settlement/{sid}/delete',   'RepCustodyController@deleteSettlement');
+$r->post('/rep-custody/assign/{aid}/done',         'RepCustodyController@assignDone');
+$r->post('/rep-custody/assign/{aid}/back',         'RepCustodyController@assignBack');
+$r->post('/rep-custody/assign/{aid}/remove',       'RepCustodyController@assignRemove');
+$r->post('/rep-custody/{sid}/review-start',        'RepCustodyController@startReview');
+$r->post('/rep-custody/{sid}/approve',             'RepCustodyController@approve');
+$r->post('/rep-custody/{sid}/reject',              'RepCustodyController@reject');
+$r->post('/rep-custody/{sid}/edit',                'RepCustodyController@editSubmission');
+$r->post('/rep-custody/transfer/{tid}/delete',     'RepCustodyController@deleteTransfer');     // v46 — حرفي قبل /{id}
+$r->post('/rep-custody/{id}/permit-perm',          'RepCustodyController@togglePermitPerm');  // v44
+$r->post('/rep-custody/{id}/watch-perm',           'RepCustodyController@toggleWatchPerm');   // v47
+$r->post('/rep-custody/{id}/account/toggle',       'RepCustodyController@toggleAccount');
+$r->post('/rep-custody/{id}/account/reset',        'RepCustodyController@resetPin');
+$r->post('/rep-custody/{id}/account',              'RepCustodyController@saveAccount');
+$r->post('/rep-custody/{id}/assign',               'RepCustodyController@assign');
+$r->post('/rep-custody/{id}/deposit',              'RepCustodyController@storeDeposit');
+$r->post('/rep-custody/{id}/settle',               'RepCustodyController@settle');
+$r->get('/rep-custody/{id}',                       'RepCustodyController@card');   // الجشع أخيرًا
 
 // سداد العملاء (دفعات سداد العملاء عبر كل الوكلاء + توجيهها للعهدة/الفيزا)
 $r->get('/payments',                'PaymentController@index');
@@ -220,6 +286,7 @@ $r->get('/reports/print',  'ReportsController@printable');
 $r->get('/reports/client', 'ReportsController@client');
 
 // الإعدادات والقوائم
+$r->get('/security',                      'SecurityController@index');   // للمالك بس (Access::OWNER_ONLY)
 $r->get('/audit',                         'AuditController@index');
 $r->post('/audit/{id}/undo',              'AuditController@undo');
 $r->post('/audit/trash/{id}/restore',     'AuditController@restore');
@@ -245,4 +312,11 @@ $r->get('/search/api', 'SearchController@api');
 $r->get('/search',  'SearchController@index');
 $r->post('/backup', 'BackupController@download');
 
+// المرفقات الخاصة — لا تُخدم كملفات static حتى لو كان السجل قديمًا داخل public/uploads.
+$r->get('/attachments/stage/{id}',      'FileController@stage');
+$r->get('/attachments/submission/{id}', 'FileController@submission');
+$r->get('/attachments/misc/{id}',       'FileController@misc');
+
 $r->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
+Performance::finish();
+if ($performanceBuffer && ob_get_level() > 0) { ob_end_flush(); }

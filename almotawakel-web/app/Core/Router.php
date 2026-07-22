@@ -35,7 +35,7 @@ class Router
             $pattern = '#^' . $pattern . '$#';
             if (preg_match($pattern, $path, $matches)) {
                 array_shift($matches);
-                $this->call($handler, $matches);
+                $this->call($handler, $matches, $method);
                 return;
             }
         }
@@ -43,8 +43,9 @@ class Router
         (new Controller())->render('errors/404', ['title' => 'غير موجود'], false);
     }
 
-    private function call($handler, array $params): void
+    private function call($handler, array $params, string $httpMethod): void
     {
+        Access::enforce((string) $handler, $httpMethod);
         [$class, $action] = explode('@', $handler);
         $class = 'App\\Controllers\\' . $class;
         $controller = new $class();

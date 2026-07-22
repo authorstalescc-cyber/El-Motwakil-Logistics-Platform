@@ -104,8 +104,12 @@ class RepController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
-        Rep::delete((int) $id);
-        flash('success', 'تم حذف المندوب وكل سجله.');
+        $result = Rep::delete((int) $id);
+        flash('success', $result['deleted']
+            ? 'تم حذف كارت المندوب لأنه بلا أي سجل.'
+            : ($result['deactivated']
+                ? 'للمندوب تاريخ محفوظ؛ تم تعطيله وإيقاف دخوله بدل حذف السجل.'
+                : 'المندوب غير موجود.'));
         redirect('reps');
     }
 

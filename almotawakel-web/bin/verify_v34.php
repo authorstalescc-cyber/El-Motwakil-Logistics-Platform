@@ -1,4 +1,9 @@
 <?php
+// ═══ حارس: سطر الأوامر فقط ═══
+// السكربتات دي بتعدّل القاعدة وبتاخد نسخ احتياطية، ومفيش فيها تسجيل دخول.
+// حمايتها الأساسية إن .htaccess بيمنع مجلد bin/ من الويب — والسطر ده طبقة
+// تانية مستقلة تشتغل حتى لو ذلك المنع وقع (صيانة استضافة، ملف اتمسح…).
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /**
  * فحص v34 — نقاط الوجهات والمسافة المتبقية والوصول المتوقع.
  *
@@ -144,8 +149,11 @@ check(abs(Custody::balance() - $custodyBefore) < 0.01, 'رصيد العهدة ز
 // هيبان إنه فاضله 600 كم على الأقصر. الاختبارات دي بتحمي من ده بالظبط.
 // (محتاجة إنترنت — بتتخطّى لو مفيش)
 echo PHP_EOL . "7) فلتر التحديد التلقائي (يحتاج إنترنت)" . PHP_EOL;
-$net = Track::geocodePlace('المنصورة');
-if ($net === null) {
+$skipNetwork = getenv('ALMOTAWAKEL_SKIP_NETWORK') === '1';
+$net = $skipNetwork ? null : Track::geocodePlace('المنصورة');
+if ($skipNetwork) {
+    echo '  ⏭️  فحوص الشبكة معطلة صراحة في هذه البيئة' . PHP_EOL;
+} elseif ($net === null) {
     echo '  ⏭️  مفيش إنترنت — الفحوصات دي اتخطّت' . PHP_EOL;
 } else {
     check($net['kind'] === 'city', 'مدينة معروفة → [city]');
@@ -172,8 +180,12 @@ echo PHP_EOL . "8) تغطية وجهاتك الحقيقية" . PHP_EOL;
 $cov = Track::destinationCoverage();
 $hit = 0; $tot = 0;
 foreach ($cov as $c) { $tot += $c['count']; if ($c['point']) { $hit += $c['count']; } }
-$pctv = $tot ? $hit / $tot * 100 : 0;
-check($pctv >= 85, sprintf('تغطية %.0f%% من البوالص (%d/%d)', $pctv, $hit, $tot));
+if ($tot === 0) {
+    echo "  ⏭️  لا توجد بوالص فعلية لقياس التغطية؛ لا تُحسب النتيجة كفشل\n";
+} else {
+    $pctv = $hit / $tot * 100;
+    check($pctv >= 85, sprintf('تغطية %.0f%% من البوالص (%d/%d)', $pctv, $hit, $tot));
+}
 
 echo PHP_EOL . str_repeat('─', 50) . PHP_EOL;
 echo $fail === 0

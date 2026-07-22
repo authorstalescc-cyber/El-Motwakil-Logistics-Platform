@@ -1,15 +1,18 @@
-<?php $val = fn($k) => $row[$k] ?? ''; ?>
+<?php $val = fn($k) => $row[$k] ?? ''; $errors = $errors ?? []; ?>
 <div class="page-actions">
-  <a class="btn ghost" href="<?= url('office') ?>">‹ رجوع لرصيد المكتب</a>
+  <a class="btn ghost" href="<?= url($back ?? 'office') ?>">‹ رجوع لرصيد المكتب</a>
 </div>
 
-<form class="form-card" method="post" action="<?= e($action) ?>">
+<?= formErrorSummary($errors) ?>
+<form class="form-card js-dirty-form" method="post" action="<?= e($action) ?>">
   <?= csrfField() ?>
+  <?= formStateFields($formToken, $back ?? 'office') ?>
   <div class="form-group-title gt-identity">بيانات كارت الفيزا</div>
   <div class="form-grid">
     <div class="field">
       <label>اسم / رقم الكارت *</label>
-      <input type="text" name="name" value="<?= e($val('name')) ?>" placeholder="مثال: فيزا الأهلي 1234" required>
+      <input type="text" name="name" value="<?= e($val('name')) ?>" placeholder="مثال: فيزا الأهلي 1234" required<?= fieldErrorAttrs('name', $errors) ?>>
+      <?= fieldError('name', $errors) ?>
     </div>
     <div class="field">
       <label>صاحب الكارت</label>
@@ -22,11 +25,11 @@
     <?php if (!$isEdit): ?>
     <div class="field">
       <label>رصيد مبدئي (اختياري)</label>
-      <input type="number" step="0.01" name="init_amount" value="" placeholder="0">
+      <input type="number" step="0.01" name="init_amount" value="<?= e($val('init_amount')) ?>" placeholder="0">
     </div>
     <div class="field">
       <label>بتاريخ الرصيد المبدئي</label>
-      <input type="date" name="init_date" value="<?= e(work_date()) ?>">
+      <input type="date" name="init_date" value="<?= e($val('init_date') ?: work_date()) ?>">
     </div>
     <?php endif; ?>
     <div class="field">
@@ -43,7 +46,7 @@
   </div>
 
   <div class="form-actions">
-    <button class="btn gold" type="submit">💾 <?= $isEdit?'حفظ التعديلات':'حفظ الكارت' ?></button>
-    <a class="btn ghost" href="<?= url('office') ?>">إلغاء</a>
+    <button class="btn gold" type="submit" data-primary-submit>💾 <?= $isEdit?'حفظ التعديلات':'حفظ الكارت' ?></button>
+    <a class="btn ghost" href="<?= url($back ?? 'office') ?>">إلغاء</a>
   </div>
 </form>

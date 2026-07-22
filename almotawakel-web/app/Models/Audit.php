@@ -34,7 +34,7 @@ class Audit
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
             [
                 (int)($_SESSION['uid'] ?? 0) ?: null,
-                Auth::user(),
+                self::actorName(),
                 $action,
                 $entity,
                 $recordId !== null ? (string)$recordId : null,
@@ -48,6 +48,19 @@ class Audit
             ]
         );
         return Database::lastId();
+    }
+
+    /**
+     * اسم المنفّذ: مستخدم المكتب، وإلا المندوب.
+     * جلسة المندوب (`/m`) عمرها ما بتحط `uid` ولا `uname` (v35)، فبدون الحيلة دي
+     * كان أي إجراء بيعمله المندوب يتسجّل بلا اسم في سجل الإدخالات.
+     */
+    private static function actorName(): ?string
+    {
+        $user = Auth::user();
+        if ($user !== null && trim($user) !== '') { return $user; }
+        $rep = trim((string) ($_SESSION['rep_name'] ?? ''));
+        return $rep !== '' ? 'مندوب: ' . $rep : null;
     }
 
     public static function trash(string $entity, array $row, string $label = '', array $related = []): int

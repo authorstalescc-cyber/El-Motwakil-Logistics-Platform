@@ -24,6 +24,169 @@
     if (back && back.isConnected) setTimeout(() => back.focus(), 0);
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     التنبيهات الطايرة (Toasts) — المرحلة ١
+     نظام **واحد** بيخدم رسائل الخادم (flash_all عبر window.__TOASTS) ورسائل
+     الـAJAX بنفس الشكل بالظبط، فنفس الإجراء يدّي نفس التغذية الراجعة سواء
+     اتنفّذ بتحميل كامل ولا بـfetch.
+     اللي اتصلّح عن النظام القديم:
+       • كان عنصر **مفرد** — تاني رسالة بتمسح الأولى. دلوقتي كومة بطابور.
+       • كان بلا aria-live — قارئ الشاشة ما بيسمعهوش. دلوقتي منطقة معلَنة.
+       • كان بـpointer-events:none — مستحيل تقفله. دلوقتي زر ✕ و Esc.
+       • **الخطأ ما بيختفيش لوحده أبدًا** (كان بيروح بعد 2.6 ثانية زي النجاح).
+       • الوقوف بالماوس/التركيز بالكيبورد بيوقف العدّاد.
+     ══════════════════════════════════════════════════════════════════════════ */
+  const TOAST_MAX = 3;                                   // الظاهر في المرة الواحدة
+  const TOAST_LIFE = { ok: 5000, info: 5000, warn: 8000, err: 0 };  // 0 = ما يختفيش لوحده
+  const TOAST_ICON = {
+    ok:   '<path d="M20 6 9 17l-5-5"/>',
+    err:  '<circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16h.01"/>',
+    warn: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/>',
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'
+  };
+  const toastQueue = [];
+  let toastStack = null;
+
+  function toastRoot() {
+    if (toastStack && toastStack.isConnected) return toastStack;
+    toastStack = document.getElementById('toastStack');
+    if (!toastStack) {
+      toastStack = document.createElement('div');
+      toastStack.id = 'toastStack';
+      toastStack.className = 'toast-stack';
+      toastStack.setAttribute('role', 'region');
+      toastStack.setAttribute('aria-label', 'تنبيهات');
+      toastStack.setAttribute('aria-live', 'polite');
+      document.body.appendChild(toastStack);
+    }
+    return toastStack;
+  }
+
+  function toastClose(el) {
+    if (!el || el.__closing) return;
+    el.__closing = true;
+    clearTimeout(el.__timer);
+    el.classList.add('out');
+    const done = () => {
+      el.remove();
+      const next = toastQueue.shift();
+      if (next) toastShow(next);
+    };
+    // ما نعتمدش على animationend لوحده: لو الحركة متعطّلة (reduced motion) ما بتحصلش
+    el.addEventListener('animationend', done, { once: true });
+    setTimeout(() => { if (el.isConnected) done(); }, 400);
+  }
+
+  /**
+   * toast(msg, kind, opts)
+   *   kind: 'ok' | 'err' | 'warn' | 'info'   (الافتراضي 'ok')
+   *   opts.action = { label, url, method:'post', csrf, confirm } → زر إجراء جوّه الرسالة
+   *   opts.life  = مهلة مخصّصة بالملّي، أو 0 عشان ما يختفيش لوحده
+   */
+  function toast(msg, kind, opts) {
+    if (!msg) return null;
+    kind = TOAST_ICON[kind] ? kind : 'ok';
+    opts = opts || {};
+    const root = toastRoot();
+    if (root.children.length >= TOAST_MAX) {          // الزيادة تستنى في الطابور
+      toastQueue.push([msg, kind, opts]);
+      return null;
+    }
+    return toastShow([msg, kind, opts]);
+  }
+
+  function toastShow(entry) {
+    const [msg, kind, opts] = entry;
+    const root = toastRoot();
+    const el = document.createElement('div');
+    el.className = 'toast-item ' + kind;
+    // الخطأ لازم يتعلن فورًا لقارئ الشاشة، والباقي بأدب
+    el.setAttribute('role', kind === 'err' ? 'alert' : 'status');
+
+    const ic = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    ic.setAttribute('viewBox', '0 0 24 24'); ic.setAttribute('width', '19'); ic.setAttribute('height', '19');
+    ic.setAttribute('fill', 'none'); ic.setAttribute('stroke', 'currentColor');
+    ic.setAttribute('stroke-width', '2'); ic.setAttribute('stroke-linecap', 'round');
+    ic.setAttribute('stroke-linejoin', 'round'); ic.setAttribute('aria-hidden', 'true');
+    ic.innerHTML = TOAST_ICON[kind];
+    const icWrap = document.createElement('span');
+    icWrap.className = 'toast-ic'; icWrap.appendChild(ic);
+
+    const body = document.createElement('div');
+    body.className = 'toast-body';
+    const text = document.createElement('span');
+    text.className = 'toast-msg';
+    text.textContent = msg;                            // textContent — مفيش أي حقن HTML
+    body.appendChild(text);
+
+    if (opts.action && opts.action.label && opts.action.url) {
+      const act = document.createElement('button');
+      act.type = 'button'; act.className = 'toast-act';
+      act.textContent = opts.action.label;
+      act.addEventListener('click', () => runToastAction(opts.action, el));
+      body.appendChild(act);
+    }
+
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'toast-x';
+    x.setAttribute('aria-label', 'إغلاق التنبيه');
+    x.textContent = '✕';
+    x.addEventListener('click', () => toastClose(el));
+
+    el.appendChild(icWrap); el.appendChild(body); el.appendChild(x);
+
+    const life = typeof opts.life === 'number' ? opts.life : TOAST_LIFE[kind];
+    if (life > 0) {
+      const bar = document.createElement('i');
+      bar.className = 'toast-bar';
+      bar.style.animationDuration = life + 'ms';
+      el.appendChild(bar);
+      el.__timer = setTimeout(() => toastClose(el), life);
+      // الوقوف بالماوس/التركيز بيوقف العدّاد فعليًا مش الشريط بس
+      const hold = () => clearTimeout(el.__timer);
+      const resume = () => { el.__timer = setTimeout(() => toastClose(el), life); };
+      el.addEventListener('mouseenter', hold);  el.addEventListener('focusin', hold);
+      el.addEventListener('mouseleave', resume); el.addEventListener('focusout', resume);
+    }
+
+    root.appendChild(el);
+    return el;
+  }
+
+  /** إجراء داخل التنبيه (زي «تراجع») — بيتبعت POST بنموذج مؤقّت ومعاه CSRF. */
+  function runToastAction(action, el) {
+    const go = () => {
+      const f = document.createElement('form');
+      f.method = 'post'; f.action = action.url; f.className = 'no-confirm';
+      f.style.display = 'none';
+      if (action.csrf) {
+        const t = document.createElement('input');
+        t.type = 'hidden'; t.name = '_csrf'; t.value = action.csrf;
+        f.appendChild(t);
+      }
+      document.body.appendChild(f);
+      f.submit();
+    };
+    if (action.confirm && window.AppUI && typeof window.AppUI.confirm === 'function') {
+      window.AppUI.confirm(action.confirm).then((yes) => { if (yes) { toastClose(el); go(); } });
+      return;
+    }
+    toastClose(el); go();
+  }
+
+  // Esc يقفل أحدث تنبيه مفتوح
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !toastStack) return;
+    const last = toastStack.lastElementChild;
+    if (last) { e.stopPropagation(); toastClose(last); }
+  });
+
+  // رسائل الخادم (flash_all) — تتعرض بنفس المكوّن بالظبط
+  document.addEventListener('DOMContentLoaded', () => {
+    const seed = Array.isArray(window.__TOASTS) ? window.__TOASTS : [];
+    seed.forEach((t) => { if (t && t.msg) toast(t.msg, t.kind, { action: t.action }); });
+  });
+
   /* ───────── توحيد الأرقام: أي رقم عربي/فارسي يتحوّل فورًا لإنجليزي في أي خانة ─────────
      نعترض على مستوى beforeinput لأن <input type="number"> يرفض الأرقام العربية أصلًا
      (فلا تصل لـ value)، فنحوّلها قبل أن يمسحها المتصفح. مع طبقة input احتياطية للّصق
@@ -100,7 +263,7 @@
 
   // ===== مودال تأكيد أنيق (للحفظ والحذف في كل النماذج) =====
   const modal = (function () {
-    let overlay, titleEl, msgEl, okBtn, cancelBtn, pending = null;
+    let overlay, titleEl, msgEl, okBtn, cancelBtn, pending = null, inputEl = null;
     function build() {
       overlay = document.createElement('div');
       overlay.className = 'confirm-overlay';
@@ -119,12 +282,16 @@
       msgEl = overlay.querySelector('.confirm-msg');
       okBtn = overlay.querySelector('.confirm-ok');
       cancelBtn = overlay.querySelector('.confirm-cancel');
-      okBtn.addEventListener('click', () => { const cb = pending; close(); if (cb) cb(); });
+      okBtn.addEventListener('click', () => {
+        const cb = pending, value = inputEl ? inputEl.value : undefined;
+        if (inputEl && !inputEl.readOnly && inputEl.required && !value.trim()) { inputEl.focus(); return; }
+        close(); if (cb) cb(value);
+      });
       cancelBtn.addEventListener('click', close);
       overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('open')) close(); });
     }
-    function close() { pending = null; if (overlay) { overlay.classList.remove('open'); deactivateDialog(overlay); } }
+    function close() { pending = null; inputEl = null; if (overlay) { overlay.classList.remove('open'); deactivateDialog(overlay); } }
     function show(opts, onOk) {
       if (!overlay) build();
       const del = !!opts.danger, info = !!opts.info;
@@ -132,12 +299,27 @@
       overlay.querySelector('.confirm-ic').textContent = info ? 'ℹ️' : (del ? '⚠️' : '✓');
       titleEl.textContent = opts.title || (info ? 'تنبيه' : (del ? 'تأكيد الإجراء' : 'تأكيد الحفظ'));
       msgEl.textContent = opts.message || '';
+      inputEl = null;
+      if (opts.input) {
+        inputEl = document.createElement(opts.multiline ? 'textarea' : 'input');
+        inputEl.className = 'confirm-input';
+        inputEl.value = opts.defaultValue || '';
+        inputEl.placeholder = opts.placeholder || '';
+        inputEl.required = opts.required !== false;
+        inputEl.readOnly = !!opts.readOnly;
+        if (!opts.multiline) inputEl.type = opts.inputType || 'text';
+        msgEl.appendChild(document.createElement('br'));
+        msgEl.appendChild(inputEl);
+        inputEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !opts.multiline) { e.preventDefault(); okBtn.click(); }
+        });
+      }
       okBtn.textContent = opts.okText || (info ? 'حسناً' : (del ? 'نعم، نفّذ' : 'نعم، احفظ'));
       okBtn.className = 'btn confirm-ok ' + (del ? 'danger' : 'gold');
       cancelBtn.hidden = info;
       pending = onOk;
       overlay.classList.add('open');
-      activateDialog(overlay, info ? okBtn : cancelBtn);
+      activateDialog(overlay, inputEl || (info ? okBtn : cancelBtn));
     }
     function notice(message, title) { show({ info: true, message, title }, null); }
     function confirm(message, onOk, opts) {
@@ -149,9 +331,17 @@
         okText: opts.okText || 'نعم، تابع'
       }, onOk);
     }
-    return { show, notice, confirm };
+    function ask(message, onOk, opts) {
+      opts = opts || {};
+      show({ input: true, multiline: !!opts.multiline, inputType: opts.inputType,
+        defaultValue: opts.defaultValue, placeholder: opts.placeholder, required: opts.required,
+        readOnly: opts.readOnly, message: message, title: opts.title || 'أدخل القيمة',
+        okText: opts.okText || 'متابعة' }, onOk);
+      if (inputEl && inputEl.select) setTimeout(() => inputEl.select(), 30);
+    }
+    return { show, notice, confirm, ask };
   })();
-  window.AppUI = Object.assign(window.AppUI || {}, { notice: modal.notice, confirm: modal.confirm });
+  window.AppUI = Object.assign(window.AppUI || {}, { notice: modal.notice, confirm: modal.confirm, ask: modal.ask });
 
   // ===== نافذة منبثقة للنماذج (إضافة/تعديل إيصال/بوليصة/بند في مكانها) =====
   // تنقل نموذجًا موجودًا (مخفيًّا) إلى نافذة مركزية، وتُعيده لمكانه عند الإلغاء،
@@ -375,7 +565,7 @@
         e.preventDefault(); e.stopPropagation();
         const i=unresolved[0]; i.classList.add('name-warn','live-invalid'); i.focus();
         if(i.scrollIntoView) i.scrollIntoView({block:'center'});
-        if(typeof toast==='function') toast('فيه اسم قريب من اسم مخزّن — اختَر الموجود أو أكّد أنه جديد.');
+        toast('فيه اسم قريب من اسم مخزّن — اختَر الموجود أو أكّد أنه جديد.', 'warn');
       }
     },true);
 
@@ -386,7 +576,7 @@
       const box=document.createElement('span');box.className='saved-views';const select=document.createElement('select');select.innerHTML='<option value="">منظر محفوظ…</option>';
       views.forEach((v,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=v.name;select.appendChild(o)});
       select.addEventListener('change',()=>{if(select.value!=='')location.href=views[+select.value].url;});
-      const save=document.createElement('button');save.type='button';save.className='btn ghost sm';save.textContent='☆ حفظ المنظر';save.addEventListener('click',()=>{const name=prompt('اسم المنظر المحفوظ:');if(!name)return;views.push({name:name.trim(),url:location.pathname+location.search});views=views.slice(-12);localStorage.setItem(key,JSON.stringify(views));location.reload();});
+      const save=document.createElement('button');save.type='button';save.className='btn ghost sm';save.textContent='☆ حفظ المنظر';save.addEventListener('click',()=>{window.AppUI.ask('اكتب اسمًا واضحًا للمنظر الحالي.',(name)=>{name=(name||'').trim();if(!name)return;views.push({name:name,url:location.pathname+location.search});views=views.slice(-12);localStorage.setItem(key,JSON.stringify(views));location.reload();},{title:'حفظ منظر الفلاتر',okText:'حفظ'});});
       const del=document.createElement('button');del.type='button';del.className='btn ghost sm';del.textContent='×';del.title='حذف المنظر المختار';del.addEventListener('click',()=>{if(select.value==='')return;views.splice(+select.value,1);localStorage.setItem(key,JSON.stringify(views));location.reload();});
       box.append(select,save,del);toolbar.appendChild(box);
     }
@@ -458,21 +648,22 @@
   // ================= شاشة إدارة الإذن: حفظ فوري (AJAX) + اختصارات =================
   const manageRoot = document.querySelector('.permit-manage');
 
-  function toast(msg, kind) {
-    if (!msg) return;
-    let t = document.querySelector('.toast');
-    if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
-    t.className = 'toast ' + (kind || 'ok');
-    t.textContent = msg;
-    void t.offsetWidth;
-    t.classList.add('show');
-    clearTimeout(t._h);
-    t._h = setTimeout(() => t.classList.remove('show'), 2600);
-  }
+  /* دالة toast() المفردة القديمة اتشالت — بقى فيه تطبيق واحد بس في أول الملف
+     (كومة بطابور + إغلاق + aria-live). النداءات تحت زي ما هي. */
 
   function ajaxSubmit(form) {
+    if (form.dataset.submitting === '1') return;
+    clearAjaxErrors(form);
+    ensureAttemptToken(form);
+    form.dataset.submitting = '1';
+    form.setAttribute('aria-busy', 'true');
     const btn = form.querySelector('[type=submit]');
-    if (btn) btn.classList.add('js-busy');
+    if (btn) { btn.classList.add('js-busy'); btn.disabled = true; }
+    const done = () => {
+      form.dataset.submitting = '';
+      form.removeAttribute('aria-busy');
+      if (btn) { btn.classList.remove('js-busy'); btn.disabled = false; }
+    };
     fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then((r) => {
         const ct = r.headers.get('content-type') || '';
@@ -480,17 +671,74 @@
         return r.json();
       })
       .then((data) => {
-        if (btn) btn.classList.remove('js-busy');
-        if (!data.ok) { toast(data.flash || 'تعذّر الحفظ', 'err'); return; }  // النافذة تبقى مفتوحة لتصحيح الخطأ
+        done();
+        if (!data.ok) {
+          showAjaxErrors(form, data.errors || {}, data.flash || 'تعذّر الحفظ');
+          toast(data.flash || 'تعذّر الحفظ', 'err');
+          return;
+        }  // النافذة تبقى مفتوحة لتصحيح الخطأ
         if (data.reload) { location.reload(); return; }
         applyMovement(data);
         if (formModal.contains(form)) formModal.close(false);   // أغلِق النافذة بعد نجاح الحفظ
         toast(data.flash || 'تم الحفظ', 'ok');
       })
-      .catch(() => {                       // فشل AJAX → إرسال عادي (fallback)
-        form.classList.remove('js-ajax');
-        if (form.submit) form.submit();
+      .catch(() => {
+        // لا نعيد POST تلقائيًا: قد يكون الخادم نفّذ الكتابة وانقطع الرد، وإعادته تضاعفها.
+        done();
+        toast('تعذّر تأكيد الحفظ. راجع السجل ثم أعد المحاولة يدويًا.', 'err');
       });
+  }
+
+  function ensureAttemptToken(form) {
+    let input = form.querySelector('input[name="_form_token"]');
+    if (input && /^[a-f0-9]{32}$/.test(input.value)) return input.value;
+    if (!input) {
+      input = document.createElement('input');
+      input.type = 'hidden'; input.name = '_form_token';
+      form.appendChild(input);
+    }
+    const bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    input.value = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return input.value;
+  }
+
+  function clearAjaxErrors(form) {
+    form.querySelectorAll('[data-ajax-error-summary], .ajax-field-error').forEach((el) => el.remove());
+    form.querySelectorAll('[aria-invalid="true"]').forEach((el) => {
+      el.removeAttribute('aria-invalid');
+      const described = (el.getAttribute('aria-describedby') || '').split(/\s+/).filter((id) => id && !id.startsWith('ajax-err-'));
+      if (described.length) el.setAttribute('aria-describedby', described.join(' '));
+      else el.removeAttribute('aria-describedby');
+    });
+  }
+
+  function showAjaxErrors(form, errors, fallback) {
+    const entries = Object.entries(errors || {});
+    const summary = document.createElement('div');
+    summary.className = 'form-error-summary';
+    summary.dataset.ajaxErrorSummary = '1';
+    summary.setAttribute('role', 'alert');
+    summary.tabIndex = -1;
+    summary.textContent = fallback;
+    form.prepend(summary);
+    let first = null;
+    entries.forEach(([name, message], index) => {
+      if (name === '_form') return;
+      const field = form.elements.namedItem(name);
+      const input = field && typeof field.length === 'number' && !field.tagName ? field[0] : field;
+      if (!input || !input.setAttribute) return;
+      const id = 'ajax-err-' + Date.now() + '-' + index;
+      input.setAttribute('aria-invalid', 'true');
+      const described = (input.getAttribute('aria-describedby') || '').trim();
+      input.setAttribute('aria-describedby', (described ? described + ' ' : '') + id);
+      const error = document.createElement('small');
+      error.id = id; error.className = 'field-error ajax-field-error'; error.setAttribute('role', 'alert');
+      error.textContent = String(message);
+      input.insertAdjacentElement('afterend', error);
+      if (!first) first = input;
+    });
+    (first || summary).focus();
   }
 
   function applyMovement(data) {
@@ -1522,4 +1770,192 @@
     const t = document.querySelector(location.hash);
     if (t) { if (t.tagName === 'DETAILS') t.open = true; const d = t.closest('details'); if (d) d.open = true; setTimeout(() => t.scrollIntoView({ block: 'center' }), 80); }
   }
+
+  // منع النقر المزدوج على POST العادي، مع إبقاء زر الإرسال ضمن البيانات المرسلة.
+  document.addEventListener('submit', (e) => {
+    const form = e.target;
+    if (!(form instanceof HTMLFormElement) || e.defaultPrevented || form.classList.contains('js-ajax')) return;
+    if ((form.method || '').toLowerCase() !== 'post') return;
+    if (form.dataset.submitting === '1') { e.preventDefault(); return; }
+    form.dataset.submitting = '1';
+    form.setAttribute('aria-busy', 'true');
+    const buttons = Array.from(form.querySelectorAll('button[type=submit],input[type=submit]'));
+    setTimeout(() => buttons.forEach((button) => {
+      button.dataset.wasDisabled = button.disabled ? '1' : '0';
+      button.disabled = true;
+      if (button.dataset.primarySubmit !== undefined) {
+        button.dataset.originalText = button.textContent;
+        button.textContent = 'جارٍ الحفظ…';
+      }
+    }), 0);
+  });
+  window.addEventListener('pageshow', () => document.querySelectorAll('form[data-submitting="1"]').forEach((form) => {
+    form.dataset.submitting = '';
+    form.removeAttribute('aria-busy');
+    form.querySelectorAll('button[type=submit],input[type=submit]').forEach((button) => {
+      button.disabled = button.dataset.wasDisabled === '1';
+      if (button.dataset.originalText) { button.textContent = button.dataset.originalText; delete button.dataset.originalText; }
+      delete button.dataset.wasDisabled;
+    });
+  }));
+
+  const errorSummary = document.querySelector('[data-form-error-summary]');
+  if (errorSummary) {
+    setTimeout(() => {
+      errorSummary.focus();
+      const first = document.querySelector('[aria-invalid="true"]');
+      if (first && first.scrollIntoView) first.scrollIntoView({ block: 'center' });
+    }, 30);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     مركز الإشعارات — المرحلة ١
+     الجرس بيترسم فاضي من الخادم (صفر تكلفة على رندر أي صفحة) وبيتملّى من
+     /notifications/ping بعد التحميل وكل 60 ثانية والتطبيق مفتوح.
+     حالة «مقروء» في localStorage — **مفيش جدول ولا عمود «آخر مشاهدة»**،
+     نفس الطريقة الشغّالة في شارات «جديد» ببوابة المناديب.
+     ══════════════════════════════════════════════════════════════════════════ */
+  (function notifCenter() {
+    const root  = document.getElementById('notifCenter');
+    const btn   = document.getElementById('notifBtn');
+    const panel = document.getElementById('notifPanel');
+    const list  = document.getElementById('notifList');
+    const badge = document.getElementById('notifBadge');
+    const count = document.getElementById('notifCount');
+    const at    = document.getElementById('notifAt');
+    const mark  = document.getElementById('notifMark');
+    if (!root || !btn || !panel || !list || !window.__NOTIF_PING) return;
+
+    const SEEN_KEY = 'almotawakel:notif-seen';
+    const POLL_MS  = 60000;
+    let items = [];
+    let timer = 0;
+
+    const readSeen = () => {
+      try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
+      catch (e) { return new Set(); }
+    };
+    const writeSeen = (set) => {
+      // نخزّن بصمات البنود الحالية بس، فالمخزَّن ما يكبرش مع الوقت
+      try { localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(set))); } catch (e) {}
+    };
+
+    function unreadCount() {
+      const seen = readSeen();
+      return items.filter((i) => !seen.has(i.stamp)).length;
+    }
+
+    function paintBadge() {
+      const n = unreadCount();
+      badge.textContent = n > 9 ? '+9' : String(n);
+      const was = badge.classList.contains('on');
+      badge.classList.toggle('on', n > 0);
+      if (n > 0 && !was) { badge.classList.add('pulse'); setTimeout(() => badge.classList.remove('pulse'), 1200); }
+      btn.setAttribute('aria-label', n > 0 ? ('الإشعارات — ' + n + ' جديد') : 'الإشعارات');
+      if (mark) mark.disabled = n === 0;
+    }
+
+    function svg(name) {
+      const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('width', '17'); s.setAttribute('height', '17');
+      s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor');
+      s.setAttribute('stroke-width', '2'); s.setAttribute('stroke-linecap', 'round');
+      s.setAttribute('stroke-linejoin', 'round'); s.setAttribute('aria-hidden', 'true');
+      // الأيقونات هنا بسيطة عن قصد: الخادم بيبعت اسم بس، والرسم عندنا
+      const paths = {
+        inbox:      '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+        calculator: '<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
+        receipt:    '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/>',
+        clipboard:  '<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+        'map-pin':  '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+        alert:      '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/>'
+      };
+      s.innerHTML = paths[name] || paths.alert;
+      return s;
+    }
+
+    function paintList() {
+      list.textContent = '';
+      if (count) count.textContent = items.length ? intfJs(items.length) + ' بند' : '';
+      if (at) at.textContent = '';
+      if (!items.length) {
+        const box = document.createElement('div');
+        box.className = 'nc-empty';
+        const b = document.createElement('b'); b.textContent = 'كله تمام ✓';
+        const s = document.createElement('span'); s.textContent = 'مفيش حاجة مستنياك دلوقتي.';
+        box.appendChild(b); box.appendChild(s);
+        list.appendChild(box);
+        return;
+      }
+      const seen = readSeen();
+      items.forEach((i) => {
+        const a = document.createElement('a');
+        a.className = 'nc-item ' + (i.kind || 'info') + (seen.has(i.stamp) ? '' : ' unread');
+        a.href = i.url;
+        const ic = document.createElement('span'); ic.className = 'nc-ic'; ic.appendChild(svg(i.icon));
+        const tx = document.createElement('div'); tx.className = 'nc-tx';
+        const b = document.createElement('b'); b.textContent = i.title;      // textContent — بلا حقن
+        const s = document.createElement('span'); s.textContent = i.body;
+        tx.appendChild(b); tx.appendChild(s);
+        const go = document.createElement('span'); go.className = 'nc-go'; go.textContent = '‹';
+        a.appendChild(ic); a.appendChild(tx); a.appendChild(go);
+        // فتح البند = قراءته
+        a.addEventListener('click', () => { const set = readSeen(); set.add(i.stamp); writeSeen(set); });
+        list.appendChild(a);
+      });
+    }
+
+    function intfJs(n) { return new Intl.NumberFormat('en').format(n); }
+
+    function refresh() {
+      fetch(window.__NOTIF_PING, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('http'))))
+        .then((d) => {
+          if (!d || !d.ok) return;
+          items = Array.isArray(d.items) ? d.items : [];
+          // نظّف البصمات القديمة: بنسيب المقروء اللي لسه ظاهر بس
+          const live = new Set(items.map((i) => i.stamp));
+          const kept = new Set(Array.from(readSeen()).filter((s) => live.has(s)));
+          writeSeen(kept);
+          paintBadge();
+          if (!panel.hidden) paintList();
+        })
+        .catch(() => { /* الشبكة وقعت — الجرس يفضل بآخر حالة معروفة بلا إزعاج */ });
+    }
+
+    function openPanel() {
+      panel.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      paintList();
+      activateDialog(panel, panel.querySelector('a,button'));
+    }
+    function closePanel() {
+      if (panel.hidden) return;
+      deactivateDialog(panel);
+      panel.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+
+    btn.addEventListener('click', () => { panel.hidden ? openPanel() : closePanel(); });
+    document.addEventListener('click', (e) => { if (!root.contains(e.target)) closePanel(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !panel.hidden) { e.stopPropagation(); closePanel(); btn.focus(); }
+    });
+    if (mark) {
+      mark.addEventListener('click', () => {
+        const set = readSeen();
+        items.forEach((i) => set.add(i.stamp));
+        writeSeen(set);
+        paintBadge(); paintList();
+      });
+    }
+
+    // أول نداء بعد التحميل، وبعدين كل دقيقة — وبنوقف لما التبويب يتخفي
+    refresh();
+    const start = () => { clearInterval(timer); timer = setInterval(refresh, POLL_MS); };
+    start();
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { clearInterval(timer); } else { refresh(); start(); }
+    });
+  })();
 })();

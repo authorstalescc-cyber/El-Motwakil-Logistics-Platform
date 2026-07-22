@@ -1,6 +1,9 @@
 <?php
 use App\Core\App;
+use App\Core\FormState;
 $errors = $errors ?? [];
+$formToken = $formToken ?? FormState::token();
+$back = $back ?? $ent['route'];
 $groups = [
   'identity'=>'بيانات التعريف','vehicle'=>'السيارة / الكمية',
   'revenue'=>'الإيرادات والتحصيل','expense'=>'المصروفات','result'=>'النتائج (محسوبة تلقائياً)'
@@ -11,7 +14,7 @@ foreach ($ent['fields'] as $f) { $byGroup[$f['group']][] = $f; }
 $val = fn($k) => $row[$k] ?? '';
 ?>
 <div class="page-actions">
-  <a class="btn ghost" href="<?= url($ent['route']) ?>">‹ رجوع للقائمة</a>
+  <a class="btn ghost" href="<?= url($back) ?>">‹ رجوع للقائمة</a>
   <?php if (!$isEdit && ($ent['table'] ?? '') === 'bawalis' && empty($legacyCreate)): ?><a class="btn ghost" href="<?= url('bawalis/new?copy=last') ?>">⧉ نسخ آخر بوليصة</a><?php endif; ?>
 </div>
 
@@ -34,6 +37,7 @@ $val = fn($k) => $row[$k] ?? '';
 <form class="form-card js-dirty-form" method="post" action="<?= e($action) ?>"
       data-calc="<?= e($ent['calc']) ?>" data-form-mode="<?= $isEdit?'edit':'create' ?>" data-vat="<?= e(App::setting('vat_rate','0.14')) ?>">
   <?= csrfField() ?>
+  <?= formStateFields($formToken, $back) ?>
   <?php if($isEdit && array_key_exists('lock_version',$row)): ?><input type="hidden" name="lock_version" value="<?= (int)$row['lock_version'] ?>"><?php endif; ?>
   <?php foreach ($groups as $gk=>$gLabel): if (empty($byGroup[$gk])) continue; ?>
     <div class="form-group-title gt-<?= $gk ?>"><?= $gLabel ?></div>
@@ -82,7 +86,8 @@ $val = fn($k) => $row[$k] ?? '';
     <div class="form-grid">
       <div class="field">
         <label>إجمالي ما استلمه صاحب البيان لهذه البوليصة</label>
-        <input type="number" step="0.01" min="0" name="legacy_paid" value="<?= e($legacyPaid ?? 0) ?>" placeholder="0">
+        <input type="number" step="0.01" min="0" name="legacy_paid" value="<?= e($legacyPaid ?? 0) ?>" placeholder="0"<?= fieldErrorAttrs('legacy_paid', $errors) ?>>
+        <?= fieldError('legacy_paid', $errors) ?>
         <small style="display:block;margin-top:6px;color:var(--grey)">يُسجّل كدفعة تاريخية معزولة، ولا يدخل حسابات اليوم أو التقفيل.</small>
       </div>
     </div>
@@ -90,7 +95,8 @@ $val = fn($k) => $row[$k] ?? '';
 
   <div class="form-actions">
     <button class="btn gold" type="submit" data-primary-submit>💾 <?= $isEdit?'حفظ التعديلات':(!empty($legacyCreate)?'حفظ كبوليصة قديمة':'حفظ') ?></button>
-    <a class="btn ghost" href="<?= url($ent['route']) ?>">إلغاء</a>
+    <?php if (!$isEdit && empty($legacyCreate)): ?><button class="btn ghost" type="submit" name="save_and_new" value="1">حفظ وإضافة آخر</button><?php endif; ?>
+    <a class="btn ghost" href="<?= url($back) ?>">إلغاء</a>
   </div>
 </form>
 

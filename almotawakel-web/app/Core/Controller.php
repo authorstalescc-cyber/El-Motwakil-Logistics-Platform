@@ -52,6 +52,22 @@ class Controller
         }
     }
 
+    /** حارس إضافي للعمليات الحساسة؛ السياسة المركزية في Access تظل الحارس الأول. */
+    protected function requireRole(string|array $roles): void
+    {
+        $this->requireAuth();
+        $roles = (array) $roles;
+        if (!in_array(Auth::role(), $roles, true)) {
+            http_response_code(403);
+            if ($this->wantsJson()) {
+                $this->json(['ok' => false, 'error' => 'ليست لديك صلاحية لتنفيذ هذا الإجراء.']);
+                exit;
+            }
+            flash('error', 'ليست لديك صلاحية لتنفيذ هذا الإجراء.');
+            redirect('');
+        }
+    }
+
     protected function requireCsrf(): void
     {
         if (!Auth::checkCsrf($_POST['_csrf'] ?? null)) {
@@ -64,5 +80,33 @@ class Controller
     {
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+
+    /** PRG موحد لفشل validation مع عزل القيم والأخطاء لكل تبويب. */
+    protected function formFailure(string $formId, string $path, array $old, array $errors, string $fallbackBack): never
+    {
+        $token = FormState::store($formId, $old, $errors, $fallbackBack);
+        redirect(FormState::redirectPath($path, $token));
+    }
+
+    /** منع تنفيذ طلب كتابة يحمل نفس رمز النموذج أكثر من مرة. */
+    protected function claimForm(string $fallback): void
+    {
+        if (FormState::claim($_POST['_form_token'] ?? null)) { return; }
+        if ($this->wantsJson()) {
+            $message = 'هذا الطلب نُفّذ أو انتهت صلاحيته. راجع السجل قبل إعادة المحاولة.';
+            $this->json(['ok' => false, 'flash' => $message, 'errors' => ['_form' => $message]]);
+            exit;
+        }
+        flash('error', 'هذا الطلب نُفّذ أو انتهت صلاحيته. راجع السجل قبل إعادة المحاولة.');
+        redirect(safe_back($fallback, $_POST['_back'] ?? null));
+    }
+
+    /** رد validation موحد لنماذج AJAX مع أخطاء مرتبطة بالحقول. */
+    protected function jsonFormFailure(array $errors, string $fallback = 'تعذّر الحفظ'): never
+    {
+        $message = (string)($errors['_form'] ?? reset($errors) ?: $fallback);
+        $this->json(['ok' => false, 'flash' => $message, 'errors' => $errors]);
+        exit;
     }
 }

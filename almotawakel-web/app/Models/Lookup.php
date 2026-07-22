@@ -43,6 +43,25 @@ class Lookup
         );
     }
 
+    /** عدة قوائم مطلوبة في الشاشة نفسها باستعلام واحد. */
+    public static function ofTypes(array $types): array
+    {
+        $types = array_values(array_unique(array_filter(
+            $types,
+            static fn($type): bool => is_string($type) && isset(self::TYPES[$type])
+        )));
+        $out = array_fill_keys($types, []);
+        if (!$types) { return $out; }
+        $placeholders = implode(',', array_fill(0, count($types), '?'));
+        foreach (Database::all(
+            "SELECT list_type, value FROM lookups WHERE list_type IN ($placeholders) ORDER BY value",
+            $types
+        ) as $row) {
+            $out[$row['list_type']][] = $row['value'];
+        }
+        return $out;
+    }
+
     /** إضافة قيمة إن لم تكن موجودة */
     public static function add(string $type, string $value): void
     {

@@ -2,6 +2,9 @@
 /** استكمال بيانات الإيصالات — السعر الفعلي للعميل + رقم الإيصال (ليوم العمل المحدَّد فقط) */
 use App\Models\Permit;
 $count = count($rows);
+$formState = $formState ?? ['token'=>'','old'=>[],'errors'=>[],'back'=>'expenses/receipts'];
+$errors = $formState['errors'];
+$oldIds = array_map('intval', (array) ($formState['old']['id'] ?? []));
 ?>
 <style>
 .rc-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px}
@@ -38,8 +41,10 @@ $count = count($rows);
     </div>
   </div>
 <?php else: ?>
-  <form method="post" action="<?= url('expenses/receipts') ?>" class="no-confirm">
+  <?= formErrorSummary($errors) ?>
+  <form method="post" action="<?= url('expenses/receipts') ?>" class="no-confirm js-dirty-form">
     <?= csrfField() ?>
+    <?= formStateFields($formState['token'], $formState['back']) ?>
     <div class="card">
       <div class="table-wrap">
         <table class="data rc-tbl">
@@ -59,6 +64,11 @@ $count = count($rows);
             <?php foreach ($rows as $i => $rrow):
               $qty  = max(1, (int)$rrow['qty']);
               $unit = $rrow['actual_amount'] !== null ? rtrim(rtrim(number_format((float)$rrow['actual_amount'] / $qty, 2, '.', ''), '0'), '.') : '';
+              $oldAt = array_search((int) $rrow['id'], $oldIds, true);
+              if ($oldAt !== false) {
+                $unit = (string) (($formState['old']['actual_unit'] ?? [])[$oldAt] ?? $unit);
+                $rrow['ref_no'] = (string) (($formState['old']['ref_no'] ?? [])[$oldAt] ?? ($rrow['ref_no'] ?? ''));
+              }
               $noLbl = Permit::noLabel($rrow['permit_type']);
             ?>
             <tr>
@@ -90,7 +100,7 @@ $count = count($rows);
       </div>
       <div class="rc-actionbar">
         <span style="color:var(--grey);font-size:.85rem">اكتب اللي ناقص بس — الخانات الفاضية هتفضل زي ما هي.</span>
-        <button type="submit" class="btn gold">💾 حفظ الاستكمال</button>
+        <button type="submit" class="btn gold" data-primary-submit>💾 حفظ الاستكمال</button>
       </div>
     </div>
   </form>

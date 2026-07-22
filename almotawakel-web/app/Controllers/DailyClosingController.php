@@ -45,6 +45,8 @@ class DailyClosingController extends Controller
 
         // مصروفات اليوم — كل بند مصروف تاريخه = اليوم (مهما كان تاريخ الإصدار)
         // بنود «فيزا» (is_visa=1) لا تدخل صندوق التقفيل — تُدفع بالفيزا لا نقداً — لكنها تظل في وحدة المصروفات.
+        // بنود «عهدة المناديب» (paid_by_rep_id) تدخل التقفيل عادي من v42: فلوس المندوب
+        // أصلها من الدرج، والتنزيل نفسه مالوش أثر، فالخصم بيحصل يوم الصرف.
         $expenses = Database::all(
             "SELECT s.id, s.amount, s.entry_date, s.ref_no, s.note, s.stage_key, s.status,
                     p.id AS permit_id, p.permit_no, p.permit_type, p.company, p.client,
@@ -115,6 +117,37 @@ class DailyClosingController extends Controller
             }
         }
 
+        // نثريات المناديب (v39) — مصروف شركة بلا إذن. بقت تُخصم من الخزنة في v42
+        // فلازم تظهر في جدول التفاصيل ولا تُخصم من الرصيد في الخفاء.
+        $hasRepMisc = (bool) Database::scalar(
+            "SELECT COUNT(*) FROM information_schema.tables
+             WHERE table_schema=DATABASE() AND table_name='rep_misc_expenses'"
+        );
+        if ($hasRepMisc) {
+            foreach (Database::all(
+                // v45: الكاش بس بيدخل صندوق التقفيل. المدفوع بالفيزا بيظهر تحت
+                // في جدول الفيزا المعلوماتي زي أي بند فيزا.
+                "SELECT x.id,x.rep_id,x.amount,x.category,x.note,x.ref_no,r.name
+                 FROM rep_misc_expenses x JOIN reps r ON r.id=x.rep_id
+                 WHERE x.amount<>0 AND " . \App\Models\RepMiscExpense::cashOnlySql('x') . "
+                   AND x.exp_date=? ORDER BY x.id", [$date]
+            ) as $mx) {
+                $expenses[] = [
+                    'is_rep_misc' => true,
+                    'rep_id'      => (int) $mx['rep_id'],
+                    'permit_id'   => null,
+                    'permit_no'   => 'نثرية',
+                    'company'     => $mx['name'] ?: '—',
+                    'stage_key'   => 'rep_misc',
+                    'stage_label' => $mx['category'] ?: 'نثريات',
+                    'note'        => $mx['note'],
+                    'ref_no'      => $mx['ref_no'],
+                    'status'      => 'done',
+                    'amount'      => $mx['amount'],
+                ];
+            }
+        }
+
         // مدفوعات الفيزا (is_visa=1) المؤرَّخة باليوم — تُدفع بالفيزا لا نقداً، فلا تدخل صندوق التقفيل،
         // لكن تُعرض في جدول صغير منفصل للاطلاع. من بنود الإصدارات + المصاريف اليدوية.
         $visaRows = Database::all(
@@ -137,6 +170,21 @@ class DailyClosingController extends Controller
                 'permit_no'   => 'يدوي',
                 'company'     => $mv['beneficiary'] ?: '—',
             ];
+        }
+        // نثريات المناديب المدفوعة بالفيزا (v45) — نفس المعاملة: معلوماتية بس.
+        if ($hasRepMisc && \App\Models\RepMiscExpense::visaReady()) {
+            foreach (Database::all(
+                "SELECT x.amount, x.category, x.note, r.name
+                 FROM rep_misc_expenses x JOIN reps r ON r.id=x.rep_id
+                 WHERE x.amount<>0 AND x.is_visa=1 AND x.exp_date=? ORDER BY x.id", [$date]) as $mv) {
+                $visaRows[] = [
+                    'amount'      => $mv['amount'],
+                    'note'        => $mv['note'],
+                    'stage_label' => $mv['category'] ?: 'نثريات',
+                    'permit_no'   => 'نثرية',
+                    'company'     => $mv['name'] ?: '—',
+                ];
+            }
         }
         $totVisa = round((float) array_sum(array_map(fn($x)=>(float)$x['amount'], $visaRows)), 2);
 

@@ -1,3 +1,10 @@
+<?php
+use App\Core\FormState;
+$topupState = $topupState ?? ['token'=>FormState::token(), 'old'=>[], 'errors'=>[], 'back'=>'custody'];
+$topupOld = $topupState['old'];
+$topupErrors = $topupState['errors'];
+$returnPath = current_app_path() ?: 'custody';
+?>
 <div class="toolbar">
   <div class="section-head" style="margin:0">💼 رصيد عهدة المكتب</div>
   <div class="spacer"></div>
@@ -35,23 +42,27 @@
 </div>
 
 <!-- إضافة عهدة يدوية للرصيد -->
-<div class="card mb" style="padding:16px 18px">
+<div class="card mb" id="topup" style="padding:16px 18px">
   <div class="section-head" style="margin:0 0 10px">➕ إضافة عهدة للرصيد</div>
-  <form method="post" action="<?= url('custody/topup') ?>" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">
+  <?= formErrorSummary($topupErrors) ?>
+  <form class="js-dirty-form" method="post" action="<?= url('custody/topup') ?>" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">
     <?= csrfField() ?>
+    <?= formStateFields($topupState['token'], $topupState['back']) ?>
     <div class="field" style="margin:0;width:160px">
       <label>التاريخ</label>
-      <input type="date" name="cust_date" value="<?= e(work_date()) ?>">
+      <input type="date" name="cust_date" value="<?= e($topupOld['cust_date'] ?? work_date()) ?>"<?= fieldErrorAttrs('cust_date', $topupErrors) ?>>
+      <?= fieldError('cust_date', $topupErrors) ?>
     </div>
     <div class="field" style="margin:0;flex:1;min-width:180px">
       <label>البيان / المصدر</label>
-      <input type="text" name="note" placeholder="مصدر العهدة (اختياري)">
+      <input type="text" name="note" value="<?= e($topupOld['note'] ?? '') ?>" placeholder="مصدر العهدة (اختياري)">
     </div>
     <div class="field" style="margin:0;width:150px">
       <label>المبلغ</label>
-      <input type="number" step="0.01" name="amount" placeholder="0" required>
+      <input type="number" step="0.01" min="0.01" name="amount" value="<?= e($topupOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $topupErrors) ?>>
+      <?= fieldError('amount', $topupErrors) ?>
     </div>
-    <button class="btn gold" type="submit">إضافة للرصيد</button>
+    <button class="btn gold" type="submit" data-primary-submit>إضافة للرصيد</button>
   </form>
 </div>
 
@@ -87,9 +98,10 @@
           <td style="font-weight:700"><?= money($r['running'],false) ?></td>
           <td style="white-space:nowrap">
             <?php if($r['kind']==='topup'): ?>
-              <a class="edit" href="<?= url('custody/topup/'.$r['id'].'/edit') ?>" title="تعديل">✏️</a>
+              <a class="edit" href="<?= url('custody/topup/'.$r['id'].'/edit') ?>?back=<?= urlencode($returnPath) ?>" title="تعديل">✏️</a>
               <form method="post" action="<?= url('custody/topup/'.$r['id'].'/delete') ?>" class="confirm-delete" data-confirm="حذف هذه الإضافة؟" style="display:inline">
                 <?= csrfField() ?>
+                <?= formStateFields(FormState::token(), $returnPath) ?>
                 <button class="edit" type="submit" title="حذف" style="background:none;border:0;cursor:pointer">🗑️</button>
               </form>
             <?php else: ?>

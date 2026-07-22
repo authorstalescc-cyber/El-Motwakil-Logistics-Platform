@@ -110,11 +110,11 @@ $initial = mb_substr($profile['name'], 0, 1);
 </div>
 <script src="<?= url('assets/js/chart.umd.js') ?>"></script>
 <script>
-const CP = <?= json_encode([
+const CP = <?= js_json([
   'labels'    => $monthNames,
   'freight'   => array_map(fn($m)=>round($profile['monthly'][$m]['freight'],2), range(1,12)),
   'collected' => array_map(fn($m)=>round($profile['monthly'][$m]['collected'],2), range(1,12)),
-], JSON_UNESCAPED_UNICODE) ?>;
+]) ?>;
 Chart.defaults.font.family = "'Segoe UI','Tahoma',sans-serif";
 Chart.defaults.plugins.legend.rtl = true;
 Chart.defaults.plugins.tooltip.rtl = true;

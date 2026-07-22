@@ -19,11 +19,9 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
     if (is_file(App::basePath('public/' . $cand))) { $logoRel = $cand; break; }
 }
 
-// QR تلقائي: رقم الكشف + صاحب البيان + الباقي له
-$qrLines = [$company . ' — لمقاولات النقل', 'كشف حساب: ' . $docNo, 'صاحب البيان: ' . ($st['owner'] ?: '—'),
-            'الباقي له: ' . number_format((float)$st['stat_remaining'], 2) . ' ' . $currency];
-$qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=0&data='
-       . rawurlencode(implode("\n", $qrLines));
+// ⚠️ اتشال كود الـQR (2026-07-22، المرحلة 3 من خطة الأمان). كان بيبعت **اسم
+//    صاحب البيان والباقي له** لـapi.qrserver.com كل مرة يتطبع كشف. شوف الشرح
+//    الكامل في `permits/invoice_print.php`. ما ترجّعش أي مصدر خارجي هنا.
 
 $billNo = fn($b) => ($b['number'] ?? '') !== '' ? $b['number'] : '—';
 $typeAr = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
@@ -230,12 +228,8 @@ $typeAr = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
       <div class="note-box"><div class="t">ملاحظة</div><?= e($st['note']) ?></div>
     <?php endif; ?>
 
-    <!-- شريط التواصل + QR -->
+    <!-- شريط التواصل (اتشال الـQR — كان بيتولّد من موقع خارجي) -->
     <div class="contact-bar">
-      <div class="qr">
-        <img src="<?= $qrSrc ?>" alt="QR" width="84" height="84" loading="lazy">
-        <span>للتحقّق</span>
-      </div>
       <div class="contact">
         <?php if ($phone): ?><div class="cline"><span class="ci">📞</span> <bdi dir="ltr"><?= e($phone) ?></bdi></div><?php endif; ?>
         <?php if ($email): ?><div class="cline"><span class="ci">✉️</span> <bdi dir="ltr"><?= e($email) ?></bdi></div><?php endif; ?>

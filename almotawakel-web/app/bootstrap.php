@@ -20,9 +20,15 @@ require __DIR__ . '/Core/helpers.php';
 
 use App\Core\App;
 use App\Core\Auth;
+use App\Core\ErrorHandler;
+use App\Core\Performance;
+use App\Core\SecurityHeaders;
 
 App::boot();
+ErrorHandler::register();
+Performance::start();
 Auth::start();
+SecurityHeaders::send();
 
 // توحيد كل الأرقام الواردة في الطلب لتكون إنجليزية (حتى لو كُتبت بالعربية)
 // طبقة أمان خلف تحويل الواجهة — تعمل قبل أن يقرأ أي كنترولر $_POST/$_GET.

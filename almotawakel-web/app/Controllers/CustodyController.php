@@ -2,6 +2,7 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\FormState;
 use App\Models\Closing;
 use App\Models\Custody;
 
@@ -15,6 +16,7 @@ class CustodyController extends Controller
     public function index(): void
     {
         $this->requireAuth();
+        $state = FormState::consume('custody.topup.create', 'custody');
         $this->render('custody/index', [
             'title'      => 'رصيد العهدة',
             'balance'    => Custody::balance(),
@@ -24,6 +26,7 @@ class CustodyController extends Controller
             'ledger'     => Custody::ledger(),
             'breakdown'  => Closing::currentBreakdown(),
             'lastClosed' => Closing::lastClosedDate(),
+            'topupState' => $state,
         ]);
     }
 
@@ -34,7 +37,15 @@ class CustodyController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $data = $this->collect();
-        if ($err = Closing::guard($data['cust_date'])) { flash('error', $err); redirect('custody'); }
+        if ($data['amount'] <= 0) {
+            $this->formFailure('custody.topup.create', 'custody#topup', $_POST,
+                ['amount' => 'اكتب مبلغ إضافة أكبر من صفر.'], 'custody');
+        }
+        if ($err = Closing::guard($data['cust_date'])) {
+            $this->formFailure('custody.topup.create', 'custody#topup', $_POST,
+                ['cust_date' => $err], 'custody');
+        }
+        $this->claimForm('custody#topup');
         Custody::createTopup($data);
         flash('success', 'تمت إضافة العهدة إلى الرصيد.');
         redirect('custody');
@@ -45,10 +56,14 @@ class CustodyController extends Controller
         $this->requireAuth();
         $row = Custody::findTopup((int) $id);
         if (!$row) { flash('error', 'الإضافة غير موجودة.'); redirect('custody'); }
+        $state = FormState::consume('custody.topup.edit.' . (int) $id, 'custody');
         $this->render('custody/topup_form', [
             'title'  => 'تعديل إضافة عهدة',
-            'row'    => $row,
+            'row'    => array_replace($row, $state['old']),
             'action' => url('custody/topup/' . $id),
+            'errors' => $state['errors'],
+            'formToken' => $state['token'],
+            'back' => $state['back'],
         ]);
     }
 
@@ -58,10 +73,17 @@ class CustodyController extends Controller
         $this->requireCsrf();
         $data = $this->collect();
         $old  = Custody::findTopup((int) $id);
+        $formId = 'custody.topup.edit.' . (int) $id;
+        $formPath = 'custody/topup/' . (int) $id . '/edit';
+        if ($data['amount'] <= 0) {
+            $this->formFailure($formId, $formPath, $_POST,
+                ['amount' => 'اكتب مبلغ إضافة أكبر من صفر.'], 'custody');
+        }
         // امنع لو التاريخ الجديد أو القديم يقع ضمن فترة متقفلة
         if ($err = (Closing::guard($data['cust_date']) ?? ($old ? Closing::guard($old['cust_date']) : null))) {
-            flash('error', $err); redirect('custody');
+            $this->formFailure($formId, $formPath, $_POST, ['cust_date' => $err], 'custody');
         }
+        $this->claimForm('custody');
         Custody::updateTopup((int) $id, $data);
         flash('success', 'تم حفظ التعديلات.');
         redirect('custody');
@@ -73,6 +95,7 @@ class CustodyController extends Controller
         $this->requireCsrf();
         $old = Custody::findTopup((int) $id);
         if ($old && ($err = Closing::guard($old['cust_date']))) { flash('error', $err); redirect('custody'); }
+        $this->claimForm('custody');
         Custody::deleteTopup((int) $id);
         flash('success', 'تم حذف الإضافة.');
         redirect('custody');

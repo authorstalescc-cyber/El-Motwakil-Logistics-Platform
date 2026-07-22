@@ -1,12 +1,40 @@
 <?php
 use App\Models\Permit;
 use App\Models\PermitInvoice;
+use App\Core\FormState;
 
 $pid    = (int)$p['id'];
 $type   = $p['permit_type'];
 $isClosed = ($p['status'] ?? 'open') === 'closed';
 $noLabel  = Permit::noLabel($type);
 $vatPct = rtrim(rtrim(number_format($vatRate * 100, 2), '0'), '.');
+$formState = $formState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'permits/'.$pid];
+$old = $formState['old']; $errors = $formState['errors'];
+$voidState = $voidState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'permits/'.$pid.'/invoice'];
+$voidOldId = (int)($voidState['old']['_void_id'] ?? 0);
+$docKind = $old['doc_kind'] ?? 'invoice';
+$taxableOld = (string)($old['taxable'] ?? '0');
+$renderRows = [];
+if (is_array($old['item_label'] ?? null)) {
+    foreach ($old['item_label'] as $i => $label) {
+        $src = (string)($old['item_src'][$i] ?? 'new');
+        $renderRows[] = [
+            'label'=>(string)$label, 'qty'=>$old['item_qty'][$i] ?? 1,
+            'price'=>$old['item_price'][$i] ?? '', 'src'=>$src,
+            'role'=>$src === 'freight' ? 'freight' : 'receipt',
+        ];
+    }
+} else {
+    $renderRows[] = ['label'=>'النولون','qty'=>1,'price'=>'','src'=>'freight','role'=>'freight'];
+    foreach ($candidates as $c) {
+        $renderRows[] = [
+            'label'=>$c['label'], 'qty'=>(int)($c['qty'] ?? 1),
+            'price'=>number_format((float)$c['unit'],2,'.',''),
+            'src'=>!empty($c['auto']) ? 'primary_auto' : 'stage:'.(int)$c['stage_id'],
+            'role'=>$c['role'] ?? 'receipt',
+        ];
+    }
+}
 
 // تجميع كل البوالص عبر الحركات (لملخص سريع)
 $allBills = [];
@@ -75,27 +103,30 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
   <?php endif; ?>
 </div>
 
-<form method="post" action="<?= url('permits/'.$pid.'/invoice') ?>" id="invForm">
+<?= formErrorSummary($errors) ?>
+<form class="js-dirty-form" method="post" action="<?= url('permits/'.$pid.'/invoice') ?>" id="invForm" data-draft-key="permit-invoice-<?= $pid ?>">
   <?= csrfField() ?>
+  <?= formStateFields($formState['token'], $formState['back']) ?>
 
   <!-- (1) نوع المستند + الضريبة -->
   <div class="sec-head"><span>① نوع المستند</span></div>
   <div class="card mb" style="padding:16px">
     <div class="inv-choice">
-      <label class="ichip"><input type="radio" name="doc_kind" value="invoice" checked><span>فاتورة</span></label>
-      <label class="ichip"><input type="radio" name="doc_kind" value="statement"><span>كشف حساب</span></label>
-      <label class="ichip"><input type="radio" name="doc_kind" value="claim"><span>مطالبة بالإيصالات</span></label>
+      <label class="ichip"><input type="radio" name="doc_kind" value="invoice" <?= $docKind==='invoice'?'checked':'' ?>><span>فاتورة</span></label>
+      <label class="ichip"><input type="radio" name="doc_kind" value="statement" <?= $docKind==='statement'?'checked':'' ?>><span>كشف حساب</span></label>
+      <label class="ichip"><input type="radio" name="doc_kind" value="claim" <?= $docKind==='claim'?'checked':'' ?>><span>مطالبة بالإيصالات</span></label>
     </div>
     <div id="claimHint" class="i-hint" style="display:none;margin-top:10px">🧾 المطالبة بالإيصالات تسحب <b>كل الإيصالات فقط</b> بدون النولون وبدون الرسوم الأولية أو الضريبة.</div>
     <div id="taxBlock" style="margin-top:14px">
       <div style="font-weight:700;color:var(--navy,#15355B);margin-bottom:8px">خاضعة لضريبة القيمة المضافة (<?= $vatPct ?>%)؟</div>
       <div class="inv-choice">
-        <label class="ichip sm"><input type="radio" name="taxable" value="0" checked><span>غير خاضعة</span></label>
-        <label class="ichip sm"><input type="radio" name="taxable" value="1"><span>خاضعة للضريبة</span></label>
+        <label class="ichip sm"><input type="radio" name="taxable" value="0" <?= $taxableOld!=='1'?'checked':'' ?>><span>غير خاضعة</span></label>
+        <label class="ichip sm"><input type="radio" name="taxable" value="1" <?= $taxableOld==='1'?'checked':'' ?>><span>خاضعة للضريبة</span></label>
       </div>
       <div id="internalBlock" style="margin-top:12px;display:none">
-        <label style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">رقم الفاتورة (يُدخَل يدوياً)<span id="internalReq"> *</span></label>
-        <input type="text" name="internal_no" id="internalNo"
+        <label for="internalNo" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">رقم الفاتورة (يُدخَل يدوياً)<span id="internalReq"> *</span></label>
+        <input type="text" name="internal_no" id="internalNo" value="<?= e($old['internal_no'] ?? '') ?>"
+               aria-describedby="internalHint"
                style="display:block;width:100%;max-width:320px;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
         <div id="internalHint" class="i-hint" style="display:none">اختياري لغير الخاضعة — لو تركته فارغاً يظهر رقم المستند التلقائي فقط.</div>
       </div>
@@ -103,8 +134,8 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
 
     <!-- اسم العميل في الطباعة (اختياري) — للطباعة فقط، لا يمسّ بيانات الإذن -->
     <div style="margin-top:14px">
-      <label style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">اسم العميل في الطباعة (اختياري)</label>
-      <input type="text" name="display_client" value="<?= e($p['client'] ?? '') ?>"
+      <label for="invoice-display-client" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">اسم العميل في الطباعة (اختياري)</label>
+      <input id="invoice-display-client" type="text" name="display_client" value="<?= e($old['display_client'] ?? ($p['client'] ?? '')) ?>"
              style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
       <div class="i-hint">يظهر هذا الاسم على المستند المطبوع فقط — لا يغيّر اسم العميل المسجّل في الإذن أو التقارير.</div>
     </div>
@@ -112,15 +143,16 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
     <!-- عنوان بديل + رقم مسلسل خاص بالعميل (اختياريان) -->
     <div class="inv-extra">
       <div>
-        <label style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">عنوان الفاتورة (اختياري)</label>
-        <input type="text" name="custom_title" placeholder="اتركه فارغاً للعنوان الافتراضي (فاتورة / كشف حساب / مطالبة بالإيصالات)"
+        <label for="invoice-custom-title" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">عنوان الفاتورة (اختياري)</label>
+        <input id="invoice-custom-title" type="text" name="custom_title" value="<?= e($old['custom_title'] ?? '') ?>" placeholder="اتركه فارغاً للعنوان الافتراضي (فاتورة / كشف حساب / مطالبة بالإيصالات)"
                style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
         <div class="i-hint">لو أدخلت عنواناً هنا سيظهر بدل العنوان الافتراضي في الطباعة.</div>
       </div>
       <div>
-        <label style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">رقم مسلسل خاص بالعميل (اختياري)</label>
-        <input type="text" name="serial_no" placeholder="رقم مرجعي للعميل — لا يتكرّر"
+        <label for="invoice-serial-no" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">رقم مسلسل خاص بالعميل (اختياري)</label>
+        <input id="invoice-serial-no" type="text" name="serial_no" value="<?= e($old['serial_no'] ?? '') ?>" placeholder="رقم مرجعي للعميل — لا يتكرّر"<?= fieldErrorAttrs('serial_no', $errors) ?>
                style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
+        <?= fieldError('serial_no', $errors) ?>
         <div class="i-hint">يُطبَع على المستند، ويُرفَض لو كان مستخدَماً من قبل.</div>
       </div>
     </div>
@@ -135,14 +167,14 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
       <div class="inv-extra">
         <?php if ($needAgency): ?>
           <div>
-            <label style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">توكيل ملاحي</label>
-            <input type="text" name="agency" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
+            <label for="invoice-agency" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">توكيل ملاحي</label>
+            <input id="invoice-agency" type="text" name="agency" value="<?= e($old['agency'] ?? '') ?>" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
           </div>
         <?php endif; ?>
         <?php if ($needPort): ?>
           <div>
-            <label style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">الميناء</label>
-            <input type="text" name="port" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
+            <label for="invoice-port" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">الميناء</label>
+            <input id="invoice-port" type="text" name="port" value="<?= e($old['port'] ?? '') ?>" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
           </div>
         <?php endif; ?>
       </div>
@@ -161,37 +193,19 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
         <th style="width:44px"></th>
       </tr></thead>
       <tbody>
-        <!-- صف النولون (يُحسب عليه الضريبة، غير قابل للحذف؛ يُستبعَد في «مطالبة بالإيصالات») -->
-        <tr class="inv-row freight-row" data-role="freight">
-          <td>
-            <input type="text" name="item_label[]" value="النولون" class="i-label">
-            <input type="hidden" name="item_freight[]" value="1">
-            <input type="hidden" name="item_src[]" value="freight">
-            <div class="i-hint">النولون الفعلي المسجّل: <b><?= money($actualFreight,false) ?></b>
-              <?php if ($actualFreight>0): ?><button type="button" class="mini-btn" id="useActual">استخدم الفعلي</button><?php endif; ?>
-            </div>
-          </td>
-          <td><input type="number" step="0.01" name="item_qty[]" value="1" class="i-qty"></td>
-          <td><input type="number" step="0.01" name="item_price[]" value="" placeholder="0.00" class="i-price"></td>
-          <td class="i-total">0.00</td>
-          <td></td>
-        </tr>
-        <!-- بنود الإذن (إيصالات + رسوم أولية) — الكمية وسعر الوحدة مستورَدان -->
-        <?php foreach ($candidates as $c): ?>
-          <?php $src = !empty($c['auto']) ? 'primary_auto' : 'stage:'.(int)$c['stage_id']; ?>
-          <tr class="inv-row" data-role="<?= e($c['role'] ?? 'receipt') ?>">
+        <?php foreach ($renderRows as $rowIndex => $rr): $isFreightRow = $rr['src'] === 'freight'; ?>
+          <tr class="inv-row<?= $isFreightRow?' freight-row':'' ?>" data-role="<?= e($rr['role']) ?>">
             <td>
-              <input type="text" name="item_label[]" value="<?= e($c['label']) ?>" class="i-label">
-              <input type="hidden" name="item_freight[]" value="0">
-              <input type="hidden" name="item_src[]" value="<?= e($src) ?>">
-              <?php if (!empty($c['auto']) || !empty($c['note'])): ?>
-                <div class="i-hint"><?php if(!empty($c['auto'])): ?><span class="auto-tag">تلقائي</span> <?php endif; ?><?= e($c['date'] ? dfmt($c['date']).' — ' : '') ?><?= e($c['note'] ?? '') ?></div>
-              <?php endif; ?>
+              <input type="text" name="item_label[]" value="<?= e($rr['label']) ?>" class="i-label" aria-label="بيان البند <?= (int)$rowIndex+1 ?>">
+              <input type="hidden" name="item_freight[]" value="<?= $isFreightRow?'1':'0' ?>">
+              <input type="hidden" name="item_src[]" value="<?= e($rr['src']) ?>">
+              <?php if ($isFreightRow): ?><div class="i-hint">النولون الفعلي المسجّل: <b><?= money($actualFreight,false) ?></b>
+                <?php if ($actualFreight>0): ?><button type="button" class="mini-btn" id="useActual">استخدم الفعلي</button><?php endif; ?></div><?php endif; ?>
             </td>
-            <td><input type="number" step="0.01" name="item_qty[]" value="<?= (int)($c['qty'] ?? 1) ?>" class="i-qty"></td>
-            <td><input type="number" step="0.01" name="item_price[]" value="<?= number_format((float)$c['unit'],2,'.','') ?>" class="i-price"></td>
+            <td><input type="number" step="0.01" name="item_qty[]" value="<?= e($rr['qty']) ?>" class="i-qty" aria-label="كمية البند <?= (int)$rowIndex+1 ?>"></td>
+            <td><input type="number" step="0.01" name="item_price[]" value="<?= e($rr['price']) ?>" placeholder="0.00" class="i-price" aria-label="سعر البند <?= (int)$rowIndex+1 ?>"></td>
             <td class="i-total">0.00</td>
-            <td><button type="button" class="row-del" title="حذف البند">✕</button></td>
+            <td><?php if(!$isFreightRow): ?><button type="button" class="row-del" title="حذف البند">✕</button><?php endif; ?></td>
           </tr>
         <?php endforeach; ?>
       </tbody>
@@ -204,20 +218,20 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
   <!-- (3) الإصدار -->
   <div class="sec-head"><span>③ الإجمالي والإصدار</span></div>
   <div class="card mb" style="padding:16px">
-    <label style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">ملاحظة على الفاتورة (اختياري)</label>
-    <textarea name="note" rows="2" placeholder="أي بيان إضافي يظهر في المستند"
-              style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px;font-family:inherit"></textarea>
+    <label for="invoice-note" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">ملاحظة على الفاتورة (اختياري)</label>
+    <textarea id="invoice-note" name="note" rows="2" placeholder="أي بيان إضافي يظهر في المستند"
+              style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px;font-family:inherit"><?= e($old['note'] ?? '') ?></textarea>
 
     <div class="inv-extra" style="margin-top:14px">
-      <div><label style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">تاريخ الإصدار</label>
-        <input type="date" name="invoice_date" value="<?= e(work_date()) ?>" required></div>
-      <div><label style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">تاريخ الاستحقاق</label>
-        <input type="date" name="due_date" value="<?= e(date('Y-m-d',strtotime(work_date().' +'.(int)($paymentTermsDays ?? 30).' days'))) ?>">
+      <div><label for="invoice-date" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">تاريخ الإصدار</label>
+        <input id="invoice-date" type="date" name="invoice_date" value="<?= e($old['invoice_date'] ?? work_date()) ?>" required></div>
+      <div><label for="invoice-due-date" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">تاريخ الاستحقاق</label>
+        <input id="invoice-due-date" type="date" name="due_date" value="<?= e($old['due_date'] ?? date('Y-m-d',strtotime(work_date().' +'.(int)($paymentTermsDays ?? 30).' days'))) ?>">
         <div class="i-hint">يُحسب افتراضياً من شروط دفع العميل، ويمكن تعديله قبل الإصدار.</div></div>
     </div>
 
     <?php if (!$isClosed): ?>
-      <label class="close-opt"><input type="checkbox" name="close_permit" value="1"><span>🔒 إغلاق الإذن بعد إصدار الفاتورة</span></label>
+      <div class="close-opt">🔒 سيتم <b>إغلاق الإذن تلقائياً</b> بمجرد إصدار المستند. لإعادة فتحه لاحقاً لازم تلغي المستند أولاً.</div>
     <?php endif; ?>
 
     <div class="inv-summary" data-vat="<?= e($vatRate) ?>">
@@ -228,7 +242,7 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
 
     <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
       <button type="submit" class="btn gold" formaction="<?= url('permits/'.$pid.'/invoice/preview') ?>">👁️ معاينة قبل الإصدار</button>
-      <button type="submit" class="btn ghost">🧾 إصدار مباشر وحفظ</button>
+      <button type="submit" class="btn ghost" data-primary-submit>🧾 إصدار مباشر وحفظ</button>
       <a class="btn ghost" href="<?= url('permits/'.$pid) ?>">إلغاء</a>
     </div>
   </div>
@@ -237,6 +251,7 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
 <!-- سجل الفواتير السابقة لهذا الإذن -->
 <?php if ($invoices): ?>
   <div class="sec-head"><span>🗂️ مستندات صادرة سابقاً لهذا الإذن (<?= intf(count($invoices)) ?>)</span></div>
+  <?= formErrorSummary($voidState['errors']) ?>
   <div class="card mb" style="padding:0;overflow:hidden">
     <div class="table-wrap"><table class="data">
       <thead><tr>
@@ -256,8 +271,8 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
             <a class="edit" href="<?= url('permits/invoice/'.$iv['id']) ?>" target="_blank" title="طباعة">🖨️</a>
             <?php if($iv['status']!=='void'): ?><form method="post" action="<?= url('permits/invoice/'.$iv['id'].'/delete') ?>" style="display:inline"
                   data-danger="1" data-confirm="إلغاء المستند مع الاحتفاظ برقمه؟">
-              <?= csrfField() ?><input type="hidden" name="lock_version" value="<?= (int)$iv['lock_version'] ?>">
-              <input name="reason" required placeholder="سبب الإلغاء" style="width:110px"><button class="del" title="إلغاء">⛔</button>
+              <?= csrfField() ?><?= formStateFields($voidState['token'], $voidState['back']) ?><input type="hidden" name="_void_id" value="<?= (int)$iv['id'] ?>"><input type="hidden" name="lock_version" value="<?= (int)$iv['lock_version'] ?>">
+              <span class="field" style="display:inline-block;margin:0"><input name="reason" value="<?= $voidOldId===(int)$iv['id'] ? e($voidState['old']['reason'] ?? '') : '' ?>" required placeholder="سبب الإلغاء" style="width:110px"<?= $voidOldId===(int)$iv['id'] ? fieldErrorAttrs('reason', $voidState['errors']) : '' ?>><?= $voidOldId===(int)$iv['id'] ? fieldError('reason', $voidState['errors']) : '' ?></span><button class="del" type="submit" data-primary-submit title="إلغاء">⛔</button>
             </form><?php endif; ?>
           </div></td>
         </tr>
@@ -386,11 +401,11 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
     tr.className = 'inv-row';
     tr.setAttribute('data-role', 'new');
     tr.innerHTML =
-      '<td><input type="text" name="item_label[]" value="" placeholder="اسم البند" class="i-label">'+
+      '<td><input type="text" name="item_label[]" value="" placeholder="اسم البند" class="i-label" aria-label="بيان البند الجديد">'+
       '<input type="hidden" name="item_freight[]" value="0">'+
       '<input type="hidden" name="item_src[]" value="new"></td>'+
-      '<td><input type="number" step="0.01" name="item_qty[]" value="1" class="i-qty"></td>'+
-      '<td><input type="number" step="0.01" name="item_price[]" value="" placeholder="0.00" class="i-price"></td>'+
+      '<td><input type="number" step="0.01" name="item_qty[]" value="1" class="i-qty" aria-label="كمية البند الجديد"></td>'+
+      '<td><input type="number" step="0.01" name="item_price[]" value="" placeholder="0.00" class="i-price" aria-label="سعر البند الجديد"></td>'+
       '<td class="i-total">0.00</td>'+
       '<td><button type="button" class="row-del" title="حذف البند">✕</button></td>';
     tbody.appendChild(tr);

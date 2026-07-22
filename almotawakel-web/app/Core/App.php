@@ -12,6 +12,15 @@ class App
     public static function boot(): void
     {
         self::$config = require dirname(__DIR__, 2) . '/config/config.php';
+        // يسمح لاختبارات المثبّت فقط باستخدام قاعدة معزولة دون لمس config.php.
+        // القيد على CLI والبادئة يمنع تحوير اتصال تطبيق الويب أو اختيار قاعدة عامة.
+        $testDb = (string) getenv('ALMOTAWAKEL_TEST_DB');
+        if (in_array(PHP_SAPI, ['cli', 'cli-server'], true) && $testDb !== '') {
+            if (!preg_match('/^almotawakel_test_[a-z0-9_]{6,48}$/', $testDb)) {
+                throw new \RuntimeException('اسم قاعدة الاختبار ALMOTAWAKEL_TEST_DB غير آمن.');
+            }
+            self::$config['db']['name'] = $testDb;
+        }
         date_default_timezone_set(self::$config['timezone'] ?? 'Africa/Cairo');
         mb_internal_encoding('UTF-8');
     }
@@ -32,6 +41,9 @@ class App
     /** الرابط الأساسي للتطبيق (يدعم التشغيل داخل مجلد فرعي) */
     public static function baseUrl(): string
     {
+        // مع router script، خادم PHP المدمج يضع مسار الطلب نفسه في SCRIPT_NAME؛
+        // اعتباره مجلدًا أساسيًا يكسر كل رابط متداخل مثل /permits/12.
+        if (PHP_SAPI === 'cli-server') { return ''; }
         $script = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
         $script = rtrim($script, '/');
         // إذا كان جذر الويب هو public/ فالمسار الأساسي هو ''

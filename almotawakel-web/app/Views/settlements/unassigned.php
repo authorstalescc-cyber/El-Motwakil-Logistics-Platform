@@ -1,4 +1,5 @@
 <?php
+use App\Core\FormState;
 /**
  * البوالص بلا صاحب بيان — تعيين سريع (فردي) أو جماعي (عدّة بوالص لصاحب بيان واحد).
  * @var array $bills         البوالص التي declaration_owner فيها فارغ
@@ -34,6 +35,7 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
 
 <form method="post" action="<?= url('settlements/assign-owner') ?>" id="assignForm" data-confirm="حفظ تعيين صاحب البيان للبوالص؟">
   <?= csrfField() ?>
+  <?= formStateFields(FormState::token(), 'settlements?unassigned=1') ?>
 
   <!-- شريط التعيين الجماعي -->
   <div class="bulk-bar">

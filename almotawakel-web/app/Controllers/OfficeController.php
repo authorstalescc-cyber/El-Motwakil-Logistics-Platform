@@ -2,6 +2,7 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\FormState;
 use App\Models\VisaCard;
 
 /**
@@ -30,6 +31,7 @@ class OfficeController extends Controller
         $this->requireAuth();
         $card = VisaCard::find((int) $id);
         if (!$card) { flash('error', 'الكارت غير موجود.'); redirect('office'); }
+        $state = FormState::consume('office.deposit.' . (int) $id, 'office/' . (int) $id);
         $this->render('office/card', [
             'title'   => 'كارت: ' . $card['name'],
             'card'    => $card,
@@ -37,6 +39,7 @@ class OfficeController extends Controller
             'balance' => VisaCard::balanceOf((int) $id),
             'stats'   => VisaCard::stats((int) $id),
             'lastDep' => VisaCard::lastDeposit((int) $id),
+            'depositState' => $state,
         ]);
     }
 
@@ -59,11 +62,16 @@ class OfficeController extends Controller
     public function create(): void
     {
         $this->requireAuth();
+        $state = FormState::consume('office.card.create', 'office');
+        $defaults = ['name' => '', 'owner' => '', 'bank' => '', 'opening_balance' => '', 'status' => 'active', 'note' => '', 'init_amount' => '', 'init_date' => work_date()];
         $this->render('office/form', [
             'title'  => 'إضافة كارت فيزا',
-            'row'    => ['name' => '', 'owner' => '', 'bank' => '', 'opening_balance' => '', 'status' => 'active', 'note' => ''],
+            'row'    => array_replace($defaults, $state['old']),
             'action' => url('office'),
             'isEdit' => false,
+            'errors' => $state['errors'],
+            'formToken' => $state['token'],
+            'back' => $state['back'],
         ]);
     }
 
@@ -72,7 +80,11 @@ class OfficeController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $data = $this->collect();
-        if ($data['name'] === '') { flash('error', 'اكتب اسم أو رقم الكارت.'); redirect('office/new'); }
+        if ($data['name'] === '') {
+            $this->formFailure('office.card.create', 'office/new', $_POST,
+                ['name' => 'اكتب اسم أو رقم الكارت.'], 'office');
+        }
+        $this->claimForm('office');
         $id = VisaCard::create($data);
         // رصيد مبدئي اختياري → يُسجَّل كشحنة مؤرَّخة (بدل الرصيد الافتتاحي)
         $init = ($_POST['init_amount'] ?? '') === '' ? 0 : (float) $_POST['init_amount'];
@@ -92,11 +104,15 @@ class OfficeController extends Controller
         $this->requireAuth();
         $row = VisaCard::find((int) $id);
         if (!$row) { flash('error', 'الكارت غير موجود.'); redirect('office'); }
+        $state = FormState::consume('office.card.edit.' . (int) $id, 'office/' . (int) $id);
         $this->render('office/form', [
             'title'  => 'تعديل كارت فيزا',
-            'row'    => $row,
+            'row'    => array_replace($row, $state['old']),
             'action' => url('office/' . $id),
             'isEdit' => true,
+            'errors' => $state['errors'],
+            'formToken' => $state['token'],
+            'back' => $state['back'],
         ]);
     }
 
@@ -105,7 +121,11 @@ class OfficeController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $data = $this->collect();
-        if ($data['name'] === '') { flash('error', 'اكتب اسم أو رقم الكارت.'); redirect('office/' . $id . '/edit'); }
+        if ($data['name'] === '') {
+            $this->formFailure('office.card.edit.' . (int) $id, 'office/' . (int) $id . '/edit', $_POST,
+                ['name' => 'اكتب اسم أو رقم الكارت.'], 'office/' . (int) $id);
+        }
+        $this->claimForm('office/' . (int) $id);
         VisaCard::update((int) $id, $data);
         flash('success', 'تم حفظ التعديلات.');
         redirect('office/' . $id);
@@ -115,6 +135,7 @@ class OfficeController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
+        $this->claimForm('office');
         VisaCard::delete((int) $id);
         flash('success', 'تم حذف الكارت (وفُكّت نسبة عملياته).');
         redirect('office');
@@ -131,7 +152,11 @@ class OfficeController extends Controller
             'amount'   => ($_POST['amount'] ?? '') === '' ? 0 : (float) $_POST['amount'],
             'note'     => trim($_POST['note'] ?? ''),
         ];
-        if ($d['amount'] <= 0) { flash('error', 'اكتب مبلغ الشحن.'); redirect('office/' . $id); }
+        if ($d['amount'] <= 0) {
+            $this->formFailure('office.deposit.' . (int) $id, 'office/' . (int) $id . '#deposit', $_POST,
+                ['amount' => 'اكتب مبلغ شحن أكبر من صفر.'], 'office/' . (int) $id);
+        }
+        $this->claimForm('office/' . (int) $id . '#deposit');
         VisaCard::createDeposit((int) $id, $d);
         flash('success', 'تمت إضافة الشحن للرصيد.');
         redirect('office/' . $id);
@@ -142,6 +167,7 @@ class OfficeController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $dep = VisaCard::findDeposit((int) $depId);
+        $this->claimForm($dep ? 'office/' . (int) $dep['card_id'] : 'office');
         VisaCard::deleteDeposit((int) $depId);
         flash('success', 'تم حذف الشحن.');
         redirect($dep ? 'office/' . (int) $dep['card_id'] : 'office');

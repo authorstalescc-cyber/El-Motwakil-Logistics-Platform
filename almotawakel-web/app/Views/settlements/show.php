@@ -1,4 +1,6 @@
-<?php use App\Models\Bill; ?>
+<?php use App\Models\Bill; use App\Core\FormState;
+$paymentState = $paymentState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'settlements/'.(int)$bill['id']];
+$payOld = $paymentState['old']; $payErrors = $paymentState['errors']; ?>
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('settlements') ?>">‹ رجوع لقائمة السداد</a>
   <a class="btn ghost" href="<?= url('bawalis/'.$bill['id'].'/edit') ?>">✏️ تعديل البوليصة</a>
@@ -28,12 +30,14 @@
 
     <?php if ($bill['remaining'] > 0): ?>
     <div class="section-head" style="margin-top:22px">تسجيل دفعة</div>
-    <form class="inline-form" method="post" action="<?= url('settlements/'.$bill['id'].'/pay') ?>">
+    <?= formErrorSummary($payErrors) ?>
+    <form class="inline-form js-dirty-form" method="post" action="<?= url('settlements/'.$bill['id'].'/pay') ?>">
       <?= csrfField() ?>
-      <input type="number" step="0.01" name="amount" placeholder="المبلغ" required style="max-width:130px">
-      <input type="date" name="pay_date" value="<?= e(work_date()) ?>">
-      <input type="text" name="note" placeholder="ملاحظة (اختياري)">
-      <button class="btn gold sm" type="submit">➕ دفع</button>
+      <?= formStateFields($paymentState['token'], $paymentState['back']) ?>
+      <div class="field" style="margin:0"><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required style="max-width:130px"<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
+      <div class="field" style="margin:0"><input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>"<?= fieldErrorAttrs('pay_date', $payErrors) ?>><?= fieldError('pay_date', $payErrors) ?></div>
+      <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)">
+      <button class="btn gold sm" type="submit" data-primary-submit>➕ دفع</button>
     </form>
     <?php endif; ?>
   </div>
@@ -51,7 +55,7 @@
             <td>
               <?php if ((int)($p['is_legacy'] ?? 0) !== 1): ?>
               <form class="confirm-delete" method="post" action="<?= url('settlements/'.$bill['id'].'/payment/'.$p['id'].'/delete') ?>" style="margin:0">
-                <?= csrfField() ?><button class="del" type="submit" title="حذف">🗑️</button>
+                <?= csrfField() ?><?= formStateFields(FormState::token(), 'settlements/'.(int)$bill['id']) ?><button class="del" type="submit" title="حذف">🗑️</button>
               </form>
               <?php else: ?><span title="دفعة تاريخية ثابتة">🔒</span><?php endif; ?>
             </td>

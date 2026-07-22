@@ -1,0 +1,18 @@
+{
+  "name": "المتوكل — شغل المندوب",
+  "short_name": "المتوكل",
+  "description": "تسجيل إيصالات ومصاريف الأذونات من الموبايل",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/m",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F151E",
+  "theme_color": "#0F151E",
+  "icons": [
+    { "src": "/assets/img/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/assets/img/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" },
+    { "src": "/assets/img/logo.png", "sizes": "296x225", "type": "image/png", "purpose": "any" }
+  ]
+}

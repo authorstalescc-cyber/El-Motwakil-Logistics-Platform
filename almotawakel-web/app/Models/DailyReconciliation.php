@@ -129,6 +129,8 @@ class DailyReconciliation
     private static function systemClientRows(string $date): array
     {
         $expSql = Permit::expenseSql('s');
+        // v42: بنود عهدة المناديب بقت داخلة المطابقة زي أي بند. فلوس المندوب أصلها
+        // من الدرج، والصرف بيتخصم يوم صرفه — فلازم يتطابق مع اليدوي زي غيره.
         $items = Database::all(
             "SELECT s.id,s.permit_id,s.movement_id,pm.seq AS movement_seq,s.stage_key,s.amount,
                     s.note,s.ref_no,s.is_visa,p.permit_no,p.permit_type,p.client,p.company
@@ -205,6 +207,22 @@ class DailyReconciliation
             ) as $r){
                 $amount=round((float)$r['amount'],2);if((int)$r['is_visa']===1){$visa+=$amount;}else{$system+=$amount;}
                 $details[]=['label'=>Rep::kindLabel((string)$r['kind']),'party'=>$r['name']?:'—','note'=>$r['note'],'amount'=>$amount,'is_visa'=>(int)$r['is_visa']];
+            }
+        }
+        // نثريات المناديب (v39) — مصروف شركة بلا إذن ولا عميل، فمكانها الصف العام.
+        // بقت كاش خارج من الخزنة من v42 فلازم تتطابق زي أي مصروف يدوي.
+        // v45: الكاش بس بيتطابق. المدفوع بالفيزا بيتعدّ في `visa` المعلوماتي زي
+        // أي بند فيزا، وما بيدخلش المطابقة لأنه ما خرجش من الدرج أصلاً.
+        if(self::tableExists('rep_misc_expenses')){
+            $miscVisa = RepMiscExpense::visaReady() ? 'x.is_visa' : '0';
+            foreach(Database::all(
+                "SELECT x.amount,x.category,x.note,$miscVisa AS is_visa,r.name FROM rep_misc_expenses x
+                 JOIN reps r ON r.id=x.rep_id WHERE x.amount<>0 AND x.exp_date=? ORDER BY x.id",[$date]
+            ) as $r){
+                $amount=round((float)$r['amount'],2);
+                $isVisa=!empty($r['is_visa']);
+                if($isVisa){ $visa+=$amount; } else { $system+=$amount; }
+                $details[]=['label'=>$r['category']?:RepMiscExpense::CATEGORY,'party'=>$r['name']?:'—','note'=>$r['note'],'amount'=>$amount,'is_visa'=>$isVisa?1:0];
             }
         }
         return ['system'=>round($system,2),'visa_excluded'=>round($visa,2),'manual'=>null,'difference'=>round(-$system,2),'matched'=>false,'details'=>$details];

@@ -9,6 +9,29 @@ function e($v): string
 }
 
 /**
+ * تحويل أي قيمة إلى JSON صالح للوضع **داخل وسم <script>**.
+ * المصدر الوحيد لهذا التحويل — استخدمه في كل `<?= ... ?>` جوّه سكربت.
+ *
+ * ⚠️ ليه موجودة: `json_encode(..., JSON_UNESCAPED_SLASHES)` بتسيب الشرطة `/`
+ *    زي ما هي، فنص زي «</script>» مخزَّن في أي خانة (اسم عميل، وجهة بوليصة…)
+ *    بيقفل الوسم ويشغّل كود المهاجم في متصفح كل من يفتح الصفحة — بما فيهم
+ *    المالك (تصعيد صلاحيات من أقل مستخدم). `JSON_HEX_TAG` بتحوّل `<` و`>`
+ *    إلى `<`/`>` فيستحيل الخروج من الوسم مهما كان المحتوى، ومعاها
+ *    HEX_AMP/APOS/QUOT عشان تفضل آمنة كمان لو اتحطّت جوّه سمة HTML.
+ *
+ * بنسيب JSON_UNESCAPED_SLASHES شغّالة عن قصد: الروابط تفضل مقروءة، وبقاء
+ * `/` بلا تهريب مش خطر بعد ما بقى `<` نفسه مستحيل يعدّي.
+ */
+function js_json($value): string
+{
+    return json_encode(
+        $value,
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    );
+}
+
+/**
  * تحويل الأرقام العربية (٠١٢…) والفارسية (۰۱۲…) إلى إنجليزية (012…).
  * المصدر الوحيد لهذا التحويل — استخدمه في أي مكان يحتاج توحيد الأرقام.
  */
@@ -151,11 +174,9 @@ function dfmt($v): string
     }
 }
 
-/** قيمة قديمة من النموذج (للاحتفاظ بالمدخلات عند الخطأ) */
-function old(string $key, $default = '')
-{
-    return $_SESSION['_old'][$key] ?? $default;
-}
+/* ملحوظة: دالة `old()` القديمة اتشالت في المرحلة ٠ — كانت بتقرا `$_SESSION['_old']`
+   اللي **مفيش حاجة في المشروع كله بتكتب فيه**، ومفيش view واحد كان بينادّيها.
+   الاحتفاظ بالمدخلات عند الخطأ بيتم عبر `App\Core\FormState` وهو المصدر الوحيد. */
 
 /** حقل CSRF مخفي */
 function csrfField(): string
@@ -163,16 +184,113 @@ function csrfField(): string
     return '<input type="hidden" name="_csrf" value="' . e(Auth::csrf()) . '">';
 }
 
-/** رسالة فلاش */
+/** حقول حالة النموذج المعزولة وسياق الرجوع الداخلي. */
+function formStateFields(string $token, string $back): string
+{
+    return '<input type="hidden" name="_form_token" value="' . e($token) . '">' .
+           '<input type="hidden" name="_back" value="' . e(safe_back('', $back)) . '">';
+}
+
+/** ملخص أخطاء موحّد، قابل للتركيز وقارئ الشاشة. */
+function formErrorSummary(array $errors): string
+{
+    if (!$errors) { return ''; }
+    $messages = [];
+    foreach ($errors as $message) {
+        if (is_string($message) && trim($message) !== '') { $messages[] = trim($message); }
+    }
+    $messages = array_values(array_unique($messages));
+    if (!$messages) { return ''; }
+    $items = implode('', array_map(fn(string $m): string => '<li>' . e($m) . '</li>', $messages));
+    return '<div class="form-error-summary" role="alert" tabindex="-1" data-form-error-summary>' .
+           '<strong>راجع البيانات التالية:</strong><ul>' . $items . '</ul></div>';
+}
+
+function fieldErrorAttrs(string $name, array $errors): string
+{
+    return empty($errors[$name]) ? '' : ' aria-invalid="true" aria-describedby="err-' . e($name) . '"';
+}
+
+function fieldError(string $name, array $errors): string
+{
+    return empty($errors[$name]) ? '' : '<small class="field-error" id="err-' . e($name) . '" role="alert">' . e($errors[$name]) . '</small>';
+}
+
+/** المسار الحالي داخل التطبيق، مع query وfragment إن وُجدا. */
+function current_app_path(): string
+{
+    $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+    $base = App::baseUrl();
+    if ($base !== '' && str_starts_with($uri, $base . '/')) { $uri = substr($uri, strlen($base)); }
+    return safe_back('', $uri);
+}
+
+/**
+ * يقبل مسارًا داخليًا نسبيًا فقط، ويرفض scheme/host و`//` ومحارف التحكم.
+ */
+function safe_back(string $fallback, $candidate = null): string
+{
+    $fallback = ltrim(trim($fallback), '/');
+    $raw = trim((string) ($candidate ?? ''));
+    if ($raw === '' || preg_match('/[\x00-\x1F\x7F]/', $raw) || str_starts_with($raw, '//') ||
+        preg_match('/^[a-z][a-z0-9+.-]*:/i', $raw)) { return $fallback; }
+    // نفصل يدويًا بدل parse_url كي لا تتشوّه query عربية خام في بعض إصدارات PHP.
+    $fragment = '';
+    if (($at = strpos($raw, '#')) !== false) { $fragment = substr($raw, $at + 1); $raw = substr($raw, 0, $at); }
+    $query = '';
+    if (($at = strpos($raw, '?')) !== false) { $query = substr($raw, $at + 1); $raw = substr($raw, 0, $at); }
+    $path = $raw;
+    $base = App::baseUrl();
+    if ($base !== '' && ($path === $base || str_starts_with($path, $base . '/'))) { $path = substr($path, strlen($base)); }
+    if ($path === '' || str_starts_with($path, '//') || str_contains($path, '\\')) { return $fallback; }
+    if (!str_starts_with($path, '/') && (str_starts_with($path, '.') || str_contains($path, ':'))) { return $fallback; }
+    $out = ltrim($path, '/');
+    if ($query !== '') { $out .= '?' . $query; }
+    if ($fragment !== '') { $out .= '#' . $fragment; }
+    return $out;
+}
+
+/**
+ * رسالة فلاش — طابور (المرحلة ٠).
+ *
+ * قبل كده كان `$_SESSION['_flash'][$type]` نصًّا واحدًا، يعني تاني `flash('success', …)`
+ * في نفس الطلب بيمسح الأولى **بالسكوت**. دلوقتي بقت مصفوفة فالرسايل بتتراكم.
+ *
+ * القراءة `flash('success')` بترجّع **أول رسالة** وبتفضّي نوعها بالكامل — ده بالظبط
+ * سلوك النظام القديم (رسالة واحدة كانت بتوصل)، فمفيش أي صفحة اتغيّر سلوكها،
+ * ومفيش رسالة بتتسرّب للصفحة اللي بعدها. الطابور كله يتقرا بـ`flash_all()`
+ * اللي هتستخدمه شاشة التوستات في المرحلة ١.
+ */
 function flash(string $type, ?string $msg = null)
 {
     if ($msg === null) {
-        $m = $_SESSION['_flash'][$type] ?? null;
+        $bucket = $_SESSION['_flash'][$type] ?? null;
         unset($_SESSION['_flash'][$type]);
-        return $m;
+        if ($bucket === null) { return null; }
+        // توافق رجعي: جلسة قديمة ممكن يكون فيها نص مخزَّن قبل الترقية
+        return is_array($bucket) ? ($bucket[0] ?? null) : $bucket;
     }
-    $_SESSION['_flash'][$type] = $msg;
+    $_SESSION['_flash'][$type][] = $msg;
     return null;
+}
+
+/**
+ * يسحب **كل** رسائل الفلاش المتراكمة ويفضّي الطابور.
+ * بترجّع `[['type' => 'success', 'msg' => '…'], …]` بترتيب النوع ثم الإضافة.
+ */
+function flash_all(): array
+{
+    $queue = $_SESSION['_flash'] ?? [];
+    unset($_SESSION['_flash']);
+    $out = [];
+    foreach ($queue as $type => $bucket) {
+        foreach ((array) $bucket as $msg) {
+            if (is_string($msg) && $msg !== '') {
+                $out[] = ['type' => (string) $type, 'msg' => $msg];
+            }
+        }
+    }
+    return $out;
 }
 
 /** إعادة توجيه */
@@ -292,6 +410,8 @@ function icon(string $name, int $size = 20, string $class = ''): string
         'zap'         => '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
         'landmark'    => '<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>',
         'hourglass'   => '<path d="M5 22h14M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.41L12 12l-4.41 4.42A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.41L12 12l4.41-4.42A2 2 0 0 0 17 6.17V2"/>',
+        'bell'        => '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
+        'info'        => '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
         'menu'        => '<line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/>',
         'chevron'     => '<path d="m15 18-6-6 6-6"/>',
         'inbox'       => '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
@@ -324,7 +444,12 @@ function icon(string $name, int $size = 20, string $class = ''): string
  * تظهر دائمًا: لو مفيش كروت تعرض رابط «أضف كارت» بدل الاختفاء.
  * تُخزَّن الكروت في static فلا تتكرّر الاستعلامات داخل نفس الطلب (مهم لجداول البنود).
  */
-function visa_card_select($selected = 0, string $name = 'visa_card_id', string $style = ''): string
+/**
+ * @param string $form اسم فورم خارجي يتربط بيه الـselect (سمة form=""). لازمة في
+ *        صندوق مراجعة المناديب: حقول التعديل جوّه div مربوطة بفورم برّه، ومن
+ *        غير السمة دي الاختيار ما بيتبعتش أصلاً فالكارت بيضيع بصمت.
+ */
+function visa_card_select($selected = 0, string $name = 'visa_card_id', string $style = '', string $id = '', string $form = ''): string
 {
     static $cards = null;
     if ($cards === null) { $cards = \App\Models\VisaCard::all(true); }
@@ -334,7 +459,9 @@ function visa_card_select($selected = 0, string $name = 'visa_card_id', string $
              . '<a href="' . url('office') . '">➕ أضِف كارت فيزا</a></span>';
     }
     $st = $style !== '' ? ' style="' . e($style) . '"' : '';
-    $h  = '<select name="' . e($name) . '" title="كارت الفيزا (رصيد المكتب)"' . $st . '>'
+    $idAttr = $id !== '' ? ' id="' . e($id) . '"' : '';
+    $formAttr = $form !== '' ? ' form="' . e($form) . '"' : '';
+    $h  = '<select name="' . e($name) . '"' . $idAttr . $formAttr . ' title="كارت الفيزا (رصيد المكتب)"' . $st . '>'
         . '<option value="">— اختر الكارت —</option>';
     foreach ($cards as $vc) {
         $lbl = e($vc['name']) . ($vc['owner'] ? ' — ' . e($vc['owner']) : '');

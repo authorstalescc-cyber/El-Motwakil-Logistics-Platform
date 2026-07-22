@@ -217,7 +217,7 @@ if ($onMap):
 <script>
 (function(){
   // مسار الأيقونات: Leaflet بيدوّر عليها جنب الـ CSS افتراضيًا
-  L.Icon.Default.prototype.options.imagePath = <?= json_encode(url('assets/vendor/leaflet/images/'), JSON_UNESCAPED_SLASHES) ?>;
+  L.Icon.Default.prototype.options.imagePath = <?= js_json(url('assets/vendor/leaflet/images/')) ?>;
 
   var map = L.map('allMap', {scrollWheelZoom:false});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -250,7 +250,7 @@ if ($onMap):
   }
   function esc(s){ var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
 
-  var initial = <?= json_encode(array_map(fn($t) => [
+  var initial = <?= js_json(array_map(fn($t) => [
         'lat'    => (float) $t['last_lat'],
         'lng'    => (float) $t['last_lng'],
         'driver' => $t['driver'] ?: '—',
@@ -261,7 +261,7 @@ if ($onMap):
         'ago'    => Track::ago($t['last_at']),
         'pulse'  => Track::pulse($t)[0],
         'url'    => url('tracking/' . (int) $t['id']),
-      ], $onMap), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+      ], $onMap)) ?>;
 
   var pts = draw(initial);
   if (pts.length === 1) { map.setView(pts[0], 12); }
@@ -270,7 +270,7 @@ if ($onMap):
   // تحديث تلقائي كل دقيقة — الكروت تحت ما بتتحدّثش إلا بإعادة التحميل
   <?php if ($status === 'active'): ?>
   setInterval(function(){
-    fetch(<?= json_encode(url('tracking/feed'), JSON_UNESCAPED_SLASHES) ?>, {headers:{'X-Requested-With':'XMLHttpRequest'}})
+    fetch(<?= js_json(url('tracking/feed')) ?>, {headers:{'X-Requested-With':'XMLHttpRequest'}})
       .then(function(r){ return r.json(); })
       .then(function(j){ if (j.ok && j.cars.length) draw(j.cars); })
       .catch(function(){});
@@ -288,12 +288,12 @@ document.querySelectorAll('.js-copy').forEach(function(b){
       var o = b.innerHTML; b.innerHTML = '✓ اتنسخ'; setTimeout(function(){ b.innerHTML = o; }, 1600);
     };
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(txt).then(done).catch(function(){ prompt('انسخ الرابط:', txt); });
+      navigator.clipboard.writeText(txt).then(done).catch(function(){ window.AppUI.ask('انسخ الرابط التالي:',function(){},{defaultValue:txt,readOnly:true,required:false,title:'نسخ الرابط'}); });
     } else {
       var ta = document.createElement('textarea');
       ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
       document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); done(); } catch(e) { prompt('انسخ الرابط:', txt); }
+      try { document.execCommand('copy'); done(); } catch(e) { window.AppUI.ask('انسخ الرابط التالي:',function(){},{defaultValue:txt,readOnly:true,required:false,title:'نسخ الرابط'}); }
       document.body.removeChild(ta);
     }
   });

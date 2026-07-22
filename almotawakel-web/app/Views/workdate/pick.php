@@ -43,7 +43,7 @@ $current = $current ?? $today;
 </div>
 <script>
 (function(){
-  var today = <?= json_encode($today) ?>;
+  var today = <?= js_json($today) ?>;
   var input = document.getElementById('wd-input');
   var warn  = document.getElementById('wd-warn');
   function sync(){ warn.hidden = (input.value === today); }

@@ -1,5 +1,10 @@
 <?php
 /** @var array $f @var array $payments @var array $summary @var array $agents @var array $visaCards */
+use App\Core\FormState;
+$formState = $formState ?? ['token'=>'','old'=>[],'errors'=>[],'back'=>'payments'];
+$formOld = $formState['old'];
+$formErrors = $formState['errors'];
+$autoAllocateChecked = $formErrors ? !empty($formOld['auto_allocate']) : true;
 $br = $summary['by_route'];
 $cardName = [];
 foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owner']?' — '.$vc['owner']:''); }
@@ -23,42 +28,48 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
 <div class="card cp-wrap mb">
   <div class="section-head" style="padding:16px 20px 0;margin:0">➕ تسجيل تحصيل من عميل</div>
   <div class="cp-form-box" style="border-bottom:0">
-    <form method="post" action="<?= url('payments/pay') ?>" id="cpForm">
+    <?= formErrorSummary($formErrors) ?>
+    <form method="post" action="<?= url('payments/pay') ?>" id="cpForm" class="js-dirty-form">
       <?= csrfField() ?>
+      <?= formStateFields($formState['token'], $formState['back']) ?>
       <div class="cp-form-grid">
         <div class="field" style="margin:0;flex:1;min-width:200px">
           <label>العميل (الوكيل) *</label>
-          <select name="client_name" required>
+          <select name="client_name" required<?= fieldErrorAttrs('client_name', $formErrors) ?>>
             <option value="">— اختر العميل —</option>
             <?php foreach($agents as $ag): ?>
-              <option value="<?= e($ag['name']) ?>" <?= $f['client']===$ag['name']?'selected':'' ?>><?= e($ag['name']) ?></option>
+              <option value="<?= e($ag['name']) ?>" <?= (($formOld['client_name'] ?? $f['client'])===$ag['name'])?'selected':'' ?>><?= e($ag['name']) ?></option>
             <?php endforeach; ?>
           </select>
+          <?= fieldError('client_name', $formErrors) ?>
         </div>
         <div class="field" style="margin:0;width:150px">
           <label>التاريخ</label>
-          <input type="date" name="pay_date" value="<?= e(work_date()) ?>">
+          <input type="date" name="pay_date" value="<?= e($formOld['pay_date'] ?? work_date()) ?>"<?= fieldErrorAttrs('pay_date', $formErrors) ?>>
+          <?= fieldError('pay_date', $formErrors) ?>
         </div>
         <div class="field" style="margin:0;width:150px">
           <label>المبلغ *</label>
-          <input type="number" step="0.01" min="0" name="amount" placeholder="0" required>
+          <input type="number" step="0.01" min="0.01" name="amount" value="<?= e($formOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $formErrors) ?>>
+          <?= fieldError('amount', $formErrors) ?>
         </div>
         <div class="field" style="margin:0;flex:1;min-width:160px">
           <label>البيان (اختياري)</label>
-          <input type="text" name="note" placeholder="ملاحظة على الدفعة">
+          <input type="text" name="note" value="<?= e($formOld['note'] ?? '') ?>" placeholder="ملاحظة على الدفعة">
         </div>
       </div>
       <div class="cp-route">
         <span class="cp-route-lbl">توجيه الدفعة:</span>
-        <label class="cp-route-opt"><input type="radio" name="route" value="none" checked onchange="cpRoute()"> <span>بدون توجيه</span></label>
-        <label class="cp-route-opt"><input type="radio" name="route" value="cash" onchange="cpRoute()"> <span>💵 عهدة نقدية (تُضاف لعهدة اليوم)</span></label>
-        <label class="cp-route-opt"><input type="radio" name="route" value="visa" onchange="cpRoute()"> <span>💳 شحن كارت فيزا</span></label>
-        <span id="cpVisaBox" class="cp-visa-box" style="display:none"><?= visa_card_select() ?></span>
+        <?php $formRoute = $formOld['route'] ?? 'none'; ?>
+        <label class="cp-route-opt"><input type="radio" name="route" value="none" <?= $formRoute==='none'?'checked':'' ?> onchange="cpRoute()"> <span>بدون توجيه</span></label>
+        <label class="cp-route-opt"><input type="radio" name="route" value="cash" <?= $formRoute==='cash'?'checked':'' ?> onchange="cpRoute()"> <span>💵 عهدة نقدية (تُضاف لعهدة اليوم)</span></label>
+        <label class="cp-route-opt"><input type="radio" name="route" value="visa" <?= $formRoute==='visa'?'checked':'' ?> onchange="cpRoute()"> <span>💳 شحن كارت فيزا</span></label>
+        <span id="cpVisaBox" class="cp-visa-box" style="display:<?= $formRoute==='visa'?'flex':'none' ?>"><?= visa_card_select($formOld['visa_card_id'] ?? null) ?><?= fieldError('visa_card_id', $formErrors) ?></span>
       </div>
-      <label class="cp-route-opt" style="margin-bottom:12px"><input type="checkbox" name="auto_allocate" value="1" checked>
+      <label class="cp-route-opt" style="margin-bottom:12px"><input type="checkbox" name="auto_allocate" value="1" <?= $autoAllocateChecked?'checked':'' ?>>
         <span><b>تخصيص تلقائي</b> على أقدم الفواتير المستحقة لهذا العميل</span></label>
       <div class="cp-form-actions">
-        <button class="btn gold" type="submit">＋ تسجيل التحصيل</button>
+        <button class="btn gold" type="submit" data-primary-submit>＋ تسجيل التحصيل</button>
         <span class="cp-hint">«نقدي» تدخل التقفيل اليومي (عهدة اليوم)، و«فيزا» تشحن رصيد الكارت.</span>
       </div>
     </form>
@@ -126,6 +137,7 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
             <?php if($pm['status']==='posted'): ?><form method="post" action="<?= url('payments/'.$pm['id'].'/delete') ?>"
                   style="display:inline" data-danger="1" data-confirm="عكس هذا التحصيل؟ ستُلغى تخصيصاته وأثره في العهدة/الفيزا مع بقاء السجل.">
               <?= csrfField() ?>
+              <?= formStateFields(FormState::token(), current_app_path()) ?>
               <input type="text" name="reason" required placeholder="سبب العكس" style="width:110px">
               <button class="edit" type="submit" title="عكس التحصيل" style="background:none;border:0;cursor:pointer">↩️</button>
             </form><?php else: ?><small><?= e($pm['reverse_reason'] ?? '') ?></small><?php endif; ?>

@@ -1,10 +1,14 @@
 <?php use App\Models\Permit; ?>
+<?php $errors = $errors ?? []; ?>
 <div class="page-actions">
-  <a class="btn ghost" href="<?= url('permits') ?>">‹ رجوع للإصدارات</a>
+  <a class="btn ghost" href="<?= url($back ?? 'permits') ?>">‹ رجوع للإصدارات</a>
 </div>
 
-<form class="form-card" method="post" action="<?= e($action) ?>">
+<?= formErrorSummary($errors) ?>
+<form class="form-card js-dirty-form" method="post" action="<?= e($action) ?>">
   <?= csrfField() ?>
+  <?= formStateFields($formToken, $back ?? 'permits') ?>
+  <?php if($isEdit): ?><input type="hidden" name="_form_id" value="permits.edit.<?= (int)$p['id'] ?>"><?php endif; ?>
   <?php if($isEdit): ?><input type="hidden" name="lock_version" value="<?= (int)($p['lock_version'] ?? 1) ?>"><?php endif; ?>
 
   <div class="form-group-title gt-identity">نوع الإصدار</div>
@@ -19,7 +23,7 @@
 
   <div class="form-group-title gt-identity">بيانات الإذن / الشهادة</div>
   <div class="form-grid">
-    <div class="field"><label>رقم الإذن / الشهادة</label><input name="permit_no" value="<?= e($p['permit_no']) ?>" autocomplete="off"></div>
+    <div class="field"><label>رقم الإذن / الشهادة</label><input name="permit_no" value="<?= e($p['permit_no']) ?>" autocomplete="off"<?= fieldErrorAttrs('permit_no', $errors) ?>><?= fieldError('permit_no', $errors) ?></div>
     <div class="field"><label>التاريخ</label><input type="date" name="permit_date" value="<?= e($p['permit_date']) ?>"></div>
     <div class="field"><label>الوكيل (العميل)</label><input list="dl_client" data-smart-name="client" id="permit_client" name="client" value="<?= e($p['client']) ?>" autocomplete="off"></div>
     <div class="field"><label>لصالح شركة</label><input list="dl_company" data-smart-name="company" id="permit_company" name="company" value="<?= e($p['company']) ?>" autocomplete="off"></div>
@@ -35,8 +39,8 @@
   </div>
 
   <div class="form-actions">
-    <button class="btn gold" type="submit">💾 <?= $isEdit?'حفظ التعديلات':'إنشاء الإصدار وفتح التايم لاين' ?></button>
-    <a class="btn ghost" href="<?= url('permits') ?>">إلغاء</a>
+    <button class="btn gold" type="submit" data-primary-submit>💾 <?= $isEdit?'حفظ التعديلات':'إنشاء الإصدار وفتح التايم لاين' ?></button>
+    <a class="btn ghost" href="<?= url($back ?? 'permits') ?>">إلغاء</a>
   </div>
 </form>
 
@@ -50,8 +54,8 @@
 
 <script>
 (function(){
-  var MAP = <?= json_encode($nameMap ?? ['agentCompanies'=>[],'companyAgents'=>[]], JSON_UNESCAPED_UNICODE) ?>;
-  var ALL_COMPANIES = <?= json_encode(array_values($lookups['company'] ?? []), JSON_UNESCAPED_UNICODE) ?>;
+  var MAP = <?= js_json($nameMap ?? ['agentCompanies'=>[],'companyAgents'=>[]]) ?>;
+  var ALL_COMPANIES = <?= js_json(array_values($lookups['company'] ?? [])) ?>;
   var clientEl  = document.getElementById('permit_client');
   var companyEl = document.getElementById('permit_company');
   var companyDl = document.getElementById('dl_company');

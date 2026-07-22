@@ -1,0 +1,90 @@
+<?php
+// ═══ حارس: سطر الأوامر فقط ═══
+// السكربتات دي بتعدّل القاعدة وبتاخد نسخ احتياطية، ومفيش فيها تسجيل دخول.
+// حمايتها الأساسية إن .htaccess بيمنع مجلد bin/ من الويب — والسطر ده طبقة
+// تانية مستقلة تشتغل حتى لو ذلك المنع وقع (صيانة استضافة، ملف اتمسح…).
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+/**
+ * v44 — صلاحية «فتح إذن» لكل مندوب على حِدة.
+ *
+ * v43 خلّت **أي مندوب** يقدر يفتح إذن من موبايله، وده كان أوسع من اللازم.
+ * الهجرة دي بتضيف `reps.can_create_permit` (0/1) و**الافتراضي 0 = ممنوع** —
+ * يعني بعد تشغيلها كل المناديب بيتمنعوا، والمالك بيدّي الصلاحية لمين يستاهل
+ * من كارت المندوب `/rep-custody/{id}`.
+ *
+ * ⚠️ إضافي بحت: عمود وصفي واحد. **مفيش أي أثر مالي** — لا خزنة ولا عهدة ولا
+ *    تقفيل ولا أي إذن قائم بيتغيّر. والمنع بيتفرض في الخادم مش في الواجهة.
+ *
+ * بتدّي الصلاحية تلقائيًا للمناديب المذكورين في $GRANT (بحساب الدخول) لو موجودين،
+ * عشان ما تحتاجش تفتح الشاشة بعد الترحيل. idempotent — عادي تشغّلها أكتر من مرة.
+ *
+ * التشغيل:  php bin/migrate_v44.php
+ */
+require dirname(__DIR__) . '/app/bootstrap.php';
+
+use App\Core\Database;
+use App\Models\Closing;
+
+/** أسماء دخول المناديب اللي المالك طلب يكون لهم حق فتح الإذن. */
+const V44_GRANT = ['badr', 'fekry'];
+
+echo "v44 — صلاحية فتح إذن للمناديب\n" . str_repeat('=', 60) . "\n";
+
+$balanceBefore = Closing::currentBalance();
+
+$exists = (bool) Database::scalar(
+    "SELECT COUNT(*) FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = 'reps' AND column_name = 'can_create_permit'"
+);
+
+if ($exists) {
+    echo "  = reps.can_create_permit موجود قبل كده\n";
+} else {
+    Database::exec(
+        "ALTER TABLE `reps`
+         ADD COLUMN `can_create_permit` TINYINT(1) NOT NULL DEFAULT 0
+         COMMENT 'يقدر يفتح إذن/شهادة من الموبايل (v44)' AFTER `status`"
+    );
+    echo "  + reps.can_create_permit (الافتراضي 0 = ممنوع للكل)\n";
+}
+
+// منح الصلاحية للمناديب المطلوبين — بحساب الدخول عشان الاسم بيتكتب بتهجئات مختلفة.
+echo "\nمنح الصلاحية:\n";
+foreach (V44_GRANT as $username) {
+    $rep = Database::row(
+        "SELECT r.id, r.name, r.can_create_permit
+         FROM rep_users ru JOIN reps r ON r.id = ru.rep_id
+         WHERE ru.username = ?", [$username]
+    );
+    if (!$rep) {
+        echo "  ~ «$username» — مفيش حساب بالاسم ده، اتخطّى\n";
+        continue;
+    }
+    if ((int) $rep['can_create_permit'] === 1) {
+        echo "  = {$rep['name']} ($username) — عنده الصلاحية أصلاً\n";
+        continue;
+    }
+    Database::exec("UPDATE reps SET can_create_permit = 1 WHERE id = ?", [(int) $rep['id']]);
+    echo "  ✓ {$rep['name']} ($username) — اتمنح حق فتح الإذن\n";
+}
+
+// ── تحقّق السلامة: العمود وصفي، فممنوع يكون غيّر أي رقم
+$balanceAfter = Closing::currentBalance();
+echo "\n" . str_repeat('─', 60) . "\n";
+printf("رصيد الخزنة قبل: %s  |  بعد: %s\n", number_format($balanceBefore, 2), number_format($balanceAfter, 2));
+if (abs($balanceAfter - $balanceBefore) > 0.005) {
+    echo "✗✗ الرصيد اتغيّر — ده مستحيل في هجرة وصفية. راجع فورًا.\n";
+    exit(1);
+}
+echo "✓ الرصيد ما اتغيّرش (الهجرة وصفية بحتة).\n";
+
+$allowed = Database::all(
+    "SELECT r.name, COALESCE(ru.username,'—') username
+     FROM reps r LEFT JOIN rep_users ru ON ru.rep_id = r.id
+     WHERE r.can_create_permit = 1 ORDER BY r.name"
+);
+echo "\nالمسموح لهم يفتحوا إذن دلوقتي (" . count($allowed) . "):\n";
+foreach ($allowed as $a) { echo "  • {$a['name']} ({$a['username']})\n"; }
+if (!$allowed) { echo "  (مفيش حد — امنح الصلاحية من كارت المندوب /rep-custody/{id})\n"; }
+
+echo "\nتمام. شغّل php bin/verify_v44.php للتأكد.\n";

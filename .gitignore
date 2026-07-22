@@ -9,7 +9,20 @@ almotawakel-web/config/config.php
 *.log
 
 # ===== نسخ احتياطية وبيانات متولّدة =====
-almotawakel-web/storage/backups/*.sql
+# ⚠️ **ممنوع نهائيًا** رفع أي نسخة من قاعدة البيانات. اتصادف فعليًا (2026-07-22):
+#    6 نسخ كاملة كانت متسلّمة ومرفوعة على جيت هب — فيها بيانات كل العملاء
+#    والمبالغ **وهاشات كلمات السر**. الريبو خاص فالضرر كان محدود، بس أي حد
+#    ياخد صلاحية على المستودع كان هياخد معاها أرشيف الشركة كله.
+#    القواعد تحت واسعة عن قصد: أي امتداد قاعدة بيانات في أي مكان.
+*.sql
+*.sql.gz
+*.dump
+*.mysql
+almotawakel-web/database/backups/
+almotawakel-web/storage/backups/
+# الاستثناء الوحيد: مخطط الجداول (بنية بلا بيانات) — محتاجينه للتثبيت.
+!almotawakel-web/database/schema.sql
+
 almotawakel-web/database/old_data.json
 chrome-profile*/
 _preview_*.pdf

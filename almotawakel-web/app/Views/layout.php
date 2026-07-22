@@ -1,4 +1,4 @@
-<?php use App\Core\Auth; use App\Core\App;
+<?php use App\Core\Auth; use App\Core\App; use App\Core\Access;
 $cur = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
 $base = App::baseUrl();
 if ($base && str_starts_with($cur, $base)) { $cur = substr($cur, strlen($base)); }
@@ -28,6 +28,8 @@ $nav = [
     ['custody', 'رصيد العهدة', 'briefcase'],
     ['office', 'رصيد المكتب (الفيزا)', 'credit-card'],
     ['reps', 'المناديب', 'user'],
+    ['rep-custody', 'عهدة المناديب', 'briefcase'],
+    ['rep-custody/inbox', 'مراجعة بنود المناديب', 'inbox'],
     ['expenses', 'المصروفات', 'trending-down'],
     ['__sec_records', 'السجلات', null],
     ['directory', 'دليل الأطراف', 'users'],
@@ -37,13 +39,17 @@ $nav = [
     ['audit', 'سجل العمليات والمحذوفات', 'clipboard'],
     ['settings', 'الإعدادات', 'settings'],
 ];
+if (!Access::canOpenSettings()) {
+    $nav = array_values(array_filter($nav, fn(array $item): bool => $item[0] !== 'settings'));
+}
 ?><!doctype html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title ?? '') ?> — <?= e(App::setting('company_name','شركة المتوكل')) ?></title>
-<link rel="stylesheet" href="<?= url('assets/css/app.css') ?>">
+<?php $appCss = \App\Core\App::basePath('public/assets/css/app.css'); $appCssV = is_file($appCss) ? filemtime($appCss) : 1; ?>
+<link rel="stylesheet" href="<?= url('assets/css/app.css') ?>?v=<?= $appCssV ?>">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2315355B'/><text x='50' y='68' font-size='54' text-anchor='middle' fill='%23C9A227' font-family='Arial' font-weight='bold'>م</text></svg>">
 </head>
 <body>
@@ -85,9 +91,28 @@ $nav = [
         <kbd class="search-kbd">Ctrl K</kbd>
       </button>
       <button type="button" class="btn ghost sm icon-btn" id="shortcut-help" title="اختصارات الإدخال" aria-label="اختصارات الإدخال">⌨</button>
-      <div class="user" title="<?= e(Auth::user() ?? '') ?>">
+      <?php /* مركز الإشعارات — الجرس بيترسم فاضي والعدّاد بيتملّى من /notifications/ping
+               بعد التحميل، فما بيزوّدش أي تكلفة على رندر أي صفحة. */ ?>
+      <div class="nc" id="notifCenter">
+        <button type="button" class="nc-btn" id="notifBtn" aria-haspopup="true" aria-expanded="false"
+                aria-controls="notifPanel" title="الإشعارات" aria-label="الإشعارات">
+          <?= icon('bell', 20) ?>
+          <span class="nc-badge" id="notifBadge" aria-hidden="true"></span>
+        </button>
+        <div class="nc-panel" id="notifPanel" hidden role="dialog" aria-modal="false" aria-label="الإشعارات">
+          <div class="nc-head"><?= icon('bell', 17) ?> <span>الإشعارات</span><span class="nc-count" id="notifCount"></span></div>
+          <div class="nc-list" id="notifList">
+            <div class="nc-empty"><?= icon('hourglass', 24) ?><b>لحظة…</b><span>بنجيب آخر المستجدات.</span></div>
+          </div>
+          <div class="nc-foot">
+            <button type="button" class="nc-mark" id="notifMark">تعليم الكل كمقروء</button>
+            <span class="nc-count" id="notifAt"></span>
+          </div>
+        </div>
+      </div>
+      <div class="user" title="<?= e((Auth::user() ?? '') . ' — ' . Auth::roleLabel()) ?>">
         <span class="av"><?= e(mb_substr(Auth::user() ?? 'م', 0, 1)) ?></span>
-        <span class="user-name"><?= e(Auth::user() ?? '') ?></span>
+        <span class="user-name"><?= e(Auth::user() ?? '') ?> · <?= e(Auth::roleLabel()) ?></span>
       </div>
       <form action="<?= url('logout') ?>" method="post" class="no-confirm" style="margin:0">
         <?= csrfField() ?>
@@ -122,8 +147,29 @@ $nav = [
         </form>
         <?php endif; ?>
       </div>
-      <?php if ($m = flash('success')): $lastUndo=(int)($_SESSION['_last_undo_audit']??0);unset($_SESSION['_last_undo_audit']); ?><div class="flash success" role="status" aria-live="polite"><?= icon('check',18) ?> <?= e($m) ?><?php if($lastUndo): ?><form method="post" action="<?= url('audit/'.$lastUndo.'/undo') ?>" data-confirm="التراجع عن آخر تعديل واستعادة القيم السابقة؟" style="margin-inline-start:auto"><?= csrfField() ?><button class="btn ghost sm" type="submit">↶ تراجع</button></form><?php endif; ?></div><?php endif; ?>
-      <?php if ($m = flash('error')): ?><div class="flash error" role="alert" aria-live="assertive"><?= icon('alert',18) ?> <?= e($m) ?></div><?php endif; ?>
+      <?php
+      /* رسائل الخادم بقت **توستات طايرة** بدل بانرات ثابتة كانت بتزقّ المحتوى
+         لتحت وما فيهاش إغلاق ولا اختفاء (المرحلة ١). `flash_all()` بتسحب
+         الطابور كله فمفيش رسالة بتضيع لما يتبعت أكتر من واحدة في نفس الطلب.
+         زرار «تراجع» انتقل جوّه التوست نفسه بدل ما يكون في البانر. */
+      $__lastUndo = (int) ($_SESSION['_last_undo_audit'] ?? 0);
+      unset($_SESSION['_last_undo_audit']);
+      $__kindMap = ['success' => 'ok', 'error' => 'err', 'warning' => 'warn', 'info' => 'info'];
+      $__toasts = [];
+      foreach (flash_all() as $__f) {
+          $__t = ['msg' => $__f['msg'], 'kind' => $__kindMap[$__f['type']] ?? 'info'];
+          if ($__t['kind'] === 'ok' && $__lastUndo > 0) {
+              $__t['action'] = [
+                  'label'   => '↶ تراجع',
+                  'url'     => url('audit/' . $__lastUndo . '/undo'),
+                  'csrf'    => Auth::csrf(),
+                  'confirm' => 'التراجع عن آخر تعديل واستعادة القيم السابقة؟',
+              ];
+              $__lastUndo = 0;   // زرار التراجع لأول رسالة نجاح بس
+          }
+          $__toasts[] = $__t;
+      }
+      ?>
       <?= $content ?>
     </main>
   </div>
@@ -204,6 +250,7 @@ $cmdSyn = [
     'custody' => 'عهدة رصيد خزنة محفظة',
     'office'  => 'فيزا كارت كروت رصيد المكتب بنك',
     'reps'    => 'مندوب مناديب',
+    'rep-custody' => 'عهدة مناديب مندوب سلفة تنزيل تسوية',
     'expenses'=> 'مصروف مصروفات صرف',
     'directory' => 'وكلاء عملاء شركات جهات دليل',
     'legacy'  => 'ارشيف بوالص قديمة',
@@ -230,7 +277,9 @@ foreach ($cmdCreate as [$label, $seg, $ic, $kw]) {
     $cmdNav[] = ['label' => $label, 'url' => url($seg), 'icon' => $ic, 'kw' => $kw, 'kind' => 'create'];
 }
 ?>
-<script>window.__SEARCH_API = <?= json_encode(url('search/api'), JSON_UNESCAPED_SLASHES) ?>; window.__SEARCH_PAGE = <?= json_encode(url('search'), JSON_UNESCAPED_SLASHES) ?>; window.__CMD_NAV = <?= json_encode($cmdNav, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>; window.__NAME_SUGGEST_API = <?= json_encode(url('suggest/names'), JSON_UNESCAPED_SLASHES) ?>; window.__BILL_NUMBER_CHECK_API = <?= json_encode(url('bawalis/check-number'), JSON_UNESCAPED_SLASHES) ?>;</script>
+<!-- كومة التنبيهات الطايرة — مكوّن واحد بيخدم رسائل الخادم ورسائل الـAJAX -->
+<div class="toast-stack" id="toastStack" role="region" aria-live="polite" aria-label="تنبيهات"></div>
+<script>window.__SEARCH_API = <?= js_json(url('search/api')) ?>; window.__SEARCH_PAGE = <?= js_json(url('search')) ?>; window.__CMD_NAV = <?= js_json($cmdNav) ?>; window.__NAME_SUGGEST_API = <?= js_json(url('suggest/names')) ?>; window.__BILL_NUMBER_CHECK_API = <?= js_json(url('bawalis/check-number')) ?>; window.__TOASTS = <?= js_json($__toasts) ?>; window.__NOTIF_PING = <?= js_json(url('notifications/ping')) ?>;</script>
 <?php $appJs = \App\Core\App::basePath('public/assets/js/app.js'); $appJsV = is_file($appJs) ? filemtime($appJs) : 1; ?>
 <script src="<?= url('assets/js/app.js') ?>?v=<?= $appJsV ?>"></script>
 <?= $scripts ?? '' ?>

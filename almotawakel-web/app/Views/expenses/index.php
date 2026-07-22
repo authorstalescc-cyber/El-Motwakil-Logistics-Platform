@@ -1,6 +1,8 @@
 <?php
 /** وحدة المصروفات — السجل الموحّد */
 use App\Models\Expense;
+use App\Core\FormState;
+$returnPath = current_app_path();
 $monthNames = ['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 $qs = fn(array $ov=[]) => http_build_query(array_merge(
     ['q'=>$f['q'],'source'=>$f['source'],'visa'=>$f['visa']??'','from'=>$f['from'],'to'=>$f['to'],'year'=>$year], $ov));
@@ -79,7 +81,7 @@ tr.norec:hover{background:transparent!important}
   <div class="spacer"></div>
   <span class="count-badge"><?= intf($total) ?> بند</span>
   <a class="btn ghost" href="<?= url('expenses/receipts') ?>">🧾 استكمال بيانات الإيصالات</a>
-  <a class="btn gold" href="<?= url('expenses/new') ?>">➕ إضافة مصروف يدوي</a>
+  <a class="btn gold" href="<?= url('expenses/new?back=' . rawurlencode($returnPath)) ?>">➕ إضافة مصروف يدوي</a>
 </div>
 
 <div class="card">
@@ -118,9 +120,10 @@ tr.norec:hover{background:transparent!important}
             <td>
               <div class="actions">
                 <?php if ($isManual): ?>
-                  <a class="edit" href="<?= url('expenses/'.$r['ref_id'].'/edit') ?>" title="تعديل">✏️</a>
+                  <a class="edit" href="<?= url('expenses/'.$r['ref_id'].'/edit?back=' . rawurlencode($returnPath)) ?>" title="تعديل">✏️</a>
                   <form class="confirm-delete" method="post" action="<?= url('expenses/'.$r['ref_id'].'/delete') ?>" style="margin:0">
                     <?= csrfField() ?>
+                    <?= formStateFields(FormState::token(), $returnPath) ?>
                     <button class="del" type="submit" title="حذف">🗑️</button>
                   </form>
                 <?php elseif ($originUrl): ?>

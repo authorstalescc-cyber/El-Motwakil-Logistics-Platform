@@ -1,0 +1,54 @@
+# ══════════════════════════════════════════════════════════════════════════
+# نظام المتوكل — الواجهة الأمامية (Front Controller)
+# محفوظ في المستودع ومرفوع بـ`bash bin/deploy.sh` (شوف .htaccess في الجذر).
+# ══════════════════════════════════════════════════════════════════════════
+
+Options -Indexes
+
+# ══════════════════════════════════════════════════════════════════════════
+# حد حجم الطلب — 25 ميجا
+#
+# ⚠️⚠️ **متحقَّق فعليًا: الاستضافة الحالية (LiteSpeed) بتتجاهل التوجيه ده.**
+#    اتجرّب برفع multipart بـ30 ميجا على الإنتاج: اترفعت كاملة (31,457,588 بايت)
+#    ورد السيرفر 419 من التطبيق مش 413 من السيرفر — يعني PHP استقبلت الحمولة
+#    كلها. سايبينه لأنه صح ومفيد لو الاستضافة اتغيّرت لـApache، **بس ما تعتبرهوش
+#    حماية قايمة**.
+#
+#    الوضع الحالي: `upload_max_filesize=1536M` (1.5 جيجا!) و`.user.ini` متعطّلة
+#    (`user_ini.filename` فاضية) و`ini_set()` ما بتنفعش مع PHP_INI_PERDIR.
+#    **الحل الوحيد المتبقّي = تغيير الإعداد من لوحة تحكم هوستنجر (hPanel)**
+#    لـ`upload_max_filesize=20M` و`post_max_size=24M` — إجراء يدوي من المالك.
+#
+#    الحماية القايمة فعلاً دلوقتي: `PrivateFile::storeUploaded` بترفض أي ملف
+#    فوق 12 ميجا — بس بعد ما PHP تكون خزّنته، فالخطر الباقي استنزاف موارد
+#    (رفع ملفات ضخمة متكررة) مش تخزين ملف كبير فعلاً.
+# ══════════════════════════════════════════════════════════════════════════
+LimitRequestBody 26214400
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # المرفقات الخاصة تُخدم عبر FileController بعد التحقق من الصلاحية فقط.
+    # ⚠️ المرفقات القديمة في public/uploads/ اتفحصت بالامتداد بس وقت رفعها،
+    #    وأسماؤها كانت شبه متوقَّعة (uniqid) — فالمنع المباشر ده مهم.
+    RewriteRule ^uploads/(permits|reps)/ - [F,L]
+
+    # الملفات الثابتة الموجودة فعلًا تُخدم مباشرة
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# حزام أمان: امتدادات تنفيذية ما لهاش أي لزمة تتفتح من الويب هنا.
+# (ملحوظة: `<Directory>` ممنوعة داخل .htaccess وبتدّي خطأ 500 — فبنستخدم
+#  FilesMatch، ومجلد uploads نفسه متمنوع بالـRewriteRule فوق.)
+<FilesMatch "\.(phar|phtml|cgi|pl|sh)$">
+    Require all denied
+</FilesMatch>
+
+# أنواع MIME لملفات التطبيق (PWA)
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+    AddType text/javascript .js
+    AddType image/svg+xml .svg
+</IfModule>

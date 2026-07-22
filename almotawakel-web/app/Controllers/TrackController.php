@@ -268,6 +268,40 @@ class TrackController extends Controller
      * «حدّدها تلقائيًا» — يدوّر على وجهة واحدة في OpenStreetMap ويحفظها.
      * الفلتر الصارم في Track::geocodePlace بيرفض النتايج الغلط بدل ما يحفظ رقم مضلّل.
      */
+    /**
+     * بحث بالاسم من صفحة الوجهات — يرجّع إحداثيات JSON بلا حفظ.
+     *
+     * ⚠️ الطلب ده كان بيتبعت **من متصفح المالك مباشرة** لـNominatim، وده كان
+     *    فيه مشكلتين: (1) الـCSP الجديدة (`connect-src 'self'`) بتمنع أي اتصال
+     *    خارجي من الصفحة فالزرار وقف عن الشغل؛ (2) الأهم — الكود القديم كان
+     *    بياخد **أول نتيجة خام** (`j[0]`)، وده بالظبط الفخ الموثَّق: البحث عن
+     *    «العاشر» بيرجّع «مقبرة رمسيس العاشر» في الأقصر، و«6 أكتوبر» بترجّع
+     *    كافيه في الإسكندرية. `Track::geocodePlace()` فيها الفلترة الصح
+     *    (نوع المكان الأول مش الـimportance) — فبنعدّي عليها.
+     */
+    public function lookupPlace(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+
+        $name = trim((string) ($_POST['name'] ?? ''));
+        if ($name === '') {
+            $this->json(['ok' => false, 'msg' => 'اكتب اسم الوجهة الأول.']);
+            return;
+        }
+        $hit = Track::geocodePlace($name);
+        if (!$hit) {
+            $this->json(['ok' => false, 'msg' => 'مالقيناش الاسم ده بشكل موثوق — حدّده بإيدك على الخريطة.']);
+            return;
+        }
+        $this->json([
+            'ok'    => true,
+            'lat'   => (float) $hit['lat'],
+            'lng'   => (float) $hit['lng'],
+            'label' => (string) ($hit['label'] ?? $name),
+        ]);
+    }
+
     public function autoPlace(): void
     {
         $this->requireAuth();

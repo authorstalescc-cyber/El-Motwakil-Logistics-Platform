@@ -31,10 +31,12 @@
     <span class="pv-kpi-tx"><span class="pv-kpi-v num good"><?= intf($stats['closed_cnt']) ?></span><span class="pv-kpi-l">مقفولة</span></span>
   </a>
   <?php if ($mode==='follow'): ?>
-    <button type="button" class="pv-kpi k-inc <?= $incomplete>0?'is-alert':'' ?>" data-jump="warn" <?= $incomplete>0?'':'disabled' ?>>
+    <?php if($incomplete>0): ?><a class="pv-kpi k-inc is-alert" href="<?= url('permits?state=warn') ?>">
       <span class="pv-kpi-ic"><?= $incomplete>0?'⚠️':'🎉' ?></span>
       <span class="pv-kpi-tx"><span class="pv-kpi-v num <?= $incomplete>0?'bad':'good' ?>"><?= intf($incomplete) ?></span><span class="pv-kpi-l">تحتاج استكمال</span></span>
-    </button>
+    </a><?php else: ?><div class="pv-kpi k-inc">
+      <span class="pv-kpi-ic">🎉</span><span class="pv-kpi-tx"><span class="pv-kpi-v num good">0</span><span class="pv-kpi-l">تحتاج استكمال</span></span>
+    </div><?php endif; ?>
   <?php elseif ($mode==='movements'): ?>
     <div class="pv-kpi k-static">
       <span class="pv-kpi-ic">🔀</span>
@@ -50,38 +52,92 @@
 
 <?php if ($mode === 'follow'): ?>
   <?php // ============ شاشة المتابعة ============ ?>
+  <?php
+    $followQ = $followQ ?? ''; $followState = $followState ?? 'all'; $followSort = $followSort ?? 'new';
+    $followCo = $followCo ?? ''; $followCl = $followCl ?? ''; $followGroup = $followGroup ?? '';
+    $followCounts = $followCounts ?? ['all'=>0,'warn'=>0,'ok'=>0];
+    $followQs = static function(array $overrides = []) use ($followQ,$followState,$followSort,$followCo,$followCl,$followGroup): string {
+      $query = ['q'=>$followQ,'state'=>$followState,'sort'=>$followSort,'co'=>$followCo,'cl'=>$followCl,'group'=>$followGroup,'page'=>1];
+      $query = array_merge($query,$overrides);
+      return http_build_query(array_filter($query,static fn($value,$key)=>$value!=='' && !($key==='state'&&$value==='all') && !($key==='sort'&&$value==='new') && !($key==='page'&&(int)$value===1),ARRAY_FILTER_USE_BOTH));
+    };
+    $followUrl = static fn(array $overrides = []): string => url('permits?'.$followQs($overrides));
+  ?>
 
-  <?php if ($rows): ?>
-  <!-- شريط أدوات حيّ: بحث + ترتيب + تصفية (client-side بالكامل) -->
-  <div class="pv-ftools" id="pvFollowTools">
+  <?php if (($stats['open_cnt']??0)>0 || $followQ!=='' || $followState!=='all'): ?>
+  <!-- البحث والتصفية على كل الأذونات المفتوحة، لا على الصفحة الظاهرة فقط. -->
+  <form class="pv-ftools" method="get" action="<?= url('permits') ?>">
     <div class="pvf-search">
       <span class="pvf-search-ic">🔍</span>
-      <input type="search" id="pvfSearch" placeholder="ابحث برقم الإذن / الشركة / الوكيل…" autocomplete="off">
-      <button type="button" class="pvf-clear" id="pvfClear" title="مسح" hidden>✕</button>
+      <input type="search" name="q" value="<?= e($followQ) ?>" placeholder="ابحث في كل الأذونات برقم الإذن / الشركة / الوكيل…" autocomplete="off">
+      <?php if($followQ!==''): ?><a class="pvf-clear" href="<?= url('permits?'.$followQs(['q'=>''])) ?>" title="مسح البحث">✕</a><?php endif; ?>
     </div>
+    <input type="hidden" name="state" value="<?= e($followState) ?>">
+    <input type="hidden" name="co" value="<?= e($followCo) ?>">
+    <input type="hidden" name="cl" value="<?= e($followCl) ?>">
+    <input type="hidden" name="group" value="<?= e($followGroup) ?>">
     <div class="pvf-chips" role="tablist">
-      <button type="button" class="pvf-chip on" data-filter="all">الكل <span class="pvf-ct num" data-ct="all">0</span></button>
-      <button type="button" class="pvf-chip" data-filter="warn">⚠ ناقص <span class="pvf-ct num" data-ct="warn">0</span></button>
-      <button type="button" class="pvf-chip" data-filter="ok">✓ جاهز <span class="pvf-ct num" data-ct="ok">0</span></button>
+      <a class="pvf-chip <?= $followState==='all'?'on':'' ?>" href="<?= url('permits?'.$followQs(['state'=>'all'])) ?>">الكل <span class="pvf-ct num"><?= intf($followCounts['all']) ?></span></a>
+      <a class="pvf-chip <?= $followState==='warn'?'on':'' ?>" href="<?= url('permits?'.$followQs(['state'=>'warn'])) ?>">⚠ ناقص <span class="pvf-ct num"><?= intf($followCounts['warn']) ?></span></a>
+      <a class="pvf-chip <?= $followState==='ok'?'on':'' ?>" href="<?= url('permits?'.$followQs(['state'=>'ok'])) ?>">✓ جاهز <span class="pvf-ct num"><?= intf($followCounts['ok']) ?></span></a>
     </div>
     <div class="pvf-spacer"></div>
     <label class="pvf-sort">
       <span>ترتيب</span>
-      <select id="pvfSort">
-        <option value="new">الأحدث تاريخاً</option>
-        <option value="old">الأقدم تاريخاً</option>
-        <option value="prog-asc">الأقل اكتمالاً</option>
-        <option value="prog-desc">الأكثر اكتمالاً</option>
-        <option value="rem-desc">الأكبر متبقّياً</option>
+      <select name="sort">
+        <option value="new" <?= $followSort==='new'?'selected':'' ?>>الأحدث تاريخاً</option>
+        <option value="old" <?= $followSort==='old'?'selected':'' ?>>الأقدم تاريخاً</option>
+        <option value="rem-desc" <?= $followSort==='rem-desc'?'selected':'' ?>>الأكبر متبقّياً</option>
       </select>
     </label>
+    <button class="btn sm" type="submit">تطبيق</button>
+  </form>
+  <?php endif; ?>
+
+  <?php // أزرار الشركات/الوكلاء المتكررين + تجميع البطاقات — تظهر تلقائيًا بلا أي إعداد
+    $pcCoList = $coChips ?? []; $pcClList = $clChips ?? [];
+    $pcCo = $followCo; $pcCl = $followCl; $pcUrl = $followUrl;
+    include __DIR__ . '/_party_chips.php';
+  ?>
+
+  <?php if ($followCo!=='' || $followCl!=='' || ($coChips??[])): ?>
+  <div class="pv-viewbar">
+    <?php if ($followCo!=='' || $followCl!==''): ?>
+      <span class="pvv-active">
+        🔎 معروض الآن:
+        <?php if($followCo!==''): ?><b><?= e($followCo) ?></b><?php endif; ?>
+        <?php if($followCo!=='' && $followCl!==''): ?> · <?php endif; ?>
+        <?php if($followCl!==''): ?><b><?= e($followCl) ?></b><?php endif; ?>
+        — <span class="num"><?= intf($followTotal) ?></span> إذن
+      </span>
+      <a class="pvv-x" href="<?= e($followUrl(['co'=>'','cl'=>''])) ?>">✕ إلغاء التصفية</a>
+    <?php endif; ?>
+    <span style="flex:1"></span>
+    <a class="pvv-toggle<?= $followGroup==='co'?' on':'' ?>" href="<?= e($followUrl(['group'=>$followGroup==='co'?'':'co'])) ?>">
+      🗂️ <?= $followGroup==='co' ? 'إلغاء التجميع' : 'تجميع حسب الشركة' ?>
+    </a>
   </div>
   <?php endif; ?>
 
   <?php if (!$rows): ?>
-    <div class="pv-empty"><div class="ic">✅</div>لا أذونات مفتوحة حالياً — كل شيء مغلق.<br><a class="btn gold" style="margin-top:14px" href="<?= url('permits/new') ?>">➕ إصدار جديد</a></div>
+    <?php if($followQ!=='' || $followState!=='all'): ?>
+      <div class="pv-empty"><div class="ic">🔍</div>لا توجد أذونات مطابقة للبحث أو التصفية.<br><a class="btn ghost" style="margin-top:14px" href="<?= url('permits') ?>">مسح التصفية</a></div>
+    <?php else: ?>
+      <div class="pv-empty"><div class="ic">✅</div>لا أذونات مفتوحة حالياً — كل شيء مغلق.<br><a class="btn gold" style="margin-top:14px" href="<?= url('permits/new') ?>">➕ إصدار جديد</a></div>
+    <?php endif; ?>
   <?php else: ?>
-    <div class="dkt-grid" id="pvFollowGrid">
+    <?php
+      // ملخّص كل شركة داخل الصفحة الظاهرة (للتجميع فقط — بلا أي حساب جديد)
+      $grpCnt = []; $grpRem = [];
+      if ($followGroup === 'co') {
+        foreach ($rows as $rr) { $k = (string)($rr['company'] ?? '');
+          $grpCnt[$k] = ($grpCnt[$k] ?? 0) + 1;
+          $grpRem[$k] = ($grpRem[$k] ?? 0) + (float)$rr['remaining'];
+        }
+      }
+      $grpCur = null;
+    ?>
+    <div class="dkt-grid<?= $followGroup==='co'?' is-grouped':'' ?>" id="pvFollowGrid">
       <?php foreach ($rows as $r): $inc = $r['is_incomplete']; $prog=(int)$r['progress']; $th = Permit::theme($r['permit_type']);
             $rcps = $r['receipts'] ?? []; $rcTotal = array_sum(array_map(fn($x)=>(float)$x['amount'], $rcps));
             $rcShow = array_slice($rcps, 0, 6); $rcMore = count($rcps) - count($rcShow);
@@ -89,6 +145,18 @@
             $missTip = $inc ? implode(' · ', $r['missing']) : 'كل البيانات مكتملة';
             $searchKey = mb_strtolower(trim(($r['permit_no']?:('#'.$r['id'])).' '.($r['company']??'').' '.($r['client']??'')));
             $url = url('permits/'.$r['id']); ?>
+        <?php if ($followGroup==='co'): $gk = (string)($r['company'] ?? ''); if ($gk !== $grpCur): $grpCur = $gk; ?>
+          <div class="dkt-grp">
+            <span class="dg-ic">🏢</span>
+            <b class="dg-nm"><?= e($gk !== '' ? $gk : 'بدون شركة') ?></b>
+            <span class="dg-ct"><span class="num"><?= intf($grpCnt[$gk] ?? 0) ?></span> إذن</span>
+            <?php if(($grpRem[$gk] ?? 0) != 0): ?><span class="dg-rem">المتبقّي <b class="num"><?= money($grpRem[$gk],false) ?></b></span><?php endif; ?>
+            <span style="flex:1"></span>
+            <?php if ($gk !== '' && $followCo !== $gk): ?>
+              <a class="dg-only" href="<?= e($followUrl(['co'=>$gk,'page'=>1])) ?>">اعرضها وحدها ←</a>
+            <?php endif; ?>
+          </div>
+        <?php endif; endif; ?>
         <div class="dkt t-<?= $th['cls'] ?> <?= $inc?'warn':'ok' ?>" onclick="location.href='<?= $url ?>'" tabindex="0" role="link"
              data-status="<?= $inc?'warn':'ok' ?>" data-search="<?= e($searchKey) ?>" data-prog="<?= $prog ?>"
              data-rem="<?= (float)$r['remaining'] ?>" data-date="<?= e($r['permit_date']?:'') ?>" data-seq="<?= (int)$r['id'] ?>"
@@ -100,9 +168,21 @@
           </header>
 
           <div class="dkt-bd">
-            <div class="dkt-co"><span class="dkt-mono"><?= e(initials($r['company'] ?: '؟')) ?></span><span class="dkt-co-tx"><?= e($r['company'] ?: '—') ?></span></div>
+            <div class="dkt-co">
+              <span class="dkt-mono"><?= e(initials($r['company'] ?: '؟')) ?></span>
+              <span class="dkt-co-tx"><?= e($r['company'] ?: '—') ?></span>
+              <?php if(($r['company']??'')!=='' && $followCo!==$r['company']): ?>
+                <a class="dkt-filt" href="<?= e($followUrl(['co'=>$r['company'],'page'=>1])) ?>" onclick="event.stopPropagation()"
+                   title="اعرض أذونات هذه الشركة فقط">⛃</a>
+              <?php endif; ?>
+            </div>
             <div class="dkt-meta">
-              <?php if($r['client']): ?><span class="dkt-tag">👤 <?= e($r['client']) ?></span><?php endif; ?>
+              <?php if($r['client']): ?>
+                <?php if($followCl!==$r['client']): ?>
+                  <a class="dkt-tag dkt-tag-lnk" href="<?= e($followUrl(['cl'=>$r['client'],'page'=>1])) ?>" onclick="event.stopPropagation()"
+                     title="اعرض أذونات هذا الوكيل فقط">👤 <?= e($r['client']) ?></a>
+                <?php else: ?><span class="dkt-tag">👤 <?= e($r['client']) ?></span><?php endif; ?>
+              <?php endif; ?>
               <span class="dkt-tag">🗓️ <span class="num"><?= dfmt($r['permit_date']) ?: '—' ?></span></span>
               <span class="dkt-tag">🚛 <span class="num"><?= intf($r['bills']) ?></span> بوليصة</span>
             </div>
@@ -151,7 +231,15 @@
         </div>
       <?php endforeach; ?>
     </div>
-    <div class="pv-empty sm" id="pvFollowNone" hidden><div class="ic">🔍</div>لا أذونات مطابقة لبحثك أو تصفيتك.<br><button type="button" class="btn ghost sm" style="margin-top:12px" onclick="document.getElementById('pvfClear')?.click()">مسح البحث</button></div>
+    <div class="pv-count" style="justify-content:center;margin-top:12px">عرض <?= intf((($followPage-1)*48)+1) ?>–<?= intf((($followPage-1)*48)+count($rows)) ?> من <?= intf($followTotal) ?> إذن مطابق</div>
+    <?php if($followPages>1): ?><nav class="pager" aria-label="صفحات متابعة الأذونات">
+      <?php if($followPage>1): ?><a href="?<?= e($followQs(['page'=>$followPage-1])) ?>">‹ السابق</a><?php endif; ?>
+      <?php $start=max(1,$followPage-2);$end=min($followPages,$followPage+2);
+        if($start>1)echo '<a href="?'.e($followQs(['page'=>1])).'">1</a>'.($start>2?'<span class="dots">…</span>':'');
+        for($p=$start;$p<=$end;$p++)echo $p===$followPage?'<span class="cur">'.$p.'</span>':'<a href="?'.e($followQs(['page'=>$p])).'">'.$p.'</a>';
+        if($end<$followPages)echo ($end<$followPages-1?'<span class="dots">…</span>':'').'<a href="?'.e($followQs(['page'=>$followPages])).'">'.$followPages.'</a>'; ?>
+      <?php if($followPage<$followPages): ?><a href="?<?= e($followQs(['page'=>$followPage+1])) ?>">التالي ›</a><?php endif; ?>
+    </nav><?php endif; ?>
   <?php endif; ?>
 
 <?php elseif ($mode === 'movements'): ?>
@@ -205,9 +293,19 @@
 
 <?php else: ?>
   <?php // ============ وضع السجلات ============ ?>
+  <?php
+    $co = $co ?? ''; $cl = $cl ?? '';
+    $recordQs = static function(array $overrides=[]) use ($q,$type,$date,$st,$co,$cl): string {
+      $query = array_merge(['view'=>'records','q'=>$q,'type'=>$type,'date'=>$date,'st'=>$st,'co'=>$co,'cl'=>$cl,'page'=>1],$overrides);
+      return http_build_query(array_filter($query,static fn($value,$key)=>$value!==''&&!($key==='page'&&(int)$value===1),ARRAY_FILTER_USE_BOTH));
+    };
+    $recordUrl = static fn(array $ov=[]): string => url('permits?'.$recordQs($ov));
+  ?>
   <div class="pv-tools">
     <form method="get" action="<?= url('permits') ?>">
       <input type="hidden" name="view" value="records">
+      <input type="hidden" name="co" value="<?= e($co) ?>">
+      <input type="hidden" name="cl" value="<?= e($cl) ?>">
       <input type="search" name="q" value="<?= e($q) ?>" placeholder="رقم الإذن/الشهادة، شركة، عميل…">
       <select name="type">
         <option value="">كل الأنواع</option>
@@ -221,18 +319,81 @@
       </select>
       <input type="date" name="date" value="<?= e($date) ?>">
       <button class="btn sm" type="submit">تصفية</button>
-      <?php if($q||$type||$date||($st??'')): ?><a class="btn ghost sm" href="<?= url('permits?view=records') ?>">إلغاء</a><?php endif; ?>
+      <?php if($q||$type||$date||($st??'')||$co||$cl): ?><a class="btn ghost sm" href="<?= url('permits?view=records') ?>">إلغاء</a><?php endif; ?>
     </form>
     <div class="spacer"></div>
     <span class="pv-count"><span class="num"><?= intf($total) ?></span> إصدار</span>
   </div>
 
-  <!-- شريط الطباعة الجماعية (يظهر عند اختيار أذونات) -->
+  <?php // أزرار الشركات/الوكلاء المتكررين — تظهر تلقائيًا لأي طرف له أكثر من إصدار
+    $pcCoList = $coChips ?? []; $pcClList = $clChips ?? [];
+    $pcCo = $co; $pcCl = $cl; $pcUrl = $recordUrl;
+    include __DIR__ . '/_party_chips.php';
+  ?>
+
+  <?php if ($co!=='' || $cl!==''): ?>
+    <div class="pv-viewbar">
+      <span class="pvv-active">🔎 معروض الآن:
+        <?php if($co!==''): ?><b><?= e($co) ?></b><?php endif; ?>
+        <?php if($co!=='' && $cl!==''): ?> · <?php endif; ?>
+        <?php if($cl!==''): ?><b><?= e($cl) ?></b><?php endif; ?>
+        — <span class="num"><?= intf($total) ?></span> إصدار
+      </span>
+      <a class="pvv-x" href="<?= e($recordUrl(['co'=>'','cl'=>''])) ?>">✕ إلغاء التصفية</a>
+    </div>
+  <?php endif; ?>
+
+  <?php
+    // رجوع محلي آمن لنفس الفلتر الحالي بعد أي إجراء جماعي
+    $pvBack = ltrim((string)($_SERVER['REQUEST_URI'] ?? 'permits?view=records'), '/');
+    $agentOptions   = $agentOptions   ?? [];
+    $companyOptions = $companyOptions ?? [];
+  ?>
+  <!-- شريط الإجراءات الجماعية (يظهر عند اختيار أذونات) -->
   <div class="pv-batchbar" id="pvBatchBar">
     <label class="pbb-all"><input type="checkbox" id="pvAll"> تحديد الكل</label>
     <span class="pbb-count"><span class="num" id="pvCount">0</span> إذن محدَّد</span>
     <span style="flex:1"></span>
-    <button type="button" class="btn gold sm" id="pvPrintBtn" disabled onclick="printSelectedPermits()">🖨️ طباعة المحدَّد</button>
+    <button type="button" class="btn gold sm pv-bulk-btn" id="pvPrintBtn" disabled onclick="printSelectedPermits()">🖨️ طباعة</button>
+    <button type="button" class="btn ghost sm pv-bulk-btn" data-bulk="close"  disabled>✅ إتمام وإغلاق</button>
+    <button type="button" class="btn ghost sm pv-bulk-btn" data-bulk="reopen" disabled>🔓 إعادة فتح</button>
+    <button type="button" class="btn ghost sm pv-bulk-btn" id="pvPartyBtn"    disabled>👤 تغيير الوكيل/الشركة</button>
+    <button type="button" class="btn ghost sm pv-bulk-btn" data-bulk="csv"    disabled>⬇️ تصدير CSV</button>
+    <button type="button" class="btn ghost sm pv-bulk-btn pv-danger" data-bulk="delete" disabled>🗑️ حذف</button>
+    <button type="button" class="btn ghost sm pv-bulk-btn" id="pvClearSel"    disabled>إلغاء التحديد</button>
+  </div>
+
+  <!-- فورم واحد يحمل كل الإجراءات؛ الـ ids تُملأ بالـ JS وقت الإرسال -->
+  <form method="post" action="<?= url('permits/bulk') ?>" id="pvBulkForm" style="display:none">
+    <?= csrfField() ?>
+    <input type="hidden" name="back" value="<?= e($pvBack) ?>">
+    <input type="hidden" name="op" id="pvBulkOp" value="">
+    <div id="pvBulkIds"></div>
+    <div id="pvBulkExtra"></div>
+  </form>
+
+  <!-- مودال تغيير الوكيل/الشركة -->
+  <div class="pv-modal" id="pvPartyModal" hidden>
+    <div class="pv-modal-card" role="dialog" aria-modal="true" aria-labelledby="pvPartyTitle">
+      <div class="pv-modal-head">
+        <b id="pvPartyTitle">تغيير الوكيل/الشركة للأذونات المحدَّدة</b>
+        <button type="button" class="pv-modal-x" aria-label="إغلاق">×</button>
+      </div>
+      <div class="pv-modal-body">
+        <p class="pv-hint">اكتب الاسم اللي عايز توحّده على <b><span id="pvPartyCount">0</span></b> إذن. سيب الخانة فاضية لو مش عايز تغيّرها.
+          الأسماء بتمرّ على حوكمة الأسماء زي فورم الإذن (توحيد التهجئة + إيقاف الاسم القريب).</p>
+        <label class="pv-lbl">الوكيل (العميل)</label>
+        <input type="text" id="pvPartyClient" name="client" form="pvBulkForm" list="pvAgentOpts" maxlength="150" autocomplete="off" data-smart-name="client" placeholder="اتركه فاضي = بلا تغيير">
+        <datalist id="pvAgentOpts"><?php foreach ($agentOptions as $n): ?><option value="<?= e($n) ?>"><?php endforeach; ?></datalist>
+        <label class="pv-lbl">لصالح شركة</label>
+        <input type="text" id="pvPartyCompany" name="company" form="pvBulkForm" list="pvCompanyOpts" maxlength="150" autocomplete="off" data-smart-name="company" placeholder="اتركه فاضي = بلا تغيير">
+        <datalist id="pvCompanyOpts"><?php foreach ($companyOptions as $n): ?><option value="<?= e($n) ?>"><?php endforeach; ?></datalist>
+        <div class="pv-modal-actions">
+          <button type="button" class="btn gold" id="pvPartySave">💾 طبّق على المحدَّد</button>
+          <button type="button" class="btn ghost pv-modal-x">إلغاء</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="pv-tbl-wrap">
@@ -269,8 +430,12 @@
             <td><span class="kind-tag <?= $th['cls'] ?>"><?= $th['short'] ?> <?= $th['arrow'] ?></span></td>
             <td class="num serial"><?= e($r['permit_no'] ?: '#'.$r['id']) ?></td>
             <td class="num"><?= dfmt($r['permit_date']) ?></td>
-            <td class="txt"><?= e($r['company'] ?: '—') ?></td>
-            <td class="txt"><?= e($r['client'] ?: '—') ?></td>
+            <td class="txt"><?php if(($r['company']??'')!==''): ?>
+              <a class="pv-plnk" href="<?= e($recordUrl(['co'=>$r['company'],'page'=>1])) ?>" onclick="event.stopPropagation()" title="اعرض أذونات هذه الشركة فقط"><?= e($r['company']) ?></a>
+            <?php else: ?>—<?php endif; ?></td>
+            <td class="txt"><?php if(($r['client']??'')!==''): ?>
+              <a class="pv-plnk" href="<?= e($recordUrl(['cl'=>$r['client'],'page'=>1])) ?>" onclick="event.stopPropagation()" title="اعرض أذونات هذا الوكيل فقط"><?= e($r['client']) ?></a>
+            <?php else: ?>—<?php endif; ?></td>
             <td class="num"><?= intf($r['bills']) ?></td>
             <td class="num"><?php if(($r['containers']??0)>0): ?><?= intf($r['containers']) ?><?php if(($r['container_type']??'')!==''): ?>×<?= e($r['container_type']) ?><?php endif; else: ?>—<?php endif; ?></td>
             <td class="num pos"><?= money($r['custody'],false) ?></td>
@@ -290,7 +455,7 @@
         <tfoot>
           <tr class="pv-tot">
             <td data-no-sort></td>
-            <td class="txt" colspan="2">الإجمالي (<?= intf(count($rows)) ?>)</td>
+            <td class="txt" colspan="2">إجمالي الصفحة (<?= intf(count($rows)) ?>)</td>
             <td></td><td></td><td></td>
             <td class="num"><?= intf($tBills) ?></td>
             <td class="num"><?= $tContainers>0?intf($tContainers):'—' ?></td>
@@ -300,10 +465,34 @@
             <td class="num"><?= money($tRemaining,false) ?></td>
             <td></td><td></td>
           </tr>
+          <?php if(!empty($grand)): ?>
+          <tr class="pv-tot pv-grand">
+            <td data-no-sort></td>
+            <td class="txt" colspan="2">إجمالي كل النتائج (<?= intf($total) ?>)</td>
+            <td></td><td></td><td></td>
+            <td class="num"><?= intf($grand['bills']) ?></td>
+            <td class="num"><?= ((int)$grand['containers'])>0?intf($grand['containers']):'—' ?></td>
+            <td class="num pos"><?= money($grand['custody'],false) ?></td>
+            <td class="num neg"><?= money($grand['expense'],false) ?></td>
+            <td class="num pos"><?= money($grand['fees'],false) ?></td>
+            <td class="num"><?= money($grand['remaining'],false) ?></td>
+            <td></td><td></td>
+          </tr>
+          <?php endif; ?>
         </tfoot>
         <?php endif; ?>
     </table>
   </div>
+  <?php if(($pages??1)>1): // $recordQs معرَّف أعلى الشاشة ويحمل تصفية الشركة/الوكيل ?>
+  <nav class="pager" aria-label="صفحات سجل الأذونات">
+    <?php if($page>1): ?><a href="?<?= e($recordQs(['page'=>$page-1])) ?>">‹ السابق</a><?php endif; ?>
+    <?php $start=max(1,$page-2);$end=min($pages,$page+2);
+      if($start>1)echo '<a href="?'.e($recordQs(['page'=>1])).'">1</a>'.($start>2?'<span class="dots">…</span>':'');
+      for($p=$start;$p<=$end;$p++)echo $p===$page?'<span class="cur">'.$p.'</span>':'<a href="?'.e($recordQs(['page'=>$p])).'">'.$p.'</a>';
+      if($end<$pages)echo ($end<$pages-1?'<span class="dots">…</span>':'').'<a href="?'.e($recordQs(['page'=>$pages])).'">'.$pages.'</a>'; ?>
+    <?php if($page<$pages): ?><a href="?<?= e($recordQs(['page'=>$page+1])) ?>">التالي ›</a><?php endif; ?>
+  </nav>
+  <?php endif; ?>
 <?php endif; ?>
 
 <?php if ($mode === 'records'): ?>
@@ -313,13 +502,27 @@
   .pv-batchbar .pbb-all{display:inline-flex;align-items:center;gap:7px;font-weight:700;cursor:pointer;color:var(--navy,#15355B)}
   .pv-batchbar .pbb-all input,.pv-tbl .pv-pick input{width:17px;height:17px;cursor:pointer;accent-color:var(--gold,#C9A227)}
   .pv-batchbar .pbb-count{color:var(--muted,#5A6472);font-weight:700}
-  .pv-batchbar #pvPrintBtn:disabled{opacity:.45;cursor:not-allowed}
+  .pv-batchbar .pv-bulk-btn:disabled{opacity:.45;cursor:not-allowed}
+  .pv-batchbar .pv-bulk-btn.pv-danger{color:#b32020;border-color:#e7bcbc}
+  .pv-batchbar .pv-bulk-btn.pv-danger:not(:disabled):hover{background:#fdf1f1}
+  .pv-modal[hidden]{display:none}
+  .pv-modal{position:fixed;inset:0;z-index:1000;background:rgba(13,29,49,.58);display:flex;align-items:center;justify-content:center;padding:20px}
+  .pv-modal-card{width:min(560px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.28)}
+  .pv-modal-head{display:flex;justify-content:space-between;align-items:center;padding:15px 18px;background:var(--navy,#15355B);color:#fff}
+  .pv-modal-x{border:0;background:transparent;color:inherit;font-size:1.5rem;cursor:pointer;line-height:1}
+  .pv-modal-body{padding:18px}
+  .pv-modal-body .pv-lbl{display:block;font-weight:800;color:var(--navy,#15355B);font-size:.82rem;margin-top:12px}
+  .pv-modal-body input[type=text]{display:block;width:100%;margin-top:6px;border:1px solid var(--line2,#D6DDE6);border-radius:9px;padding:9px 11px;font-family:inherit}
+  .pv-hint{font-size:.78rem;color:var(--grey,#5A6472);line-height:1.7;margin:0 0 6px}
+  .pv-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
   .pv-tbl th.pv-pick,.pv-tbl td.pv-pick{width:38px;text-align:center;padding-inline:6px}
   .pv-tbl tfoot .pv-tot td{background:var(--navy,#15355B);color:#fff;font-weight:800;padding:11px 12px;
     text-align:center;white-space:nowrap;border-top:2px solid var(--gold,#C9A227)}
   .pv-tbl tfoot .pv-tot td.txt{text-align:right}
   .pv-tbl tfoot .pv-tot td.num{font-family:var(--mono);font-feature-settings:"tnum" 1}
   .pv-tbl tfoot .pv-tot td.pos{color:#a7e9bf} .pv-tbl tfoot .pv-tot td.neg{color:#ffc4c4}
+  .pv-tbl tfoot .pv-grand td{background:#0f2947;border-top:2px solid var(--gold,#C9A227)}
+  .pv-tbl tfoot .pv-grand td.txt{color:var(--gold,#C9A227)}
 </style>
 <script>
 (function(){
@@ -329,11 +532,13 @@
   var cnt = document.getElementById('pvCount');
   var btn = document.getElementById('pvPrintBtn');
   if (!btn) return;
+  var actionBtns = Array.prototype.slice.call(document.querySelectorAll('.pv-bulk-btn'));
+  function selectedIds(){ return boxes().filter(function(b){ return b.checked; }).map(function(b){ return b.value; }); }
   function sync(){
     var bs = boxes();
     var sel = bs.filter(function(b){ return b.checked; });
     if (cnt) cnt.textContent = sel.length;
-    btn.disabled = sel.length === 0;
+    actionBtns.forEach(function(b){ b.disabled = sel.length === 0; });
     var allChecked = bs.length > 0 && sel.length === bs.length;
     if (allTop) allTop.checked = allChecked;
     if (allBar) allBar.checked = allChecked;
@@ -345,80 +550,86 @@
     else if (t === allTop || t === allBar) selectAll(t.checked);
   });
   window.printSelectedPermits = function(){
-    var ids = boxes().filter(function(b){ return b.checked; }).map(function(b){ return b.value; });
+    var ids = selectedIds();
     if (!ids.length) return;
     window.open('<?= url('permits/print-batch') ?>?ids=' + ids.join(','), '_blank');
   };
-  sync();
-})();
-</script>
-<?php endif; ?>
 
-<?php if ($mode === 'follow'): ?>
-<script>
-(function(){
-  var grid = document.getElementById('pvFollowGrid');
-  if (!grid) return;
-  var cards   = Array.prototype.slice.call(grid.querySelectorAll('.dkt'));
-  var search  = document.getElementById('pvfSearch');
-  var clearBt = document.getElementById('pvfClear');
-  var sortSel = document.getElementById('pvfSort');
-  var chips   = Array.prototype.slice.call(document.querySelectorAll('.pvf-chip'));
-  var noneBox = document.getElementById('pvFollowNone');
-  var incKpi  = document.querySelector('.pv-kpi[data-jump="warn"]');
-  var filter = 'all', term = '';
+  // --- الإجراءات الجماعية: فورم واحد يتعبّى وقت الإرسال ---
+  var form  = document.getElementById('pvBulkForm');
+  var opFld = document.getElementById('pvBulkOp');
+  var idBox = document.getElementById('pvBulkIds');
+  var exBox = document.getElementById('pvBulkExtra');
 
-  // عدّادات الشرائح (ثابتة — على كل البطاقات)
-  var totAll = cards.length;
-  var totWarn = cards.filter(function(c){ return c.dataset.status === 'warn'; }).length;
-  function setCt(k,v){ var el = document.querySelector('.pvf-ct[data-ct="'+k+'"]'); if(el) el.textContent = v; }
-  setCt('all', totAll); setCt('warn', totWarn); setCt('ok', totAll - totWarn);
-
-  function apply(){
-    var shown = 0;
-    cards.forEach(function(c){
-      var okFilter = filter === 'all' || c.dataset.status === filter;
-      var okTerm   = !term || (c.dataset.search || '').indexOf(term) !== -1;
-      var vis = okFilter && okTerm;
-      c.style.display = vis ? '' : 'none';
-      if (vis) shown++;
-    });
-    if (noneBox) noneBox.hidden = shown !== 0;
-    if (clearBt) clearBt.hidden = term === '';
+  function hidden(name, value){
+    var i = document.createElement('input');
+    i.type = 'hidden'; i.name = name; i.value = value;
+    return i;
+  }
+  function submitBulk(op, extra){
+    var ids = selectedIds();
+    if (!ids.length) return;
+    opFld.value = op;
+    idBox.innerHTML = ''; exBox.innerHTML = '';
+    ids.forEach(function(v){ idBox.appendChild(hidden('ids[]', v)); });
+    Object.keys(extra || {}).forEach(function(k){ exBox.appendChild(hidden(k, extra[k])); });
+    if (form.requestSubmit) form.requestSubmit(); else form.submit();
   }
 
-  function sortCards(){
-    var mode = sortSel ? sortSel.value : 'new';
-    var arr = cards.slice();
-    arr.sort(function(a,b){
-      var da=a.dataset, db=b.dataset;
-      switch(mode){
-        case 'old':      return (da.date||'').localeCompare(db.date||'') || (+da.seq - +db.seq);
-        case 'prog-asc': return (+da.prog - +db.prog) || (+db.seq - +da.seq);
-        case 'prog-desc':return (+db.prog - +da.prog) || (+db.seq - +da.seq);
-        case 'rem-desc': return (+db.rem - +da.rem)   || (+db.seq - +da.seq);
-        default:         return (db.date||'').localeCompare(da.date||'') || (+db.seq - +da.seq); // new
+  var CONFIRM = {
+    close:  function(n){ return 'إتمام وإغلاق ' + n + ' إذن؟ الأذونات المقفولة بالفعل هتتخطّى.'; },
+    reopen: function(n){ return 'إعادة فتح ' + n + ' إذن؟'; },
+    delete: function(n){ return 'حذف ' + n + ' إصدار نهائيًا؟ البوالص المرتبطة هتتفكّ من الإذن ومش هتتحذف. أي إذن له مستند مالي صادر هيتخطّى.'; }
+  };
+  actionBtns.forEach(function(b){
+    var op = b.getAttribute('data-bulk');
+    if (!op) return;
+    b.addEventListener('click', function(){
+      var n = selectedIds().length;
+      if (!n) return;
+      if (CONFIRM[op]) {
+        window.AppUI.confirm(CONFIRM[op](n), function(){ submitBulk(op, {}); }, {danger:op==='delete'});
+      } else { submitBulk(op, {}); }
+    });
+  });
+  var clearBtn = document.getElementById('pvClearSel');
+  if (clearBtn) clearBtn.addEventListener('click', function(){ selectAll(false); });
+
+  // --- مودال تغيير الوكيل/الشركة ---
+  var modal = document.getElementById('pvPartyModal');
+  var openBtn = document.getElementById('pvPartyBtn');
+  if (modal && openBtn) {
+    var clientIn  = document.getElementById('pvPartyClient');
+    var companyIn = document.getElementById('pvPartyCompany');
+    function closeModal(){ modal.hidden = true; }
+    openBtn.addEventListener('click', function(){
+      if (!selectedIds().length) return;
+      document.getElementById('pvPartyCount').textContent = selectedIds().length;
+      modal.hidden = false;
+      clientIn.focus();
+    });
+    modal.addEventListener('click', function(e){
+      if (e.target === modal || (e.target.classList && e.target.classList.contains('pv-modal-x'))) closeModal();
+    });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+    document.getElementById('pvPartySave').addEventListener('click', function(){
+      var c = clientIn.value.trim(), co = companyIn.value.trim();
+      if (!c && !co) { window.AppUI.notice('اكتب الوكيل أو الشركة (أو الاتنين).'); return; }
+      // خانتا الاسم مرتبطتان بالفورم عبر form="pvBulkForm" فتُرسَلان تلقائيًا مع __newname_*
+      // اللي بيضيفه محرّك حوكمة الأسماء عند تأكيد «ده اسم جديد». الخادم هو الحاكم النهائي.
+      var conflict = [clientIn, companyIn].filter(function(i){
+        var v = i.value.trim();
+        return v && i.dataset.conflict && i.dataset.newConfirmed !== '1' && v !== i.dataset.conflict;
+      });
+      if (conflict.length) {
+        window.AppUI.notice('فيه اسم قريب من اسم مخزّن — اختَر الموجود أو أكّد أنه اسم جديد.');
+        conflict[0].focus();
+        return;
       }
+      window.AppUI.confirm('تطبيق الأسماء على ' + selectedIds().length + ' إذن؟', function(){ submitBulk('party', {}); }, {danger:false});
     });
-    arr.forEach(function(c){ grid.appendChild(c); });
   }
-
-  if (search) search.addEventListener('input', function(){ term = (this.value||'').toLowerCase().trim(); apply(); });
-  if (clearBt) clearBt.addEventListener('click', function(){ if(search){ search.value=''; } term=''; apply(); if(search) search.focus(); });
-  if (sortSel) sortSel.addEventListener('change', sortCards);
-  chips.forEach(function(ch){
-    ch.addEventListener('click', function(){
-      chips.forEach(function(x){ x.classList.remove('on'); });
-      ch.classList.add('on'); filter = ch.dataset.filter; apply();
-    });
-  });
-  if (incKpi) incKpi.addEventListener('click', function(){
-    var warnChip = document.querySelector('.pvf-chip[data-filter="warn"]');
-    if (warnChip) warnChip.click();
-    grid.scrollIntoView({behavior:'smooth', block:'start'});
-  });
-
-  sortCards(); apply();
+  sync();
 })();
 </script>
 <?php endif; ?>

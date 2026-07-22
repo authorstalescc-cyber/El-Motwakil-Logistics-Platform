@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>عرض أسعار — مجموعة شركات الزمردة | شركة المتوكل لمقاولات النقل</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#0163AA; --blue-hi:#1B8AD6; --deep:#082F4E; --deep-2:#06263F; --deep-3:#04192B;
+  --signal:#F5B301; --paper:#F4F7FA; --ink:#0E1D2B; --steel:#5B7288; --line:#DEE6EE;
+  --display:'Alexandria',sans-serif; --body:'IBM Plex Sans Arabic',sans-serif; --mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+@page{size:A4 landscape;margin:0}
+html,body{background:#fff}
+body{font-family:var(--body);color:var(--ink);font-size:11.8px;line-height:1.72;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-variant-numeric:tabular-nums}
+h1,h2,h3,h4{font-family:var(--display);font-weight:800;line-height:1.28;letter-spacing:-.01em}
+b,strong{font-weight:700}
+a{color:inherit;text-decoration:none}
+a:hover{text-decoration:underline}
+.ltr{direction:ltr;display:inline-block;font-family:var(--mono)}
+
+/* ── الصفحة والتاكستشر ───────────────────────────────── */
+.pg{width:297mm;height:209.9mm;position:relative;overflow:hidden;page-break-after:always;background:#fff;display:flex;flex-direction:column}
+.pg::before{content:"";position:absolute;bottom:-35px;left:-35px;width:340px;height:340px;
+  background-image:url('logo.png');background-repeat:no-repeat;background-position:center;
+  background-size:contain;opacity:0.038;pointer-events:none;z-index:0}
+.pg[dir="ltr"]::before{left:auto;right:-35px}
+.pg.cover::before{display:none}
+.pg:last-child{page-break-after:auto}
+.pad{padding:0 16mm;position:relative;z-index:2}
+.ph,.bd,.pf{position:relative;z-index:2}
+
+/* LTR Styles Override */
+.pg[dir="ltr"]{font-family:'Alexandria',var(--body),sans-serif;direction:ltr;text-align:left}
+.pg[dir="ltr"] .ltr{direction:ltr}
+
+/* رأس الصفحة */
+.ph{display:flex;align-items:center;gap:10px;padding:7mm 16mm 0}
+.ph .logo{height:13.5mm}
+.ph .qr-head{height:12mm;width:12mm;object-fit:contain;border-radius:6px;border:1px solid var(--line);padding:2px;background:#fff}
+.ph .brand-link{display:flex;align-items:center;gap:10px}
+.ph .tag{margin-inline-start:auto;display:flex;align-items:center;gap:9px}
+.ph .tag b{background:var(--blue);color:#fff;font-family:var(--display);font-weight:700;font-size:12px;
+  padding:6px 18px;border-radius:99px;letter-spacing:-.01em}
+.ph .tag i{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--steel);letter-spacing:.1em}
+.rule{height:2.5px;background:linear-gradient(90deg,var(--signal) 0 16%,var(--blue) 16% 50%,var(--deep) 50% 100%);margin:4mm 0 0;border-radius:99px}
+
+/* جسم الصفحة */
+.bd{flex:1;padding:5.5mm 16mm 3.5mm;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+
+/* عنوان القسم */
+.h-sec h2{font-size:25px;color:var(--deep)}
+.h-sec h2 em{font-style:normal;color:var(--blue)}
+.h-sec p{color:var(--steel);font-size:11.5px;margin-top:2px}
+.code{font-family:var(--mono);font-size:9.4px;letter-spacing:.16em;color:var(--blue);direction:ltr;display:block;margin-bottom:3px;font-weight:600}
+
+/* تذييل */
+.pf{display:flex;align-items:center;gap:10px;padding:0 16mm 4mm;color:var(--blue);font-size:10.4px;font-weight:600}
+.pf .ln{flex:1;height:1px;background:var(--line)}
+.pf .n{width:20px;height:20px;border-radius:99px;background:var(--deep);color:#fff;display:flex;align-items:center;
+  justify-content:center;font-family:var(--mono);font-size:9.5px}
+.pf .mut{color:var(--steel);font-weight:500}
+
+/* بطاقات */
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+.card h3{font-size:13.5px;color:var(--deep);margin-bottom:4px}
+.card p{color:var(--steel);font-size:11px;line-height:1.68}
+.ico{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--deep) 0%,var(--deep-2) 100%);color:#fff;display:flex;align-items:center;
+  justify-content:center;margin-bottom:8px}
+.ico svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+
+/* إحصائيات */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:linear-gradient(155deg,var(--deep) 0%,var(--deep-2) 100%);border-radius:12px;padding:14px 16px;color:#fff}
+.stat b{display:block;font-family:var(--display);font-size:25px;font-weight:800;color:var(--signal);line-height:1.1}
+.stat span{font-size:10.5px;color:#BDD3E6}
+
+/* قائمة الخدمات */
+.svl{margin-top:1mm}
+.svl .code{display:block;margin-bottom:3mm}
+.svl .i{padding:3.2mm 0;border-bottom:1px solid var(--line);display:flex;gap:4.5mm;align-items:baseline}
+.svl .i:last-child{border-bottom:0}
+.svl .i .d{font-size:9.5px;color:var(--blue);font-weight:700;min-width:7mm;font-family:var(--mono)}
+.svl .i b{font-size:12.5px;font-weight:700;display:block;color:var(--deep)}
+.svl .i div > span{font-size:10px;color:var(--steel);display:block;margin-top:0.8mm;line-height:1.5}
+
+/* شريط داكن */
+.band{background:linear-gradient(120deg,var(--deep) 0%,var(--deep-2) 65%,var(--deep-3) 100%);border-radius:12px;
+  padding:14px 18px;color:#fff}
+.band h3{color:#fff;font-size:13.8px;margin-bottom:4px}
+.band h3 em{font-style:normal;color:var(--signal)}
+
+/* الغلاف */
+.cover{flex-direction:row;padding:0}
+.cv-l{width:38%;background:linear-gradient(165deg,var(--blue-hi) 0%,var(--blue) 38%,var(--deep) 100%);position:relative;
+  color:#fff;padding:14mm 12mm;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+.cv-l::after{content:"";position:absolute;inset:0;
+  background-image:radial-gradient(rgba(255,255,255,.16) 1px,transparent 1px);background-size:13px 13px;opacity:.55}
+.cv-l .z{position:relative;z-index:2}
+.cv-name{font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:-.01em}
+.cv-name span{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.28em;color:#BFE0F7;font-weight:500;margin-top:3px}
+.cv-photo{border-radius:14px;overflow:hidden;border:2px solid rgba(255,255,255,.25);height:72mm;padding:20px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.07);backdrop-filter:blur(6px)}
+.cv-photo img{max-width:85%;max-height:85%;object-fit:contain;display:block}
+.cv-r{flex:1;padding:14mm 16mm;display:flex;flex-direction:column;justify-content:space-between}
+.cv-r .mark{height:16.5mm;align-self:flex-start}
+.cv-kicker{color:var(--blue);font-weight:700;font-size:11px}
+.cv-h1{font-family:var(--display);font-weight:800;font-size:44px;color:var(--deep);line-height:1.1;margin:6px 0 10px}
+.cv-h1 em{font-style:normal;color:var(--blue)}
+.cv-bar{width:52mm;height:4px;background:var(--signal);border-radius:99px;margin-bottom:12px}
+.cv-lead{color:var(--steel);font-size:12.4px;max-width:46ch;line-height:1.75}
+.cv-lead b{color:var(--deep)}
+
+.client-badge{background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:11px 16px;display:flex;align-items:center;gap:14px;margin-top:10px;max-width:420px}
+.client-badge img{height:42px;max-width:140px;object-fit:contain}
+.client-badge .txt{border-inline-start:1px solid var(--line);padding-inline-start:13px}
+.client-badge .txt span{display:block;font-size:9px;color:var(--steel);font-family:var(--mono);letter-spacing:.1em;font-weight:600}
+.client-badge .txt b{display:block;font-size:13.5px;color:var(--deep);font-weight:700}
+
+.cv-facts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;border-top:1px solid var(--line);padding-top:11px}
+.cv-facts div span{display:block;font-size:9.4px;color:var(--steel)}
+.cv-facts div b{font-size:11.5px;color:var(--deep);font-weight:700}
+
+/* رسالة الترحيب والود */
+.friendly-banner{background:linear-gradient(135deg,#EBF4FC 0%,#F4F8FC 100%);border:1.5px solid #C4DDF2;border-radius:11px;padding:10px 14px;display:flex;align-items:center;gap:12px;margin-bottom:9px}
+.friendly-banner .icon-heart{width:32px;height:32px;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.friendly-banner .icon-heart svg{width:16px;height:16px;fill:currentColor}
+.friendly-banner .msg-text{font-size:11.2px;color:var(--deep);line-height:1.6}
+.friendly-banner .msg-text b{color:var(--blue);font-weight:700}
+
+/* صفحة الحلول المخصصة */
+.sol-card{background:#fff;border:1px solid var(--line);border-radius:11px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.sol-card .sol-num{width:26px;height:26px;border-radius:50%;background:var(--paper);border:1px solid var(--line);color:var(--blue);font-family:var(--mono);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;margin-bottom:2px}
+.sol-card h3{font-size:13px;color:var(--deep)}
+.sol-card p{font-size:10.8px;color:var(--steel);line-height:1.65}
+
+/* صفحة الأسعار */
+.dst-card{background:linear-gradient(135deg,var(--deep) 0%,var(--deep-2) 100%);border-radius:11px;padding:14px 18px;color:#fff;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.dst-card .n b{font-size:26px;font-weight:800;color:var(--signal);line-height:1.1;display:block;font-family:var(--display)}
+.dst-card .n span{font-size:11px;color:#BDD3E6;display:block;margin-top:2px}
+.dst-card .meta-side{display:flex;gap:16px;text-align:inherit}
+.dst-card .meta-side div{border-inline-start:1px solid rgba(255,255,255,.15);padding-inline-start:14px}
+.dst-card .meta-side .k{font-size:8.5px;letter-spacing:.15em;color:var(--signal);font-weight:700;font-family:var(--mono)}
+.dst-card .meta-side .v{font-size:12px;font-weight:700;color:#fff;margin-top:2px}
+
+.sec-head-pill{background:var(--deep);color:#fff;padding:4px 12px;border-radius:6px;font-size:11px;font-family:var(--display);font-weight:700;display:inline-flex;align-items:center;gap:6px;margin-bottom:8px}
+.sec-head-pill span{color:var(--signal)}
+
+.price-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 16px;text-align:center;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.price-card::before{content:"";position:absolute;top:0;right:0;left:0;height:4.5px;background:var(--blue)}
+.price-card.featured::before{background:var(--signal)}
+.price-card .sz{font-size:18px;font-weight:800;color:var(--deep);font-family:var(--display)}
+.price-card .cap{font-size:11px;color:var(--steel);margin-top:4px}
+.price-card .amt{font-size:46px;font-weight:800;color:var(--deep);line-height:1;margin:14px 0 4px;font-family:var(--display)!important;letter-spacing:-1px;direction:ltr}
+.price-card.featured .amt{color:var(--blue)}
+.price-card .cur{font-size:11.5px;color:var(--blue);font-weight:700;font-family:var(--body)}
+
+.flat-box{background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:12px 16px;margin-top:12px;display:flex;align-items:center;gap:16px}
+.flat-box .lbl{min-width:140px;border-inline-end:1px solid var(--line);padding-inline-end:14px}
+.flat-box .lbl .code{margin-bottom:1px}
+.flat-box .lbl b{font-size:13.5px;color:var(--deep);font-weight:700}
+.flat-box .txt{font-size:11px;color:var(--ink);line-height:1.7;flex:1}
+
+/* ═══════════ التصميم العصري لسلايد التواصل ═══════════ */
+.contact-grid-v2{display:grid;grid-template-columns:1.12fr .88fr;gap:14px;height:100%;align-items:stretch}
+.c-col{display:flex;flex-direction:column;gap:10px}
+
+.person-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 15px;display:flex;align-items:center;gap:12px;position:relative;overflow:hidden}
+.person-card::before{content:"";position:absolute;top:0;right:0;bottom:0;width:4px;background:var(--blue)}
+.pg[dir="ltr"] .person-card::before{right:auto;left:0}
+.person-card .p-ico{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--deep) 0%,var(--deep-2) 100%);color:var(--signal);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.person-card .p-ico svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.person-card .p-info{flex:1}
+.person-card .p-info b{font-size:13.5px;color:var(--deep);display:block;font-family:var(--display)}
+.person-card .p-email{background:var(--paper);border:1px solid var(--line);border-radius:99px;padding:5px 12px;font-size:10.5px;color:var(--blue);font-weight:600;font-family:var(--mono);transition:all .2s ease}
+.person-card .p-email:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+.direct-lines-box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-top:auto}
+.direct-lines-box .box-head{margin-bottom:8px}
+.direct-lines-box .box-head h3{font-size:13.5px;color:var(--deep)}
+.tel-grid-v2{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.tel-pill{background:var(--paper);border:1px solid var(--line);border-radius:99px;padding:8.5px 12px;display:flex;align-items:center;justify-content:center;gap:7px;color:var(--deep);font-weight:700;font-family:var(--mono);font-size:12.8px;transition:all .2s ease}
+.tel-pill svg{width:14px;height:14px;fill:none;stroke:var(--blue);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tel-pill:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+.tel-pill:hover svg{stroke:#fff}
+
+.office-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 15px;display:flex;gap:12px}
+.office-card .off-ico{width:36px;height:36px;border-radius:10px;background:var(--deep);color:var(--signal);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.office-card .off-ico svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.office-card .off-txt h3{font-size:13.5px;color:var(--deep);margin-bottom:3px}
+.office-card .off-txt p{font-size:11px;color:var(--steel);line-height:1.68}
+
+.slogan-band{background:linear-gradient(120deg,var(--deep) 0%,var(--deep-2) 65%,var(--deep-3) 100%);border-radius:12px;padding:12px 16px;color:#fff;text-align:center}
+.slogan-band h3{font-size:13.5px;color:#fff;font-family:var(--display)}
+.slogan-band h3 em{font-style:normal;color:var(--signal)}
+
+.qr-card-v2{background:linear-gradient(135deg,#fff 0%,var(--paper) 100%);border:1px solid var(--line);border-radius:12px;padding:12px 15px;margin-top:auto}
+.qr-card-v2 a{display:flex;align-items:center;gap:14px}
+.qr-card-v2 img{width:48px;height:48px;object-fit:contain;border-radius:6px}
+.qr-card-v2 .q-info b{font-size:14px;color:var(--deep);display:block;font-family:var(--mono);margin-top:1px}
+.qr-card-v2 .q-info .sub-link{font-size:9.5px;color:var(--blue);font-weight:600;display:block;margin-top:2px}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!--                      النسخة العربية (ARABIC)                     -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<!-- ═══════════ 01 — الغلاف (عربي) ═══════════ -->
+<section class="pg cover" dir="rtl">
+  <div class="cv-l">
+    <div class="z cv-name">النقل والمقاولات<span>TRANSPORT · LOGISTICS</span></div>
+    <div class="z cv-photo">
+      <a href="https://almutawakkil.com" target="_blank" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%"><img src="logo-white.png" alt="شعار المتوكل"></a>
+    </div>
+    <div class="z" style="font-size:10px;color:#D5E8F7;line-height:1.9">
+      <b style="color:#fff;font-size:11px"><a href="https://almutawakkil.com" target="_blank" class="ltr" style="color:#fff">almutawakkil.com</a></b><br>
+      ٣ ش علي بك جنينة — المنشية، الإسكندرية<br>
+      <a href="tel:01272028046" class="ltr" style="color:#BFE0F7">01272028046</a>
+    </div>
+  </div>
+  <div class="cv-r">
+    <img class="mark" src="logo.png" alt="المتوكل لمقاولات النقل">
+    <div>
+      <div class="cv-kicker">شركة المتوكل لمقاولات النقل</div>
+      <h1 class="cv-h1">عرض <em>أسعار</em></h1>
+      <div class="cv-bar"></div>
+      <p class="cv-lead">يسعدنا أن نتقدم لسيادتكم بعرض أسعار لنقل صادرات الحاويات من مصانع <b>العاشر من رمضان</b> إلى موانئ <b>الإسكندرية والدخيلة</b> — بأسطول متخصص وإشراف ميداني كامل يلبي احتياجات قطاع الصناعات الغذائية ومنتجات الذرة.</p>
+      
+      <div class="client-badge">
+        <img src="zomoroda-logo.png" alt="مجموعة شركات الزمردة">
+        <div class="txt">
+          <span>PREPARED FOR</span>
+          <b>مجموعة شركات الزمردة الموقرة</b>
+        </div>
+      </div>
+    </div>
+
+    <div class="cv-facts">
+      <div><span>التاريخ</span><b>يوليو 2026</b></div>
+      <div><span>الخدمة</span><b>نقل حاويات الصادر</b></div>
+      <div><span>المرجع</span><b class="ltr">MT-Q-2026-ZMR</b></div>
+      <div><span>العميل</span><b>مجموعة الزمردة</b></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 02 — من نحن (عربي) ═══════════ -->
+<section class="pg" dir="rtl">
+  <div class="ph"><a href="https://almutawakkil.com" target="_blank" class="brand-link"><img class="logo" src="logo.png" alt="المتوكل"><img class="qr-head" src="qr-ink.png" alt="QR Code"></a>
+    <span class="tag"><b>من نحن</b><i>01</i></span></div>
+  <div class="pad"><div class="rule"></div></div>
+  <div class="bd">
+    <div class="h-sec">
+      <span class="code">ABOUT AL-MUTAWAKKIL</span>
+      <h2>شركة المتوكل <em>لمقاولات النقل</em></h2>
+      <p>شريككم اللوجستي الموثوق لنقل الحاويات والبضائع العامة في جميع الموانئ المصرية والمناطق الصناعية.</p>
+    </div>
+
+    <div class="g3" style="margin-top:4mm">
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <h3>خبرة وتخصص قطاعي</h3>
+        <p>خبرة متعمقة في نقل شحنات المصانع الكبرى وكبرى شركات الصناعات الغذائية والمنتجات الزراعية بكفاءة عالية وفق أعلى معايير الأمان.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+        <h3>أسطول مجهز ومستعد</h3>
+        <p>جرارات ومقطورات حديثة مجهزة لنقل الحاويات 20ft / 40ft / 2x20ft مع التزام كامل بنظافة وجاهزية المقطورات لشحنات الأغذية.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+        <h3>إشراف ميداني داخل الموانئ</h3>
+        <p>تواجد ميداني مكثف ومستمر داخل موانئ الإسكندرية والدخيلة لضمان إنهاء الإجراءات والميزان والسحب دون أي تأخير.</p>
+      </div>
+    </div>
+
+    <div class="band" style="margin-top:3.5mm">
+      <h3>شراكتكم اللوجستية <em>الموثوقة</em> لنقل المنتجات الغذائية وصادرتكم إلى العالم بكل أمان</h3>
+      <p style="color:#BDD3E6;font-size:11px">نلتزم بالدقة المتناهية والتتبع المستمر لجميع الشحنات لضمان وصول صادراتكم ومستلزماتكم في مواعيدها المحسوبة.</p>
+    </div>
+
+    <div style="margin-top:3.5mm;display:grid;grid-template-columns:1fr 2fr;gap:12px;align-items:center">
+      <div class="stats">
+        <div class="stat"><b>+15</b><span>عاماً من الخبرة</span></div>
+        <div class="stat"><b>100%</b><span>التزام بالمواعيد</span></div>
+        <div class="stat"><b>24/7</b><span>متابعة ميدانية</span></div>
+      </div>
+      <div class="svl">
+        <span class="code">OUR CORE SERVICES</span>
+        <div class="svl-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="svl .i" style="padding:0"><b>• نقل حاويات الصادر (FCL)</b><span style="color:var(--steel);font-size:10.5px">20ft / 40ft / 2x20ft</span></div>
+          <div class="svl .i" style="padding:0"><b>• التغطية المباشرة للموانئ</b><span style="color:var(--steel);font-size:10.5px">الإسكندرية والدخيلة</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pf"><span class="mut">عرض أسعار — مجموعة شركات الزمردة</span><div class="ln"></div><div class="n">2</div></div>
+</section>
+
+<!-- ═══════════ 03 — ماذا سنقدم لشركة الزمردة (عربي) ═══════════ -->
+<section class="pg" dir="rtl">
+  <div class="ph"><a href="https://almutawakkil.com" target="_blank" class="brand-link"><img class="logo" src="logo.png" alt="المتوكل"><img class="qr-head" src="qr-ink.png" alt="QR Code"></a>
+    <span class="tag"><b>الحلول اللوجستية المخصصة</b><i>02</i></span></div>
+  <div class="pad"><div class="rule"></div></div>
+  <div class="bd">
+    <div class="h-sec" style="margin-bottom:3.5mm">
+      <span class="code">TAILORED LOGISTICS SOLUTIONS</span>
+      <h2>ماذا سنقدم <em>لمجموعة شركات الزمردة؟</em></h2>
+      <p>حلول نقل متكاملة تفهم احتياجات مصانع "الزمردة لمنتجات الذرة" و"الزمردة للصناعات الغذائية - أرز الساعة" بالعاشر من رمضان.</p>
+    </div>
+
+    <div class="g4">
+      <div class="sol-card">
+        <div class="sol-num">01</div>
+        <h3>معايير نقل الأغذية (Food Grade)</h3>
+        <p>ضمان نظافة المقطورات وجاهزيتها التامة لنقل منتجات النشا، الجلوكوز، الزيوت، وأرز الساعة لمنع التلوث أو الرطوبة.</p>
+      </div>
+
+      <div class="sol-card">
+        <div class="sol-num">02</div>
+        <h3>جاهزية الأسطول بالعاشر من رمضان</h3>
+        <p>توفير مقطورات يومية جاهزة للتحميل المباشر من مصانع العاشر من رمضان والتسليم الفوري لموانئ الإسكندرية والدخيلة.</p>
+      </div>
+
+      <div class="sol-card">
+        <div class="sol-num">03</div>
+        <h3>الالتزام التام بمواعيد المراكب</h3>
+        <p>متابعة دقيقة لمواعيد السحبات وفتحات المراكب (Cut-off times) لضمان شحن الصادرات في ميعادها وتجنب أي غرامات تأخير.</p>
+      </div>
+
+      <div class="sol-card">
+        <div class="sol-num">04</div>
+        <h3>إشراف ميداني 24/7 داخل الموانئ</h3>
+        <p>فريق ميداني مخصص داخل الموانئ لتسهيل إجراءات الميزان، البوابات، والتسليم لخطوط الشحن بأقصى سرعة ومرونة.</p>
+      </div>
+    </div>
+
+    <div class="band" style="margin-top:3.5mm">
+      <h3>لماذا نعتبر <em>الشريك الأنسب</em> لمجموعة الزمردة؟</h3>
+      <p style="color:#BDD3E6;font-size:11px">لأننا نجمع بين التخصص في نقل المنتجات الغذائية والاستجابة السريعة لمتطلبات مجمع مصانع العاشر من رمضان، مع وجود إداري وميداني قوي داخل الموانئ يضمن انسيابية حركة صادراتكم دون أي معوقات.</p>
+    </div>
+
+    <div class="flat-box" style="margin-top:3mm">
+      <div class="lbl">
+        <span class="code">OUR COMMITMENT</span>
+        <b>التزامنا اللوجستي</b>
+      </div>
+      <div class="txt">
+        نضع خبراتنا وأسطولنا تحت أمر مجموعة الزمردة لتوفير خط نقل بري منتظم وآمن يربط بين خطوط الإنتاج بالعاشر من رمضان وموانئ التصدير البحرية بكل كفاءة واحترافية.
+      </div>
+    </div>
+  </div>
+  <div class="pf"><span class="mut">عرض أسعار — مجموعة شركات الزمردة</span><div class="ln"></div><div class="n">3</div></div>
+</section>
+
+<!-- ═══════════ 04 — أسعار الصادر FCL (عربي) ═══════════ -->
+<section class="pg" dir="rtl">
+  <div class="ph"><a href="https://almutawakkil.com" target="_blank" class="brand-link"><img class="logo" src="logo.png" alt="المتوكل"><img class="qr-head" src="qr-ink.png" alt="QR Code"></a>
+    <span class="tag"><b>عرض الأسعار — الصادر</b><i>03</i></span></div>
+  <div class="pad"><div class="rule"></div></div>
+  <div class="bd">
+    <div class="friendly-banner">
+      <div class="icon-heart"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
+      <div class="msg-text">
+        <b>نتمنى أن ينال هذا العرض إعجابكم وتطلعاتكم</b>، ونسعد دائماً بخدمتكم وتوفير أفضل حلول النقل اللوجستي لشحناتكم بكل احترافية وأمان.
+      </div>
+    </div>
+
+    <div class="dst-card">
+      <div class="n">
+        <b>مصانع العاشر من رمضان ⬅ موانئ الإسكندرية / الدخيلة</b>
+        <span>أسعار نقل صادرات الحاويات (Export FCL)</span>
+      </div>
+      <div class="meta-side">
+        <div><div class="k">الخدمة</div><div class="v">صادر (Export)</div></div>
+        <div><div class="k">القومية</div><div class="v">العاشر من رمضان</div></div>
+      </div>
+    </div>
+
+    <!-- قسم حاويات الصادر FCL -->
+    <div class="sec-head-pill"><span>■</span> نقل حاويات الصادر (Export FCL)</div>
+    <div class="g3" style="margin-top:2px">
+      <div class="price-card">
+        <div>
+          <div class="sz">حاوية 1 * 20 قدم</div>
+          <div class="cap">صادر — حاوية 20ft</div>
+        </div>
+        <div class="amt">14,000</div>
+        <div class="cur">جنيه مصري</div>
+      </div>
+
+      <div class="price-card featured">
+        <div>
+          <div class="sz">حاوية 1 * 40 قدم</div>
+          <div class="cap">صادر — حاوية 40ft</div>
+        </div>
+        <div class="amt">17,000</div>
+        <div class="cur">جنيه مصري</div>
+      </div>
+
+      <div class="price-card">
+        <div>
+          <div class="sz">2 * 20 قدم</div>
+          <div class="cap">صادر — حاويتان 20ft على مقطورة واحدة</div>
+        </div>
+        <div class="amt">22,000</div>
+        <div class="cur">جنيه مصري</div>
+      </div>
+    </div>
+
+    <div class="flat-box" style="margin-top:10px">
+      <div class="lbl">
+        <span class="code">EXPORT ADVANTAGES</span>
+        <b>ملاحظات وشروط النقل</b>
+      </div>
+      <div class="txt">
+        الأسعار أعلاه تشمل النقل المباشر من مصانع مجموعة الزمردة بالعاشر من رمضان إلى موانئ الإسكندرية والدخيلة. الأسعار لا تشمل أي رسوم أرضيات أو تعتيق أو مصاريف سيادية داخل الموانئ.
+      </div>
+    </div>
+
+    <div class="band" style="margin-top:10px">
+      <h3>إشراف ميداني <em>مباشر</em> داخل الموانئ طوال فترة التحميل والسحب</h3>
+      <p style="color:#BDD3E6;font-size:11px">يقوم فريقنا الميداني بتنسيق دخول السيارات وإنهاء إجراءات البوابات والميزان بسرعة ومرونة فائقة لضمان اللحاق بمواعيد المراكب.</p>
+    </div>
+  </div>
+  <div class="pf"><span class="mut">عرض أسعار — مجموعة شركات الزمردة</span><div class="ln"></div><div class="n">4</div></div>
+</section>
+
+<!-- ═══════════ 05 — التواصل (عربي) ═══════════ -->
+<section class="pg" dir="rtl">
+  <div class="ph"><a href="https://almutawakkil.com" target="_blank" class="brand-link"><img class="logo" src="logo.png" alt="المتوكل"><img class="qr-head" src="qr-ink.png" alt="QR Code"></a>
+    <span class="tag"><b>التواصل</b><i>04</i></span></div>
+  <div class="pad"><div class="rule"></div></div>
+  <div class="bd">
+    <div class="h-sec" style="margin-bottom:10px">
+      <span class="code">DIRECT CONTACT</span>
+      <h2>نسعد <em>بتواصلكم معنا</em></h2>
+      <p>فريقنا جاهز لتلبية طلباتكم وتنسيق شحناتكم على مدار الساعة.</p>
+    </div>
+
+    <div class="contact-grid-v2">
+      <!-- العمود الأيمن: فريق التشغيل والخطوط المباشرة -->
+      <div class="c-col">
+        <!-- كارت أحمد عادل -->
+        <div class="person-card">
+          <div class="p-ico">
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="p-info">
+            <b>م/ أحمد عادل</b>
+          </div>
+          <a href="mailto:ahmed@almutawakkil.com" class="p-email ltr">ahmed@almutawakkil.com</a>
+        </div>
+
+        <!-- كارت أيمن عليمي -->
+        <div class="person-card">
+          <div class="p-ico">
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="p-info">
+            <b>م/ أيمن عليمي</b>
+          </div>
+          <a href="mailto:ayman@almutawakkil.com" class="p-email ltr">ayman@almutawakkil.com</a>
+        </div>
+
+        <!-- صندوق أرقام التواصل المباشرة -->
+        <div class="direct-lines-box">
+          <div class="box-head">
+            <h3>خطوط التواصل المباشرة والواتساب</h3>
+          </div>
+          <div class="tel-grid-v2">
+            <a href="tel:01272028046" class="tel-pill">
+              <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span>01272028046</span>
+            </a>
+            <a href="tel:01115532133" class="tel-pill">
+              <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span>01115532133</span>
+            </a>
+            <a href="tel:01024543399" class="tel-pill">
+              <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span>01024543399</span>
+            </a>
+            <a href="tel:01278093616" class="tel-pill">
+              <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span>01278093616</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- العمود الأيسر: المقر والشعار الختامي والـ QR -->
+      <div class="c-col">
+        <!-- كارت المقر الرئيسي -->
+        <div class="office-card">
+          <div class="off-ico">
+            <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div class="off-txt">
+            <h3>المقر الرئيسي</h3>
+            <p>٣ ش علي بك جنينة — متفرع من شارع السكة الجديدة، أمام شارع حمام الورشة — المنشية، الإسكندرية</p>
+          </div>
+        </div>
+
+        <!-- شريط الشعار الرسمي -->
+        <div class="slogan-band">
+          <h3>شحنتك في أمان .. <em>توصيلك في ميعاده ★</em></h3>
+        </div>
+
+        <!-- كارت الموقع الإلكتروني والـ QR -->
+        <div class="qr-card-v2">
+          <a href="https://almutawakkil.com" target="_blank">
+            <img src="qr-ink.png" alt="QR Code">
+            <div class="q-info">
+              <span style="font-size:9px;color:var(--steel);font-family:var(--mono)">OFFICIAL WEBSITE</span>
+              <b>almutawakkil.com</b>
+              <span class="sub-link">اضغط هنا لزيارة الموقع الرسمي ↗</span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pf"><span class="mut">عرض أسعار — مجموعة شركات الزمردة</span><div class="ln"></div><div class="n">5</div></div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!--                     النسخة الإنجليزية (ENGLISH)                   -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<!-- ═══════════ 06 — COVER (ENGLISH) ═══════════ -->
+<section class="pg cover" dir="ltr">
+  <div class="cv-l">
+    <div class="z cv-name">TRANSPORT · LOGISTICS<span>AL-MUTAWAKKIL CO.</span></div>
+    <div class="z cv-photo">
+      <a href="https://almutawakkil.com" target="_blank" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%"><img src="logo-white.png" alt="Al-Mutawakkil Logo"></a>
+    </div>
+    <div class="z" style="font-size:10px;color:#D5E8F7;line-height:1.9">
+      <b style="color:#fff;font-size:11px"><a href="https://almutawakkil.com" target="_blank" class="ltr" style="color:#fff">almutawakkil.com</a></b><br>
+      3 Ali Bey Genena St., El-Mansheya, Alexandria<br>
+      <a href="tel:01272028046" class="ltr" style="color:#BFE0F7">+20 127 202 8046</a>
+    </div>
+  </div>
+  <div class="cv-r">
+    <img class="mark" src="logo.png" alt="Al-Mutawakkil">
+    <div>
+      <div class="cv-kicker">AL-MUTAWAKKIL TRANSPORT SERVICES</div>
+      <h1 class="cv-h1">Quotation <em>Offer</em></h1>
+      <div class="cv-bar"></div>
+      <p class="cv-lead">We are pleased to present our official quotation for container export transport from <b>6th of October City factories</b> to <b>Alexandria and Dekheila Ports</b> — backed by a specialized fleet tailored for food &amp; corn products industries.</p>
+      
+      <div class="client-badge">
+        <img src="zomoroda-logo.png" alt="EL ZOMORODA Group">
+        <div class="txt">
+          <span>PREPARED FOR</span>
+          <b>EL ZOMORODA Group for Food &amp; Corn Products</b>
+        </div>
+      </div>
+    </div>
+
+    <div class="cv-facts">
+      <div><span>DATE</span><b>JULY 2026</b></div>
+      <div><span>SERVICE</span><b>Export FCL Cargo</b></div>
+      <div><span>REF</span><b class="ltr">MT-Q-2026-ZMR</b></div>
+      <div><span>CLIENT</span><b>EL ZOMORODA</b></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 07 — ABOUT US (ENGLISH) ═══════════ -->
+<section class="pg" dir="ltr">
+  <div class="ph"><a href="https://almutawakkil.com" target="_blank" class="brand-link"><img class="logo" src="logo.png" alt="Al-Mutawakkil"><img class="qr-head" src="qr-ink.png" alt="QR Code"></a>
+    <span class="tag"><b>ABOUT US</b><i>01</i></span></div>
+  <div class="pad"><div class="rule"></div></div>
+  <div class="bd">
+    <div class="h-sec">
+      <span class="code">ABOUT AL-MUTAWAKKIL</span>
+      <h2>Al-Mutawakkil <em>Transport Contracting</em></h2>
+      <p>Your trusted logistics partner for container haulage and general freight across all Egyptian ports and industrial zones.</p>
+    </div>
+
+    <div class="g3" style="margin-top:4mm">
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <h3>Food Sector Expertise</h3>
+        <p>In-depth experience in handling large-scale food manufacturing and agricultural export shipments with maximum safety standards.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+        <h3>Dedicated Fleet</h3>
+        <p>Modern heavy-duty trucks equipped for 20ft / 40ft / 2x20ft container transport, strictly maintaining clean food-grade trailers.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+        <h3>On-Site Port Supervision</h3>
+        <p>Continuous presence inside Alexandria and Dekheila ports ensuring fast scale processing, gate entry, and vessel dispatch.</p>
+      </div>
+    </div>
+
+    <div class="band" style="margin-top:3.5mm">
+      <h3>Your <em>Trusted</em> Partner for Transporting Food Products to World Markets</h3>
+      <p style="color:#BDD3E6;font-size:11px">We commit to precise schedules and continuous tracking to guarantee your exports arrive on time.</p>
+    </div>
+
+    <div style="margin-top:3.5mm;display:grid;grid-template-columns:1fr 2fr;gap:12px;align-items:center">
+      <div class="stats">
+        <div class="stat"><b>+15</b><span>Years Experience</span></div>
+        <div class="stat"><b>100%</b><span>On-Time Delivery</span></div>
+        <div class="stat"><b>24/7</b><span>Port Supervision</span></div>
+      </div>
+      <div class="svl">
+        <span class="code">OUR CORE SERVICES</span>
+        <div class="svl-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="svl .i" style="padding:0"><b>• Export Container Haulage</b><span style="color:var(--steel);font-size:10.5px">20ft / 40ft / 2x20ft</span></div>
+          <div class="svl .i" style="padding:0"><b>• Direct Port Coverage</b><span style="color:var(--steel);font-size:10.5px">Alexandria &amp; Dekheila Ports</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pf"><span class="mut">Official Quotation — EL ZOMORODA Group</span><div class="ln"></div><div class="n">7</div></div>
+</section>
+
+<!-- ═══════════ 08 — WHAT WE OFFER EL ZOMORODA (ENGLISH) ═══════════ -->
+<section class="pg" dir="ltr">
+  <div class="ph"><a href="https://almutawakkil.com" target="_blank" class="brand-link"><img class="logo" src="logo.png" alt="Al-Mutawakkil"><img class="qr-head" src="qr-ink.png" alt="QR Code"></a>
+    <span class="tag"><b>TAILORED SOLUTIONS</b><i>02</i></span></div>
+  <div class="pad"><div class="rule"></div></div>
+  <div class="bd">
+    <div class="h-sec" style="margin-bottom:3.5mm">
+      <span class="code">TAILORED LOGISTICS SOLUTIONS</span>
+      <h2>What We Offer <em>El Zomoroda Group?</em></h2>
+      <p>Customized freight solutions tailored for Elzomoroda Corn Products &amp; Elzomoroda Food Industries (El-Sa'a Rice) in 6th of October City.</p>
+    </div>
+
+    <div class="g4">
+      <div class="sol-card">
+        <div class="sol-num">01</div>
+        <h3>Food Grade Transport Standards</h3>
+        <p>Ensuring clean, dry trailers fully prepared for starch, glucose, oils, and rice shipments to prevent contamination or moisture damage.</p>
+      </div>
+
+      <div class="sol-card">
+        <div class="sol-num">02</div>
+        <h3>Fleet Readiness in October Zone</h3>
+        <p>Providing daily available trailers ready for immediate loading from 6th of October plants directly to Alexandria &amp; Dekheila ports.</p>
+      </div>
+
+      <div class="sol-card">
+        <div class="sol-num">03</div>
+        <h3>Vessel Cut-off Compliance</h3>
+        <p>Strict monitoring of vessel cut-off dates and dispatch windows to ensure exports board seamlessly without demurrage costs.</p>
+      </div>
+
+      <div class="sol-card">
+        <div class="sol-num">04</div>
+        <h3>24/7 On-Site Port Operations</h3>
+        <p>Dedicated port team managing scale weight processing, gate passes, and terminal clearance with maximum agility.</p>
+      </div>
+    </div>
+
+    <div class="band" style="margin-top:3.5mm">
+      <h3>Why Are We <em>The Ideal Partner</em> for El Zomoroda Group?</h3>
+      <p style="color:#BDD3E6;font-size:11px">Because we combine specialized food transport standards with swift response times in 6th of October Industrial Zone and strong port operations, ensuring your export logistics flow without bottlenecks.</p>
+    </div>
+
+    <div class="flat-box" style="margin-top:3mm">
+      <div class="lbl">
+        <span class="code">OUR COMMITMENT</span>
+        <b>Our Commitment</b>
+      </div>
+      <div class="txt">
+        We place our fleet and operational expertise at the service of El Zomoroda Group to establish a reliable, safe land transport corridor connecting 6th of October production lines to sea ports.
+      </div>
+    </div>
+  </div>
+  <div class="pf"><span class="mut">Official Quotation — EL ZOMORODA Group</span><div class="ln"></div><div class="n">8</div></div>
+</section>
+
+<!-- ═══════════ 09 — EXPORT QUOTATION FCL (ENGLISH) ═══════════ -->
+<section class="pg" dir="ltr">
+  <div class="ph"><a href="https://almutawakkil.com" target="_blank" class="brand-link"><img class="logo" src="logo.png" alt="Al-Mutawakkil"><img class="qr-head" src="qr-ink.png" alt="QR Code"></a>
+    <span class="tag"><b>EXPORT RATES</b><i>03</i></span></div>
+  <div class="pad"><div class="rule"></div></div>
+  <div class="bd">
+    <div class="friendly-banner">
+      <div class="icon-heart"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
+      <div class="msg-text">
+        <b>We hope this offer meets your expectations</b>, and we are always delighted to serve you with top-tier logistics solutions.
+      </div>
+    </div>
+
+    <div class="dst-card">
+      <div class="n">
+        <b>6th of October City ⬅ Alexandria / Dekheila Ports</b>
+        <span>Export Freight Rates (Export FCL)</span>
+      </div>
+      <div class="meta-side">
+        <div><div class="k">TYPE</div><div class="v">Export Freight</div></div>
+        <div><div class="k">ORIGIN</div><div class="v">6th of October</div></div>
+      </div>
+    </div>
+
+    <!-- Section Export FCL -->
+    <div class="sec-head-pill"><span>■</span> Container Export Haulage (FCL)</div>
+    <div class="g3" style="margin-top:2px">
+      <div class="price-card">
+        <div>
+          <div class="sz">1 * 20ft Container</div>
+          <div class="cap">Export — 20ft Container</div>
+        </div>
+        <div class="amt">14,000</div>
+        <div class="cur">EGP</div>
+      </div>
+
+      <div class="price-card featured">
+        <div>
+          <div class="sz">1 * 40ft Container</div>
+          <div class="cap">Export — 40ft Container</div>
+        </div>
+        <div class="amt">17,000</div>
+        <div class="cur">EGP</div>
+      </div>
+
+      <div class="price-card">
+        <div>
+          <div class="sz">2 * 20ft Containers</div>
+          <div class="cap">Export — Two 20ft / Single Trailer</div>
+        </div>
+        <div class="amt">22,000</div>
+        <div class="cur">EGP</div>
+      </div>
+    </div>
+
+    <div class="flat-box" style="margin-top:10px">
+      <div class="lbl">
+        <span class="code">EXPORT ADVANTAGES</span>
+        <b>Transport Terms</b>
+      </div>
+      <div class="txt">
+        Rates include direct transport from El Zomoroda factories in 6th of October to Alexandria and Dekheila ports. Excludes storage fees, unloading charges, or official port duties.
+      </div>
+    </div>
+
+    <div class="band" style="margin-top:10px">
+      <h3>Direct <em>On-Site</em> Supervision Inside All Alexandria Ports</h3>
+      <p style="color:#BDD3E6;font-size:11px">Our port operations team manages gate entry and scale processing with extreme speed and flexibility.</p>
+    </div>
+  </div>
+  <div class="pf"><span class="mut">Official Quotation — EL ZOMORODA Group</span><div class="ln"></div><div class="n">9</div></div>
+</section>
+
+<!-- ═══════════ 10 — CONTACT (ENGLISH) ═══════════ -->
+<section class="pg" dir="ltr">
+  <div class="ph"><a href="https://almutawakkil.com" target="_blank" class="brand-link"><img class="logo" src="logo.png" alt="Al-Mutawakkil"><img class="qr-head" src="qr-ink.png" alt="QR Code"></a>
+    <span class="tag"><b>CONTACT</b><i>04</i></span></div>
+  <div class="pad"><div class="rule"></div></div>
+  <div class="bd">
+    <div class="h-sec" style="margin-bottom:10px">
+      <span class="code">DIRECT CONTACT</span>
+      <h2>Get In <em>Touch With Us</em></h2>
+      <p>Our team is available 24/7 to support your logistics requirements.</p>
+    </div>
+
+    <div class="contact-grid-v2">
+      <!-- Left Column: Operations Team & Phones -->
+      <div class="c-col">
+        <!-- Card Ahmed Adel -->
+        <div class="person-card">
+          <div class="p-ico">
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="p-info">
+            <b>Eng. Ahmed Adel</b>
+          </div>
+          <a href="mailto:ahmed@almutawakkil.com" class="p-email ltr">ahmed@almutawakkil.com</a>
+        </div>
+
+        <!-- Card Ayman Alimey -->
+        <div class="person-card">
+          <div class="p-ico">
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="p-info">
+            <b>Eng. Ayman Alimey</b>
+          </div>
+          <a href="mailto:ayman@almutawakkil.com" class="p-email ltr">ayman@almutawakkil.com</a>
+        </div>
+
+        <!-- Direct Lines Box -->
+        <div class="direct-lines-box">
+          <div class="box-head">
+            <h3>Direct Lines &amp; WhatsApp</h3>
+          </div>
+          <div class="tel-grid-v2">
+            <a href="tel:01272028046" class="tel-pill">
+              <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span>01272028046</span>
+            </a>
+            <a href="tel:01115532133" class="tel-pill">
+              <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span>01115532133</span>
+            </a>
+            <a href="tel:01024543399" class="tel-pill">
+              <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span>01024543399</span>
+            </a>
+            <a href="tel:01278093616" class="tel-pill">
+              <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span>01278093616</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Office Address, Slogan & QR Card -->
+      <div class="c-col">
+        <!-- Head Office Card -->
+        <div class="office-card">
+          <div class="off-ico">
+            <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div class="off-txt">
+            <h3>Head Office</h3>
+            <p>3 Ali Bey Genena St., Off El-Seka El-Gedida, Opposite Hamam El-Wersha St., El-Mansheya, Alexandria</p>
+          </div>
+        </div>
+
+        <!-- Slogan Band -->
+        <div class="slogan-band">
+          <h3>Your Cargo is Safe .. <em>Delivered On Time ★</em></h3>
+        </div>
+
+        <!-- Web QR Card -->
+        <div class="qr-card-v2">
+          <a href="https://almutawakkil.com" target="_blank">
+            <img src="qr-ink.png" alt="QR Code">
+            <div class="q-info">
+              <span style="font-size:9px;color:var(--steel);font-family:var(--mono)">OFFICIAL WEBSITE</span>
+              <b>almutawakkil.com</b>
+              <span class="sub-link">Click to visit official website ↗</span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pf"><span class="mut">Official Quotation — EL ZOMORODA Group</span><div class="ln"></div><div class="n">10</div></div>
+</section>
+
+</body>
+</html>

@@ -188,7 +188,7 @@ $e = $edit ?: null;
 <script src="<?= url('assets/vendor/leaflet/leaflet.js') ?>"></script>
 <script>
 (function(){
-  L.Icon.Default.prototype.options.imagePath = <?= json_encode(url('assets/vendor/leaflet/images/'), JSON_UNESCAPED_SLASHES) ?>;
+  L.Icon.Default.prototype.options.imagePath = <?= js_json(url('assets/vendor/leaflet/images/')) ?>;
   var latI = document.getElementById('plLat'), lngI = document.getElementById('plLng');
 
   // مصر كلها لو مفيش نقطة محدّدة
@@ -197,12 +197,12 @@ $e = $edit ?: null;
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
 
   // كل الوجهات المحفوظة كنقط ذهبية
-  var all = <?= json_encode(array_map(fn($p) => [
+  var all = <?= js_json(array_map(fn($p) => [
         'lat' => (float) $p['lat'], 'lng' => (float) $p['lng'],
         'name' => $p['name'], 'id' => (int) $p['id'],
-      ], $points), JSON_UNESCAPED_UNICODE) ?>;
+      ], $points)) ?>;
   var EDIT_ID = <?= (int) ($e['id'] ?? 0) ?>;
-  var EDIT_URL = <?= json_encode(url('tracking/places?edit='), JSON_UNESCAPED_SLASHES) ?>;
+  var EDIT_URL = <?= js_json(url('tracking/places?edit=')) ?>;
 
   all.forEach(function(p){
     if (p.id === EDIT_ID) return;   // اللي بنعدّله بيبان كماركر متحرّك تحت
@@ -231,16 +231,25 @@ $e = $edit ?: null;
   btn.textContent = '🔍 دوّر على الاسم ده في الخريطة';
   btn.addEventListener('click', function(){
     var q = nameI.value.trim();
-    if (!q) { alert('اكتب اسم الوجهة الأول'); return; }
+    if (!q) { window.AppUI.notice('اكتب اسم الوجهة الأول.'); nameI.focus(); return; }
     btn.disabled = true; btn.textContent = '⏳ بندوّر…';
-    fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=eg&q=' + encodeURIComponent(q))
+    // ⚠️ البحث بيمرّ على السيرفر مش من المتصفح مباشرة. سببين: الـCSP بتمنع أي
+    //    اتصال خارجي من الصفحة (`connect-src 'self'`)، والأهم إن السيرفر عنده
+    //    فلترة `Track::geocodePlace` اللي بتمنع فخ «أول نتيجة» (البحث الخام عن
+    //    «العاشر» بيرجّع مقبرة في الأقصر). ما ترجّعش الاتصال المباشر.
+    var fd = new FormData();
+    fd.append('name', q);
+    fd.append('_csrf', <?= js_json(App\Core\Auth::csrf()) ?>);
+    fetch(<?= js_json(url('tracking/places/lookup')) ?>, {
+        method: 'POST', body: fd, credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      })
       .then(function(r){ return r.json(); })
       .then(function(j){
-        if (j && j[0]) {
-          var la = parseFloat(j[0].lat), ln = parseFloat(j[0].lon);
-          place(la, ln); map.setView([la, ln], 12);
+        if (j && j.ok) {
+          place(j.lat, j.lng); map.setView([j.lat, j.lng], 12);
           btn.textContent = '✓ لقيناه — راجعه على الخريطة';
-        } else { btn.textContent = '✗ مالقيناش — حدّده بإيدك على الخريطة'; }
+        } else { btn.textContent = '✗ ' + ((j && j.msg) || 'مالقيناش — حدّده بإيدك على الخريطة'); }
       })
       .catch(function(){ btn.textContent = '✗ مفيش نت — حدّده بإيدك'; })
       .finally(function(){ btn.disabled = false;

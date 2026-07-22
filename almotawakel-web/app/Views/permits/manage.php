@@ -72,7 +72,7 @@ $stageForm = function(string $key, ?array $entry) use ($pid, $primaryDef) {
       <div class="tl-form-actions">
         <button class="btn gold sm" type="submit">💾 <?= $isEdit?'حفظ التعديل':'إضافة البند' ?></button>
         <?php if ($isEdit && !empty($entry['attachment'])): ?>
-          <a class="btn ghost sm" href="<?= url($entry['attachment']) ?>" target="_blank">📎 عرض المرفق</a>
+          <a class="btn ghost sm" href="<?= url('attachments/stage/'.(int)$entry['id']) ?>" target="_blank">📎 عرض المرفق</a>
         <?php endif; ?>
       </div>
     </form>
@@ -129,7 +129,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
               <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge">💳 فيزا</span><?php endif; ?>
               <?php if($en['note']): ?><span class="te-note"><?= e($en['note']) ?></span><?php endif; ?>
               <?= $statusBadge($en['status']) ?>
-              <?php if($en['attachment']): ?><a class="te-clip" href="<?= url($en['attachment']) ?>" target="_blank" onclick="event.stopPropagation()">📎</a><?php endif; ?>
+              <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank" onclick="event.stopPropagation()">📎</a><?php endif; ?>
               <span class="te-edit">تعديل ▾</span>
             </summary>
             <?= $stageForm($key, $en) ?>
@@ -158,6 +158,8 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
 };
 ?>
 <!-- شريط الإجراءات -->
+<?php $permitFormState = $permitFormState ?? ['token'=>'','old'=>[],'errors'=>[],'back'=>'permits/'.$pid.'/manage#stage-data']; ?>
+<?= formErrorSummary($permitFormState['errors']) ?>
 <div class="permit-bar">
   <a class="btn ghost sm" href="<?= url('permits/'.$pid) ?>">👁 عرض الإذن</a>
   <span class="pb-title">إدارة: <?= Permit::typeLabel($type) ?> <b><?= e($p['permit_no'] ?: '#'.$pid) ?></b></span>
@@ -228,6 +230,8 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
         <div class="stage-body">
           <form id="permitDataForm" class="tl-form" method="post" action="<?= url('permits/'.$pid) ?>">
             <?= csrfField() ?>
+            <?= formStateFields($permitFormState['token'], $permitFormState['back']) ?>
+            <input type="hidden" name="_form_id" value="permits.manage.<?= $pid ?>">
             <input type="hidden" name="lock_version" value="<?= (int)($p['lock_version'] ?? 1) ?>">
             <div class="tl-fields">
               <label>النوع
@@ -237,7 +241,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
                   <?php endforeach; ?>
                 </select>
               </label>
-              <label><?= e($noLabel) ?><input name="permit_no" value="<?= e($p['permit_no']) ?>" autocomplete="off"></label>
+              <label><?= e($noLabel) ?><input name="permit_no" value="<?= e($p['permit_no']) ?>" autocomplete="off"<?= fieldErrorAttrs('permit_no', $permitFormState['errors']) ?>><?= fieldError('permit_no', $permitFormState['errors']) ?></label>
               <label>التاريخ<input type="date" name="permit_date" value="<?= e($p['permit_date']) ?>"></label>
               <label>عدد الحاويات (الإجمالي)<input type="number" min="0" name="containers" value="<?= e($p['containers'] ?? 0) ?>"></label>
               <label>تصنيف الحاويات<input list="dl_ctype" name="container_type" value="<?= e($p['container_type'] ?? '') ?>" placeholder="40 قدم / 20 قدم" autocomplete="off"></label>
@@ -251,7 +255,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
               <label>⚓ الميناء<input list="dl_port" name="port" value="<?= e($p['port'] ?? '') ?>" autocomplete="off"></label>
               <label class="wide">ملاحظة<input name="note" value="<?= e($p['note']) ?>"></label>
             </div>
-            <div class="tl-form-actions"><button class="btn gold sm" type="submit">💾 حفظ بيانات الإذن</button></div>
+            <div class="tl-form-actions"><button class="btn gold sm" type="submit" data-primary-submit>💾 حفظ بيانات الإذن</button></div>
           </form>
         </div>
       </details>
@@ -332,11 +336,11 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
 <datalist id="dl_agency"><?php foreach (($lookups['agency']??[]) as $c): ?><option value="<?= e($c) ?>"><?php endforeach; ?></datalist>
 <datalist id="dl_port"><?php foreach (($lookups['port']??[]) as $c): ?><option value="<?= e($c) ?>"><?php endforeach; ?></datalist>
 
-<script id="permitMaps" type="application/json"><?= json_encode([
+<script id="permitMaps" type="application/json"><?= js_json([
   'nameMap' => $nameMap,
   'carMap'  => $carMap,
   'companies' => array_values($lookups['company'] ?? []),
-], JSON_UNESCAPED_UNICODE) ?></script>
+]) ?></script>
 
 <script>
 /* قدوم من صفحة العرض بزر «تعديل/إضافة سريع» — افتح المرحلة المستهدفة واعرض نموذجها */

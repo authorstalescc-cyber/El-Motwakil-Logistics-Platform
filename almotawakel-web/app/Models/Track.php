@@ -251,8 +251,11 @@ class Track
     public static function isOpen(array $track): bool
     {
         if (($track['status'] ?? '') !== 'active') { return false; }
-        if (!empty($track['expires_at']) && strtotime($track['expires_at']) < time()) { return false; }
-        return true;
+        if (empty($track['expires_at'])) { return true; }
+        // ⚠️ المقارنة جوّه SQL. الإنتاج: MySQL بـUTC وPHP بـAfrica/Cairo (3 ساعات
+        //    فرق)، فمقارنة `strtotime($expires_at) < time()` كانت بتقفل رابط
+        //    السائق **قبل ميعاده بـ3 ساعات**. الطرفين هنا على نفس الساعة.
+        return (int) Database::scalar('SELECT ? > NOW()', [$track['expires_at']]) === 1;
     }
 
     /** سبب رفض الرابط بلغة السائق */
@@ -293,9 +296,17 @@ class Track
         $source = (($meta['source'] ?? '') === 'live') ? 'live' : 'manual';
         $prev   = self::lastPing($id);
 
-        // حماية من الإغراق: نقطة كل 5 ثواني بحد أقصى
-        if ($prev && (time() - strtotime($prev['created_at'])) < self::MIN_PING_GAP_SECS) {
-            return ['ok' => false, 'msg' => 'استنى ثواني وحاول تاني.'];
+        // حماية من الإغراق: نقطة كل 5 ثواني بحد أقصى.
+        // ⚠️ الفرق بيتحسب جوّه SQL. `time() - strtotime($created_at)` كان بيدّي
+        //    فرق ثابت ≈3 ساعات على الإنتاج (MySQL بـUTC وPHP بـCairo)، يعني
+        //    الشرط عمره ما تحقّق و**الحد ده كان معطّل تمامًا** على أهم مسار عام
+        //    بلا تسجيل دخول في النظام.
+        if ($prev) {
+            $gap = (int) Database::scalar(
+                'SELECT TIMESTAMPDIFF(SECOND, ?, NOW())', [$prev['created_at']]);
+            if ($gap < self::MIN_PING_GAP_SECS) {
+                return ['ok' => false, 'msg' => 'استنى ثواني وحاول تاني.'];
+            }
         }
 
         $dist = 0;

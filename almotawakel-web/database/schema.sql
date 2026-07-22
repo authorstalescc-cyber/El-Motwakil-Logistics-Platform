@@ -13,10 +13,30 @@ CREATE TABLE IF NOT EXISTS users (
     username      VARCHAR(60)  NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     display_name  VARCHAR(120) NULL,
+    role          VARCHAR(20)  NOT NULL DEFAULT 'read_only',
+    can_free_edit TINYINT(1)   NOT NULL DEFAULT 0,
+    failed_tries  INT UNSIGNED NOT NULL DEFAULT 0,
+    locked_until  DATETIME     NULL,
+    last_failed_at DATETIME    NULL,
+    last_login_at DATETIME     NULL,
     created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uq_username (username)
+    UNIQUE KEY uq_username (username),
+    KEY idx_users_role (role),
+    KEY idx_users_locked (locked_until)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS auth_login_attempts (
+    id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    username_hash CHAR(64) NOT NULL,
+    ip_hash       CHAR(64) NOT NULL,
+    was_success   TINYINT(1) NOT NULL DEFAULT 0,
+    attempted_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_login_ip_time (ip_hash, was_success, attempted_at),
+    KEY idx_login_user_time (username_hash, attempted_at),
+    KEY idx_login_cleanup (attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=ascii COLLATE=ascii_bin;
 
 -- --------------------------------------------------------------------------
 --  الإعدادات العامة (مفتاح/قيمة)
@@ -586,4 +606,17 @@ CREATE TABLE IF NOT EXISTS visa_deposits (
     PRIMARY KEY (id),
     KEY idx_card (card_id),
     KEY idx_date (dep_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- سجل الترحيلات: يمنع إعادة التطبيق وتعديل ملف سبق اعتماده.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version       INT UNSIGNED NOT NULL,
+    filename      VARCHAR(190) NOT NULL,
+    checksum      CHAR(64) NOT NULL,
+    apply_mode    VARCHAR(12) NOT NULL DEFAULT 'applied',
+    result        VARCHAR(12) NOT NULL DEFAULT 'success',
+    execution_ms  INT UNSIGNED NOT NULL DEFAULT 0,
+    applied_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (version),
+    UNIQUE KEY uq_schema_migration_file (filename)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

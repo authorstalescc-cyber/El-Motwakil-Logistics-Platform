@@ -1,5 +1,6 @@
 <?php
 use App\Models\Permit;
+$canManageSecrets = !empty($canManageSecrets);
 
 // تجميع القوائم المنسدلة في فئات منطقية للعرض
 $lookupGroups = [
@@ -31,9 +32,11 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
   <button type="button" class="tab-btn active" data-tab="general">⚙️ عام</button>
   <button type="button" class="tab-btn" data-tab="lists">📋 القوائم المنسدلة</button>
   <button type="button" class="tab-btn" data-tab="permits">🗂️ الأذونات والتايم لاين</button>
-  <button type="button" class="tab-btn" data-tab="ai">🤖 المساعد الذكي</button>
-  <button type="button" class="tab-btn" data-tab="users">👥 المستخدمون</button>
-  <button type="button" class="tab-btn" data-tab="maint">🧰 الصيانة والنسخ الاحتياطي</button>
+  <?php if ($canManageSecrets): ?>
+    <button type="button" class="tab-btn" data-tab="ai">🤖 المساعد الذكي</button>
+    <button type="button" class="tab-btn" data-tab="users">👥 المستخدمون</button>
+  <?php endif; ?>
+  <button type="button" class="tab-btn" data-tab="maint">🧰 الصيانة<?= $canManageSecrets ? ' والنسخ الاحتياطي' : '' ?></button>
 </div>
 
 <!-- ============ تبويب: عام ============ -->
@@ -163,6 +166,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 </div>
 
 <!-- ============ تبويب: المساعد الذكي ============ -->
+<?php if ($canManageSecrets): ?>
 <style>
 .ai-onoff{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--navy);font-size:1rem}
 .ai-onoff input{width:18px;height:18px}
@@ -199,8 +203,8 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
       </div>
 
       <?php foreach ([
-          ['n'=>'1','label'=>$ai['key1_label'],'val'=>$ai['key1']],
-          ['n'=>'2','label'=>$ai['key2_label'],'val'=>$ai['key2']],
+          ['n'=>'1','label'=>$ai['key1_label'],'val'=>$ai['key1'],'set'=>$ai['key1_set'],'hint'=>$ai['key1_hint']],
+          ['n'=>'2','label'=>$ai['key2_label'],'val'=>$ai['key2'],'set'=>$ai['key2_set'],'hint'=>$ai['key2_hint']],
       ] as $k): ?>
         <div class="ai-key">
           <div class="ai-key-top">
@@ -208,10 +212,11 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
             <input type="text" name="ai_key_<?= $k['n'] ?>_label" value="<?= e($k['label']) ?>" class="ai-name" placeholder="اسم المفتاح (مثال: MO-<?= $k['n'] ?>)">
           </div>
           <div class="ai-key-in">
-            <input type="password" name="ai_key_<?= $k['n'] ?>" value="<?= e($k['val']) ?>" placeholder="gsk_..." autocomplete="off" class="ai-token" data-token="<?= $k['n'] ?>">
+            <input type="password" name="ai_key_<?= $k['n'] ?>" value="" placeholder="<?= $k['set'] ? e('محفوظ: '.$k['hint'].' — اتركه فارغًا للإبقاء عليه') : 'gsk_...' ?>" autocomplete="new-password" class="ai-token" data-token="<?= $k['n'] ?>">
             <button type="button" class="btn ghost sm ai-eye" data-eye="<?= $k['n'] ?>" title="إظهار/إخفاء">👁</button>
             <button type="button" class="btn ghost sm ai-test" data-test="<?= $k['n'] ?>">🔌 اختبار</button>
           </div>
+          <?php if ($k['set']): ?><label class="ai-hint"><input type="checkbox" name="clear_ai_key_<?= $k['n'] ?>" value="1"> حذف المفتاح المحفوظ عند الحفظ</label><?php endif; ?>
           <div class="ai-res" data-res="<?= $k['n'] ?>"></div>
         </div>
       <?php endforeach; ?>
@@ -224,7 +229,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 (function(){
   var form = document.getElementById('ai-set-form');
   if(!form) return;
-  var TEST_URL = <?= json_encode(url('settings/ai/test'), JSON_UNESCAPED_SLASHES) ?>;
+  var TEST_URL = <?= js_json(url('settings/ai/test')) ?>;
   var csrf = form.querySelector('[name=_csrf]').value;
   form.querySelectorAll('.ai-eye').forEach(function(btn){
     btn.addEventListener('click', function(){
@@ -241,7 +246,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
       res.className = 'ai-res show muted'; res.textContent = 'جارٍ الاختبار…';
       btn.disabled = true;
       var fd = new FormData();
-      fd.append('_csrf', csrf); fd.append('key', key); fd.append('model', model);
+      fd.append('_csrf', csrf); fd.append('key', key); fd.append('slot', n); fd.append('model', model);
       fetch(TEST_URL, {method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}})
         .then(function(r){return r.json();})
         .then(function(d){
@@ -254,9 +259,11 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
   });
 })();
 </script>
+<?php endif; ?>
 
 <!-- ============ تبويب: الصيانة والنسخ الاحتياطي ============ -->
 <!-- ============ تبويب: المستخدمون ============ -->
+<?php if ($canManageSecrets): ?>
 <div class="tab-panel" id="tab-users">
   <div class="set-grid">
     <div class="card" style="padding:22px">
@@ -273,8 +280,11 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         </div>
         <div class="field">
           <label>كلمة السر</label>
-          <input type="password" name="password" required autocomplete="new-password" minlength="4" placeholder="٤ أحرف على الأقل">
+          <input type="password" name="password" required autocomplete="new-password" minlength="8" placeholder="٨ أحرف على الأقل">
         </div>
+        <div class="field"><label>الدور</label><select name="role" required>
+          <?php foreach (($roleLabels ?? []) as $rk => $rl): ?><option value="<?= e($rk) ?>" <?= $rk==='read_only'?'selected':'' ?>><?= e($rl) ?></option><?php endforeach; ?>
+        </select></div>
         <label class="free-login-option"><input type="checkbox" name="can_free_edit" value="1"><span><b>صلاحية الدخول الحر</b><small>تسمح بالتعديل على الأيام المقفولة؛ امنحها للمسؤولين فقط.</small></span></label>
         <div style="margin-top:16px"><button class="btn gold" type="submit">➕ إضافة المستخدم</button></div>
       </form>
@@ -284,12 +294,13 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
       <div class="section-head">👥 المستخدمون الحاليون</div>
       <div class="table-wrap">
       <table class="data">
-        <thead><tr><th>اسم الدخول</th><th>الاسم الظاهر</th><th>الدخول الحر</th><th></th></tr></thead>
+        <thead><tr><th>اسم الدخول</th><th>الاسم الظاهر</th><th>الدور</th><th>الدخول الحر</th><th></th></tr></thead>
         <tbody>
         <?php foreach (($users ?? []) as $u): $uid = (int)$u['id']; $isSelf = $uid === (int)($currentUid ?? 0); ?>
           <tr>
             <td><?= e($u['username']) ?><?php if ($isSelf): ?> <span style="opacity:.6">(أنت)</span><?php endif; ?></td>
             <td><?= e($u['display_name'] ?: '—') ?></td>
+            <td><span class="pill"><?= e(($roleLabels ?? [])[$u['role'] ?? 'read_only'] ?? 'قراءة فقط') ?></span></td>
             <td><?= !empty($u['can_free_edit']) ? '<span class="pill st-paid">مسموح</span>' : '<span class="pill">عادي</span>' ?></td>
             <td style="text-align:left;white-space:nowrap">
               <button type="button" class="btn ghost sm" data-edit-user="<?= $uid ?>" title="تعديل">✏️ تعديل</button>
@@ -302,7 +313,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
             </td>
           </tr>
           <tr class="user-edit-row" id="user-edit-<?= $uid ?>" style="display:none">
-            <td colspan="4" style="background:var(--bg)">
+            <td colspan="5" style="background:var(--bg)">
               <form method="post" action="<?= url('settings/users/' . $uid) ?>" autocomplete="off" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding:6px 2px">
                 <?= csrfField() ?>
                 <div class="field" style="margin:0;flex:1 1 160px">
@@ -315,8 +326,11 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
                 </div>
                 <div class="field" style="margin:0;flex:1 1 160px">
                   <label>كلمة سر جديدة (اختياري)</label>
-                  <input type="password" name="password" autocomplete="new-password" minlength="4" placeholder="اتركها فاضية لعدم التغيير">
+                  <input type="password" name="password" autocomplete="new-password" minlength="8" placeholder="اتركها فاضية لعدم التغيير">
                 </div>
+                <div class="field" style="margin:0;flex:1 1 140px"><label>الدور</label><select name="role">
+                  <?php foreach (($roleLabels ?? []) as $rk => $rl): ?><option value="<?= e($rk) ?>" <?= ($u['role']??'read_only')===$rk?'selected':'' ?>><?= e($rl) ?></option><?php endforeach; ?>
+                </select></div>
                 <label style="display:flex;align-items:center;gap:7px;padding:9px;border:1px solid var(--line);border-radius:9px"><input type="checkbox" name="can_free_edit" value="1" <?= !empty($u['can_free_edit'])?'checked':'' ?>> صلاحية الدخول الحر</label>
                 <div style="display:flex;gap:8px">
                   <button type="submit" class="btn gold sm">💾 حفظ</button>
@@ -332,9 +346,11 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
     </div>
   </div>
 </div>
+<?php endif; ?>
 
 <div class="tab-panel" id="tab-maint">
   <div class="set-grid">
+    <?php if ($canManageSecrets): ?>
     <div class="card" style="padding:22px">
       <div class="section-head">💾 النسخ الاحتياطي</div>
       <form method="post" action="<?= url('backup') ?>" class="no-confirm">
@@ -342,6 +358,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         <button class="btn" type="submit">⬇️ تنزيل نسخة احتياطية الآن</button>
       </form>
     </div>
+    <?php endif; ?>
 
     <div class="card" style="padding:22px">
       <div class="section-head">🔤 توحيد المسميات المكررة</div>

@@ -1,5 +1,6 @@
 # بيانات ونُسخ احتياطية
 storage/backups/*.sql
+storage/private_uploads/
 database/old_data.json
 .DS_Store
 chrome-profile*/

@@ -1,10 +1,13 @@
 <?php
+use App\Core\FormState;
 /**
  * صفحة حساب مديونية يدوية واحدة: الأصل / المدفوع / المتبقّي + سجل الدفعات.
  * @var array $acc       صف debt_accounts
  * @var array $totals    ['charges','paid','remaining']
  * @var array $payments  دفعات هذا الحساب
  */
+$paymentState = $paymentState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'debts/account/'.(int)$acc['id']];
+$payOld = $paymentState['old']; $payErrors = $paymentState['errors'];
 ?>
 <style>.two-col .section-head{justify-content:flex-start}</style>
 <div class="page-actions">
@@ -24,16 +27,17 @@
     </tbody></table>
 
     <div class="section-head" style="margin-top:22px">تسجيل دفعة</div>
-    <form class="inline-form" method="post" action="<?= url('debts/account/'.$acc['id'].'/pay') ?>">
+    <?= formErrorSummary($payErrors) ?>
+    <form class="inline-form js-dirty-form" method="post" action="<?= url('debts/account/'.$acc['id'].'/pay') ?>">
       <?= csrfField() ?>
-      <input type="hidden" name="back" value="debts/account/<?= (int)$acc['id'] ?>">
-      <input type="number" step="0.01" name="amount" placeholder="المبلغ" required style="max-width:130px">
-      <input type="date" name="pay_date" value="<?= e(work_date()) ?>">
-      <input type="text" name="note" placeholder="ملاحظة (اختياري)">
+      <?= formStateFields($paymentState['token'], $paymentState['back']) ?>
+      <div class="field" style="margin:0"><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required style="max-width:130px"<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
+      <input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>">
+      <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)">
       <label style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:.85rem;white-space:nowrap">
-        <input type="checkbox" name="is_visa" value="1" style="width:16px;height:16px;accent-color:var(--gold)">💳 فيزا</label>
-      <?= visa_card_select(0, 'visa_card_id', 'max-width:170px') ?>
-      <button class="btn gold sm" type="submit">➕ دفع</button>
+        <input type="checkbox" name="is_visa" value="1" <?= !empty($payOld['is_visa'])?'checked':'' ?> style="width:16px;height:16px;accent-color:var(--gold)">💳 فيزا</label>
+      <?= visa_card_select((int)($payOld['visa_card_id'] ?? 0), 'visa_card_id', 'max-width:170px') ?>
+      <button class="btn gold sm" type="submit" data-primary-submit>➕ دفع</button>
     </form>
   </div>
 
@@ -49,7 +53,7 @@
             <td><?= e($p['note']) ?></td>
             <td>
               <form class="confirm-delete" method="post" action="<?= url('debts/payment/'.$p['id'].'/delete') ?>" style="margin:0">
-                <?= csrfField() ?><input type="hidden" name="back" value="debts/account/<?= (int)$acc['id'] ?>">
+                <?= csrfField() ?><?= formStateFields(FormState::token(), 'debts/account/'.(int)$acc['id']) ?>
                 <button class="del" type="submit" title="حذف">🗑️</button>
               </form>
             </td>

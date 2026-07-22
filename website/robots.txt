@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# نظام الإدارة الداخلي — ممنوع نهائيًا على محركات البحث
+Disallow: /al-mutawakkil-system/
+
+Sitemap: https://almutawakkil.com/sitemap.xml

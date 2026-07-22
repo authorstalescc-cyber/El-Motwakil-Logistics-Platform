@@ -3,11 +3,13 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Performance;
 use App\Models\Custody;
 use App\Models\Metrics;
 use App\Models\Note;
 use App\Models\Lookup;
 use App\Models\PermitQuickEntry;
+use App\Models\RepCustody;
 use App\Models\VisaCard;
 
 class DashboardController extends Controller
@@ -19,13 +21,25 @@ class DashboardController extends Controller
         // كل بيانات الصفحة تحترم تاريخ العمل المحدَّد
         $date = Auth::workDate();
         $year = (int) substr($date, 0, 4);
+        $profile = static fn(string $name, callable $operation) => Performance::span($name, $operation);
 
         $charts = [
-            'trend'    => Metrics::activityTrend(14, $date),
-            'clients'  => Metrics::clientDebts(7),
-            'monthly'  => array_values(Metrics::monthlyExpensePayments($year)),
-            'expenses' => Metrics::expenseReport(),
+            'trend'    => $profile('dashboard.chart.trend', fn() => Metrics::activityTrend(14, $date)),
+            'clients'  => $profile('dashboard.chart.clients', fn() => Metrics::clientDebts(7)),
+            'monthly'  => $profile('dashboard.chart.monthly', fn() => array_values(Metrics::monthlyExpensePayments($year))),
+            'expenses' => $profile('dashboard.chart.expenses', fn() => Metrics::expenseReport()),
         ];
+        $custodyBalance = $profile('dashboard.custody', fn() => Custody::balance());
+        $readyData = $profile('dashboard.ready', fn() => Metrics::readyToInvoiceDashboard(8));
+        $timeline = $profile('dashboard.feed', fn() => Metrics::expenseReceiptFeed($date, 300));
+        $dayExpenses = $profile('dashboard.day_expenses', static fn() => array_values(array_filter(
+            $timeline,
+            fn($row) => $row['d'] === $date && !$row['is_receipt']
+        )));
+        $dayReceipts = $profile('dashboard.day_receipts', static fn() => array_values(array_filter(
+            $timeline,
+            fn($row) => $row['d'] === $date && $row['is_receipt']
+        )));
         $quickOld = $_SESSION['_quick_entry_old'] ?? [];
         unset($_SESSION['_quick_entry_old']);
         // إشارة النجاح لمرة واحدة (تُستهلك هنا) → الواجهة تمسح المسودة المحفوظة
@@ -38,27 +52,52 @@ class DashboardController extends Controller
             'title'    => 'لوحة التحكم',
             'date'     => $date,
             'year'     => $year,
-            'daily'    => Metrics::dashDaily($date),
-            'counters' => Metrics::counters(),
-            'permits'  => Metrics::permitsSummary(),
-            'custody'  => Custody::balance(),
-            'ready'    => Metrics::readyToInvoice(60),
-            'readySum' => Metrics::readyToInvoiceSummary(),
-            'openList' => Metrics::openPermitsList(60),
-            'feed'     => Metrics::expenseReceiptFeed($date, 14),
-            'dayExp'   => Metrics::dayExpenses($date),
-            'dayRec'   => Metrics::dayReceipts($date),
-            'custodyDay'=> Metrics::custodyDay($date),
-            'activity' => Metrics::recentActivity(10),
-            'notes'    => Note::all(20),
+            'daily'    => $profile('dashboard.daily', fn() => Metrics::dashDaily($date)),
+            'counters' => $profile('dashboard.counters', fn() => Metrics::counters()),
+            'permits'  => $profile('dashboard.permits', fn() => Metrics::permitsSummary()),
+            'custody'  => $custodyBalance,
+            'ready'    => $readyData['rows'],
+            'readySum' => $readyData['summary'],
+            'openList' => $profile('dashboard.open_permits', fn() => Metrics::openPermitsList(8)),
+            'feed'     => array_slice($timeline, 0, 14),
+            'dayExp'   => $dayExpenses,
+            'dayRec'   => $dayReceipts,
+            'custodyDay'=> $profile('dashboard.custody_day', fn() => Metrics::custodyDay($date, $custodyBalance)),
+            'activity' => $profile('dashboard.activity', fn() => Metrics::recentActivity(10)),
+            // لوحة متابعة عهدة المناديب — قراءة فقط؛ الصرف المعتمد يدخل الخزنة (v42)
+            'repsPanel'=> $profile('dashboard.reps', fn() => RepCustody::dashboard($date, 6, 6)),
+            'notes'    => $profile('dashboard.notes', fn() => Note::all(20)),
             'charts'   => $charts,
-            'quickPermits' => PermitQuickEntry::options(),
-            'quickCards' => VisaCard::all(true),
-            'quickReceipts' => Lookup::ofType('mv_receipt'),
-            'quickExpenses' => Lookup::ofType('mv_expense'),
+            // قائمة الأذونات قد تكون مئات الصفوف؛ تُحمّل فقط عند فتح الإدخال السريع.
+            'quickPermits' => [],
+            'quickCards' => [],
+            'quickReceipts' => [],
+            'quickExpenses' => [],
             'quickOld' => $quickOld,
             'quickApplied' => $quickApplied,
             'quickToken' => $quickToken,
+        ]);
+    }
+
+    /** خيارات الإدخال السريع الثقيلة — تُجلب عند فتح الأداة بدل تضخيم الداشبورد. */
+    public function quickOptions(): void
+    {
+        $this->requireAuth();
+        header('Cache-Control: private, no-store, max-age=0');
+        $lookups = Lookup::ofTypes(['mv_receipt', 'mv_expense']);
+        $cards = array_map(
+            static fn(array $card): array => [
+                'id' => (int) $card['id'],
+                'label' => $card['name'] . ($card['owner'] ? ' — ' . $card['owner'] : ''),
+            ],
+            VisaCard::all(true)
+        );
+        $this->json([
+            'ok' => true,
+            'permits' => PermitQuickEntry::options(),
+            'cards' => $cards,
+            'receipts' => $lookups['mv_receipt'] ?? [],
+            'expenses' => $lookups['mv_expense'] ?? [],
         ]);
     }
 

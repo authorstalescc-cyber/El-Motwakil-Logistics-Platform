@@ -1,0 +1,80 @@
+# ══════════════════════════════════════════════════════════════════════════
+# نظام المتوكل — حارس جذر المشروع (Apache / هوستنجر)
+#
+# ⚠️ الملف ده **حرج**. هو الحاجز الوحيد اللي بيمنع الإنترنت من:
+#      • config/config.php  → باسورد قاعدة البيانات + مفتاح Groq
+#      • bin/*.php          → هجرات وسكربتات فيها DROP DATABASE بلا تسجيل دخول
+#      • storage/ database/ → نسخ احتياطية وسجلات
+#
+#    عشان كده هو **متحفوظ في المستودع** ومتراجَع بعد كل رفع بـ
+#    `bash bin/deploy.sh` (بيجرّب يفتح config/config.php ويفشل لو الرد مش 403).
+#    قبل كده كان موجود على السيرفر بس ومستثنى من الرفع — يعني لو اتمسح
+#    بالغلط أو رجّعته الاستضافة لنسخة افتراضية، النظام كان هيتفتح على النت
+#    من غير ما حد ياخد باله.
+#
+#    **طبقة تانية مستقلة:** كل ملف في bin/ فيه
+#    `if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }`
+#    فحتى لو الملف ده وقع، السكربتات مش هتشتغل من المتصفح.
+# ══════════════════════════════════════════════════════════════════════════
+
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # امنع الوصول المباشر لمجلدات الكود والبيانات
+    RewriteRule ^(app|config|database|storage|bin|docs)(/|$) - [F,L]
+
+    # كل شيء آخر يمر عبر public/
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# لا تعرض ملفات الإعداد أو التوثيق أبدًا
+<FilesMatch "\.(sql|json|md|log|command|py|ini|bak|old|orig|save|swp|dist|lock|example\.php)$">
+    Require all denied
+</FilesMatch>
+
+# الملفات المخفية والنسخ الجانبية (.env / .git / .htaccess.bak-seo / ‎~‎ …)
+<FilesMatch "(^\.|~$|\.bak-)">
+    Require all denied
+</FilesMatch>
+
+# ══════════════════════════════════════════════════════════════════════════
+# رؤوس الأمان
+#
+# ⚠️ **لازم تتحطّ هنا مش في PHP.** متحقَّق فعليًا: الاستضافة بتضبط
+#    `Content-Security-Policy: upgrade-insecure-requests` على مستوى السيرفر،
+#    وده **بيمسح** الـCSP اللي بيبعتها `SecurityHeaders::send()` من PHP. يعني
+#    كل سياسة الحماية اللي في الكود ما كانتش بتوصل للمتصفح أصلاً.
+#    إعدادات المجلد بتتدمج بعد إعدادات السيرفر، فـ`Header always set` هنا
+#    هي اللي بتكسب. أي تعديل هنا لازم يتأكّد بـ`bin/verify_security.php --remote`.
+# ══════════════════════════════════════════════════════════════════════════
+<IfModule mod_headers.c>
+    # منع الفهرسة نهائيًا (قرار المالك: النظام لا يظهر في أي محرك بحث)
+    Header always set X-Robots-Tag "noindex, nofollow, noarchive, nosnippet, noimageindex"
+
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "same-origin"
+    Header always set Permissions-Policy "geolocation=(self), camera=(self), microphone=(), payment=(), usb=()"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Header always unset X-Powered-By
+
+    # سياسة المحتوى.
+    #  • connect-src 'self'  = أهم سطر هنا. حتى لو ظهرت ثغرة XSS في المستقبل،
+    #    الكود المحقون مش هيقدر **يبعت** أي بيانات (عملاء/أرصدة/فواتير) لسيرفر
+    #    برّه النظام. ده اللي بيحوّل الاختراق من «تسريب بيانات» لمجرد إزعاج.
+    #  • object-src 'none'   = يمنع Flash/تضمين ملفات تنفّذ كود.
+    #  • 'unsafe-inline' للسكربت **مؤقتة**: النظام فيه 53 معالج حدث inline
+    #    (onclick=…) وشيلها دلوقتي هيكسّر شاشات شغّالة. الحماية الحقيقية ضد
+    #    XSS هي `js_json()` في helpers.php. التشديد لـnonce في مرحلة لاحقة.
+    #  • img-src بيسمح بخرايط OpenStreetMap و QR — دول الطرفين الخارجيين
+    #    الوحيدين اللي الواجهة بتحمّل منهم.
+    Header always set Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.tile.openstreetmap.org; font-src 'self' data:; connect-src 'self'; upgrade-insecure-requests"
+</IfModule>
+
+# ⚠️ متعمّد: مفيش هنا `php_flag engine off`. مغرية عشان تمنع تشغيل PHP برّه
+#    public/، بس إعدادات .htaccess بتنزل للمجلدات الفرعية — فكانت هتطفّي PHP
+#    على public/ نفسه وتوقّف النظام كله. المنع متغطّي أصلاً بالـRewriteRule
+#    فوق + حارس CLI في كل ملف bin/.

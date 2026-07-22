@@ -44,8 +44,8 @@
   </div>
 
   <script>
-    window.__AI_ASK  = <?= json_encode(url('assistant/ask'), JSON_UNESCAPED_SLASHES) ?>;
-    window.__AI_CSRF = <?= json_encode(Auth::csrf()) ?>;
+    window.__AI_ASK  = <?= js_json(url('assistant/ask')) ?>;
+    window.__AI_CSRF = <?= js_json(Auth::csrf()) ?>;
   </script>
   <script>
   (function () {

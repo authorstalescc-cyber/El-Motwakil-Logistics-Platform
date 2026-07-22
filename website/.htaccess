@@ -1,0 +1,56 @@
+# موقع شركة المتوكل لمقاولات النقل — إعدادات هوستنجر (Apache)
+
+# ═══ 1) توحيد العنوان: https + بدون www ═══
+# بدون ده جوجل يشوف 4 نسخ من كل صفحة (http/https × www/بدون) ويقسّم قوّتها.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # إجبار https
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # إزالة www
+  RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+  RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
+
+  # /index.html ← / (تفادي صفحتين بنفس المحتوى)
+  RewriteCond %{THE_REQUEST} \s/+index\.html[\s?] [NC]
+  RewriteRule ^ / [L,R=301]
+</IfModule>
+
+# ═══ 2) صفحة 404 ═══
+ErrorDocument 404 /index.html
+
+# ═══ 3) الضغط — يقلّل حجم الصفحة ويسرّعها ═══
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml \
+    application/javascript application/json application/xml \
+    image/svg+xml application/rss+xml
+</IfModule>
+
+# ═══ 4) الكاش — سرعة أعلى للزائر الراجع (عامل ترتيب في جوجل) ═══
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css              "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/jpeg            "access plus 1 year"
+  ExpiresByType image/png             "access plus 1 year"
+  ExpiresByType image/svg+xml         "access plus 1 year"
+  ExpiresByType image/webp            "access plus 1 year"
+  ExpiresByType text/html             "access plus 1 hour"
+  ExpiresByType application/xml       "access plus 1 day"
+</IfModule>
+
+# ═══ 5) الترميز العربي ═══
+AddDefaultCharset UTF-8
+
+# ═══ 6) رؤوس أمان بسيطة ═══
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always unset X-Powered-By
+</IfModule>
+
+# ═══ 7) منع تصفّح المجلدات ═══
+Options -Indexes
