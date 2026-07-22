@@ -111,7 +111,18 @@ if (form) {
   form.addEventListener('submit', e => {
     e.preventDefault();
     const v = id => (form.querySelector('#' + id)?.value || '').trim();
-    const lines = [
+    const isEn = document.documentElement.lang === 'en';
+    const lines = isEn ? [
+      'Price Quotation Request — Al-Mutawakkil Website',
+      '—————————————',
+      'Name: ' + v('q-name'),
+      'Company: ' + v('q-company'),
+      'Phone: ' + v('q-phone'),
+      'Service: ' + v('q-service'),
+      'From: ' + v('q-from') + '  To: ' + v('q-to'),
+      'Cargo: ' + v('q-cargo'),
+      'Details: ' + v('q-notes'),
+    ].filter(l => !/: $/.test(l)) : [
       'طلب عرض سعر — من موقع المتوكل',
       '—————————————',
       'الاسم: ' + v('q-name'),

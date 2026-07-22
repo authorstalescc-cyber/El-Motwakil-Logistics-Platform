@@ -7,41 +7,83 @@ $isActive = function(string $seg) use ($cur): string {
     if ($seg === '' ) return $cur === '/' ? 'active' : '';
     return str_starts_with($cur, '/' . $seg) ? 'active' : '';
 };
-$nav = [
-    ['__sec_home', 'الرئيسية', null],
-    ['', 'لوحة التحكم', 'dashboard'],
-    ['assistant', 'المساعد الذكي', 'sparkles'],
-    ['__sec_ops', 'العمليات', null],
-    ['permits', 'الإصدارات (أذونات/شهادات)', 'folder'],
-    ['bawalis', 'البوالص', 'truck'],
-    ['tracking', 'تتبع الشحنات', 'map-pin'],
-    ['settlements', 'سداد البوالص', 'banknote'],
-    ['takhlis', 'التخليص', 'clipboard'],
-    ['generators', 'المولدات', 'cpu'],
-    ['closing', 'التقفيل اليومي', 'calculator'],
-    ['__sec_billing', 'الفوترة والكشوف', null],
-    ['invoices', 'إصدار الفواتير', 'receipt'],
-    ['statements', 'كشوف أصحاب البيان', 'file-text'],
-    ['__sec_finance', 'المالية', null],
-    ['debts', 'المديونيات', 'credit-card'],
-    ['payments', 'تحصيلات العملاء', 'wallet'],
-    ['custody', 'رصيد العهدة', 'briefcase'],
-    ['office', 'رصيد المكتب (الفيزا)', 'credit-card'],
-    ['reps', 'المناديب', 'user'],
-    ['rep-custody', 'عهدة المناديب', 'briefcase'],
-    ['rep-custody/inbox', 'مراجعة بنود المناديب', 'inbox'],
-    ['expenses', 'المصروفات', 'trending-down'],
-    ['__sec_records', 'السجلات', null],
-    ['directory', 'دليل الأطراف', 'users'],
-    ['legacy', 'أرشيف البوالص القديمة', 'inbox'],
-    ['__sec_admin', 'الإدارة', null],
-    ['reports', 'التقارير', 'bar-chart'],
-    ['audit', 'سجل العمليات والمحذوفات', 'clipboard'],
-    ['settings', 'الإعدادات', 'settings'],
+/* ══════════════════════════════════════════════════════════════════════════
+   القائمة الجانبية — المرحلة ٣
+   الأسماء بتوصف **شغل المستخدم** مش أسماء الجداول. أهم اللي اتغيّر:
+     • «رصيد العهدة» ← **«خزنة المكتب»**  و«رصيد المكتب (الفيزا)» ← **«كروت الفيزا»**
+       (كلمة «عهدة» كان لها 3 معاني: خزنة المكتب / عهدة المندوب / عهدة السائق)
+     • «المناديب» ← **«رواتب وحسابات المناديب»** عشان تتفرق عن «عهدة المناديب»
+     • «الإصدارات (أذونات/شهادات)» ← **«الأذونات والشهادات»** (القوس كان دليل اسم فاشل)
+     • «مراجعة بنود المناديب» اتشالت كسطر مستقل — بقت شارة على «عهدة المناديب»
+     • «المراقبة الأمنية» اتضافت (كانت مدفونة في تبويب جوّه سجل العمليات)
+     • «التخليص» و«المولدات» نزلوا تحت «السجلات» (قرار المالك: مالهمش استخدام حاليًا)
+   الأقسام بقت بـ**الطرف اللي بتتعامل معاه** بدل «مالية/فوترة» المتداخلين.
+
+   كل بند: [المسار, الاسم, الأيقونة, معالِج الصلاحية, مفتاح الشارة]
+   • معالِج الصلاحية → `Access::allows()` بتقرّر يظهر ولا لأ (الرفض هو الافتراضي).
+   • مفتاح الشارة → بيتملّى من `/notifications/ping` في المتصفح، **صفر تكلفة
+     على الخادم**، ونفس مصدر رقم الجرس فمستحيل الاتنين يختلفوا.
+   ══════════════════════════════════════════════════════════════════════════ */
+$navRaw = [
+    ['__sec', 'الرئيسية', null, null, null],
+    ['',            'لوحة التحكم',   'dashboard',     'DashboardController@index',   null],
+    ['assistant',   'المساعد الذكي', 'sparkles',      'AssistantController@index',   null],
+
+    ['__sec', 'الشغل اليومي', null, null, null],
+    ['permits',     'الأذونات والشهادات', 'folder',   'PermitController@index',      null],
+    ['bawalis',     'البوالص',       'truck',         'CrudController@index',        null],
+    ['tracking',    'تتبع الشحنات',  'map-pin',       'TrackController@index',       'track_stale'],
+    ['closing',     'التقفيل اليومي','calculator',    'DailyClosingController@index','closing_open'],
+
+    ['__sec', 'حسابات العملاء', null, null, null],
+    ['invoices',    'فواتير العملاء','receipt',       'InvoiceController@index',     'ready_invoice'],
+    ['payments',    'تحصيلات العملاء','wallet',       'PaymentController@index',     null],
+    ['debts',       'المديونيات',    'credit-card',   'DebtController@index',        null],
+
+    ['__sec', 'أصحاب البيان', null, null, null],
+    ['statements',  'كشوف الحساب',  'file-text',     'OwnerStatementController@index', null],
+    ['settlements', 'السداد',        'banknote',      'SettlementController@index',  null],
+
+    ['__sec', 'الخزنة والمصروفات', null, null, null],
+    ['custody',     'خزنة المكتب',   'briefcase',     'CustodyController@index',     null],
+    ['office',      'كروت الفيزا',   'credit-card',   'OfficeController@index',      null],
+    ['expenses',    'المصروفات',     'trending-down', 'ExpenseController@index',     'receipts_missing'],
+
+    ['__sec', 'المناديب', null, null, null],
+    ['rep-custody', 'عهدة المناديب', 'briefcase',     'RepCustodyController@index',  'rep_pending'],
+    ['reps',        'رواتب وحسابات المناديب', 'user', 'RepController@index',         null],
+
+    ['__sec', 'السجلات والإدارة', null, null, null],
+    ['directory',   'دليل الأطراف',  'users',         'DirectoryController@index',   null],
+    ['legacy',      'أرشيف البوالص القديمة', 'inbox', 'LegacyController@index',      null],
+    ['takhlis',     'التخليص',       'clipboard',     'TakhlisController@index',     null],
+    ['generators',  'المولدات',      'cpu',           'GeneratorsController@index',  null],
+    ['reports',     'التقارير',      'bar-chart',     'ReportsController@index',     null],
+    ['audit',       'سجل العمليات',  'clipboard',     'AuditController@index',       null],
+    ['security',    'المراقبة الأمنية','alert',       'SecurityController@index',    'failed_logins'],
+    ['settings',    'الإعدادات',     'settings',      'SettingsController@index',    'weak_pins'],
 ];
-if (!Access::canOpenSettings()) {
-    $nav = array_values(array_filter($nav, fn(array $item): bool => $item[0] !== 'settings'));
+
+/* فلترة بالدور: **الرفض هو الافتراضي** — البند يظهر بس لو السياسة المركزية
+   بتسمح لدور المستخدم يفتح صفحته. ده بيخفي «المراقبة الأمنية» عن غير المالك
+   و«الإعدادات» عن غير المالك/المدير تلقائيًّا، ومن غير ما نكتب أي شرط بالإيد. */
+$role = Auth::role();
+$nav = [];
+foreach ($navRaw as $item) {
+    [$seg, $label, $ic, $handler, $badge] = $item;
+    if ($ic === null) { $nav[] = $item; continue; }              // فاصل قسم
+    if ($handler !== null && !Access::allows($role, $handler, 'GET')) { continue; }
+    $nav[] = $item;
 }
+/* نشيل أي عنوان قسم فضي بعد الفلترة (مثلاً لو الدور مشافش أي بند تحته) */
+$clean = [];
+for ($i = 0, $n = count($nav); $i < $n; $i++) {
+    $isSection = $nav[$i][2] === null;
+    $nextIsLink = isset($nav[$i + 1]) && $nav[$i + 1][2] !== null;
+    if ($isSection && !$nextIsLink) { continue; }
+    $clean[] = $nav[$i];
+}
+$nav = $clean;
 ?><!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -64,13 +106,19 @@ if (!Access::canOpenSettings()) {
       </a>
       <button type="button" class="nav-toggle" aria-label="طي القائمة" aria-controls="primary-sidebar" aria-expanded="true" title="طي / فتح القائمة">‹</button>
     </div>
-    <nav class="nav" aria-label="أقسام النظام">
-      <?php foreach ($nav as [$seg, $label, $ic]):
+    <nav class="nav" id="primary-nav" aria-label="أقسام النظام">
+      <?php foreach ($nav as [$seg, $label, $ic, $handler, $badge]):
         if ($ic === null): ?>
           <div class="section"><?= e($label) ?></div>
-      <?php else: ?>
-          <a href="<?= url($seg) ?>" class="<?= $isActive($seg) ?>" title="<?= e($label) ?>"<?= $isActive($seg) ? ' aria-current="page"' : '' ?>>
-            <span class="ic"><?= icon($ic, 20) ?></span><span class="lbl"><?= e($label) ?></span>
+      <?php else: $act = $isActive($seg); ?>
+          <a href="<?= url($seg) ?>" class="<?= $act ?>"<?= $act ? ' aria-current="page"' : '' ?>
+             <?= $badge ? 'data-badge="' . e($badge) . '"' : '' ?>>
+            <span class="ic"><?= icon($ic, 20) ?></span>
+            <span class="lbl"><?= e($label) ?></span>
+            <?php /* الشارة بتتملّى من /notifications/ping — بتفضل مخفية لحد ما يجي رقم */ ?>
+            <?php if ($badge): ?><span class="nav-cnt" hidden aria-hidden="true"></span><?php endif; ?>
+            <?php /* بديل title= الأصلي: tooltip منسّق بيظهر في الوضع المطوي بس */ ?>
+            <span class="nav-tip" role="tooltip"><?= e($label) ?></span>
           </a>
       <?php endif; endforeach; ?>
     </nav>
@@ -235,28 +283,33 @@ if (!Access::canOpenSettings()) {
  * فينتقل فورًا بلا استعلام قاعدة بيانات. مبنيّة من $nav نفسها (تبقى الروابط والمسار
  * الأساسي متزامنة) + إجراءات «إضافة جديد». الكلمات المرادفة تحسّن المطابقة العربية.
  */
+/* ⚠️ الأسماء القديمة **لازم تفضل هنا** بعد إعادة التسمية (المرحلة ٣): المالك
+   متعوّد يدوّر بـ«رصيد العهدة» و«رصيد المكتب» و«إصدارات»، ولو شالناها من
+   المرادفات هيكتب الاسم القديم في Ctrl+K وما يلاقيش حاجة. */
 $cmdSyn = [
     ''        => 'الرئيسية الهوم main home',
-    'permits' => 'اذن اذونات شهادة شهادات اصدار اصدارات تصاريح',
+    'permits' => 'اذن اذونات شهادة شهادات اصدار اصدارات تصاريح الاصدارات',
     'bawalis' => 'بوليصة بوالص شحنة شحنات نولون',
     'tracking' => 'تتبع لوكيشن موقع مواقع خريطة سائق سواق سيارة رابط واتساب gps',
-    'settlements' => 'سداد تسديد دفع بوالص',
+    'settlements' => 'سداد تسديد دفع بوالص سداد البوالص اصحاب البيان',
     'takhlis' => 'تخليص جمرك جمركي',
+    'generators' => 'مولدات مولد',
     'closing' => 'تقفيل يومية قفل اليوم',
-    'invoices'=> 'فاتورة فواتير اصدار',
+    'invoices'=> 'فاتورة فواتير اصدار اصدار الفواتير فواتير العملاء',
     'statements' => 'كشف كشوف اصحاب البيان حساب',
     'debts'   => 'مديونية مديونيات دين ديون كشف ضمان',
     'payments'=> 'تحصيلات العملاء سداد دفعات قبض',
-    'custody' => 'عهدة رصيد خزنة محفظة',
-    'office'  => 'فيزا كارت كروت رصيد المكتب بنك',
-    'reps'    => 'مندوب مناديب',
-    'rep-custody' => 'عهدة مناديب مندوب سلفة تنزيل تسوية',
+    'custody' => 'عهدة رصيد خزنة محفظة رصيد العهدة خزنه المكتب درج',
+    'office'  => 'فيزا كارت كروت رصيد المكتب بنك كروت الفيزا',
+    'reps'    => 'مندوب مناديب مرتب مرتبات رواتب سلفة خصم',
+    'rep-custody' => 'عهدة مناديب مندوب سلفة تنزيل تسوية مراجعة بنود صندوق',
     'expenses'=> 'مصروف مصروفات صرف',
     'directory' => 'وكلاء عملاء شركات جهات دليل',
     'legacy'  => 'ارشيف بوالص قديمة',
     'reports' => 'تقرير تقارير احصائيات',
     'audit'   => 'سجل عمليات محذوفات حذف تدقيق',
-    'settings'=> 'اعدادات ضبط تهيئة',
+    'security'=> 'امن امان مراقبة دخول محاولات اختراق',
+    'settings'=> 'اعدادات ضبط تهيئة نسخة احتياطية باك اب',
     'assistant' => 'مساعد ذكي شات ai',
 ];
 $cmdNav = [];

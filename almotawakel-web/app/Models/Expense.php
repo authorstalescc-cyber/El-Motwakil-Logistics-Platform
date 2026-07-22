@@ -39,7 +39,10 @@ class Expense
             'permits' => $id ? url('permits/' . $id) : null,
             'bawalis' => $id ? url('bawalis/' . $id) : url('movements'),
             'takhlis' => $id ? url('takhlis/' . $id . '/edit') : null,
-            'shamil'  => $id ? url('shamil/' . $id . '/edit') : null,
+            // ⚠️ `shamil` **أرشيف** (قرار المالك 2026-07-22): مفيش مسار `/shamil`
+            //    في الراوتر خالص، فالرابط القديم كان بيوصّل **404**. البيانات
+            //    نفسها لسه بتتقرا في المجاميع والتقارير زي ما هي.
+            'shamil'  => null,
             'reps'    => $id ? url('reps/' . $id) : url('reps'),
             // نثرية المندوب مالهاش إذن، فالرابط بيوّدي لكارت عهدته (v39)
             'rep_misc'=> $id ? url('rep-custody/' . $id) : url('rep-custody'),

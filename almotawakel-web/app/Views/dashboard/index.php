@@ -26,7 +26,8 @@ if ($rp['available']) {
 /* خريطة أنواع سجل النشاط */
 $kindMeta = [
   'bawalis'    => ['truck',    'بوليصة',      'navy',  fn($r)=>url('bawalis/'.$r['id'])],
-  'shamil'     => ['layers',   'فاتورة',       'teal',  fn($r)=>url('shamil/'.$r['id'].'/edit')],
+  /* أرشيف: مفيش صفحة لـshamil فالصف بيتعرض بلا رابط بدل ما يوصّل 404 */
+  'shamil'     => ['layers',   'فاتورة (أرشيف)', 'teal',  fn($r)=>null],
   'takhlis'    => ['clipboard','شهادة تخليص',  'purple',fn($r)=>url('takhlis/'.$r['id'].'/edit')],
   'generators' => ['cpu',      'مولدات',       'gold',  fn($r)=>url('generators/'.$r['id'].'/edit')],
   'permits'    => ['folder',   'إصدار',        'green', fn($r)=>url('permits/'.$r['id'])],
@@ -355,10 +356,13 @@ $rowSub = function(array $s) use ($subMeta) {
     <?php if (!$activity): ?>
       <div class="empty">لا توجد عمليات مسجّلة بعد.</div>
     <?php else: foreach ($activity as $a):
-      [$ic,$lbl,$col,$linkFn] = $kindMeta[$a['kind']] ?? ['file-text','عملية','slate',fn($r)=>'#'];
+      [$ic,$lbl,$col,$linkFn] = $kindMeta[$a['kind']] ?? ['file-text','عملية','slate',fn($r)=>null];
       $link = $linkFn($a);
+      /* الصفوف الأرشيفية (shamil) مالهاش صفحة — تتعرض بلا رابط بدل ما
+         href="" يعيد تحميل نفس الصفحة ويوهم المستخدم إنها لينك مكسور. */
+      $tag = $link ? 'a' : 'div';
     ?>
-    <a class="act <?= $col ?>" href="<?= e($link) ?>">
+    <<?= $tag ?> class="act <?= $col ?><?= $link ? '' : ' act-flat' ?>"<?= $link ? ' href="'.e($link).'"' : '' ?>>
       <span class="act-ic"><?= icon($ic,18) ?></span>
       <span class="act-body">
         <span class="act-top"><b><?= e($lbl) ?></b><?php if ($a['ref'] && $a['ref']!=='—'): ?><span class="act-ref">#<?= e($a['ref']) ?></span><?php endif; ?></span>
@@ -370,7 +374,7 @@ $rowSub = function(array $s) use ($subMeta) {
         <?php else: ?><b class="act-amt"><?= e(dfmt($a['d'])) ?></b><?php endif; ?>
         <span class="act-date"><?= e(dfmt($a['d'])) ?></span>
       </span>
-    </a>
+    </<?= $tag ?>>
     <?php endforeach; endif; ?>
   </div>
 </div>

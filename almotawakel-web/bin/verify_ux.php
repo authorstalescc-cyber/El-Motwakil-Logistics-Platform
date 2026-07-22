@@ -637,6 +637,102 @@ foreach (glob($root . '/app/Models/*.php') ?: [] as $file) {
 $brokenM ? bad('موديلات مش بتتحمّل: ' . implode(' · ', $brokenM))
          : ok('كل الموديلات (' . count(glob($root . '/app/Models/*.php') ?: []) . ') بتتحمّل بلا تعارض');
 
+/* ══════════════ ١٦) القائمة الجانبية ══════════════ */
+sec('١٦) القائمة الجانبية (المرحلة ٣)');
+
+$layoutSrc = (string) file_get_contents($root . '/app/Views/layout.php');
+$jsSrc     = (string) file_get_contents($root . '/public/assets/js/app.js');
+$cssSrc    = css_code((string) file_get_contents($root . '/public/assets/css/app.css'));
+
+// الفلترة بالدور بتمرّ على السياسة المركزية مش على شروط مكتوبة بالإيد
+str_contains($layoutSrc, "Access::allows(\$role, \$handler, 'GET')")
+    ? ok('القائمة متفلترة بـAccess::allows (الرفض هو الافتراضي)')
+    : bad('القائمة مش متفلترة بالسياسة المركزية');
+
+// كل شارة في القائمة لازم يكون لها مصدر حقيقي في مجمّع الإشعارات
+$notifSrc = (string) file_get_contents($root . '/app/Models/Notification.php');
+preg_match_all("/self::item\(\s*\n?\s*'([a-z_]+)'/", $notifSrc, $km);
+$modelKeys = array_unique($km[1]);
+preg_match_all("/,\s*'([a-z_]+_[a-z_]+)'\],/", $layoutSrc, $bm);
+$navKeys = array_unique($bm[1]);
+$orphan = array_diff($navKeys, $modelKeys);
+$orphan ? bad('شارات في القائمة بلا مصدر في Notification: ' . implode('، ', $orphan))
+        : ok('كل شارات القائمة (' . count($navKeys) . ') لها مصدر — نفس رقم الجرس');
+
+// الشارات بتتملّى من نفس نداء الـping (مصدر واحد للرقم)
+str_contains($jsSrc, 'paintNavBadges')
+    ? ok('شارات القائمة بتتملّى من نفس ping الجرس — صفر تكلفة زيادة')
+    : bad('شارات القائمة مش مربوطة بمصدر الإشعارات');
+
+// التسميات المعتمدة من المالك
+$renames = [
+    'خزنة المكتب'             => 'رصيد العهدة',
+    'كروت الفيزا'             => 'رصيد المكتب (الفيزا)',
+    'رواتب وحسابات المناديب' => 'المناديب\'',
+    'الأذونات والشهادات'      => 'الإصدارات (أذونات/شهادات)',
+];
+$renameBad = [];
+foreach ($renames as $new => $old) {
+    if (!str_contains($layoutSrc, $new)) { $renameBad[] = "«{$new}» مش موجود"; }
+}
+$renameBad ? bad('تسميات المرحلة ٣ ناقصة: ' . implode('، ', $renameBad))
+           : ok('التسميات المعتمدة من المالك مطبَّقة (خزنة المكتب · كروت الفيزا · …)');
+
+// الأسماء القديمة لازم تفضل في مرادفات البحث عشان المالك يلاقيها بـCtrl+K
+$synOk = str_contains($layoutSrc, 'رصيد العهدة') && str_contains($layoutSrc, 'رصيد المكتب');
+$synOk ? ok('الأسماء القديمة لسه بتتلاقى في البحث السريع')
+       : bad('الأسماء القديمة اتشالت من المرادفات — المالك مش هيلاقيها بـCtrl+K');
+
+// «المراقبة الأمنية» اتضافت للقائمة (كانت مدفونة في تبويب)
+str_contains($layoutSrc, "'security'")
+    ? ok('«المراقبة الأمنية» بقت في القائمة (للمالك بس)')
+    : bad('«المراقبة الأمنية» لسه مش في القائمة');
+
+// درج الموبايل: transform + خلفية + قفل تمرير + Escape
+$drawer = [
+    'أنيميشن (transform مش display)' => str_contains($cssSrc, 'transform:translateX(100%)'),
+    'خلفية معتّمة'                   => str_contains($jsSrc, 'nav-scrim'),
+    'قفل تمرير الصفحة'               => str_contains($jsSrc, "classList.toggle('nav-open'"),
+    'حبس التركيز'                    => str_contains($jsSrc, 'activateDialog(sidebar'),
+    'Escape بيقفله'                  => (bool) preg_match("/Escape.*sidebar\.classList\.contains\('open'\)/s", $jsSrc),
+];
+$drawerBad = array_keys(array_filter($drawer, fn($v) => !$v));
+$drawerBad ? bad('درج الموبايل ناقصه: ' . implode('، ', $drawerBad))
+           : ok('درج الموبايل كامل (أنيميشن + خلفية + قفل تمرير + حبس تركيز + Escape)');
+
+str_contains($jsSrc, 'scrollNavToActive')
+    ? ok('البند النشط بيتجاب للعين عند التحميل')
+    : bad('البند النشط ممكن يفضل برّه الشاشة');
+str_contains($cssSrc, '.nav-tip')
+    ? ok('tooltip منسّق للوضع المطوي بدل title= الأصلي')
+    : bad('الوضع المطوي لسه بيعتمد على title=');
+str_contains($cssSrc, '.nav .section{') && str_contains($cssSrc, 'position:sticky')
+    ? ok('عناوين الأقسام لاصقة وقت التمرير')
+    : bad('عناوين الأقسام مش لاصقة');
+
+/* ══════════════ ١٧) مفيش روابط ميتة ══════════════ */
+sec('١٧) الروابط الميتة (قرار المالك: shamil أرشيف)');
+
+/* `shamil` فيها بيانات حية بتغذّي المجاميع، بس **مفيش مسار `/shamil`** —
+   فأي رابط ليها بيوصّل 404. البيانات ما تتلمسش، الروابط بس اللي تتشال. */
+$deadLinks = [];
+foreach (['app/Models/Expense.php', 'app/Views/dashboard/index.php'] as $rel) {
+    $src = php_code((string) file_get_contents($root . '/' . $rel));
+    if (preg_match("/url\('shamil\//", $src)) { $deadLinks[] = $rel; }
+}
+$deadLinks ? bad("لسه فيه رابط لـ/shamil وهو مسار مش موجود (404): " . implode('، ', $deadLinks))
+           : ok('مفيش أي رابط لـ/shamil — الأرشيف بيتعرض بلا رابط مكسور');
+
+// وبرضو نتأكد إن البيانات **ما اتلمستش** (القرار عرض بس)
+$stillReads = 0;
+foreach (['app/Models/Metrics.php', 'app/Models/Expense.php'] as $rel) {
+    $src = (string) file_get_contents($root . '/' . $rel);
+    $stillReads += preg_match_all('/FROM shamil|shamil\./', $src);
+}
+$stillReads > 0
+    ? ok("بيانات shamil لسه بتتقرا في المجاميع ({$stillReads} موضع) — الأرشفة عرض بس")
+    : bad('استعلامات shamil اتشالت! ده بيغيّر الإجماليات التاريخية');
+
 /* ══════════════ الخلاصة ══════════════ */
 echo "\n" . str_repeat('=', 62) . "\n";
 echo "نجح: $pass   |   فشل: $fail   |   تخطّي: $skip\n";

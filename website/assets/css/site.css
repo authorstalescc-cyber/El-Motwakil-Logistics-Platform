@@ -66,6 +66,15 @@ p{margin:0}
 }
 .nav a:hover{color:var(--deep);background:#EDF3F8}
 .nav a[aria-current="page"]{color:var(--blue);background:#E7F1F9;font-weight:600}
+.nav a.lang-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:var(--mono);font-size:14px;font-weight:600;
+  color:var(--deep);background:#EDF3F8;border:1px solid var(--line);
+  padding:7px 13px;border-radius:8px;margin-inline-start:6px;
+  text-decoration:none;transition:all .18s ease;
+}
+.nav a.lang-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+.nav a.lang-btn svg{width:15px;height:15px;flex:none}
 .hd .btn{flex:none}
 .burger{display:none;background:none;border:1px solid var(--line);border-radius:9px;
   width:44px;height:44px;margin-inline-start:auto;cursor:pointer;font-size:20px;color:var(--deep)}

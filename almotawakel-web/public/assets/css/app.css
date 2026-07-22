@@ -533,8 +533,16 @@ input.name-warn{border-color:#e0a94f!important;background:#fffdf5!important}
 /* ---------------------------------------------------- استجابة */
 @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.kpi-grid.four{grid-template-columns:repeat(2,1fr)}.charts{grid-template-columns:1fr}.counters{grid-template-columns:repeat(3,1fr)}.form-grid{grid-template-columns:repeat(3,1fr)}.quick-actions{grid-template-columns:repeat(2,1fr)}.dash-split{grid-template-columns:1fr}}
 @media(max-width:820px){
-  .sidebar{display:none;transform:none}
-  .sidebar.open{display:flex}
+  /* ⚠️ درج الموبايل بقى transform مش display (المرحلة ٣): النسخة القديمة
+     كانت display:none/flex يعني **بلا أي أنيميشن** رغم إن transform:none
+     كان مكتوب. دلوقتي بيزحف من الجنب، وله خلفية معتّمة، والصفحة ورا بتتقفل. */
+  .sidebar{display:flex;transform:translateX(100%);transition:transform var(--dur-base) var(--ease);
+    z-index:var(--z-drawer);box-shadow:none;visibility:hidden}
+  .sidebar.open{transform:translateX(0);visibility:visible;box-shadow:var(--shadow-3)}
+  .nav-scrim{position:fixed;inset:0;z-index:calc(var(--z-drawer) - 1);background:rgba(14,36,64,.5);
+    opacity:0;pointer-events:none;transition:opacity var(--dur-base) var(--ease)}
+  .nav-scrim.on{opacity:1;pointer-events:auto}
+  body.nav-open{overflow:hidden}
   .main{margin-inline-start:0}
   .menu-btn{display:flex;width:44px;height:44px;align-items:center;justify-content:center;flex:none}
   .kpi-grid,.kpi-grid.four,.two-col{grid-template-columns:1fr}.counters{grid-template-columns:repeat(2,1fr)}
@@ -2765,3 +2773,61 @@ button.d-hchip{cursor:pointer;font-family:inherit}
 .err-actions{display:flex;flex-wrap:wrap;gap:var(--space-3);justify-content:center;margin-top:var(--space-2)}
 .err-guest{text-align:center;color:var(--white)}
 .err-guest p{font-size:var(--fs-5);margin:var(--space-2) 0 var(--space-5)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   القائمة الجانبية — تحسينات السلوك (المرحلة ٣)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* عناوين الأقسام لاصقة — مع ٢٤ بند كان سهل تتوه وانت بتعمل scroll */
+.nav .section{
+  position:sticky;top:0;z-index:1;
+  background:linear-gradient(185deg,#173a63,#173a63);
+  padding-block:var(--space-2) var(--space-1)
+}
+
+/* شارة العدّاد على بند القائمة — بتتملّى من /notifications/ping */
+.nav a{position:relative}
+.nav .nav-cnt{
+  margin-inline-start:auto;min-width:20px;height:19px;padding:0 6px;
+  display:flex;align-items:center;justify-content:center;flex:none;
+  border-radius:var(--radius-pill);background:var(--red);color:var(--white);
+  font-size:.66rem;font-weight:var(--fw-black);line-height:1
+}
+.nav .nav-cnt[hidden]{display:none}
+.nav .nav-cnt.soft{background:var(--gold);color:var(--navy-dark)}
+
+/* tooltip الوضع المطوي — بديل title= الأصلي (كان بطيء وغير منسّق) */
+.nav .nav-tip{
+  position:absolute;inset-inline-start:calc(100% + 10px);top:50%;transform:translateY(-50%) scale(.96);
+  z-index:var(--z-modal);white-space:nowrap;pointer-events:none;opacity:0;
+  padding:var(--space-2) var(--space-3);border-radius:var(--radius-1);
+  background:var(--navy-dark);color:var(--white);box-shadow:var(--shadow-3);
+  font-size:var(--fs-1);font-weight:var(--fw-bold);
+  transition:opacity var(--dur-fast) var(--ease),transform var(--dur-fast) var(--ease)
+}
+/* ما يظهرش إلا في الوضع المطوي على الشاشات الكبيرة */
+.nav-tip{display:none}
+.nav-collapsed .nav .nav-tip{display:block}
+.nav-collapsed .nav a:hover .nav-tip,
+.nav-collapsed .nav a:focus-visible .nav-tip{opacity:1;transform:translateY(-50%) scale(1)}
+/* في الوضع المطوي الشارة بتبقى نقطة صغيرة على الأيقونة */
+.nav-collapsed .nav .nav-cnt{
+  position:absolute;top:5px;inset-inline-end:9px;margin:0;
+  min-width:16px;height:16px;padding:0 4px;font-size:.6rem;border:2px solid #173a63
+}
+
+/* تدرّج بسيط عند حواف التمرير يوضّح إن فيه محتوى فوق/تحت */
+.nav{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.22) transparent}
+.nav::-webkit-scrollbar{width:6px}
+.nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:var(--radius-pill)}
+.nav::-webkit-scrollbar-track{background:transparent}
+
+@media(prefers-reduced-motion:reduce){
+  .sidebar{transition:none}
+  .nav .nav-tip{transition:none}
+  .nav-scrim{transition:none}
+}
+
+/* صف نشاط بلا رابط (أرشيف) — يفضل بنفس الشكل بس بلا مؤشر يد */
+.activity .act-flat{cursor:default}
+.activity .act-flat:hover{background:inherit;transform:none}

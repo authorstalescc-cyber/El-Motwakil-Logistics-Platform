@@ -236,19 +236,73 @@
     if (start !== null) { try { el.setSelectionRange(start, end); } catch (_) {} }
   }, true);
 
-  // فتح/غلق الشريط الجانبي على الموبايل
+  /* ══════════════════════════════════════════════════════════════════════════
+     درج القائمة على الموبايل — المرحلة ٣
+     كان: display:none/flex بلا أنيميشن، بلا خلفية معتّمة، الصفحة ورا بتفضل
+     بتتمرّر، بلا focus trap، و**Escape ما بيقفلهوش**.
+     ══════════════════════════════════════════════════════════════════════════ */
+  const MOBILE_BP = 820;                 // متوافق مع --bp-mobile في app.css
   const menuBtn = document.querySelector('.menu-btn');
   const sidebar = document.querySelector('.sidebar');
   if (menuBtn && sidebar) {
-    const setMenu = (open) => { sidebar.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+    let scrim = null;
+    const isMobile = () => window.innerWidth <= MOBILE_BP;
+
+    const setMenu = (open) => {
+      const wasOpen = sidebar.classList.contains('open');
+      if (open === wasOpen) { return; }
+      sidebar.classList.toggle('open', open);
+      menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      document.body.classList.toggle('nav-open', open && isMobile());
+
+      if (open && isMobile()) {
+        if (!scrim) {
+          scrim = document.createElement('div');
+          scrim.className = 'nav-scrim';
+          scrim.addEventListener('click', () => setMenu(false));
+          document.body.appendChild(scrim);
+        }
+        requestAnimationFrame(() => scrim.classList.add('on'));
+        activateDialog(sidebar, sidebar.querySelector('.nav a'));
+      } else {
+        if (scrim) { scrim.classList.remove('on'); }
+        if (wasOpen) { deactivateDialog(sidebar); }
+      }
+    };
+
     menuBtn.addEventListener('click', () => setMenu(!sidebar.classList.contains('open')));
     document.addEventListener('click', (e) => {
-      if (window.innerWidth <= 820 && sidebar.classList.contains('open') &&
+      if (isMobile() && sidebar.classList.contains('open') &&
           !sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
         setMenu(false);
       }
     });
+    // Escape يقفل الدرج (ما كانش بيعمل حاجة قبل كده)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && sidebar.classList.contains('open') && isMobile()) {
+        e.stopPropagation();
+        setMenu(false);
+        menuBtn.focus();
+      }
+    });
+    // لو الشاشة كبرت والدرج مفتوح، نرجّع الصفحة لطبيعتها
+    window.addEventListener('resize', () => {
+      if (!isMobile() && sidebar.classList.contains('open')) { setMenu(false); }
+    });
   }
+
+  /* البند النشط ممكن يكون برّه الشاشة مع ٢٤ بند — نجيبه للعين عند التحميل.
+     `block:'nearest'` عشان ما نلفّش القائمة من غير داعي لو هو ظاهر أصلاً. */
+  (function scrollNavToActive() {
+    const nav = document.getElementById('primary-nav');
+    const active = nav && nav.querySelector('a.active');
+    if (!active) return;
+    const navBox = nav.getBoundingClientRect();
+    const itemBox = active.getBoundingClientRect();
+    if (itemBox.top < navBox.top || itemBox.bottom > navBox.bottom) {
+      active.scrollIntoView({ block: 'nearest' });
+    }
+  })();
 
   // طي/فتح القائمة الجانبية (شريط أيقونات) — على الشاشات الكبيرة، مع حفظ الحالة
   const navToggle = document.querySelector('.nav-toggle');
@@ -1853,7 +1907,26 @@
       return items.filter((i) => !seen.has(i.stamp)).length;
     }
 
+    /* شارات القائمة الجانبية — من **نفس** نداء الـping بتاع الجرس، فمستحيل
+       الرقم اللي جنب «عهدة المناديب» يختلف عن اللي في الجرس. صفر تكلفة زيادة. */
+    function paintNavBadges() {
+      const byKey = {};
+      items.forEach((i) => { byKey[i.key] = i; });
+      document.querySelectorAll('#primary-nav a[data-badge]').forEach((a) => {
+        const cnt = a.querySelector('.nav-cnt');
+        if (!cnt) return;
+        const it = byKey[a.dataset.badge];
+        if (!it || !it.count) { cnt.hidden = true; return; }
+        cnt.hidden = false;
+        cnt.textContent = it.count > 99 ? '99+' : String(it.count);
+        // الأحمر للي محتاج تصرّف فورًا، والذهبي للمعلومة
+        cnt.classList.toggle('soft', it.kind === 'info');
+        a.setAttribute('title', it.title);
+      });
+    }
+
     function paintBadge() {
+      paintNavBadges();
       const n = unreadCount();
       badge.textContent = n > 9 ? '+9' : String(n);
       const was = badge.classList.contains('on');
