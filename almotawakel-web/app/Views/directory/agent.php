@@ -20,7 +20,7 @@ $cardName = [];
 foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owner']?' — '.$vc['owner']:''); }
 ?>
 <div class="dir-toolbar">
-  <a class="btn ghost sm" href="<?= url('directory?tab=agents') ?>">→ رجوع لقائمة الوكلاء</a>
+  <a class="btn ghost sm" href="<?= url('directory?tab=agents') ?>">‹ رجوع لقائمة الوكلاء</a>
 </div>
 
 <div class="dir-hero">

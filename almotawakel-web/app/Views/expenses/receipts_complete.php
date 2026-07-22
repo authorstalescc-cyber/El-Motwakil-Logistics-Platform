@@ -29,7 +29,7 @@ $oldIds = array_map('intval', (array) ($formState['old']['id'] ?? []));
     ده <b>مبيمسّش</b> المبلغ النقدي ولا التقفيل اليومي — بس بيكمّل البيانات المفقودة.
   </div>
   <div class="spacer"></div>
-  <a class="btn ghost sm" href="<?= url('expenses') ?>">← رجوع للمصروفات</a>
+  <a class="btn ghost sm" href="<?= url('expenses') ?>">‹ رجوع للمصروفات</a>
 </div>
 
 <?php if ($count === 0): ?>

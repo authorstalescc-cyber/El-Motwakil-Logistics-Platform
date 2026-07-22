@@ -29,7 +29,7 @@ $msg   = $link !== '' ? Track::waMessage($t + ['bill_number' => $bill['bill_numb
     <?php if (Track::isOpen($t)): ?><span class="live-pill" id="trackLive1">● بيتحدّث تلقائيًا</span><?php endif; ?>
   </div>
   <div class="pg-actions">
-    <a class="btn ghost" href="<?= url('tracking') ?>">← كل الشحنات</a>
+    <a class="btn ghost" href="<?= url('tracking') ?>">‹ كل الشحنات</a>
   </div>
 </div>
 

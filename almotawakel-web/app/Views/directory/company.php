@@ -4,7 +4,7 @@
 $p = $summary['permits']; $inv = $summary['invoices'];
 ?>
 <div class="dir-toolbar">
-  <a class="btn ghost sm" href="<?= url('directory?tab=companies') ?>">→ رجوع لقائمة الشركات</a>
+  <a class="btn ghost sm" href="<?= url('directory?tab=companies') ?>">‹ رجوع لقائمة الشركات</a>
 </div>
 
 <div class="dir-hero company">

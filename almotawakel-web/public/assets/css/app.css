@@ -2963,3 +2963,18 @@ button.d-hchip{cursor:pointer;font-family:inherit}
 .debt-figs.g4{grid-template-columns:repeat(4,1fr)}
 @media(max-width:1100px){.g4,.counters.g4,.debt-figs.g4{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){.g4,.counters.g4,.debt-figs.g4{grid-template-columns:1fr}}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Breadcrumb — المرحلة ٥
+   النظام كان بلا أي مسار تنقّل في ٨١ شاشة، و١١ شاشة مالهاش رابط للأعلى.
+   بيتشتقّ في الـlayout من خريطة القائمة، فمكان واحد بيغطّي كل الشاشات.
+   ══════════════════════════════════════════════════════════════════════════ */
+.crumbs{
+  display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;
+  margin-bottom:var(--space-3);font-size:var(--fs-1);font-weight:var(--fw-bold);color:var(--grey)
+}
+.crumbs a{display:inline-flex;align-items:center;gap:var(--space-1);color:var(--grey);border-radius:var(--radius-1)}
+.crumbs a:hover{color:var(--navy);text-decoration:underline}
+.crumbs [aria-current="page"]{color:var(--navy);font-weight:var(--fw-black)}
+.crumb-sep{color:var(--line2)}
+@media print{.crumbs{display:none}}

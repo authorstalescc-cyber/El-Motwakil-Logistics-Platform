@@ -13,7 +13,7 @@ $e = $edit ?: null;
     <p class="pg-sub">مكان كل وجهة على الخريطة — منها بنحسب السائق بيبعد قد إيه ومتوقع يوصل إمتى.</p>
   </div>
   <div class="pg-actions">
-    <a class="btn ghost" href="<?= url('tracking') ?>">← رجوع للتتبع</a>
+    <a class="btn ghost" href="<?= url('tracking') ?>">‹ رجوع للتتبع</a>
   </div>
 </div>
 

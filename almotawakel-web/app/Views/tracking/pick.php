@@ -12,7 +12,7 @@ $hasBase = $base !== '';
     <p class="pg-sub">اختار الشحنة، اكتب رقم واتساب السائق، والنظام هيجهّزلك الرسالة كاملة.</p>
   </div>
   <div class="pg-actions">
-    <a class="btn ghost" href="<?= url('tracking') ?>">← رجوع للتتبع</a>
+    <a class="btn ghost" href="<?= url('tracking') ?>">‹ رجوع للتتبع</a>
   </div>
 </div>
 

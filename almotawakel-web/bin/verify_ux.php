@@ -878,6 +878,57 @@ $movView = (string) file_get_contents($root . '/app/Views/movements/index.php');
     ? ok('حالة فراغ الحركات ما بقتش تشاور على زر مش موجود')
     : bad('حالة فراغ الحركات لسه بتشاور على زر «حركة جديدة» المش موجود');
 
+/* ══════════════ ٢١) مسار التنقّل وزر الرجوع ══════════════ */
+sec('٢١) Breadcrumb وتوحيد الرجوع (المرحلة ٥)');
+
+/* Breadcrumb بيتشتقّ في الـlayout من خريطة القائمة — مكان واحد يغطّي ٨١ شاشة */
+str_contains($layoutSrc, 'class="crumbs"')
+    ? ok('Breadcrumb موجود في الـlayout (كان صفر في ٨١ شاشة)')
+    : bad('مفيش breadcrumb');
+str_contains($layoutSrc, 'foreach ($navRaw as')
+    ? ok('Breadcrumb مشتقّ من خريطة القائمة نفسها — مستحيل يتفرّع عنها')
+    : bad('Breadcrumb مكتوب بالإيد — هيتفرّع عن القائمة');
+
+// سلوك فعلي: الأقسام والصفحات الفرعية بتطلع صح
+if (function_exists('url')) {
+    $probe = static function (string $uri, string $title) use ($root): string {
+        $keepUri = $_SERVER['REQUEST_URI'] ?? null;
+        $_SERVER['REQUEST_URI'] = $uri;
+        $_SESSION['uid'] = 1; $_SESSION['role'] = 'owner'; $_SESSION['uname'] = 'verify';
+        ob_start();
+        (new \App\Core\Controller())->render('errors/404', ['title' => $title]);
+        $html = (string) ob_get_clean();
+        if ($keepUri === null) { unset($_SERVER['REQUEST_URI']); } else { $_SERVER['REQUEST_URI'] = $keepUri; }
+        preg_match('/<nav class="crumbs".*?<\/nav>/s', $html, $m);
+        return isset($m[0]) ? trim(preg_replace('/\s+/', ' ', strip_tags($m[0]))) : '';
+    };
+    $c1 = $probe('/permits/86', 'إذن #86');
+    (str_contains($c1, 'الشغل اليومي') && str_contains($c1, 'الأذونات والشهادات') && str_contains($c1, 'إذن #86'))
+        ? ok('صفحة فرعية بتدّي مسار كامل: قسم › وحدة › الصفحة')
+        : bad('مسار الصفحة الفرعية ناقص: ' . ($c1 ?: '(فاضي)'));
+    // أطول تطابق بادئة يكسب — rep-custody/inbox مش rep-custody
+    $c2 = $probe('/rep-custody/inbox', 'صندوق المراجعة');
+    str_contains($c2, 'صندوق المراجعة')
+        ? ok('أطول تطابق بادئة بيكسب (inbox مش بيتبلع في rep-custody)')
+        : bad('مسار المسارات المتداخلة غلط: ' . ($c2 ?: '(فاضي)'));
+    // الرئيسية نفسها مالهاش breadcrumb
+    $probe('/', 'لوحة التحكم') === ''
+        ? ok('لوحة التحكم بلا breadcrumb (مفيش داعي)')
+        : bad('لوحة التحكم بتعرض breadcrump بلا داعي');
+    unset($_SESSION['uid'], $_SESSION['role'], $_SESSION['uname']);
+}
+
+/* ⚠️ `‹` حرف bidi-mirrored بيتقلب تلقائيًّا في RTL فهو الصح للرجوع.
+   `←`/`→` مش بيتقلبوا، فكانوا بيشاوروا في الاتجاه الغلط. */
+$backGlyphs = [];
+foreach (office_views($root) as $path => $src) {
+    if (preg_match('/(←|→)\s*(رجوع|كل)/u', $src)) {
+        $backGlyphs[] = str_replace($root . '/app/Views/', '', $path);
+    }
+}
+$backGlyphs ? bad('أزرار رجوع بسهم مش بيتقلب في RTL: ' . implode('، ', $backGlyphs))
+            : ok('كل أزرار الرجوع بـ‹ (الحرف الوحيد اللي بيتقلب صح في RTL)');
+
 /* ══════════════ الخلاصة ══════════════ */
 echo "\n" . str_repeat('=', 62) . "\n";
 echo "نجح: $pass   |   فشل: $fail   |   تخطّي: $skip\n";

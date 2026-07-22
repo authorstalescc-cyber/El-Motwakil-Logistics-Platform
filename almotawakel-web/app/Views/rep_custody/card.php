@@ -15,7 +15,7 @@ $selectedPermits = array_map('intval', (array) ($assignOld['permit_ids'] ?? []))
   <div class="section-head" style="margin:0">🧑‍💼 عهدة: <?= e($rep['name']) ?></div>
   <div class="spacer"></div>
   <a class="btn ghost" href="<?= url('reps/' . $rep['id']) ?>">كشف المرتبات والمكافآت</a>
-  <a class="btn ghost" href="<?= url('rep-custody') ?>">← كل المناديب</a>
+  <a class="btn ghost" href="<?= url('rep-custody') ?>">‹ كل المناديب</a>
 </div>
 
 <div class="kpi-grid mb four">

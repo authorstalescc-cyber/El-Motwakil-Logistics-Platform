@@ -169,6 +169,51 @@ $nav = $clean;
     </header>
 
     <main class="content" id="main-content" tabindex="-1">
+      <?php
+      /* ══════════════════════════════════════════════════════════════════════
+         Breadcrumb — المرحلة ٥
+         النظام كان **بلا أي breadcrumb** في ٨١ شاشة، و١١ شاشة مالهاش ولا
+         رابط للأعلى خالص. بدل ما نعدّل كل شاشة، بنشتقّه هنا من **خريطة
+         القائمة نفسها** (`$navRaw` فوق) + المسار الحالي: مكان واحد بيغطّي
+         كل الشاشات تلقائيًّا ومستحيل يتفرّع عن القائمة.
+         ══════════════════════════════════════════════════════════════════════ */
+      $crumbs = [];
+      if ($cur !== '/') {
+          $curTrim = ltrim($cur, '/');
+          $bestSeg = ''; $bestLabel = ''; $bestSection = '';
+          $section = '';
+          foreach ($navRaw as [$seg, $label, $ic, $handler, $badge]) {
+              if ($ic === null) { $section = $label; continue; }
+              if ($seg === '') { continue; }
+              // أطول تطابق بادئة يكسب: «rep-custody/inbox» قبل «rep-custody»
+              if (($curTrim === $seg || str_starts_with($curTrim, $seg . '/') || str_starts_with($curTrim, $seg . '?'))
+                  && strlen($seg) > strlen($bestSeg)) {
+                  $bestSeg = $seg; $bestLabel = $label; $bestSection = $section;
+              }
+          }
+          if ($bestSeg !== '') {
+              if ($bestSection !== '' && $bestSection !== 'الرئيسية') { $crumbs[] = [$bestSection, null]; }
+              $onIndex = ($curTrim === $bestSeg);
+              $crumbs[] = [$bestLabel, $onIndex ? null : url($bestSeg)];
+              // آخر فتّة = عنوان الصفحة الحالية لو احنا جوّه صفحة فرعية
+              if (!$onIndex && ($title ?? '') !== '' && $title !== $bestLabel) {
+                  $crumbs[] = [$title, null];
+              }
+          } elseif (($title ?? '') !== '') {
+              $crumbs[] = [$title, null];
+          }
+      }
+      ?>
+      <?php if ($crumbs): ?>
+      <nav class="crumbs" aria-label="مسار التنقّل">
+        <a href="<?= url('') ?>"><?= icon('dashboard',14) ?> الرئيسية</a>
+        <?php foreach ($crumbs as [$cLabel, $cUrl]): ?>
+          <span class="crumb-sep" aria-hidden="true">›</span>
+          <?php if ($cUrl): ?><a href="<?= e($cUrl) ?>"><?= e($cLabel) ?></a>
+          <?php else: ?><span aria-current="page"><?= e($cLabel) ?></span><?php endif; ?>
+        <?php endforeach; ?>
+      </nav>
+      <?php endif; ?>
       <?php $wd = Auth::workDate(); $wdToday = Auth::isWorkDateToday(); ?>
       <?php if (Auth::freeEditMode()): ?>
       <div class="free-edit-banner">
