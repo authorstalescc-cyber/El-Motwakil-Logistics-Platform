@@ -294,8 +294,7 @@ class SettingsController extends Controller
                 json_encode($splitAgencies((string)$_POST['ateeq_agencies']), JSON_UNESCAPED_UNICODE));
         }
 
-        flash('success', 'تم حفظ إعدادات التايم لاين والأذونات.');
-        redirect('settings');
+        $this->done('تم حفظ إعدادات التايم لاين والأذونات.', 'settings#tab-permits');
     }
 
     public function saveGeneral(): void
@@ -316,8 +315,7 @@ class SettingsController extends Controller
         App::setSetting('company_address', trim($_POST['company_address'] ?? ''));
         App::setSetting('company_tax_id',  trim($_POST['company_tax_id'] ?? ''));
         App::setSetting('company_email',   trim($_POST['company_email'] ?? ''));
-        flash('success', 'تم حفظ الإعدادات العامة.');
-        redirect('settings');
+        $this->done('تم حفظ الإعدادات العامة.', 'settings#tab-general');
     }
 
     public function addLookup(): void
@@ -326,11 +324,10 @@ class SettingsController extends Controller
         $this->requireCsrf();
         $type  = $_POST['list_type'] ?? '';
         $value = trim($_POST['value'] ?? '');
-        if (isset(Lookup::TYPES[$type]) && $value !== '') {
-            Lookup::add($type, $value);
-            flash('success', 'تمت إضافة العنصر.');
-        }
-        redirect('settings');
+        if (!isset(Lookup::TYPES[$type])) { $this->fail('نوع القائمة ده مش معروف.', 'settings#tab-lists'); }
+        if ($value === '') { $this->fail('اكتب قيمة العنصر الأول.', 'settings#tab-lists'); }
+        Lookup::add($type, $value);
+        $this->done('تمت إضافة العنصر.', 'settings#tab-lists');
     }
 
     public function deleteLookup(string $id): void
@@ -338,8 +335,7 @@ class SettingsController extends Controller
         $this->requireRole(['owner', 'manager']);
         $this->requireCsrf();
         Lookup::delete((int)$id);
-        flash('success', 'تم الحذف.');
-        redirect('settings');
+        $this->done('تم حذف العنصر من القائمة.', 'settings#tab-lists');
     }
 
     /** توحيد المسميات المكررة تلقائياً (أداة صيانة) */

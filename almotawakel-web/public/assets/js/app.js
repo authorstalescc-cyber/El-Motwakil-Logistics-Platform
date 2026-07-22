@@ -1808,6 +1808,14 @@
     }, 30);
   }
 
+  // زر «دوّر في النظام» في صفحة 404 — بيفتح نفس لوحة البحث السريع (Ctrl+K)
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('[data-open-search]');
+    if (!b) return;
+    const opener = document.getElementById('cmdk-open');
+    if (opener) opener.click();
+  });
+
   /* ══════════════════════════════════════════════════════════════════════════
      مركز الإشعارات — المرحلة ١
      الجرس بيترسم فاضي من الخادم (صفر تكلفة على رندر أي صفحة) وبيتملّى من

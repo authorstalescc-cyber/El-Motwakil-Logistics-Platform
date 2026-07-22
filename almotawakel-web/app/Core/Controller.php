@@ -58,13 +58,17 @@ class Controller
         $this->requireAuth();
         $roles = (array) $roles;
         if (!in_array(Auth::role(), $roles, true)) {
+            // نفس صفحة 403 اللي بيعرضها Access::deny — مسار رفض واحد بشكل واحد.
+            // `flash` مضافة جنب `error` لأن ajaxSubmit في app.js بتقرا data.flash
+            // وكانت بتوصلها `error` بس فتعرض «تعذّر الحفظ» العامة بدل السبب.
+            $msg = 'ليست لديك صلاحية لتنفيذ هذا الإجراء.';
             http_response_code(403);
             if ($this->wantsJson()) {
-                $this->json(['ok' => false, 'error' => 'ليست لديك صلاحية لتنفيذ هذا الإجراء.']);
+                $this->json(['ok' => false, 'error' => $msg, 'flash' => $msg, 'errors' => ['_form' => $msg]]);
                 exit;
             }
-            flash('error', 'ليست لديك صلاحية لتنفيذ هذا الإجراء.');
-            redirect('');
+            $this->render('errors/403', ['title' => 'غير مسموح']);
+            exit;
         }
     }
 
@@ -80,6 +84,71 @@ class Controller
     {
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════════════════
+     * عقد المسار بعد الحفظ/الحذف — المصدر الوحيد (المرحلة ٢).
+     * ══════════════════════════════════════════════════════════════════════
+     *
+     * قبل كده كان فيه **14 أسلوب رجوع** في 311 موضع: `safe_back` في مكان،
+     * و`bulkBack()`/`redirectBack()`/`inboxBack()`/`safeReturn()` مكتوبين
+     * بالإيد في 4 أماكن، و3 حقول رجوع مختلفة (`_back`/`back`/`return`)،
+     * و**18 إجراء بيخلص من غير أي رسالة** فالمستخدم مش عارف حصل إيه.
+     *
+     * القاعدة دلوقتي:
+     *   • **الرسالة إجبارية** — مفيش طريقة تنادي `done()` من غير ما تقول
+     *     للمستخدم إيه اللي حصل.
+     *   • **الرجوع للمكان اللي جه منه** لو الفورم بعت `_back` (بيتنضّف
+     *     بـ`safe_back` فمستحيل يوديه لدومين برّه)، وإلا `$fallback`.
+     *   • **`$anchor`** بيرجّعه لنفس البند اللي اشتغل عليه جوّه الصفحة.
+     *
+     * @param string $msg      رسالة للمستخدم (إجبارية — مفيش إجراء صامت)
+     * @param string $fallback الوجهة لو الفورم ما بعتش `_back`
+     * @param string $anchor   مرساة اختيارية (بلا `#`) للرجوع لنفس البند
+     */
+    protected function done(string $msg, string $fallback, string $anchor = '', string $type = 'success'): never
+    {
+        flash($type, $msg);
+        $target = safe_back($fallback, $_POST['_back'] ?? null);
+        if ($anchor !== '' && !str_contains($target, '#')) { $target .= '#' . $anchor; }
+        redirect($target);
+    }
+
+    /**
+     * فشل مش متعلّق بحقل معيّن (السجل مش موجود، اليوم متقفل، مفيش صلاحية…).
+     *
+     * بيحلّ محل نمط `flash('error', …); redirect('permits');` المتكرر —
+     * وأخطر منه نمط `redirect('permits');` **من غير أي رسالة** اللي كان
+     * موجود في 17 حارس في PermitController لوحده، فالمستخدم كان بيلاقي
+     * نفسه على القايمة ومش عارف ليه.
+     */
+    protected function fail(string $msg, string $fallback, string $anchor = ''): never
+    {
+        if ($this->wantsJson()) {
+            http_response_code(422);
+            $this->json(['ok' => false, 'flash' => $msg, 'errors' => ['_form' => $msg]]);
+            exit;
+        }
+        $this->done($msg, $fallback, $anchor, 'error');
+    }
+
+    /**
+     * السجل اللي المستخدم بيفتحه مش موجود (طلب GET).
+     *
+     * الفرق عن `fail()`: ده لصفحة بيفتحها المستخدم بالرابط، فالصح إننا نعرض
+     * **صفحة 404 بسبب واضح** بدل ما نحوّله للقايمة. `fail()` للإجراءات (POST)
+     * اللي لازم ترجّعه لمكانه ومعاه رسالة.
+     */
+    protected function notFound(string $msg = 'السجل ده مش موجود أو اتمسح.'): never
+    {
+        http_response_code(404);
+        if ($this->wantsJson()) {
+            $this->json(['ok' => false, 'flash' => $msg, 'errors' => ['_form' => $msg]]);
+            exit;
+        }
+        $this->render('errors/404', ['title' => 'غير موجود', 'notFoundMsg' => $msg]);
+        exit;
     }
 
     /** PRG موحد لفشل validation مع عزل القيم والأخطاء لكل تبويب. */

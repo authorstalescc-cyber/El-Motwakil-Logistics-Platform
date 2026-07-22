@@ -53,10 +53,10 @@ class BawalisController extends CrudController
     {
         $this->requireAuth(); $this->requireCsrf();
         $text = trim((string)($_POST['rows'] ?? ''));
-        if ($text === '') { flash('error', 'الصق صفوف Excel أولًا.'); redirect('bawalis'); }
+        if ($text === '') { $this->pasteFailure($text, 'الصق صفوف Excel أولًا.'); }
         $lines = preg_split('/\R/u', $text, -1, PREG_SPLIT_NO_EMPTY);
         if (!$lines || count($lines) < 2 || count($lines) > 201) {
-            flash('error', 'يجب أن يحتوي اللصق على صف عناوين وصف بيانات واحد على الأقل (الحد الأقصى 200).'); redirect('bawalis');
+            $this->pasteFailure($text, 'لازم صف عناوين وصف بيانات واحد على الأقل (الحد الأقصى 200 صف).');
         }
         $cells = fn(string $line) => array_map('trim', str_getcsv($line, "\t"));
         $norm = fn($v) => preg_replace('/[\s_\-]+/u', '', mb_strtolower(trim((string)$v), 'UTF-8'));
@@ -70,7 +70,7 @@ class BawalisController extends CrudController
         $headers = $cells(array_shift($lines)); $keys=[];
         foreach ($headers as $header) { $keys[] = $map[$norm($header)] ?? null; }
         if (!in_array('bill_number', $keys, true) || !in_array('bill_date', $keys, true)) {
-            flash('error', 'صف العناوين لازم يحتوي على «رقم البوليصة» و«التاريخ». استخدم النموذج الظاهر في النافذة.'); redirect('bawalis');
+            $this->pasteFailure($text, 'صف العناوين لازم يحتوي «رقم البوليصة» و«التاريخ». استخدم النموذج الظاهر في النافذة.');
         }
 
         $ent = $this->entity(); $inserted=[]; $pdo=Database::conn();
@@ -111,12 +111,23 @@ class BawalisController extends CrudController
             }
             Audit::log('bulk_update','bawalis',null,null,null,'لصق وإضافة بوالص من Excel',['ids'=>$inserted,'count'=>count($inserted)]);
             $pdo->commit();
-            flash('success','تمت إضافة '.count($inserted).' بوليصة من Excel بنجاح.');
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
-            flash('error','لم تتم إضافة أي صف: '.$e->getMessage());
+            $this->pasteFailure($text, 'ما اتضافش ولا صف: '.$e->getMessage());
         }
-        redirect('bawalis');
+        $this->done('تمت إضافة '.count($inserted).' بوليصة من Excel بنجاح.', 'bawalis');
+    }
+
+    /**
+     * فشل لصق الإكسل — **بيرجّع اللصق كله** بدل ما يضيع.
+     *
+     * ده كان أسوأ ضياع مُدخَل في النظام: المستخدم بينسخ 200 صف من الإكسل،
+     * وأي غلطة في صف واحد كانت بترميه على القايمة والـtextarea فاضية،
+     * فيضطر ينسخ من أول وجديد ويدوّر على الغلطة من غير ما يشوفها.
+     */
+    private function pasteFailure(string $rows, string $msg): never
+    {
+        $this->formFailure('bawalis.paste', 'bawalis', ['rows' => $rows], ['rows' => $msg], 'bawalis');
     }
 
     /** نموذج إضافة بوليصة قديمة يدويًا: بلا إذن وبلا حركة وخارج الحسابات التشغيلية. */
@@ -375,7 +386,7 @@ class BawalisController extends CrudController
     {
         $this->requireAuth();
         $bill = Database::row('SELECT * FROM bawalis WHERE id = ?', [(int)$id]);
-        if (!$bill) { redirect('bawalis'); }
+        if (!$bill) { $this->notFound('البوليصة دي مش موجودة أو اتمسحت.'); }
         $mv = Database::row('SELECT * FROM movements WHERE bill_id = ? ORDER BY id LIMIT 1', [(int)$id]);
         // بيانات الشحن الأصلية من الإذن (تُستخدم كبديل لو الحركة لا تحملها)
         $permit = !empty($bill['permit_id'])
@@ -400,7 +411,7 @@ class BawalisController extends CrudController
         $row = Database::row('SELECT bill_date, is_legacy FROM bawalis WHERE id = ?', [(int)$id]);
         if ($row && !(int)$row['is_legacy'] && $row['bill_date']
             && ($err = Closing::guard($row['bill_date']))) {
-            flash('error', $err); redirect('bawalis');
+            $this->fail($err, 'bawalis');
         }
         parent::destroy($id);
     }

@@ -332,7 +332,7 @@ class SettlementController extends Controller
     {
         $this->requireAuth();
         $bill = Database::row("SELECT * FROM bawalis WHERE id = ?", [(int)$id]);
-        if (!$bill) { redirect('settlements'); }
+        if (!$bill) { $this->notFound('البوليصة دي مش موجودة أو اتمسحت.'); }
         $state = FormState::consume('settlements.payment.' . (int) $id, 'settlements/' . (int) $id);
         $this->render('settlements/show', [
             'title'    => 'سداد بوليصة ' . ($bill['bill_number'] ?: '#' . $id),

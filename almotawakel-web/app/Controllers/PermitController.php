@@ -364,7 +364,7 @@ class PermitController extends Controller
     {
         $this->requireAuth();
         $p = Permit::find((int)$id);
-        if (!$p) { redirect('permits'); }
+        if (!$p) { $this->notFound('الإصدار ده مش موجود أو اتمسح.'); }
         $this->form($p);
     }
 
@@ -518,7 +518,7 @@ class PermitController extends Controller
     private function gather(int $pid): array
     {
         $p = Permit::find($pid);
-        if (!$p) { redirect('permits'); }
+        if (!$p) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
 
         $movements = Permit::movements($pid);
         foreach ($movements as &$mv) {
@@ -561,7 +561,7 @@ class PermitController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $pid = (int)$id;
-        if (!Permit::find($pid)) { redirect('permits'); }
+        if (!Permit::find($pid)) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
         Permit::saveChecklist($pid, $_POST);
         flash('success', 'تم حفظ بيانات المرشد.');
         redirect('permits/'.$pid.'/manage#rcp-guide');
@@ -573,10 +573,11 @@ class PermitController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $pid = (int)$id;
-        if (!Permit::find($pid)) { redirect('permits'); }
-        Permit::toggleDismissedReceipt($pid, (string)($_POST['label'] ?? ''));
+        if (!Permit::find($pid)) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
+        $label = (string)($_POST['label'] ?? '');
+        $now = Permit::toggleDismissedReceipt($pid, $label);
         $back = ($_POST['back'] ?? '') === 'view' ? 'permits/'.$pid : 'permits/'.$pid.'/manage#rcp-guide';
-        redirect($back);
+        $this->done(($now ? 'اتشال من المطلوب: ' : 'رجع للمطلوب: ') . $label, $back);
     }
 
     /**
@@ -617,7 +618,7 @@ class PermitController extends Controller
         $this->requireAuth();
         $pid  = (int)$id;
         $data = $this->printData($pid);
-        if (!$data) { redirect('permits'); }
+        if (!$data) { $this->notFound('الإصدار ده مش موجود أو اتمسح.'); }
         $data['title'] = 'كشف مراجعة — ' . Permit::typeLabel($data['p']['permit_type']) . ' ' . ($data['p']['permit_no'] ?: '#'.$pid);
         $this->render('permits/print', $data, false);
     }
@@ -767,7 +768,7 @@ class PermitController extends Controller
         $this->requireCsrf();
         $pid = (int)$id;
         $p = Permit::find($pid);
-        if (!$p) { redirect('permits'); }
+        if (!$p) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
 
         $validKinds = array_keys(PermitInvoice::KINDS);
         $kind = in_array($_POST['doc_kind'] ?? '', $validKinds, true) ? $_POST['doc_kind'] : 'invoice';
@@ -893,7 +894,7 @@ class PermitController extends Controller
         $this->requireCsrf();
         $pid = (int)$id;
         $p = Permit::find($pid);
-        if (!$p) { redirect('permits'); }
+        if (!$p) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
 
         $serial = trim($_POST['serial_no'] ?? '');
         if ($serial !== '' && PermitInvoice::serialExists($serial)) {
@@ -994,7 +995,7 @@ class PermitController extends Controller
     {
         $this->requireAuth();
         $inv = PermitInvoice::find((int)$invId);
-        if (!$inv) { flash('error', 'المستند غير موجود.'); redirect('permits'); }
+        if (!$inv) { $this->notFound('المستند ده مش موجود أو اتمسح.'); }
         $this->render('permits/invoice_print', [
             'title' => PermitInvoice::kindLabel($inv['doc_kind']) . ' ' . ($inv['doc_no'] ?: '#'.$inv['id']),
             'inv'   => $inv,
@@ -1047,7 +1048,7 @@ class PermitController extends Controller
         $this->requireCsrf();
         $pid = (int)$id;
         $permit = Permit::find($pid);
-        if (!$permit) { redirect('permits'); }
+        if (!$permit) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
         [$ctCount, $ctType] = $this->movementContainerInput();
         $this->claimForm('permits/'.$pid.'/manage');
         $mid = Permit::createMovement($pid, trim($_POST['note'] ?? '') ?: null, $ctCount, $ctType);
@@ -1063,7 +1064,7 @@ class PermitController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $mv = Permit::movement((int)$mid);
-        if (!$mv) { redirect('permits'); }
+        if (!$mv) { $this->fail('الحركة دي مش موجودة أو اتمسحت.', 'permits'); }
         $pid = (int)$mv['permit_id'];
         [$ctCount, $ctType] = $this->movementContainerInput();
         $this->claimForm('permits/'.$pid.'/manage#movement-'.(int)$mid);
@@ -1089,7 +1090,7 @@ class PermitController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $mv = Permit::movement((int)$mid);
-        if (!$mv) { redirect('permits'); }
+        if (!$mv) { $this->fail('الحركة دي مش موجودة أو اتمسحت.', 'permits'); }
         $pid = (int)$mv['permit_id'];
 
         // لا تسمح بحذف آخر حركة إن كانت بها بوالص (لتفادي بوالص بلا حركة)
@@ -1145,7 +1146,7 @@ class PermitController extends Controller
         $this->requireCsrf();
         $pid = (int)$id;
         $permit = Permit::find($pid);
-        if (!$permit) { redirect('permits'); }
+        if (!$permit) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
 
         $key = trim($_POST['stage_key'] ?? '');
         if (!in_array($key, Permit::stageKeys(), true)) {
@@ -1329,8 +1330,7 @@ class PermitController extends Controller
             flash('success', 'تم حذف البند.');
             redirect('permits/'.(int)$row['permit_id'].'/manage');
         }
-        if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>'البند غير موجود.']); return; }
-        redirect('permits');
+        $this->fail('البند ده مش موجود أو اتمسح.', 'permits');
     }
 
     /** ربط بوليصة موجودة بالإصدار (عبر رقم البوليصة) */
@@ -1339,7 +1339,7 @@ class PermitController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $pid = (int)$id;
-        if (!Permit::find($pid)) { redirect('permits'); }
+        if (!Permit::find($pid)) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
         $movementId = (int)($_POST['movement_id'] ?? 0) ?: null;
         $billNo = trim($_POST['bill_number'] ?? '');
         $ok = false; $msg = '';
@@ -1406,8 +1406,7 @@ class PermitController extends Controller
             flash('success', 'تم حذف البوليصة نهائياً.');
             redirect('permits/'.$pid . '/manage' . ($mvId ? '#movement-'.$mvId : '#stage-bills'));
         }
-        if ($this->wantsJson()) { $this->json(['ok'=>false, 'flash'=>'البوليصة غير موجودة.']); return; }
-        redirect('permits/'.$pid.'/manage');
+        $this->fail('البوليصة دي مش موجودة أو اتمسحت.', 'permits/'.$pid.'/manage');
     }
 
     /** إنشاء بوليصة جديدة وربطها بالإصدار مباشرةً من التايم لاين */
@@ -1417,7 +1416,7 @@ class PermitController extends Controller
         $this->requireCsrf();
         $pid = (int)$id;
         $p = Permit::find($pid);
-        if (!$p) { redirect('permits'); }
+        if (!$p) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
 
         $type = $p['permit_type'];
         $movementId = (int)($_POST['movement_id'] ?? 0) ?: null;
@@ -1540,7 +1539,7 @@ class PermitController extends Controller
         $this->requireCsrf();
         $pid = (int)$id;
         $p = Permit::find($pid);
-        if (!$p) { redirect('permits'); }
+        if (!$p) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
 
         $billId = (int)($_POST['bill_id'] ?? 0);
         $bill = Database::row('SELECT * FROM bawalis WHERE id = ? AND permit_id = ?', [$billId, $pid]);
@@ -1650,7 +1649,7 @@ class PermitController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $pid = (int)$id;
-        if (!Permit::find($pid)) { redirect('permits'); }
+        if (!Permit::find($pid)) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
         $billId = (int)($_POST['bill_id'] ?? 0);
         $src = Database::row('SELECT * FROM bawalis WHERE id = ? AND permit_id = ?', [$billId, $pid]);
         if (!$src) {
@@ -1716,7 +1715,7 @@ class PermitController extends Controller
         $this->requireCsrf();
         $pid = (int)$id;
         $p = Permit::find($pid);
-        if (!$p) { redirect('permits'); }
+        if (!$p) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
         $new = ($p['status'] ?? 'open') === 'closed' ? 'open' : 'closed';
         // أي إذن له مستند مالي غير ملغى يفضل مقفولاً — لإعادة فتحه ألغِ المستند أولاً.
         if ($new === 'open' && PermitInvoice::hasActive($pid)) {
@@ -1743,7 +1742,7 @@ class PermitController extends Controller
             redirect('permits/'.$pid);
         }
         $permit = Permit::find($pid);
-        if (!$permit) { redirect('permits'); }
+        if (!$permit) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
         $files = array_column(Permit::stages($pid), 'attachment');
         $pdo = Database::conn();
         try {

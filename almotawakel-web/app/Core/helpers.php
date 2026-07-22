@@ -226,6 +226,41 @@ function current_app_path(): string
 }
 
 /**
+ * يحوّل `HTTP_REFERER` لمسار داخلي نسبي **لو كان من نفس الموقع فقط**.
+ *
+ * ⚠️ الـReferer جاي من المتصفح فهو **مش مصدر ثقة**: لو رجّعناه زي ما هو
+ * بيبقى ثغرة تحويل مفتوح (المهاجم يبعت لينك لصفحة 404 عندنا فيها زر رجوع
+ * بيودّي لموقعه). عشان كده بنقارن الـhost بـhost الطلب الحالي، وبنرجّع ''
+ * لأي حاجة غريبة، وبعدين `safe_back()` بتنضّف الناتج تاني.
+ *
+ * بيُستخدم في صفحتي 404/403 بس — أي فورم بيبعت `_back` بنفسه وهو الأدق.
+ */
+function referer_path(): string
+{
+    $ref = trim((string) ($_SERVER['HTTP_REFERER'] ?? ''));
+    if ($ref === '' || preg_match('/[\x00-\x1F\x7F]/', $ref)) { return ''; }
+    $parts = @parse_url($ref);
+    if ($parts === false) { return ''; }
+    // ⚠️ أي scheme غير http/https مرفوض. من غير السطر ده `javascript:alert(1)`
+    // بيعدّي، لأن parse_url بتفكّه لـscheme + path بلا host فيتخطّى فحص الموقع
+    // تحت — متحقَّق فعليًّا وقت الاختبار.
+    if (isset($parts['scheme']) && !in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+        return '';
+    }
+    if (!empty($parts['host'])) {
+        $here = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+        $there = strtolower($parts['host']) . (isset($parts['port']) ? ':' . $parts['port'] : '');
+        // نقبل بالبورت وبدونه: HTTP_HOST بيشيله أحيانًا والريفرر لأ
+        if ($here === '' || ($there !== $here && strtolower($parts['host']) !== explode(':', $here)[0])) {
+            return '';
+        }
+    }
+    $out = (string) ($parts['path'] ?? '');
+    if (!empty($parts['query'])) { $out .= '?' . $parts['query']; }
+    return $out;
+}
+
+/**
  * يقبل مسارًا داخليًا نسبيًا فقط، ويرفض scheme/host و`//` ومحارف التحكم.
  */
 function safe_back(string $fallback, $candidate = null): string

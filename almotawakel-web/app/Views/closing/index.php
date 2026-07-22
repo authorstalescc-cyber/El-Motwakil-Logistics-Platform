@@ -1,5 +1,12 @@
 <?php
 $recon = $reconciliation;
+/* المبالغ المكتوبة اللي اترفضت — بترجع متعبّية بدل ما المالك يعيد كتابة
+   عشرات الصفوف من أول وجديد (المرحلة ٢). */
+/* ⚠️ الاسم `reconRestore` مقصود: الشاشة دي بتستخدم $reconState لحاجة تانية
+   خالص (كلاس حالة المطابقة، سطر 23). تسمية مفتاح render بنفس اسم متغيّر
+   جوّه الشاشة بتكسر واحد فيهم بالسكوت — نفس مصيدة $data الموثَّقة. */
+$reconOld = $reconRestore['old'] ?? [];
+$reconErr = $reconRestore['errors']['_form'] ?? '';
 $reconEditable = !$isLocked && !empty($recon['available']);
 $reconRows = $recon['rows'] ?? [];
 $reconTotals = $recon['totals'] ?? [];
@@ -130,6 +137,9 @@ $reconState = !$recon['available'] ? 'unavailable' : ($recon['matched'] ? 'match
   </section>
 
   <section class="cl-section cl-reconciliation" id="reconciliation">
+    <?php if ($reconErr !== ''): ?>
+      <div class="flash error" role="alert"><?= icon('alert',18) ?> ما اتحفظتش المطابقة: <?= e($reconErr) ?> — الأرقام اللي كتبتها زي ما هي تحت.</div>
+    <?php endif; ?>
     <div class="cl-section-title">
       <span class="cl-section-no">2</span>
       <div><span>الخطوة الثانية</span><h2>طابق اليدوي مع السيستم</h2><p>كل عميل في بطاقة واحدة، مهما كان عدد أذوناته.</p></div>
@@ -163,11 +173,11 @@ $reconState = !$recon['available'] ? 'unavailable' : ($recon['matched'] ? 'match
             <div class="cl-client-main">
               <div class="cl-client-identity"><span class="cl-client-mark"><?= e(mb_substr($rr['client_name'],0,1)) ?></span><div><b><?= e($rr['client_name']) ?></b><small><?= intf(count($rr['permits'])) ?> إذن<?= $manualOnly ? ' · لم يعد له حركة اليوم' : '' ?></small></div></div>
               <div class="cl-client-number system"><span>السيستم</span><b><?= money($rr['system_total'],false) ?></b></div>
-              <label class="cl-client-input"><span>اليدوي</span><input class="recon-input manual-total" type="number" min="0" step="0.01" inputmode="decimal" name="manual_total[<?= e($rr['client_key']) ?>]" value="<?= $saved ? e(number_format($rr['manual_total'],2,'.','')) : '' ?>" placeholder="0.00" <?= (!$reconEditable || $manualOnly) ? 'disabled' : '' ?>></label>
+              <label class="cl-client-input"><span>اليدوي</span><input class="recon-input manual-total" type="number" min="0" step="0.01" inputmode="decimal" name="manual_total[<?= e($rr['client_key']) ?>]" value="<?= e($reconOld['manual_total'][$rr['client_key']] ?? ($saved ? number_format($rr['manual_total'],2,'.','') : '')) ?>" placeholder="0.00" <?= (!$reconEditable || $manualOnly) ? 'disabled' : '' ?>></label>
               <div class="cl-client-number difference"><span>الفرق</span><b class="client-diff <?= $saved && abs($rr['difference']) >= .005 ? 'has-diff' : '' ?>"><?= $saved ? money($rr['difference'],false) : '—' ?></b></div>
               <?php if ($rr['visa_excluded']): ?><div class="cl-visa-mini" title="مدفوعات فيزا مستبعدة">💳 <?= money($rr['visa_excluded'],false) ?></div><?php endif; ?>
             </div>
-            <?php if (!$manualOnly): ?><label class="cl-client-note"><span>ملاحظة</span><input type="text" name="row_note[<?= e($rr['client_key']) ?>]" value="<?= e($rr['note']) ?>" placeholder="سبب الفرق أو ملاحظة للمراجعة (اختياري)" <?= !$reconEditable ? 'disabled' : '' ?>></label><?php endif; ?>
+            <?php if (!$manualOnly): ?><label class="cl-client-note"><span>ملاحظة</span><input type="text" name="row_note[<?= e($rr['client_key']) ?>]" value="<?= e($reconOld['row_note'][$rr['client_key']] ?? $rr['note']) ?>" placeholder="سبب الفرق أو ملاحظة للمراجعة (اختياري)" <?= !$reconEditable ? 'disabled' : '' ?>></label><?php endif; ?>
             <?php if ($rr['permits']): ?><details class="cl-permit-details"><summary><span>عرض تفاصيل الأذونات</span><b><?= intf(count($rr['permits'])) ?></b></summary><div class="cl-permit-list">
               <?php foreach ($rr['permits'] as $permit): ?><article class="cl-permit-card">
                 <header><div><a href="<?= url('permits/'.$permit['permit_id'].'/manage') ?>" target="_blank"><?= e($permit['permit_no'] ?: '#'.$permit['permit_id']) ?> ↗</a><span><?= e($permit['company'] ?: '—') ?></span></div><b><?= money($permit['system_total'],false) ?></b></header>
@@ -181,14 +191,14 @@ $reconState = !$recon['available'] ? 'unavailable' : ($recon['matched'] ? 'match
       <article class="cl-general-card recon-row" data-system-total="<?= e($general['system']) ?>">
         <div class="cl-general-title"><span>🧾</span><div><b>مصروفات عامة بدون إذن</b><small>مصروفات يدوية + سُلف وتسويات مناديب نقدية</small></div></div>
         <div class="cl-client-number system"><span>السيستم</span><b><?= money($general['system'],false) ?></b></div>
-        <label class="cl-client-input"><span>اليدوي</span><input class="recon-input manual-general" type="number" min="0" step="0.01" inputmode="decimal" name="manual_general_expenses" value="<?= $recon['saved'] ? e(number_format($general['manual'],2,'.','')) : '' ?>" placeholder="0.00" <?= !$reconEditable ? 'disabled' : '' ?>></label>
+        <label class="cl-client-input"><span>اليدوي</span><input class="recon-input manual-general" type="number" min="0" step="0.01" inputmode="decimal" name="manual_general_expenses" value="<?= e($reconOld['manual_general_expenses'] ?? ($recon['saved'] ? number_format($general['manual'],2,'.','') : '')) ?>" placeholder="0.00" <?= !$reconEditable ? 'disabled' : '' ?>></label>
         <div class="cl-client-number difference"><span>الفرق</span><b class="general-diff <?= $recon['saved'] && abs($general['difference']) >= .005 ? 'has-diff' : '' ?>"><?= $recon['saved'] ? money($general['difference'],false) : '—' ?></b></div>
         <?php if ($general['visa_excluded']): ?><div class="cl-visa-mini">💳 <?= money($general['visa_excluded'],false) ?></div><?php endif; ?>
         <?php if ($general['details']): ?><details class="cl-permit-details"><summary><span>عرض تفاصيل المصروفات العامة</span><b><?= intf(count($general['details'])) ?></b></summary><div class="cl-general-details table-wrap"><table><tbody><?php foreach ($general['details'] as $detail): ?><tr><td><?= e($detail['label']) ?></td><td><?= e($detail['party']) ?></td><td><?= e($detail['note'] ?: '—') ?></td><td><?= $detail['is_visa'] ? 'فيزا' : 'كاش' ?></td><td><b><?= money($detail['amount'],false) ?></b></td></tr><?php endforeach; ?></tbody></table></div></details><?php endif; ?>
       </article>
 
       <div class="cl-recon-footer">
-        <label class="cl-main-note"><span>ملاحظة عامة للمطابقة</span><textarea name="reconciliation_note" rows="2" placeholder="اختيارية…" <?= !$reconEditable ? 'disabled' : '' ?>><?= e($recon['note']) ?></textarea></label>
+        <label class="cl-main-note"><span>ملاحظة عامة للمطابقة</span><textarea name="reconciliation_note" rows="2" placeholder="اختيارية…" <?= !$reconEditable ? 'disabled' : '' ?>><?= e($reconOld['reconciliation_note'] ?? $recon['note']) ?></textarea></label>
         <div class="cl-final-difference <?= $recon['matched'] ? 'matched' : '' ?>">
           <span>الفرق النهائي بعد كل البنود</span><b id="reconGrandDiffBottom"><?= $recon['saved'] ? money($grandDifference,false) : '—' ?></b><small><?= $recon['matched'] ? '✓ الأرقام مطابقة' : 'يجب أن يصبح الفرق 0.00' ?></small>
         </div>

@@ -377,6 +377,173 @@ if (class_exists('App\\Models\\Notification')) {
     unset($_SESSION['uid'], $_SESSION['role'], $_SESSION['uname']);
 }
 
+/* ══════════════ ١٠) المرحلة ٢ — عقد المسار بعد الحفظ ══════════════ */
+sec('١٠) عقد المسار بعد الحفظ + صفحات الأخطاء (المرحلة ٢)');
+
+$ctrlCore = php_code((string) file_get_contents($root . '/app/Core/Controller.php'));
+$accessSrc = php_code((string) file_get_contents($root . '/app/Core/Access.php'));
+$routerSrc = php_code((string) file_get_contents($root . '/app/Core/Router.php'));
+
+// done() لازم تفرض الرسالة — مستحيل إجراء ناجح يعدّي بالسكوت
+str_contains($ctrlCore, 'function done(')
+    ? ok('Controller::done() موجودة (المسار الموحّد بعد الحفظ)')
+    : bad('Controller::done() مش موجودة');
+preg_match('/function done\(string \$msg[^)]*\).*?\{(.*?)\n    \}/s', $ctrlCore, $dm);
+(isset($dm[1]) && str_contains($dm[1], 'flash(') && str_contains($dm[1], 'safe_back('))
+    ? ok('done() بتضيف الرسالة **دايمًا** وبتنضّف الرجوع بـsafe_back')
+    : bad('done() مش بتضمن الرسالة أو مش بتنضّف الرجوع');
+str_contains($ctrlCore, 'function fail(')
+    ? ok('Controller::fail() موجودة (رفض بسبب واضح بدل الرمي الصامت)')
+    : bad('Controller::fail() مش موجودة');
+
+// صفحات الأخطاء
+foreach (['errors/403.php', 'errors/404.php', 'errors/404_guest.php'] as $v) {
+    is_file($root . '/app/Views/' . $v) ? ok("صفحة $v موجودة") : bad("صفحة $v ناقصة");
+}
+!preg_match("/flash\('error'.*?\n\s*redirect\(''\);/s", $accessSrc)
+    ? ok('Access::deny ما بقاش بيرمي المستخدم على الداشبورد بالسكوت')
+    : bad('Access::deny لسه بيعمل flash + redirect للداشبورد');
+str_contains($accessSrc, "render('errors/403'")
+    ? ok('Access::deny بيعرض صفحة 403 حقيقية')
+    : bad('Access::deny مش بيعرض صفحة 403');
+str_contains($accessSrc, "'flash' => \$msg")
+    ? ok('رد 403 بالـAJAX فيه مفتاح flash (اللي app.js بيقراه)')
+    : bad('رد 403 بالـAJAX مفيهوش flash — الواجهة هتعرض رسالة عامة');
+str_contains($routerSrc, "'errors/404_guest'")
+    ? ok('404 بتترندر جوّه الـlayout للمسجَّل ومستقلة للزائر')
+    : bad('404 لسه بتترندر بلا layout للكل');
+
+// أمان referer_path — ده مصدر غير موثوق جاي من المتصفح
+if (function_exists('referer_path')) {
+    ok('referer_path() موجودة');
+    $hostBefore = $_SERVER['HTTP_HOST'] ?? null;
+    $refBefore  = $_SERVER['HTTP_REFERER'] ?? null;
+    $_SERVER['HTTP_HOST'] = 'localhost';
+    $cases = [
+        'http://localhost/permits' => '/permits',
+        'https://evil.com/steal'   => '',
+        '//evil.com/steal'         => '',
+        'javascript:alert(1)'      => '',
+        'data:text/html,x'         => '',
+        ''                         => '',
+    ];
+    $bad = [];
+    foreach ($cases as $ref => $want) {
+        $_SERVER['HTTP_REFERER'] = $ref;
+        if (referer_path() !== $want) { $bad[] = ($ref === '' ? '(فاضي)' : $ref); }
+    }
+    $bad ? bad('referer_path بتقبل مصادر خطر: ' . implode('، ', $bad))
+         : ok('referer_path بترفض أي موقع خارجي وأي scheme غير http/https (6 حالات)');
+    if ($hostBefore === null) { unset($_SERVER['HTTP_HOST']); } else { $_SERVER['HTTP_HOST'] = $hostBefore; }
+    if ($refBefore === null) { unset($_SERVER['HTTP_REFERER']); } else { $_SERVER['HTTP_REFERER'] = $refBefore; }
+} else {
+    bad('referer_path() مش موجودة');
+}
+
+/* ══════════════ ١١) مفيش إجراء صامت ══════════════ */
+sec('١١) كل إجراء له نتيجة مرئية (المرحلة ٢)');
+
+/* أي `redirect()` في كنترولر لازم يكون قبلها بشوية حاجة بتقول للمستخدم إيه
+   اللي حصل. الاستثناءات الوحيدة المسموح بها موصوفة تحت بأسبابها. */
+$exempt = [
+    // دالة رجوع داخلية بتتنادى **بعد** ما المُنادي حطّ الرسالة
+    'DebtController.php'      => ['redirectBack'],
+    // بوابة المناديب — خارج نطاق إعادة التصميم، ليها نظام رسايل خاص بيها
+    'RepPortalController.php' => ['*'],
+];
+$silent = [];
+foreach (glob($root . '/app/Controllers/*.php') ?: [] as $file) {
+    $base = basename($file);
+    if (($exempt[$base][0] ?? '') === '*') { continue; }
+    $lines = file($file);
+    $fn = '';
+    foreach ($lines as $i => $line) {
+        if (preg_match('/function ([a-zA-Z]+)\(/', $line, $fm)) { $fn = $fm[1]; }
+        if (!preg_match('/^\s*redirect\(/', $line)) { continue; }
+        if (in_array($fn, $exempt[$base] ?? [], true)) { continue; }
+        $ctx = implode('', array_slice($lines, max(0, $i - 6), 7));
+        if (!preg_match('/flash\(|->done\(|->fail\(|->notFound\(|formFailure|json\(|\?bye=1/', $ctx)) {
+            $silent[] = $base . ':' . ($i + 1);
+        }
+    }
+}
+$silent ? bad('إجراءات بتخلص بالسكوت (بلا رسالة): ' . implode('، ', $silent))
+        : ok('مفيش أي إجراء بيخلص بلا رسالة للمستخدم');
+
+// الحراس الصامتة في الأذونات — كانت 18 حارس بيرموك على القايمة بلا كلمة
+$permCtrl = php_code((string) file_get_contents($root . '/app/Controllers/PermitController.php'));
+$bareGuards = preg_match_all("/if \(![^)]+\) \{ redirect\('permits'\); \}/", $permCtrl);
+$bareGuards === 0
+    ? ok('مفيش حارس في الأذونات بيرمي المستخدم على القايمة بالسكوت (كانوا 18)')
+    : bad("لسه فيه $bareGuards حارس صامت في PermitController");
+
+// دوال بترجّع الحالة الجديدة عشان الرسالة تقول الصح مش تخمّن
+$noteSrc = php_code((string) file_get_contents($root . '/app/Models/Note.php'));
+str_contains($noteSrc, 'function toggleDone(int $id): bool')
+    ? ok('Note::toggleDone بترجّع الحالة الجديدة (الرسالة بتقول الصح)')
+    : bad('Note::toggleDone لسه void — الرسالة هتخمّن الحالة');
+$permSrc = php_code((string) file_get_contents($root . '/app/Models/Permit.php'));
+str_contains($permSrc, 'function toggleDismissedReceipt(int $permitId, string $label): bool')
+    ? ok('Permit::toggleDismissedReceipt بترجّع الحالة الجديدة')
+    : bad('toggleDismissedReceipt لسه void — الرسالة هتخمّن');
+
+// الخروج: ممنوع flash بعد session_destroy لأنها بتضيع بالسكوت
+$authSrc = php_code((string) file_get_contents($root . '/app/Controllers/AuthController.php'));
+!preg_match('/Auth::logout\(\);\s*\n\s*flash\(/', $authSrc)
+    ? ok('مفيش flash بعد Auth::logout (كانت هتضيع — session_destroy)')
+    : bad('فيه flash بعد logout — هتضيع لأن الجلسة اتدمّرت');
+str_contains($authSrc, "login?bye=1")
+    ? ok('تأكيد الخروج بيتبعت في الرابط بدل الجلسة')
+    : bad('مفيش تأكيد خروج للمستخدم');
+
+// صفحة الدخول لازم تفضّي الطابور بنفسها (مستقلة عن الـlayout)
+$loginView = (string) file_get_contents($root . '/app/Views/auth/login.php');
+str_contains($loginView, 'flash_all()')
+    ? ok('صفحة الدخول بتفضّي طابور الرسايل (ما تتسربش لبعد الدخول)')
+    : bad('صفحة الدخول مش بتفضّي الطابور — الرسالة هتطلع بعد الدخول بالغلط');
+
+/* ══════════════ ١٢) الحفاظ على المُدخَل عند الفشل ══════════════ */
+sec('١٢) اللي المستخدم كتبه ما يضيعش (المرحلة ٢ج)');
+
+// لصق الإكسل — كان أسوأ ضياع في النظام (200 صف بيروحوا بسبب غلطة في صف)
+$bawSrc = php_code((string) file_get_contents($root . '/app/Controllers/BawalisController.php'));
+$crudView = (string) file_get_contents($root . '/app/Views/crud/index.php');
+str_contains($bawSrc, 'function pasteFailure')
+    ? ok('لصق الإكسل: كل فشل بيمرّ على pasteFailure')
+    : bad('لصق الإكسل: مفيش مسار فشل بيحافظ على اللصق');
+!preg_match("/flash\('error'[^;]*\);\s*redirect\('bawalis'\);/", $bawSrc)
+    ? ok('لصق الإكسل: مفيش فشل بيرمي على القايمة والـtextarea فاضية')
+    : bad('لصق الإكسل: لسه فيه مسار بيضيّع اللصق');
+str_contains($crudView, "\$pasteState['old']['rows']")
+    ? ok('نافذة اللصق بتترجّع متعبّية')
+    : bad('نافذة اللصق مش بتترجّع متعبّية');
+str_contains($crudView, 'data-reopen')
+    ? ok('نافذة اللصق بتتفتح لوحدها عشان المستخدم يشوف الخطأ')
+    : bad('نافذة اللصق مش بتتفتح بعد الفشل — الخطأ هيتخبّى');
+
+// مطابقة التقفيل — المالك بيملّي عشرات الصفوف بإيده
+$clSrc = php_code((string) file_get_contents($root . '/app/Controllers/DailyClosingController.php'));
+$clView = (string) file_get_contents($root . '/app/Views/closing/index.php');
+str_contains($clSrc, "formFailure(\n                'closing.reconcile.")
+    || str_contains($clSrc, "'closing.reconcile.'")
+    ? ok('مطابقة التقفيل: الرفض بيحفظ كل المبالغ المكتوبة')
+    : bad('مطابقة التقفيل: المبالغ لسه بتضيع');
+$allFour = str_contains($clView, "\$reconOld['manual_total']")
+    && str_contains($clView, "\$reconOld['row_note']")
+    && str_contains($clView, "\$reconOld['manual_general_expenses']")
+    && str_contains($clView, "\$reconOld['reconciliation_note']");
+$allFour ? ok('شاشة المطابقة بترجّع الأربع مجموعات (مبالغ/ملاحظات/عام/ملاحظة)')
+         : bad('شاشة المطابقة مش بترجّع كل المُدخَل');
+str_contains($clView, '$reconErr')
+    ? ok('سبب رفض المطابقة بيتعرض للمستخدم')
+    : bad('سبب رفض المطابقة مش بيتعرض');
+
+/* ⚠️ مصيدة تصادم أسماء مفاتيح render (زي مصيدة `data` الموثَّقة): الشاشة
+   بتستخدم `$reconState` لكلاس الحالة، فمفتاح الرندر اتسمّى `reconRestore`. */
+!preg_match("/'reconState'\s*=>/", $clSrc)
+    ? ok('مفتاح الرندر مش بيتصادم مع $reconState اللي في الشاشة')
+    : bad('مفتاح render اسمه reconState — هيتصادم مع متغيّر الشاشة');
+
 /* ══════════════ الخلاصة ══════════════ */
 echo "\n" . str_repeat('=', 62) . "\n";
 echo "نجح: $pass   |   فشل: $fail   |   تخطّي: $skip\n";

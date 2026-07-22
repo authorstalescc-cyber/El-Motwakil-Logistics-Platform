@@ -623,20 +623,28 @@ class Permit
         return ['present' => $g['present'], 'missing' => $g['missing']];
     }
 
-    /** تحديث قائمة «مش محتاجه» لإذن — إضافة/إزالة label (استرشادي، لا يمسّ أي حساب). */
-    public static function toggleDismissedReceipt(int $permitId, string $label): void
+    /**
+     * تحديث قائمة «مش محتاجه» لإذن — إضافة/إزالة label (استرشادي، لا يمسّ أي حساب).
+     *
+     * بترجّع **true لو البند بقى متجاهَل** و false لو رجع للمطلوب. الإرجاع
+     * اتضاف في المرحلة ٢ عشان الرسالة تقول اللي حصل فعلاً بدل ما تخمّن —
+     * الإجراء كان بيخلص بالسكوت تمامًا.
+     */
+    public static function toggleDismissedReceipt(int $permitId, string $label): bool
     {
         $label = trim($label);
-        if ($label === '') { return; }
+        if ($label === '') { return false; }
         $p = self::find($permitId);
-        if (!$p) { return; }
+        if (!$p) { return false; }
         $list = self::dismissedReceipts($p);
         $idx = array_search($label, $list, true);
-        if ($idx === false) { $list[] = $label; } else { unset($list[$idx]); }
+        if ($idx === false) { $list[] = $label; $nowDismissed = true; }
+        else { unset($list[$idx]); $nowDismissed = false; }
         Database::exec(
             'UPDATE permits SET chk_dismissed = ? WHERE id = ?',
             [$list ? implode('|', array_values($list)) : null, $permitId]
         );
+        return $nowDismissed;
     }
 
     /** حفظ إجابات الـchecklist لإذن (استرشادي، لا يمسّ أي حساب). */

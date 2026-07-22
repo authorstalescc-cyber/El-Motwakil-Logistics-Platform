@@ -39,8 +39,15 @@ class Router
                 return;
             }
         }
+        // المستخدم المسجَّل بياخد صفحة 404 **جوّه الـlayout** (قائمة + بحث +
+        // رجوع للي كان فيه) بدل ما يتقذف برّه النظام. الزائر بياخد نسخة مستقلة.
         http_response_code(404);
-        (new Controller())->render('errors/404', ['title' => 'غير موجود'], false);
+        $signedIn = Auth::check();
+        (new Controller())->render(
+            $signedIn ? 'errors/404' : 'errors/404_guest',
+            ['title' => 'غير موجود'],
+            $signedIn
+        );
     }
 
     private function call($handler, array $params, string $httpMethod): void

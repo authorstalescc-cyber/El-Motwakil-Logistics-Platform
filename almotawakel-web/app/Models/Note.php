@@ -49,7 +49,14 @@ class Note
     }
 
     /** يقلب حالة الإكمال (مكتمل ⇄ غير مكتمل) ويضبط وقت الإكمال */
-    public static function toggleDone(int $id): void
+    /**
+     * يقلب حالة «مكتملة» ويُرجِع الحالة الجديدة.
+     *
+     * الإرجاع اتضاف في المرحلة ٢: الإجراء كان **صامت تمامًا** (بيقلب الحالة
+     * وبيعمل redirect بلا أي رسالة)، وعشان الرسالة تقول الصح لازم نعرف
+     * الحالة الجديدة فعلاً مش نخمّنها.
+     */
+    public static function toggleDone(int $id): bool
     {
         // MySQL يقيّم الأعمدة يسارًا فيمينًا بالقيم المُحدَّثة، فيصبح `done` هنا = القيمة الجديدة.
         Database::exec(
@@ -59,6 +66,7 @@ class Note
              WHERE id = ?",
             [$id]
         );
+        return (int) Database::scalar("SELECT done FROM dashboard_notes WHERE id = ?", [$id]) === 1;
     }
 
     public static function delete(int $id): void

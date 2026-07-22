@@ -52,7 +52,7 @@ class MovementController extends Controller
     {
         $this->requireAuth();
         $mv = Movement::find((int)$id);
-        if (!$mv) { redirect('movements'); }
+        if (!$mv) { $this->notFound('الحركة دي مش موجودة أو اتمسحت.'); }
         $this->form($mv);
     }
 

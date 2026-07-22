@@ -66,9 +66,7 @@ class ReportsController extends Controller
     {
         $this->requireAuth();
         $name = trim((string)($_GET['name'] ?? ''));
-        if ($name === '') {
-            redirect('reports');
-        }
+        if ($name === '') { $this->fail('اختار اسم العميل الأول.', 'reports'); }
 
         $profile = Metrics::customerProfile($name);
         if ($profile === null) {

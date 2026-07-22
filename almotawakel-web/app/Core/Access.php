@@ -76,7 +76,7 @@ class Access
         if (!Auth::check()) { return; }
         if (self::allows(Auth::role(), $handler, strtoupper($httpMethod))) { return; }
 
-        self::deny();
+        self::deny($handler, strtoupper($httpMethod));
     }
 
     public static function allows(string $role, string $handler, string $httpMethod): bool
@@ -138,17 +138,36 @@ class Access
         return false;
     }
 
-    private static function deny(): void
+    /**
+     * الرفض بيعرض **صفحة 403 حقيقية** (المرحلة ٢).
+     *
+     * قبل كده كان `flash('error') + redirect('')` — يعني المستخدم بيتقذف على
+     * الداشبورد ويفقد اللي كان بيعمله من غير ما يعرف أنهي إجراء اترفض ولا
+     * مين يقدر يعمله. الصفحة الجديدة بتقول التلاتة وبتديله «ارجع للي كنت فيه».
+     *
+     * رد الـAJAX بياخد المفتاحين `error` و`flash` مع بعض: الواجهة
+     * (`ajaxSubmit` في app.js) بتقرا `data.flash`، وكان بيوصلها المفتاح
+     * `error` بس فتعرض رسالة عامة بدل السبب الحقيقي.
+     */
+    private static function deny(string $handler = '', string $method = 'POST'): void
     {
+        $msg = 'ليست لديك صلاحية لتنفيذ هذا الإجراء.';
         http_response_code(403);
         $json = strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest'
             || str_contains(strtolower($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
         if ($json) {
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['ok' => false, 'error' => 'ليست لديك صلاحية لتنفيذ هذا الإجراء.'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(
+                ['ok' => false, 'error' => $msg, 'flash' => $msg, 'errors' => ['_form' => $msg]],
+                JSON_UNESCAPED_UNICODE
+            );
             exit;
         }
-        flash('error', 'ليست لديك صلاحية لتنفيذ هذا الإجراء.');
-        redirect('');
+        (new Controller())->render('errors/403', [
+            'title'         => 'غير مسموح',
+            'deniedHandler' => $handler,
+            'deniedMethod'  => $method,
+        ]);
+        exit;
     }
 }

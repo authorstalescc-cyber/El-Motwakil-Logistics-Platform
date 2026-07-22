@@ -90,6 +90,8 @@ abstract class CrudController extends Controller
             'years'   => array_column($years, 'y'),
             'lookups' => Lookup::allGrouped(),
             'ownerOptions' => !empty($ent['has_legacy']) ? Bill::ownerOptions() : [],
+            // إعادة تعبئة نافذة لصق الإكسل بعد الفشل — كان اللصق كله بيضيع
+            'pasteState' => FormState::consume('bawalis.paste', $ent['route']),
         ]);
     }
 
@@ -174,7 +176,7 @@ abstract class CrudController extends Controller
         $this->requireAuth();
         $ent = $this->entity();
         $row = Database::row("SELECT * FROM `{$ent['table']}` WHERE id = ?", [(int)$id]);
-        if (!$row) { redirect($ent['route']); }
+        if (!$row) { $this->notFound('السجل ده مش موجود أو اتمسح.'); }
         $formId = 'crud.' . $ent['route'] . '.edit.' . (int) $id;
         $state = FormState::consume($formId, $ent['route']);
         if ($state['old']) { $row = array_replace($row, $state['old']); }

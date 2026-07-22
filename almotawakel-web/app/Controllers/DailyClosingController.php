@@ -244,6 +244,11 @@ class DailyClosingController extends Controller
             'closedAt'      => $day['closed_at'],
             // ── مطابقة اليدوي حسب الإذن (v28)
             'reconciliation'=> $reconciliation,
+            // إعادة تعبئة المطابقة بعد الرفض — المبالغ المكتوبة كانت بتضيع كلها
+            'reconRestore'  => \App\Core\FormState::consume(
+                'closing.reconcile.' . $date,
+                'closing?date=' . urlencode($date) . '#reconciliation'
+            ),
         ];
     }
 
@@ -254,12 +259,13 @@ class DailyClosingController extends Controller
         $this->requireCsrf();
         $date = trim((string) ($_POST['date'] ?? ''));
         if (!$this->validDate($date)) {
-            flash('error', 'تاريخ المطابقة غير صحيح.');
-            redirect('closing');
+            $this->fail('تاريخ المطابقة غير صحيح.', 'closing');
         }
         if (Closing::isLocked($date)) {
-            flash('error', 'اليوم متقفل. افتح الإقفال أولًا قبل تعديل المطابقة.');
-            redirect('closing?date=' . urlencode($date) . '#reconciliation');
+            $this->fail(
+                'اليوم متقفل. افتح الإقفال أولًا قبل تعديل المطابقة.',
+                'closing?date=' . urlencode($date) . '#reconciliation'
+            );
         }
 
         try {
@@ -279,15 +285,28 @@ class DailyClosingController extends Controller
                 $date, $items, $general, trim((string) ($_POST['reconciliation_note'] ?? '')), Auth::user()
             );
             $check = DailyReconciliation::view($date);
+            $backTo = 'closing?date=' . urlencode($date) . '#reconciliation';
             if ($check['matched']) {
-                flash('success', 'تم حفظ المطابقة: كل إيصالات ومصروفات اليوم مطابقة للسيستم.');
-            } else {
-                flash('error', 'تم الحفظ، وما زالت هناك فروق. الصفوف غير المطابقة مميزة بالأحمر.');
+                $this->done('تم حفظ المطابقة: كل إيصالات ومصروفات اليوم مطابقة للسيستم.', $backTo);
             }
+            $this->done('تم الحفظ، وما زالت فيه فروق. الصفوف غير المطابقة مميزة بالأحمر.', $backTo, '', 'warning');
         } catch (\Throwable $e) {
-            flash('error', $e->getMessage());
+            // ⚠️ كان بيضيّع **كل** المبالغ المكتوبة في الشاشة: المالك بيملّي
+            // عشرات الصفوف بإيده، وأول رقم غلط كان بيرجّع الشاشة فاضية.
+            // دلوقتي بترجع متعبّية ومعاها سبب الرفض.
+            $this->formFailure(
+                'closing.reconcile.' . $date,
+                'closing?date=' . urlencode($date) . '#reconciliation',
+                [
+                    'manual_total'            => is_array($_POST['manual_total'] ?? null) ? $_POST['manual_total'] : [],
+                    'row_note'                => is_array($_POST['row_note'] ?? null) ? $_POST['row_note'] : [],
+                    'manual_general_expenses' => (string) ($_POST['manual_general_expenses'] ?? ''),
+                    'reconciliation_note'     => (string) ($_POST['reconciliation_note'] ?? ''),
+                ],
+                ['_form' => $e->getMessage()],
+                'closing?date=' . urlencode($date) . '#reconciliation'
+            );
         }
-        redirect('closing?date=' . urlencode($date) . '#reconciliation');
     }
 
     /** إقفال يوم (زر «اقفل اليوم»). */

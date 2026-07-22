@@ -2736,3 +2736,32 @@ button.d-hchip{cursor:pointer;font-family:inherit}
   .nc-panel{position:fixed;inset-inline:var(--space-3);inset-block-start:66px;width:auto}
 }
 @media(prefers-reduced-motion:reduce){.nc-badge.pulse{animation:none}}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   صفحات الأخطاء (404 / 403) — المرحلة ٢
+   بتترندر جوّه الـlayout للمستخدم المسجَّل، فما يتقذفش برّه النظام.
+   ══════════════════════════════════════════════════════════════════════════ */
+.err-page{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:var(--space-3);padding:var(--space-8) var(--space-4);
+  min-height:min(58vh,460px)
+}
+.err-code{font-size:var(--fs-8);font-weight:var(--fw-black);color:var(--gold);line-height:1}
+.err-code.lock{color:var(--red);display:flex}
+.err-title{font-size:var(--fs-6);font-weight:var(--fw-black);color:var(--navy);margin:0}
+.err-sub{font-size:var(--fs-3);color:var(--grey);font-weight:var(--fw-bold);margin:0;max-width:52ch}
+.err-path{
+  display:inline-block;margin-top:var(--space-2);padding:var(--space-1) var(--space-3);
+  border-radius:var(--radius-1);background:var(--bg);border:1px solid var(--line);
+  font-size:var(--fs-1);color:var(--ink);direction:ltr;unicode-bidi:embed;
+  max-width:100%;overflow-wrap:anywhere
+}
+.err-hint{
+  display:flex;align-items:center;gap:var(--space-2);max-width:56ch;
+  padding:var(--space-3) var(--space-4);border-radius:var(--radius-2);
+  background:var(--gold-light);border:1px solid #e6d9a8;color:#6b5200;
+  font-size:var(--fs-2);font-weight:var(--fw-bold);text-align:start
+}
+.err-actions{display:flex;flex-wrap:wrap;gap:var(--space-3);justify-content:center;margin-top:var(--space-2)}
+.err-guest{text-align:center;color:var(--white)}
+.err-guest p{font-size:var(--fs-5);margin:var(--space-2) 0 var(--space-5)}

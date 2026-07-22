@@ -43,6 +43,8 @@ class AuthController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         Auth::logout();
-        redirect('login');
+        // ⚠️ مش flash: `Auth::logout()` بينادي `session_destroy()` وبيمسح الكوكي،
+        // فأي كتابة في $_SESSION بعدها بتضيع بالسكوت. الوسم في الرابط أضمن.
+        redirect('login?bye=1');
     }
 }

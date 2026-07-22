@@ -145,11 +145,9 @@ class DashboardController extends Controller
         $this->requireCsrf();
         $body  = trim($_POST['body'] ?? '');
         $color = trim($_POST['color'] ?? 'gold');
-        if ($body !== '') {
-            Note::create($body, $color, Auth::user());
-            flash('success', 'تمت إضافة الملاحظة.');
-        }
-        redirect('');
+        if ($body === '') { $this->fail('اكتب نص الملاحظة الأول.', ''); }
+        Note::create($body, $color, Auth::user());
+        $this->done('تمت إضافة الملاحظة.', '');
     }
 
     /** تعديل نص/لون ملاحظة */
@@ -159,11 +157,9 @@ class DashboardController extends Controller
         $this->requireCsrf();
         $body  = trim($_POST['body'] ?? '');
         $color = trim($_POST['color'] ?? 'gold');
-        if ($body !== '') {
-            Note::update((int) $id, $body, $color);
-            flash('success', 'تم تعديل الملاحظة.');
-        }
-        redirect('');
+        if ($body === '') { $this->fail('نص الملاحظة ما ينفعش يبقى فاضي.', ''); }
+        Note::update((int) $id, $body, $color);
+        $this->done('تم تعديل الملاحظة.', '');
     }
 
     /** تعليم/إلغاء تعليم ملاحظة كمكتملة */
@@ -171,8 +167,8 @@ class DashboardController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
-        Note::toggleDone((int) $id);
-        redirect('');
+        $done = Note::toggleDone((int) $id);
+        $this->done($done ? 'تم تعليم الملاحظة كمكتملة.' : 'رجّعت الملاحظة لغير مكتملة.', '');
     }
 
     /** حذف ملاحظة */

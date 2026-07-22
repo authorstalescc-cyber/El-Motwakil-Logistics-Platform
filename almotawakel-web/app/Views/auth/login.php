@@ -15,6 +15,17 @@
       <h1><?= e(App::setting('company_name','شركة المتوكل')) ?></h1>
     </div>
     <div class="login-body">
+      <?php if (isset($_GET['bye'])): ?>
+        <div class="flash success" role="status"><?= icon('check',17) ?> تم تسجيل الخروج بأمان.</div>
+      <?php endif; ?>
+      <?php
+      /* صفحة الدخول مستقلة عن الـlayout، فلازم تفضّي الطابور بنفسها — وإلا
+         رسالة زي «تم تسجيل الخروج» تفضل في الجلسة وتطلع كتوست بعد أول دخول
+         وكأنها حصلت دلوقتي (المرحلة ٢). */
+      foreach (flash_all() as $__f):
+        $__cls = $__f['type'] === 'error' ? 'error' : 'success'; ?>
+        <div class="flash <?= $__cls ?>" role="status"><?= icon($__cls === 'error' ? 'alert' : 'check', 17) ?> <?= e($__f['msg']) ?></div>
+      <?php endforeach; ?>
       <?= formErrorSummary($formState['errors']) ?>
       <form action="<?= url('login') ?>" method="post" id="loginForm">
         <?= csrfField() ?>
