@@ -1,262 +1,756 @@
 <?php
-$recon = $reconciliation;
-/* المبالغ المكتوبة اللي اترفضت — بترجع متعبّية بدل ما المالك يعيد كتابة
-   عشرات الصفوف من أول وجديد (المرحلة ٢). */
-/* ⚠️ الاسم `reconRestore` مقصود: الشاشة دي بتستخدم $reconState لحاجة تانية
-   خالص (كلاس حالة المطابقة، سطر 23). تسمية مفتاح render بنفس اسم متغيّر
-   جوّه الشاشة بتكسر واحد فيهم بالسكوت — نفس مصيدة $data الموثَّقة. */
-$reconOld = $reconRestore['old'] ?? [];
-$reconErr = $reconRestore['errors']['_form'] ?? '';
-$reconEditable = !$isLocked && !empty($recon['available']);
-$reconRows = $recon['rows'] ?? [];
-$reconTotals = $recon['totals'] ?? [];
-$general = $recon['general'] ?? ['system'=>0,'manual'=>0,'difference'=>0,'visa_excluded'=>0,'details'=>[]];
-$dateObject = \DateTimeImmutable::createFromFormat('!Y-m-d', $date) ?: new \DateTimeImmutable(work_date());
+/**
+ * التقفيل اليومي — شاشة مراجعة (v50).
+ *
+ * الفكرة كلها: كل بند في اليوم له **علامة ✓ واحدة**. المالك بيبص على البند
+ * ويعلّمه، والإقفال بيتفتح لما كل بند نقدي يتعلّم. مفيش أرقام تتكتب تاني —
+ * مطابقة v28 اليدوية (اكتب إجمالي كل عميل وطارد الفرق) اتشالت بالكامل.
+ *
+ * ⚠️ مصيدة تصادم مفاتيح render (نفس مصيدة `$data` الموثَّقة): ممنوع تسمّي أي
+ *    مفتاح render باسم متغيّر بيتحسب هنا. المفاتيح المستعملة: review + مفاتيح
+ *    الأرقام من `base()` فقط.
+ */
+$rv        = $review;
+$groups    = $rv['groups'];
+$t         = $rv['totals'];
+$ready     = !empty($rv['available']);
+$canReview = $ready && !$isLocked;
+$complete  = !empty($rv['complete']);
+
+$dateObject   = \DateTimeImmutable::createFromFormat('!Y-m-d', $date) ?: new \DateTimeImmutable(work_date());
 $previousDate = $dateObject->modify('-1 day')->format('Y-m-d');
-$nextDate = $dateObject->modify('+1 day')->format('Y-m-d');
-$today = work_date();
-$expenseCount = count($expenses);
-$custodyCount = count($custodyRows);
-$visaCount = count($visaRows);
-$clientCount = count(array_filter($reconRows, fn($row) => empty($row['manual_only'])));
-$differentClients = count(array_filter($reconRows, fn($row) => !empty($row['item_saved']) && empty($row['matched'])));
-$systemCash = (float)($reconTotals['system_cash'] ?? 0);
-$manualCash = (float)($reconTotals['manual_cash'] ?? 0);
-$grandDifference = (float)($reconTotals['difference'] ?? 0);
-$reconState = !$recon['available'] ? 'unavailable' : ($recon['matched'] ? 'matched' : ($recon['saved'] ? 'different' : 'new'));
+$nextDate     = $dateObject->modify('+1 day')->format('Y-m-d');
+$today        = work_date();
+
+$percent = (int) ($t['percent'] ?? 0);
 ?>
 
-<div class="closing-page">
-  <header class="cl-hero">
-    <div class="cl-hero-main">
-      <div class="cl-eyebrow">التقفيل اليومي</div>
-      <h1>تقفيل يوم <?= e(dfmt($date)) ?></h1>
-      <p>راجع الحركة، طابق اليدوي مع السيستم، ثم ثبّت رصيد اليوم.</p>
+<div class="cl-page" id="clPage" data-date="<?= e($date) ?>">
+
+  <!-- ═══════════ الترويسة: اليوم + حالته + التنقل ═══════════ -->
+  <header class="cl-top">
+    <div class="cl-top-id">
+      <span class="cl-kicker">التقفيل اليومي</span>
+      <h1>يوم <?= e(dfmt($date)) ?></h1>
+      <span class="cl-chip <?= $isClosed ? 'closed' : 'open' ?>">
+        <?= $isClosed ? '🔒 متقفل' : '● مفتوح' ?>
+      </span>
     </div>
-    <div class="cl-hero-balance <?= $carried < 0 ? 'negative' : '' ?>">
-      <span><?= $isClosed ? 'الرصيد المرحّل المثبّت' : 'الرصيد المرحّل الحالي' ?></span>
-      <b><?= money($carried) ?></b>
-      <small><?= $isClosed ? 'لن يتغيّر إلا بعد فتح الإقفال' : 'يتغيّر مع أي إدخال جديد' ?></small>
-    </div>
-    <div class="cl-hero-actions">
-      <span class="cl-state <?= $isClosed ? 'closed' : 'open' ?>"><?= $isClosed ? '● يوم متقفل' : '● يوم مفتوح' ?></span>
-      <a class="btn gold" href="<?= url('closing/print?date='.urlencode($date)) ?>" target="_blank">🖨️ طباعة</a>
+
+    <nav class="cl-dates" aria-label="اختيار يوم التقفيل">
+      <a class="cl-arrow" href="<?= url('closing?date='.urlencode($previousDate)) ?>" title="اليوم السابق" aria-label="اليوم السابق">‹</a>
+      <form method="get" action="<?= url('closing') ?>">
+        <input id="closingDate" type="date" name="date" value="<?= e($date) ?>" aria-label="تاريخ التقفيل">
+        <button class="btn sm" type="submit">عرض</button>
+      </form>
+      <a class="cl-arrow" href="<?= url('closing?date='.urlencode($nextDate)) ?>" title="اليوم التالي" aria-label="اليوم التالي">›</a>
+      <a class="cl-todaybtn <?= $date === $today ? 'active' : '' ?>" href="<?= url('closing?date='.urlencode($today)) ?>">اليوم</a>
+    </nav>
+
+    <div class="cl-top-actions">
+      <a class="btn ghost sm" href="<?= url('closing/print?date='.urlencode($date)) ?>" target="_blank">🖨️ طباعة</a>
     </div>
   </header>
 
-  <nav class="cl-datebar" aria-label="اختيار تاريخ التقفيل">
-    <a class="cl-day-arrow" href="<?= url('closing?date='.urlencode($previousDate)) ?>" title="اليوم السابق">‹</a>
-    <form method="get" action="<?= url('closing') ?>">
-      <label for="closingDate">التاريخ</label>
-      <input id="closingDate" type="date" name="date" value="<?= e($date) ?>">
-      <button class="btn" type="submit">عرض</button>
-    </form>
-    <a class="cl-today <?= $date === $today ? 'active' : '' ?>" href="<?= url('closing?date='.urlencode($today)) ?>">اليوم</a>
-    <a class="cl-day-arrow" href="<?= url('closing?date='.urlencode($nextDate)) ?>" title="اليوم التالي">›</a>
-  </nav>
-
-  <section class="cl-progress" aria-label="خطوات التقفيل">
-    <a class="cl-step done" href="#day-review"><i>1</i><span><b>راجع حركة اليوم</b><small><?= intf($expenseCount) ?> مصروف · <?= intf($custodyCount) ?> عهدة سائق</small></span></a>
-    <span class="cl-progress-line <?= $recon['matched'] ? 'done' : '' ?>"></span>
-    <a class="cl-step <?= $recon['matched'] ? 'done' : ($recon['saved'] ? 'warning' : 'current') ?>" href="#reconciliation"><i>2</i><span><b>طابق مع اليدوي</b><small><?= $recon['matched'] ? 'المطابقة كاملة' : ($recon['saved'] ? intf($differentClients).' عميل به فرق' : 'لم تُحفظ المطابقة') ?></small></span></a>
-    <span class="cl-progress-line <?= $isClosed ? 'done' : '' ?>"></span>
-    <a class="cl-step <?= $isClosed ? 'done' : ($recon['matched'] ? 'current' : 'locked') ?>" href="#final-close"><i>3</i><span><b>اقفل اليوم</b><small><?= $isClosed ? 'الرصيد تم تثبيته' : ($recon['matched'] ? 'جاهز للإقفال' : 'يتفعّل بعد المطابقة') ?></small></span></a>
-  </section>
-
-  <section class="cl-balance-card" aria-labelledby="balanceTitle">
-    <div class="cl-section-title compact">
-      <div><span>ملخص الحساب</span><h2 id="balanceTitle">معادلة رصيد اليوم</h2></div>
-      <?php if ($isClosed): ?><span class="cl-lock-note">🔒 الأرقام مثبّتة</span><?php else: ?><span class="cl-live-note"><i></i> أرقام مباشرة</span><?php endif; ?>
-    </div>
-    <div class="cl-equation">
-      <div class="cl-equation-item opening"><span>رصيد أول اليوم</span><b><?= money($prevBalance) ?></b></div>
-      <i class="plus">+</i>
-      <div class="cl-equation-item topup"><span>عهدة مضافة</span><b><?= money($totTopups) ?></b></div>
-      <i>=</i>
-      <div class="cl-equation-item available"><span>المتاح</span><b><?= money($available) ?></b></div>
-      <i class="minus">−</i>
-      <div class="cl-equation-item expense"><span>مصروفات نقدية</span><b><?= money($totExpense) ?></b></div>
-      <i class="minus">−</i>
-      <div class="cl-equation-item driver"><span>عهد السائقين</span><b><?= money($totCustodyExp) ?></b><small>بعد خصم <?= intf($rate) ?> لكل بوليصة</small></div>
-      <i>=</i>
-      <div class="cl-equation-item closing <?= $carried < 0 ? 'negative' : '' ?>"><span>المرحّل للغد</span><b><?= money($carried) ?></b></div>
+  <!-- ═══════════ معادلة رصيد اليوم ═══════════ -->
+  <section class="cl-flow" aria-label="معادلة رصيد اليوم">
+    <div class="cl-cell"><span>رصيد أول اليوم</span><b><?= money($prevBalance,false) ?></b></div>
+    <i class="op plus">+</i>
+    <div class="cl-cell in"><span>عهدة مضافة</span><b><?= money($totTopups,false) ?></b></div>
+    <i class="op minus">−</i>
+    <div class="cl-cell out"><span>مصروفات نقدية</span><b><?= money($totExpense,false) ?></b></div>
+    <i class="op minus">−</i>
+    <div class="cl-cell out"><span>عهد السائقين</span><b><?= money($totCustodyExp,false) ?></b><small>بعد خصم <?= intf($rate) ?> لكل بوليصة</small></div>
+    <i class="op eq">=</i>
+    <div class="cl-cell result <?= $carried < 0 ? 'negative' : '' ?>">
+      <span><?= $isClosed ? 'المرحّل المثبّت' : 'المرحّل للغد' ?></span>
+      <b><?= money($carried,false) ?></b>
+      <small><?= $isClosed ? 'مجمّد — لا يتغيّر' : 'يتغيّر مع أي إدخال' ?></small>
     </div>
   </section>
 
-  <section class="cl-section" id="day-review">
-    <div class="cl-section-title">
-      <span class="cl-section-no">1</span>
-      <div><span>الخطوة الأولى</span><h2>راجع حركة اليوم</h2><p>الإجماليات ظاهرة أمامك؛ افتح التفاصيل فقط عند المراجعة.</p></div>
-    </div>
+  <!-- ═══════════ المراجعة: علامة جنب كل بند ═══════════ -->
+  <section class="cl-review" id="review">
 
-    <div class="cl-review-cards">
-      <details class="cl-review-card" <?= $expenseCount && !$recon['saved'] ? 'open' : '' ?>>
-        <summary>
-          <span class="cl-review-icon cash">💸</span>
-          <span class="cl-review-name"><b>المصروفات النقدية</b><small><?= intf($expenseCount) ?> بند بتاريخ اليوم</small></span>
-          <strong class="negative"><?= money($totExpense,false) ?></strong><span class="cl-expand">›</span>
-        </summary>
-        <div class="cl-review-body">
-          <div class="table-wrap"><table class="data cl-detail-table" data-table-tools-off>
-            <thead><tr><th>الإذن / المصدر</th><th>الشركة</th><th>البند</th><th>البيان</th><th>المرجع</th><th>المبلغ</th><th></th></tr></thead>
-            <tbody><?php if (!$expenses): ?><tr><td colspan="7"><div class="empty">لا مصروفات نقدية في هذا اليوم.</div></td></tr><?php else: foreach ($expenses as $ex): ?><tr>
-              <td><b><?= e($ex['permit_no'] ?: '#'.$ex['permit_id']) ?></b></td><td><?= e($ex['company'] ?: '—') ?></td><td><?= e($ex['stage_label']) ?></td><td><?= e($ex['note'] ?: '—') ?></td><td><?= e($ex['ref_no'] ?: '—') ?></td><td class="neg"><b><?= money($ex['amount'],false) ?></b></td>
-              <td><?php if (!empty($ex['is_manual'])): ?><a class="edit" href="<?= url('expenses/'.$ex['manual_id'].'/edit') ?>" title="تعديل">✏️</a><?php elseif (!empty($ex['is_rep'])): ?><a class="edit" href="<?= url('reps/'.$ex['rep_id']) ?>" title="فتح حساب المندوب">🔎</a><?php else: ?><a class="edit" href="<?= url('permits/'.$ex['permit_id'].'#stage-'.$ex['stage_key']) ?>" title="فتح الإذن">🔎</a><?php endif; ?></td>
-            </tr><?php endforeach; endif; ?></tbody>
-            <?php if ($expenses): ?><tfoot><tr><td colspan="5">الإجمالي النقدي</td><td class="neg"><?= money($totExpense,false) ?></td><td></td></tr></tfoot><?php endif; ?>
-          </table></div>
-        </div>
-      </details>
-
-      <details class="cl-review-card">
-        <summary>
-          <span class="cl-review-icon driver">🚛</span>
-          <span class="cl-review-name"><b>عهد السائقين</b><small><?= intf($custodyCount) ?> بوليصة · المخصوم بعد <?= intf($rate) ?></small></span>
-          <strong class="negative"><?= money($totCustodyExp,false) ?></strong><span class="cl-expand">›</span>
-        </summary>
-        <div class="cl-review-body"><div class="table-wrap"><table class="data cl-detail-table" data-table-tools-off>
-          <thead><tr><th>البوليصة</th><th>السائق</th><th>العهدة</th><th>المخصوم فعليًا</th></tr></thead>
-          <tbody><?php if (!$custodyRows): ?><tr><td colspan="4"><div class="empty">لا عهد سائقين بتاريخ اليوم.</div></td></tr><?php else: foreach ($custodyRows as $c): ?><tr><td><b><?= e($c['bill_number'] ?: ('إذن '.$c['permit_no'])) ?></b></td><td><?= e($c['driver'] ?: '—') ?></td><td><?= money($c['custody'],false) ?></td><td class="neg"><b><?= money($c['deduction'],false) ?></b></td></tr><?php endforeach; endif; ?></tbody>
-          <?php if ($custodyRows): ?><tfoot><tr><td colspan="2">الإجمالي</td><td><?= money($totCustody,false) ?></td><td class="neg"><?= money($totCustodyExp,false) ?></td></tr></tfoot><?php endif; ?>
-        </table></div></div>
-      </details>
-
-      <details class="cl-review-card visa">
-        <summary>
-          <span class="cl-review-icon visa">💳</span>
-          <span class="cl-review-name"><b>مدفوعات الفيزا المستبعدة</b><small><?= intf($visaCount) ?> بند للمراجعة ولا يُخصم من النقدية</small></span>
-          <strong><?= money($totVisa,false) ?></strong><span class="cl-expand">›</span>
-        </summary>
-        <div class="cl-review-body"><div class="cl-info-line">هذه البنود مسجلة في السيستم، لكنها لا تدخل صندوق التقفيل النقدي.</div><div class="table-wrap"><table class="data cl-detail-table" data-table-tools-off>
-          <thead><tr><th>الإذن / المصدر</th><th>الشركة</th><th>البند</th><th>البيان</th><th>المبلغ</th></tr></thead>
-          <tbody><?php if (!$visaRows): ?><tr><td colspan="5"><div class="empty">لا توجد مدفوعات فيزا في هذا اليوم.</div></td></tr><?php else: foreach ($visaRows as $v): ?><tr><td><b><?= e($v['permit_no'] ?: '—') ?></b></td><td><?= e($v['company'] ?: '—') ?></td><td><?= e($v['stage_label']) ?></td><td><?= e($v['note'] ?: '—') ?></td><td><b><?= money($v['amount'],false) ?></b></td></tr><?php endforeach; endif; ?></tbody>
-          <?php if ($visaRows): ?><tfoot><tr><td colspan="4">إجمالي الفيزا المستبعدة</td><td><?= money($totVisa,false) ?></td></tr></tfoot><?php endif; ?>
-        </table></div></div>
-      </details>
-    </div>
-  </section>
-
-  <section class="cl-section cl-reconciliation" id="reconciliation">
-    <?php if ($reconErr !== ''): ?>
-      <div class="flash error" role="alert"><?= icon('alert',18) ?> ما اتحفظتش المطابقة: <?= e($reconErr) ?> — الأرقام اللي كتبتها زي ما هي تحت.</div>
+    <?php if (!$ready): ?>
+      <div class="alert error">
+        شغّل <b>php bin/migrate_v50.php</b> مرة واحدة لتفعيل مراجعة البنود، ثم افتح الصفحة تاني.
+      </div>
     <?php endif; ?>
-    <div class="cl-section-title">
-      <span class="cl-section-no">2</span>
-      <div><span>الخطوة الثانية</span><h2>طابق اليدوي مع السيستم</h2><p>كل عميل في بطاقة واحدة، مهما كان عدد أذوناته.</p></div>
-      <span class="cl-recon-status <?= e($reconState) ?>"><?php if (!$recon['available']): ?>غير مفعّلة<?php elseif ($recon['matched']): ?>✓ مطابقة كاملة<?php elseif ($recon['saved']): ?>⚠ توجد فروق<?php else: ?>لم تُراجع بعد<?php endif; ?></span>
-    </div>
 
-    <?php if (!$recon['available']): ?>
-      <div class="alert error">شغّل <b>php bin/migrate_v28.php</b> مرة واحدة لتفعيل المطابقة.</div>
-    <?php else: ?>
-    <form method="post" action="<?= url('closing/reconcile') ?>" id="reconForm">
-      <?= csrfField() ?><input type="hidden" name="date" value="<?= e($date) ?>">
-
-      <div class="cl-recon-summary">
-        <div><span>عملاء اليوم</span><b><?= intf($clientCount) ?></b></div>
-        <div><span>إجمالي السيستم النقدي</span><b><?= money($systemCash,false) ?></b></div>
-        <div><span>إجمالي اليدوي</span><b id="manualCashTotal"><?= $recon['saved'] ? money($manualCash,false) : '—' ?></b></div>
-        <div class="<?= $recon['saved'] && abs($grandDifference) >= .005 ? 'has-diff' : '' ?>"><span>الفرق النهائي</span><b id="reconGrandDiff"><?= $recon['saved'] ? money($grandDifference,false) : '—' ?></b></div>
+    <div class="rv-head">
+      <div class="rv-head-txt">
+        <h2>راجع بنود اليوم</h2>
+        <p>بُص على كل بند وعلّمه ✓. الإقفال بيتفتح لما كل البنود النقدية تتعلّم.</p>
       </div>
 
-      <div class="cl-recon-rule"><b>ماذا تكتب؟</b><span>اكتب إجمالي ما عندك يدويًا للعميل. الفرق يظهر فورًا، ويمكنك فتح أذوناته لمعرفة مكانه.</span></div>
+      <div class="rv-gauge <?= $complete ? 'done' : '' ?>" id="rvGauge">
+        <div class="rv-gauge-num"><b id="rvPercent"><?= intf($percent) ?></b><i>%</i></div>
+        <div class="rv-gauge-txt">
+          <b><span id="rvReviewed"><?= intf((int)$t['blocking_reviewed']) ?></span> من <?= intf((int)$t['blocking']) ?> بند</b>
+          <small id="rvPendingTxt"><?= $complete ? 'كل البنود اتراجعت ✓' : 'فاضل '.intf((int)$t['blocking_pending']).' بند' ?></small>
+        </div>
+        <div class="rv-gauge-bar"><i id="rvBar" style="width:<?= $percent ?>%"></i></div>
+      </div>
+    </div>
 
-      <div class="cl-client-list">
-        <?php if (!$reconRows): ?>
-          <div class="cl-empty-state"><span>✓</span><b>لا توجد إيصالات أو مصروفات أذونات في هذا اليوم</b><small>راجع المصروفات العامة أدناه ثم احفظ المطابقة.</small></div>
-        <?php else: foreach ($reconRows as $rr):
-          $saved = !empty($rr['item_saved']);
-          $manualOnly = !empty($rr['manual_only']);
-          $state = $saved ? ($rr['matched'] ? 'is-match' : 'is-different') : 'is-new';
-        ?>
-          <article class="cl-client-card recon-row <?= $state ?>" data-system-total="<?= e($rr['system_total']) ?>">
-            <div class="cl-client-main">
-              <div class="cl-client-identity"><span class="cl-client-mark"><?= e(mb_substr($rr['client_name'],0,1)) ?></span><div><b><?= e($rr['client_name']) ?></b><small><?= intf(count($rr['permits'])) ?> إذن<?= $manualOnly ? ' · لم يعد له حركة اليوم' : '' ?></small></div></div>
-              <div class="cl-client-number system"><span>السيستم</span><b><?= money($rr['system_total'],false) ?></b></div>
-              <label class="cl-client-input"><span>اليدوي</span><input class="recon-input manual-total" type="number" min="0" step="0.01" inputmode="decimal" name="manual_total[<?= e($rr['client_key']) ?>]" value="<?= e($reconOld['manual_total'][$rr['client_key']] ?? ($saved ? number_format($rr['manual_total'],2,'.','') : '')) ?>" placeholder="0.00" <?= (!$reconEditable || $manualOnly) ? 'disabled' : '' ?>></label>
-              <div class="cl-client-number difference"><span>الفرق</span><b class="client-diff <?= $saved && abs($rr['difference']) >= .005 ? 'has-diff' : '' ?>"><?= $saved ? money($rr['difference'],false) : '—' ?></b></div>
-              <?php if ($rr['visa_excluded']): ?><div class="cl-visa-mini" title="مدفوعات فيزا مستبعدة">💳 <?= money($rr['visa_excluded'],false) ?></div><?php endif; ?>
+    <?php if ($isLocked): ?>
+      <div class="rv-locked">🔒 اليوم متقفل — المراجعة مثبّتة كما هي. افتح الإقفال لو محتاج تعدّل.</div>
+    <?php endif; ?>
+
+    <div class="rv-error" id="rvError" role="alert" hidden></div>
+
+    <?php if ((int)$t['stale'] > 0): ?>
+      <div class="rv-stale-note">⚠️ فيه <?= intf((int)$t['stale']) ?> بند اتغيّر مبلغه بعد ما اتراجع — علامته اتشالت لوحدها ومحتاج مراجعة تانية.</div>
+    <?php endif; ?>
+
+    <div class="rv-tools">
+      <label class="rv-search">
+        <span aria-hidden="true">🔎</span>
+        <input type="search" id="rvSearch" placeholder="دوّر بالإذن أو العميل أو البيان…" aria-label="بحث في بنود اليوم" autocomplete="off">
+      </label>
+      <div class="rv-filters" role="group" aria-label="فلترة البنود">
+        <button type="button" class="rv-fbtn active" data-filter="all">الكل <b id="rvCntAll"><?= intf((int)$t['count']) ?></b></button>
+        <button type="button" class="rv-fbtn" data-filter="pending">بدون علامة <b id="rvCntPending"><?= intf((int)$t['pending']) ?></b></button>
+        <button type="button" class="rv-fbtn" data-filter="done">متراجَع <b id="rvCntDone"><?= intf((int)$t['reviewed']) ?></b></button>
+      </div>
+    </div>
+
+    <form method="post" action="<?= url('closing/review-save') ?>" id="rvForm">
+      <?= csrfField() ?>
+      <input type="hidden" name="date" value="<?= e($date) ?>">
+
+      <?php foreach ($groups as $key => $g): ?>
+        <?php if (!$g['count']) { continue; } ?>
+        <section class="rv-group<?= $g['kind'] === 'info' ? ' is-info' : '' ?><?= $g['done'] ? ' is-done' : '' ?>"
+                 data-group="<?= e($key) ?>" id="rvg-<?= e($key) ?>">
+          <header class="rv-gh">
+            <span class="rv-gicon" aria-hidden="true"><?= $g['icon'] ?></span>
+            <div class="rv-gtitle">
+              <b><?= e($g['title']) ?></b>
+              <small><?= e($g['hint']) ?></small>
             </div>
-            <?php if (!$manualOnly): ?><label class="cl-client-note"><span>ملاحظة</span><input type="text" name="row_note[<?= e($rr['client_key']) ?>]" value="<?= e($reconOld['row_note'][$rr['client_key']] ?? $rr['note']) ?>" placeholder="سبب الفرق أو ملاحظة للمراجعة (اختياري)" <?= !$reconEditable ? 'disabled' : '' ?>></label><?php endif; ?>
-            <?php if ($rr['permits']): ?><details class="cl-permit-details"><summary><span>عرض تفاصيل الأذونات</span><b><?= intf(count($rr['permits'])) ?></b></summary><div class="cl-permit-list">
-              <?php foreach ($rr['permits'] as $permit): ?><article class="cl-permit-card">
-                <header><div><a href="<?= url('permits/'.$permit['permit_id'].'/manage') ?>" target="_blank"><?= e($permit['permit_no'] ?: '#'.$permit['permit_id']) ?> ↗</a><span><?= e($permit['company'] ?: '—') ?></span></div><b><?= money($permit['system_total'],false) ?></b></header>
-                <div class="table-wrap"><table><thead><tr><th>النوع</th><th>البيان</th><th>الحركة</th><th>الدفع</th><th>المبلغ</th></tr></thead><tbody><?php foreach ($permit['details'] as $detail): ?><tr><td><?= e($detail['bucket'] === 'receipt' ? 'إيصال' : $detail['stage_label']) ?></td><td><?= e($detail['note'] ?: ($detail['ref_no'] ?: '—')) ?></td><td><?= $detail['movement_seq'] ? 'حركة '.intf($detail['movement_seq']) : 'الإذن' ?></td><td><?= $detail['is_visa'] ? 'فيزا' : 'كاش' ?></td><td><b><?= money($detail['amount'],false) ?></b></td></tr><?php endforeach; ?></tbody></table></div>
-              </article><?php endforeach; ?>
-            </div></details><?php endif; ?>
-          </article>
-        <?php endforeach; endif; ?>
-      </div>
+            <div class="rv-gstat">
+              <span class="rv-gcount" data-count-for="<?= e($key) ?>"><?= intf($g['reviewed']) ?>/<?= intf($g['count']) ?></span>
+              <b class="rv-gsum <?= $g['dir'] === 'in' ? 'in' : 'out' ?>"><?= money($g['total'],false) ?></b>
+            </div>
+            <?php if ($canReview): ?>
+              <button type="button" class="rv-gall" data-group-toggle="<?= e($key) ?>">
+                <?= $g['done'] ? 'شيل علامات القسم' : 'علّم القسم كله' ?>
+              </button>
+            <?php endif; ?>
+          </header>
 
-      <article class="cl-general-card recon-row" data-system-total="<?= e($general['system']) ?>">
-        <div class="cl-general-title"><span>🧾</span><div><b>مصروفات عامة بدون إذن</b><small>مصروفات يدوية + سُلف وتسويات مناديب نقدية</small></div></div>
-        <div class="cl-client-number system"><span>السيستم</span><b><?= money($general['system'],false) ?></b></div>
-        <label class="cl-client-input"><span>اليدوي</span><input class="recon-input manual-general" type="number" min="0" step="0.01" inputmode="decimal" name="manual_general_expenses" value="<?= e($reconOld['manual_general_expenses'] ?? ($recon['saved'] ? number_format($general['manual'],2,'.','') : '')) ?>" placeholder="0.00" <?= !$reconEditable ? 'disabled' : '' ?>></label>
-        <div class="cl-client-number difference"><span>الفرق</span><b class="general-diff <?= $recon['saved'] && abs($general['difference']) >= .005 ? 'has-diff' : '' ?>"><?= $recon['saved'] ? money($general['difference'],false) : '—' ?></b></div>
-        <?php if ($general['visa_excluded']): ?><div class="cl-visa-mini">💳 <?= money($general['visa_excluded'],false) ?></div><?php endif; ?>
-        <?php if ($general['details']): ?><details class="cl-permit-details"><summary><span>عرض تفاصيل المصروفات العامة</span><b><?= intf(count($general['details'])) ?></b></summary><div class="cl-general-details table-wrap"><table><tbody><?php foreach ($general['details'] as $detail): ?><tr><td><?= e($detail['label']) ?></td><td><?= e($detail['party']) ?></td><td><?= e($detail['note'] ?: '—') ?></td><td><?= $detail['is_visa'] ? 'فيزا' : 'كاش' ?></td><td><b><?= money($detail['amount'],false) ?></b></td></tr><?php endforeach; ?></tbody></table></div></details><?php endif; ?>
-      </article>
+          <?php if ($g['kind'] === 'info'): ?>
+            <div class="rv-ginfo">البنود دي اتدفعت من كارت المكتب مش من الدرج، فما بتمنعش الإقفال — علّمها لو راجعتها.</div>
+          <?php endif; ?>
 
-      <div class="cl-recon-footer">
-        <label class="cl-main-note"><span>ملاحظة عامة للمطابقة</span><textarea name="reconciliation_note" rows="2" placeholder="اختيارية…" <?= !$reconEditable ? 'disabled' : '' ?>><?= e($reconOld['reconciliation_note'] ?? $recon['note']) ?></textarea></label>
-        <div class="cl-final-difference <?= $recon['matched'] ? 'matched' : '' ?>">
-          <span>الفرق النهائي بعد كل البنود</span><b id="reconGrandDiffBottom"><?= $recon['saved'] ? money($grandDifference,false) : '—' ?></b><small><?= $recon['matched'] ? '✓ الأرقام مطابقة' : 'يجب أن يصبح الفرق 0.00' ?></small>
+          <div class="rv-list">
+            <?php foreach ($g['items'] as $it): ?>
+              <?php
+                $search = trim(implode(' ', array_filter([
+                    $it['ref'], $it['title'], $it['party'], $it['note'], $it['ref_no'], $it['movement'],
+                    $it['company'], $it['client'], $it['destination'], $it['containers'],
+                    $it['by_rep'], $it['car'], $it['car_owner'], $it['permit_ref'],
+                    $it['agency'], $it['shipping_co'], $it['port'], $it['owner'],
+                ])));
+                /* سطر التفاصيل: كل الحقائق ظاهرة بلا فتح أي شيء. الترتيب مقصود —
+                   الطرف الأساسي الأول ثم التوكيل والجهة ثم أرقام المستندات. */
+                $facts = [$it['party_label'] => $it['party']];
+                if ($it['client'] && $it['client'] !== $it['party'])   { $facts['العميل'] = $it['client']; }
+                if ($it['company'] && $it['company'] !== $it['party']) { $facts['الشركة'] = $it['company']; }
+                if ($it['agency'])       { $facts['التوكيل'] = $it['agency']; }
+                if ($it['shipping_co'])  { $facts['شركة الشحن'] = $it['shipping_co']; }
+                if ($it['port'])         { $facts['الميناء'] = $it['port']; }
+                if ($it['owner'] && $it['owner'] !== ($it['client'] ?? null)) { $facts['صاحب البيان'] = $it['owner']; }
+                if ($it['permit_ref'])   { $facts['الإذن'] = $it['permit_ref']; }
+                if ($it['destination'])  { $facts['الجهة'] = $it['destination']; }
+                if ($it['car'])          { $facts['العربية'] = $it['car']; }
+                if ($it['car_owner'])    { $facts['مالك العربية'] = $it['car_owner']; }
+                if ($it['ref_no'])       { $facts['رقم الإيصال'] = $it['ref_no']; }
+                if ($it['freight'] !== null && $it['freight'] > 0) { $facts['النولون'] = money($it['freight'], false); }
+                $facts = array_filter($facts, fn($v) => $v !== null && $v !== '' && $v !== '—');
+                // عنوان البند = اسمه المكتوب (اسم الإيصال) إن وُجد، وإلا نوعه
+                $headline = trim((string) $it['note']) !== '' && $it['type'] === 'stage'
+                    ? $it['note'] : $it['title'];
+                $subline  = $headline === $it['title'] ? null : $it['title'];
+              ?>
+              <div class="rv-item<?= $it['reviewed'] ? ' is-done' : '' ?><?= $it['stale'] ? ' is-stale' : '' ?>"
+                   data-key="<?= e($it['key']) ?>"
+                   data-group="<?= e($key) ?>"
+                   data-blocking="<?= $g['kind'] === 'cash' ? '1' : '0' ?>"
+                   data-search="<?= e(mb_strtolower($search)) ?>">
+                <label class="rv-pick">
+                  <input type="checkbox" class="rv-check" name="reviewed[]"
+                         value="<?= e($it['key']) ?>"
+                         data-type="<?= e($it['type']) ?>" data-id="<?= (int)$it['id'] ?>"
+                         <?= $it['reviewed'] ? 'checked' : '' ?>
+                         <?= $canReview ? '' : 'disabled' ?>>
+                  <span class="rv-box" aria-hidden="true"></span>
+                  <span class="sr-only">علّم البند <?= e($it['ref'].' '.$it['title']) ?> كمراجَع</span>
+                </label>
+
+                <div class="rv-info">
+                  <!-- ① اسم البند: أوضح سطر في الصف -->
+                  <h3 class="rv-title"><?= e($headline) ?><?php if ($subline): ?><span class="rv-title-sub"><?= e($subline) ?></span><?php endif; ?></h3>
+
+                  <!-- ② شارات التعريف: الإذن ونوعه والحاويات والحركة -->
+                  <div class="rv-l1">
+                    <span class="rv-ref"><?= e($it['ref']) ?></span>
+                    <?php if ($it['permit_type_label']): ?><span class="rv-tag type"><?= e($it['permit_type_label']) ?></span><?php endif; ?>
+                    <?php if ($it['containers'] !== ''): ?><span class="rv-tag box">📦 <?= e($it['containers']) ?></span><?php endif; ?>
+                    <?php if ($it['movement']): ?><span class="rv-tag"><?= e($it['movement']) ?></span><?php endif; ?>
+                    <?php if (!empty($it['visa'])): ?><span class="rv-tag visa">💳 فيزا</span><?php endif; ?>
+                    <?php if ($it['by_rep']): ?><span class="rv-tag rep">🧑‍💼 دفعها المندوب: <?= e($it['by_rep']) ?></span><?php endif; ?>
+                  </div>
+
+                  <!-- ③ الحقائق: العميل والشركة والتوكيل والجهة… -->
+                  <?php if ($facts): ?>
+                    <dl class="rv-facts">
+                      <?php foreach ($facts as $label => $value): ?>
+                        <div><dt><?= e($label) ?></dt><dd><?= e($value) ?></dd></div>
+                      <?php endforeach; ?>
+                    </dl>
+                  <?php endif; ?>
+
+                  <div class="rv-stamp"<?= $it['reviewed'] ? '' : ' hidden' ?>>
+                    ✓ راجعه <?= e($it['reviewed_by'] ?: '—') ?><?= $it['reviewed_at'] ? ' — '.e($it['reviewed_at']) : '' ?>
+                  </div>
+                  <?php if ($it['stale']): ?>
+                    <div class="rv-warn">⚠️ المبلغ اتغيّر بعد المراجعة — راجعه تاني</div>
+                  <?php endif; ?>
+                </div>
+
+                <div class="rv-money">
+                  <b class="rv-amt <?= $g['dir'] === 'in' ? 'in' : 'out' ?>"><?= money($it['amount'],false) ?></b>
+                  <?php if ((int)$it['qty'] > 1 && $it['unit'] !== null): ?>
+                    <span class="rv-calc"><?= intf($it['qty']) ?> × <?= money($it['unit'],false) ?></span>
+                  <?php endif; ?>
+                  <?php if ($it['actual'] !== null): ?>
+                    <span class="rv-actual" title="السعر الفعلي للعميل">فعلي: <?= money($it['actual'],false) ?></span>
+                  <?php elseif ($it['type'] === 'stage' && !$it['visa']): ?>
+                    <span class="rv-actual missing" title="لم يُسجَّل السعر الفعلي للعميل بعد">فعلي: —</span>
+                  <?php endif; ?>
+                  <?php if ($it['gross'] !== null): ?>
+                    <span class="rv-calc">العهدة <?= money($it['gross'],false) ?></span>
+                  <?php endif; ?>
+                </div>
+
+                <?php if ($it['link']): ?>
+                  <a class="rv-open" href="<?= url($it['link']) ?>" target="_blank" rel="noopener" title="افتح المصدر" aria-label="افتح مصدر البند">↗</a>
+                <?php else: ?>
+                  <span class="rv-open placeholder" aria-hidden="true"></span>
+                <?php endif; ?>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        </section>
+      <?php endforeach; ?>
+
+      <?php if ((int)$t['count'] === 0): ?>
+        <div class="rv-empty">
+          <span>✓</span>
+          <b>مفيش أي حركة مسجّلة في يوم <?= e(dfmt($date)) ?></b>
+          <small>تقدر تقفل اليوم على طول، أو تراجع تاريخ تاني من فوق.</small>
         </div>
-        <?php if ($reconEditable): ?><button class="btn gold cl-save-recon" type="submit">حفظ ومراجعة المطابقة</button><?php endif; ?>
-      </div>
-      <?php if ($recon['updated_at']): ?><div class="cl-recon-meta">آخر حفظ: <?= e($recon['updated_at']) ?><?= $recon['updated_by'] ? ' — بواسطة '.e($recon['updated_by']) : '' ?></div><?php endif; ?>
+      <?php endif; ?>
+
+      <div class="rv-nores" id="rvNoRes" hidden>مفيش بند مطابق للبحث.</div>
+
+      <?php if ($canReview): ?>
+        <div class="rv-manual">
+          <button class="btn gold" type="submit">💾 احفظ المراجعة</button>
+          <small>الحفظ بيتم تلقائيًّا مع كل علامة. الزر ده احتياطي لو الجافاسكريبت متعطّل.</small>
+        </div>
+      <?php endif; ?>
     </form>
-    <?php endif; ?>
   </section>
 
-  <section class="cl-section" id="final-close">
-    <div class="cl-section-title">
-      <span class="cl-section-no">3</span><div><span>الخطوة الأخيرة</span><h2>ثبّت رصيد اليوم</h2><p>بعد الإقفال لن يقبل السيستم إدخالات نقدية جديدة بتاريخ هذا اليوم.</p></div>
+  <!-- ═══════════ الإقفال ═══════════ -->
+  <section class="cl-close <?= $isClosed ? 'is-closed' : ($complete ? 'is-ready' : 'is-blocked') ?>" id="final-close">
+    <div class="cl-close-icon"><?= $isClosed ? '🔒' : ($complete ? '✓' : '⏳') ?></div>
+    <div class="cl-close-txt">
+      <?php if ($isClosed): ?>
+        <b>يوم <?= e(dfmt($date)) ?> متقفل</b>
+        <span>الرصيد المرحّل مثبّت على <strong><?= money($carried) ?></strong><?= $closedBy ? ' — بواسطة '.e($closedBy) : '' ?><?= $closedAt ? ' — '.e($closedAt) : '' ?>.</span>
+      <?php elseif ($complete): ?>
+        <b>كل البنود اتراجعت — جاهز للإقفال</b>
+        <span>هيتثبّت رصيد <strong><?= money($carried) ?></strong> كرصيد أول اليوم التالي، وهيتقفل الكتابة على اليوم ده.</span>
+      <?php else: ?>
+        <b>الإقفال لسه مقفول</b>
+        <span id="clBlockTxt">فاضل <?= intf((int)$t['blocking_pending']) ?> بند من غير علامة مراجعة.</span>
+      <?php endif; ?>
+      <?php if ($rv['last_at']): ?>
+        <small class="cl-close-meta">آخر مراجعة: <?= e($rv['last_at']) ?><?= $rv['last_by'] ? ' — '.e($rv['last_by']) : '' ?></small>
+      <?php endif; ?>
     </div>
-    <div class="cl-close-panel <?= $isClosed ? 'is-closed' : ($recon['matched'] ? 'is-ready' : 'is-blocked') ?>">
-      <div class="cl-close-symbol"><?= $isClosed ? '🔒' : ($recon['matched'] ? '✓' : '!') ?></div>
-      <div class="cl-close-copy">
-        <?php if ($isClosed): ?><b>يوم <?= e(dfmt($date)) ?> متقفل</b><span>تم تثبيت الرصيد المرحّل على <strong><?= money($carried) ?></strong><?= $closedBy ? ' بواسطة '.e($closedBy) : '' ?><?= $closedAt ? ' — '.e($closedAt) : '' ?>.</span>
-        <?php elseif ($recon['matched']): ?><b>كل شيء جاهز للإقفال</b><span>المطابقة كاملة وسيتم تثبيت رصيد <strong><?= money($carried) ?></strong> كرصيد أول اليوم التالي.</span>
-        <?php else: ?><b>الإقفال غير متاح حاليًا</b><span>احفظ المطابقة بدون فروق أولًا، ثم سيتفعّل زر إقفال اليوم.</span><?php endif; ?>
-      </div>
-      <div class="cl-close-action">
-        <?php if ($isClosed && $canReopen): ?><form method="post" action="<?= url('closing/reopen') ?>" class="confirm-financial" data-confirm="فتح إقفال يوم <?= e(dfmt($date)) ?>؟ ستتمكّن من التعديل، ويجب إقفاله مرة أخرى."><?= csrfField() ?><input type="hidden" name="date" value="<?= e($date) ?>"><button class="btn" type="submit">🔓 فتح الإقفال</button></form>
-        <?php elseif ($isClosed): ?><small>لفتح هذا اليوم، افتح الأيام الأحدث أولًا.<br>آخر يوم متقفل: <?= e(dfmt($lastClosed)) ?></small>
-        <?php elseif ($recon['matched']): ?><form method="post" action="<?= url('closing/close') ?>" class="confirm-financial" data-confirm="إقفال يوم <?= e(dfmt($date)) ?> على رصيد <?= e(money($carried,false)) ?>؟ سيتم تثبيت الرقم ومنع الكتابة على هذا اليوم."><?= csrfField() ?><input type="hidden" name="date" value="<?= e($date) ?>"><button class="btn gold cl-close-button" type="submit">🔒 إقفال اليوم على <?= money($carried,false) ?></button></form>
-        <?php else: ?><a class="btn" href="#reconciliation">اذهب إلى المطابقة ↑</a><?php endif; ?>
-      </div>
+    <div class="cl-close-act">
+      <?php if ($isClosed && $canReopen): ?>
+        <form method="post" action="<?= url('closing/reopen') ?>" class="confirm-financial" data-confirm="فتح إقفال يوم <?= e(dfmt($date)) ?>؟ هتقدر تعدّل، ولازم تقفله تاني بعدها.">
+          <?= csrfField() ?><input type="hidden" name="date" value="<?= e($date) ?>">
+          <button class="btn" type="submit">🔓 فتح الإقفال</button>
+        </form>
+      <?php elseif ($isClosed): ?>
+        <small>لفتح اليوم ده، افتح الأيام الأحدث الأول.<br>آخر يوم متقفل: <?= e(dfmt($lastClosed)) ?></small>
+      <?php else: ?>
+        <form method="post" action="<?= url('closing/close') ?>" class="confirm-financial" id="clCloseForm"
+              data-confirm="إقفال يوم <?= e(dfmt($date)) ?> على رصيد <?= e(money($carried,false)) ?>؟ الرقم هيتثبّت والكتابة على اليوم هتتمنع.">
+          <?= csrfField() ?><input type="hidden" name="date" value="<?= e($date) ?>">
+          <button class="btn gold" type="submit" id="clCloseBtn" <?= $complete ? '' : 'disabled' ?>>
+            🔒 اقفل اليوم على <?= money($carried,false) ?>
+          </button>
+        </form>
+      <?php endif; ?>
     </div>
   </section>
+
+  <!-- شريط سفلي لاصق: التقدّم + الإقفال دايمًا في المتناول (مهم على الهاتف) -->
+  <?php if (!$isClosed && (int)$t['blocking'] > 0): ?>
+    <div class="cl-bar" id="clBar" <?= $complete ? 'data-ready="1"' : '' ?>>
+      <div class="cl-bar-txt">
+        <b id="clBarNum"><?= intf((int)$t['blocking_reviewed']) ?>/<?= intf((int)$t['blocking']) ?></b>
+        <span id="clBarMsg"><?= $complete ? 'كل البنود اتراجعت' : 'بند اتراجع' ?></span>
+      </div>
+      <div class="cl-bar-line"><i id="clBarFill" style="width:<?= $percent ?>%"></i></div>
+      <a class="btn sm" href="#final-close" id="clBarGo"><?= $complete ? 'اقفل اليوم ↓' : 'اذهب للإقفال ↓' ?></a>
+    </div>
+  <?php endif; ?>
 </div>
 
 <style>
-.closing-page{display:grid;gap:18px;padding-bottom:28px}.cl-hero{position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(280px,1fr) auto auto;align-items:center;gap:22px;padding:23px 25px;border-radius:20px;background:linear-gradient(125deg,#0b294b,#174b78 68%,#126248);color:#fff;box-shadow:0 12px 32px rgba(8,35,65,.18)}.cl-hero:after{content:"";position:absolute;width:260px;height:260px;border:50px solid rgba(255,255,255,.035);border-radius:50%;left:-100px;top:-120px}.cl-hero-main,.cl-hero-balance,.cl-hero-actions{position:relative;z-index:1}.cl-eyebrow{font-size:.69rem;color:#ead477;font-weight:900;letter-spacing:.4px}.cl-hero h1{margin:4px 0 5px;font-size:1.55rem}.cl-hero p{margin:0;color:rgba(255,255,255,.7);font-size:.8rem}.cl-hero-balance{display:grid;gap:2px;min-width:230px;padding:13px 17px;border:1px solid rgba(255,255,255,.16);border-radius:14px;background:rgba(255,255,255,.09);text-align:center}.cl-hero-balance span{font-size:.68rem;color:rgba(255,255,255,.72);font-weight:800}.cl-hero-balance b{font-size:1.45rem;color:#f1d86d;font-variant-numeric:tabular-nums}.cl-hero-balance.negative b{color:#ffaaa5}.cl-hero-balance small{font-size:.59rem;color:rgba(255,255,255,.55)}.cl-hero-actions{display:grid;justify-items:end;gap:9px}.cl-state{font-size:.69rem;font-weight:900;padding:5px 9px;border-radius:20px}.cl-state.open{background:rgba(62,210,139,.15);color:#8aefbd}.cl-state.closed{background:rgba(255,255,255,.14);color:#fff}
-.cl-datebar{display:flex;align-items:center;justify-content:center;gap:8px}.cl-datebar form{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 3px 11px rgba(21,53,91,.05)}.cl-datebar label{font-size:.7rem;color:var(--grey);font-weight:900}.cl-datebar input{border:0;background:transparent;font-family:inherit;color:var(--navy);font-weight:800}.cl-datebar input:focus{outline:0}.cl-datebar .btn{min-height:32px;padding:5px 13px}.cl-day-arrow,.cl-today{display:grid;place-items:center;height:42px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--navy);text-decoration:none;font-weight:900}.cl-day-arrow{width:42px;font-size:1.5rem}.cl-today{padding:0 14px;font-size:.72rem}.cl-today.active{background:var(--navy);color:#fff;border-color:var(--navy)}
-.cl-progress{display:grid;grid-template-columns:1fr 70px 1fr 70px 1fr;align-items:center;padding:14px 18px;border:1px solid var(--line);border-radius:16px;background:#fff}.cl-step{display:flex;align-items:center;gap:10px;color:var(--grey);text-decoration:none;min-width:0}.cl-step i{display:grid;place-items:center;flex:0 0 34px;height:34px;border:2px solid #c8d2dc;border-radius:50%;font-style:normal;font-weight:900;background:#fff}.cl-step span{display:grid;gap:2px;min-width:0}.cl-step b{color:var(--ink);font-size:.78rem}.cl-step small{font-size:.64rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cl-step.done i{border-color:var(--green);background:var(--green);color:#fff}.cl-step.current i{border-color:var(--gold);background:var(--gold-light);color:#765c0c}.cl-step.warning i{border-color:var(--red);background:var(--red-lt);color:var(--red)}.cl-step.locked{opacity:.55}.cl-progress-line{height:2px;background:#dde3e8;margin:0 8px}.cl-progress-line.done{background:var(--green)}
-.cl-balance-card,.cl-section{border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 4px 16px rgba(21,53,91,.045)}.cl-balance-card{padding:18px}.cl-section{padding:20px}.cl-section-title{display:flex;align-items:center;gap:12px;margin-bottom:16px}.cl-section-title.compact{justify-content:space-between;margin-bottom:14px}.cl-section-title>div{min-width:0}.cl-section-title>div>span{font-size:.63rem;color:var(--gold);font-weight:900}.cl-section-title h2{margin:2px 0 0;font-size:1.05rem;color:var(--navy)}.cl-section-title p{margin:4px 0 0;font-size:.72rem;color:var(--grey)}.cl-section-no{display:grid;place-items:center;flex:0 0 38px;height:38px;border-radius:12px;background:var(--navy);color:#fff;font-size:1rem;font-weight:900}.cl-lock-note,.cl-live-note{margin-inline-start:auto;font-size:.66rem;font-weight:900;color:var(--grey)}.cl-live-note{color:var(--green)}.cl-live-note i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#33bf78;box-shadow:0 0 0 4px rgba(51,191,120,.12)}
-.cl-equation{display:grid;grid-template-columns:repeat(13,auto);align-items:stretch;gap:7px}.cl-equation>i{align-self:center;font-size:1.1rem;font-style:normal;font-weight:900;color:#92a0ae}.cl-equation>i.minus{color:var(--red)}.cl-equation>i.plus{color:var(--green)}.cl-equation-item{display:grid;align-content:center;gap:3px;min-width:115px;padding:12px 13px;border-radius:12px;background:#f3f6f9;border:1px solid #e2e8ed}.cl-equation-item span{font-size:.63rem;color:var(--grey);font-weight:800}.cl-equation-item b{font-size:.94rem;color:var(--navy);font-variant-numeric:tabular-nums}.cl-equation-item small{font-size:.53rem;color:var(--grey)}.cl-equation-item.topup b{color:var(--green)}.cl-equation-item.expense b,.cl-equation-item.driver b{color:var(--red)}.cl-equation-item.available{background:#edf5fa;border-color:#cbdde9}.cl-equation-item.closing{background:linear-gradient(135deg,#fff7d8,#fff);border-color:#e5cf75;min-width:145px}.cl-equation-item.closing b{color:#80630d;font-size:1.08rem}.cl-equation-item.closing.negative{background:#fff3f2;border-color:#e6b0ac}.cl-equation-item.closing.negative b{color:var(--red)}
-.cl-review-cards{display:grid;gap:10px}.cl-review-card{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden}.cl-review-card[open]{border-color:#b8cadb;box-shadow:0 5px 17px rgba(21,53,91,.07)}.cl-review-card summary{display:grid;grid-template-columns:auto minmax(190px,1fr) auto auto;align-items:center;gap:12px;padding:13px 15px;cursor:pointer;list-style:none}.cl-review-card summary::-webkit-details-marker{display:none}.cl-review-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:#f4ecec}.cl-review-icon.driver{background:#e9f2f8}.cl-review-icon.visa{background:#f1eafb}.cl-review-name{display:grid;gap:2px}.cl-review-name b{color:var(--navy);font-size:.82rem}.cl-review-name small{font-size:.65rem;color:var(--grey)}.cl-review-card summary>strong{font-size:.9rem;color:var(--navy);font-variant-numeric:tabular-nums}.cl-review-card summary>strong.negative{color:var(--red)}.cl-expand{font-size:1.4rem;color:var(--grey);transition:.15s}.cl-review-card[open] .cl-expand{transform:rotate(-90deg)}.cl-review-body{border-top:1px solid var(--line);background:#fbfcfd}.cl-info-line{padding:10px 14px;background:#f3eef9;color:#684682;font-size:.69rem}.cl-detail-table{min-width:760px}.cl-detail-table th,.cl-detail-table td{padding:9px 11px!important;font-size:.72rem}
-.cl-recon-status{margin-inline-start:auto;padding:7px 11px;border-radius:20px;font-size:.67rem;font-weight:900;white-space:nowrap}.cl-recon-status.matched{color:var(--green);background:var(--green-lt)}.cl-recon-status.different{color:var(--red);background:var(--red-lt)}.cl-recon-status.new{color:#84670c;background:var(--gold-light)}.cl-recon-status.unavailable{color:var(--grey);background:#edf0f2}.cl-recon-summary{display:grid;grid-template-columns:.65fr repeat(3,1fr);gap:9px;margin-bottom:12px}.cl-recon-summary>div{display:grid;gap:3px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:#f8fafb}.cl-recon-summary span{font-size:.61rem;color:var(--grey);font-weight:800}.cl-recon-summary b{font-size:.92rem;color:var(--navy);font-variant-numeric:tabular-nums}.cl-recon-summary .has-diff{border-color:#e4b0ad;background:#fff5f4}.cl-recon-summary .has-diff b{color:var(--red)}.cl-recon-rule{display:flex;gap:8px;margin-bottom:13px;padding:10px 12px;border:1px solid #e5d28b;border-radius:10px;background:#fff9e4;color:#725a0e;font-size:.69rem}.cl-recon-rule b{white-space:nowrap}.cl-client-list{display:grid;gap:9px}.cl-client-card,.cl-general-card{border:1px solid var(--line);border-radius:13px;background:#fff;overflow:hidden;transition:.15s}.cl-client-card.is-match{border-inline-start:4px solid var(--green)}.cl-client-card.is-different{border-inline-start:4px solid var(--red);background:#fffafa}.cl-client-main{display:grid;grid-template-columns:minmax(200px,1.5fr) minmax(105px,.7fr) 125px minmax(95px,.6fr) auto;align-items:center;gap:11px;padding:12px 14px}.cl-client-identity{display:flex;align-items:center;gap:10px;min-width:0}.cl-client-mark{display:grid;place-items:center;flex:0 0 34px;height:34px;border-radius:10px;background:#eaf1f7;color:var(--navy);font-weight:900}.cl-client-identity>div{display:grid;gap:2px;min-width:0}.cl-client-identity b{font-size:.85rem;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cl-client-identity small{font-size:.61rem;color:var(--grey)}.cl-client-number,.cl-client-input{display:grid;gap:3px}.cl-client-number span,.cl-client-input>span{font-size:.59rem;color:var(--grey);font-weight:800}.cl-client-number b{font-size:.83rem;color:var(--navy);font-variant-numeric:tabular-nums}.cl-client-number.difference b.has-diff{color:var(--red)}.recon-input{width:100%;height:36px;border:1px solid #d1b44d;border-radius:9px;background:#fffbea;padding:6px 8px;text-align:center;font-family:inherit;font-size:.82rem;font-weight:900;color:var(--navy)}.recon-input:focus{outline:0;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,162,39,.13)}.recon-input:disabled{border-color:var(--line);background:#f2f4f5;color:var(--grey)}.cl-visa-mini{padding:5px 7px;border-radius:7px;background:#f1eafb;color:#65467e;font-size:.62rem;font-weight:900;white-space:nowrap}.cl-client-note{display:flex;align-items:center;gap:8px;padding:0 14px 10px}.cl-client-note span{font-size:.6rem;color:var(--grey);font-weight:800}.cl-client-note input{flex:1;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-family:inherit;font-size:.68rem}.cl-permit-details{border-top:1px solid #edf0f2;background:#fafbfc}.cl-permit-details>summary{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;list-style:none;color:var(--navy);font-size:.68rem;font-weight:900}.cl-permit-details>summary::-webkit-details-marker{display:none}.cl-permit-details>summary b{display:grid;place-items:center;width:22px;height:22px;border-radius:7px;background:#e8eef4}.cl-permit-list{display:grid;gap:8px;padding:0 12px 12px}.cl-permit-card{border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden}.cl-permit-card header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 11px;background:#f2f6f9}.cl-permit-card header>div{display:flex;align-items:center;gap:10px}.cl-permit-card header a{color:var(--navy);font-size:.75rem;font-weight:900}.cl-permit-card header span{font-size:.65rem;color:var(--grey)}.cl-permit-card header>b{font-size:.76rem;color:var(--navy)}.cl-permit-card table,.cl-general-details table{width:100%;border-collapse:collapse;min-width:600px}.cl-permit-card th,.cl-permit-card td,.cl-general-details td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:right;font-size:.66rem}.cl-general-card{display:grid;grid-template-columns:minmax(250px,1.5fr) minmax(105px,.7fr) 125px minmax(95px,.6fr) auto;align-items:center;gap:11px;margin-top:12px;padding:12px 14px;background:#f7f9fb}.cl-general-title{display:flex;align-items:center;gap:9px}.cl-general-title>span{font-size:1.3rem}.cl-general-title>div{display:grid;gap:2px}.cl-general-title b{font-size:.8rem;color:var(--navy)}.cl-general-title small{font-size:.6rem;color:var(--grey)}.cl-general-card .cl-permit-details{grid-column:1/-1;margin:0 -14px -12px}.cl-recon-footer{display:grid;grid-template-columns:minmax(240px,1fr) minmax(210px,.55fr) auto;align-items:end;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.cl-main-note{display:grid;gap:4px}.cl-main-note>span{font-size:.66rem;color:var(--navy);font-weight:900}.cl-main-note textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px;font-family:inherit;resize:vertical}.cl-final-difference{display:grid;grid-template-columns:1fr auto;gap:3px 10px;padding:10px 12px;border-radius:10px;background:#fff2f1;border:1px solid #ebc4c1}.cl-final-difference span,.cl-final-difference small{font-size:.6rem;color:var(--grey)}.cl-final-difference b{color:var(--red);font-size:.95rem}.cl-final-difference small{grid-column:1/-1}.cl-final-difference.matched{background:#edf8f1;border-color:#badfc6}.cl-final-difference.matched b{color:var(--green)}.cl-save-recon{min-height:44px}.cl-recon-meta{margin-top:9px;text-align:end;color:var(--grey);font-size:.62rem}
-.cl-empty-state{display:grid;justify-items:center;gap:4px;padding:22px;border:1px dashed #b8c8d6;border-radius:12px;background:#f8fafb;text-align:center}.cl-empty-state>span{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--green-lt);color:var(--green);font-weight:900}.cl-empty-state b{font-size:.78rem;color:var(--navy)}.cl-empty-state small{font-size:.65rem;color:var(--grey)}
-.cl-close-panel{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:15px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#f6f7f8}.cl-close-panel.is-ready{border-color:#dbc46a;background:#fff9e5}.cl-close-panel.is-closed{border-color:#b7dac2;background:#f0f8f3}.cl-close-symbol{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;background:#e8ecef;color:var(--grey);font-size:1.15rem;font-weight:900}.is-ready .cl-close-symbol{background:#f4dea0;color:#72580b}.is-closed .cl-close-symbol{background:#d8eee0;color:var(--green)}.cl-close-copy{display:grid;gap:3px}.cl-close-copy b{font-size:.87rem;color:var(--navy)}.cl-close-copy span{font-size:.7rem;color:var(--grey)}.cl-close-copy strong{color:var(--navy)}.cl-close-action small{display:block;max-width:280px;color:var(--grey);font-size:.64rem;text-align:end}.cl-close-button{min-height:45px;padding-inline:18px}
-@media(max-width:1250px){.cl-equation{grid-template-columns:repeat(7,1fr)}.cl-equation>i{display:none}.cl-equation-item{min-width:0}.cl-equation-item.closing{grid-column:span 2}.cl-client-main{grid-template-columns:minmax(180px,1.3fr) repeat(3,minmax(100px,.7fr))}.cl-client-main .cl-visa-mini{grid-column:2/-1;justify-self:start}.cl-general-card{grid-template-columns:minmax(220px,1.3fr) repeat(3,minmax(100px,.7fr))}.cl-general-card>.cl-visa-mini{grid-column:2/-1;justify-self:start}}
-@media(max-width:900px){.cl-hero{grid-template-columns:1fr auto}.cl-hero-balance{grid-column:1/-1;grid-row:2}.cl-progress{grid-template-columns:1fr}.cl-progress-line{width:2px;height:18px;margin:3px 16px}.cl-equation{grid-template-columns:repeat(2,1fr)}.cl-equation-item.closing{grid-column:span 2}.cl-section{padding:15px}.cl-recon-summary{grid-template-columns:repeat(2,1fr)}.cl-client-main,.cl-general-card{grid-template-columns:1fr 1fr}.cl-client-identity,.cl-general-title{grid-column:1/-1}.cl-client-main .cl-visa-mini,.cl-general-card>.cl-visa-mini{grid-column:auto}.cl-recon-footer{grid-template-columns:1fr}.cl-save-recon{width:100%;justify-content:center}.cl-close-panel{grid-template-columns:auto 1fr}.cl-close-action{grid-column:1/-1}.cl-close-action .btn,.cl-close-action form{width:100%}.cl-close-action .btn{justify-content:center}.cl-close-action small{max-width:none;text-align:start}}
-@media(max-width:600px){.cl-hero{grid-template-columns:1fr;padding:18px}.cl-hero-actions{justify-items:stretch;grid-template-columns:1fr auto;align-items:center}.cl-hero-actions .btn{justify-content:center}.cl-hero-balance{grid-column:auto;grid-row:auto;min-width:0}.cl-datebar{flex-wrap:wrap}.cl-datebar form{order:-1;width:100%;justify-content:center}.cl-progress{padding:12px}.cl-section-title{align-items:flex-start}.cl-section-title .cl-recon-status{grid-column:1/-1;margin:6px 0 0}.cl-reconciliation>.cl-section-title{display:grid;grid-template-columns:auto 1fr}.cl-equation{grid-template-columns:1fr}.cl-equation-item.closing{grid-column:auto}.cl-review-card summary{grid-template-columns:auto 1fr auto}.cl-review-card summary>strong{grid-column:2}.cl-expand{grid-column:3;grid-row:1/3}.cl-recon-summary{grid-template-columns:1fr 1fr}.cl-recon-rule{display:grid}.cl-client-main,.cl-general-card{grid-template-columns:1fr 1fr;padding:11px}.cl-client-identity,.cl-general-title{grid-column:1/-1}.cl-client-note{display:grid}.cl-close-panel{grid-template-columns:1fr;text-align:center}.cl-close-symbol{margin:auto}.cl-close-action{grid-column:auto}.cl-section-title.compact{align-items:center}}
+/* ═══════════════ التقفيل اليومي — شاشة مراجعة (v50) ═══════════════ */
+.cl-page{display:grid;gap:var(--space-4);padding-bottom:var(--space-6)}
+
+/* الترويسة */
+.cl-top{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:var(--space-4);
+  padding:var(--space-4) var(--space-5);border-radius:var(--radius-3);
+  background:linear-gradient(120deg,var(--navy-dark),var(--navy-mid));color:var(--white);box-shadow:var(--shadow-2)}
+.cl-top-id{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2) var(--space-3);min-width:0}
+.cl-kicker{font-size:var(--fs-1);font-weight:var(--fw-black);color:var(--gold-light);opacity:.85;width:100%}
+.cl-top h1{margin:0;font-size:var(--fs-6);line-height:var(--lh-tight)}
+.cl-chip{padding:4px 10px;border-radius:var(--radius-pill);font-size:var(--fs-1);font-weight:var(--fw-black)}
+.cl-chip.open{background:rgba(62,210,139,.16);color:#8aefbd}
+.cl-chip.closed{background:rgba(255,255,255,.16);color:var(--white)}
+.cl-dates{display:flex;align-items:center;gap:var(--space-2)}
+.cl-dates form{display:flex;align-items:center;gap:var(--space-2);padding:4px 4px 4px var(--space-3);
+  border-radius:var(--radius-2);background:rgba(255,255,255,.12)}
+.cl-dates input[type=date]{border:0;background:transparent;color:var(--white);font-family:inherit;
+  font-weight:var(--fw-bold);min-height:34px}
+.cl-dates input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.8}
+.cl-arrow,.cl-todaybtn{display:grid;place-items:center;min-height:38px;min-width:38px;padding:0 var(--space-2);
+  border-radius:var(--radius-1);background:rgba(255,255,255,.12);color:var(--white);
+  text-decoration:none;font-weight:var(--fw-black);font-size:var(--fs-4)}
+.cl-todaybtn{font-size:var(--fs-1);padding:0 var(--space-3)}
+.cl-todaybtn.active{background:var(--gold);color:var(--navy-dark)}
+.cl-arrow:hover,.cl-todaybtn:hover{background:rgba(255,255,255,.22)}
+
+/* معادلة الرصيد */
+.cl-flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:var(--space-2);padding:var(--space-4);
+  border:1px solid var(--line);border-radius:var(--radius-3);background:var(--card);box-shadow:var(--shadow-1)}
+.cl-cell{flex:1 1 140px;display:grid;align-content:center;gap:2px;padding:var(--space-3);
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--zebra)}
+.cl-cell span{font-size:var(--fs-1);color:var(--grey);font-weight:var(--fw-bold)}
+.cl-cell b{font-size:var(--fs-3);color:var(--navy);font-variant-numeric:tabular-nums}
+.cl-cell small{font-size:var(--fs-1);color:var(--grey);opacity:.85}
+.cl-cell.in b{color:var(--green)}
+.cl-cell.out b{color:var(--red)}
+.cl-cell.result{flex:1 1 180px;background:linear-gradient(135deg,var(--gold-light),var(--white));border-color:var(--gold)}
+.cl-cell.result b{font-size:var(--fs-5);color:var(--gold-dark)}
+.cl-cell.result.negative{background:var(--red-lt);border-color:var(--red)}
+.cl-cell.result.negative b{color:var(--red)}
+.cl-flow .op{align-self:center;font-style:normal;font-weight:var(--fw-black);font-size:var(--fs-4);color:var(--ink-mut)}
+.cl-flow .op.minus{color:var(--red)}
+.cl-flow .op.plus{color:var(--green)}
+
+/* رأس المراجعة */
+.cl-review{padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-3);
+  background:var(--card);box-shadow:var(--shadow-1)}
+.rv-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-4)}
+.rv-head-txt h2{margin:0;font-size:var(--fs-5);color:var(--navy)}
+.rv-head-txt p{margin:2px 0 0;font-size:var(--fs-2);color:var(--grey)}
+.rv-gauge{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:2px var(--space-3);
+  min-width:250px;padding:var(--space-3);border:1px solid var(--line);border-radius:var(--radius-2);background:var(--zebra)}
+.rv-gauge.done{border-color:var(--green);background:var(--green-lt)}
+.rv-gauge-num{display:flex;align-items:baseline;gap:1px;grid-row:span 2}
+.rv-gauge-num b{font-size:var(--fs-7);line-height:1;color:var(--navy);font-variant-numeric:tabular-nums}
+.rv-gauge-num i{font-style:normal;font-size:var(--fs-2);color:var(--grey);font-weight:var(--fw-black)}
+.rv-gauge.done .rv-gauge-num b{color:var(--green)}
+.rv-gauge-txt b{display:block;font-size:var(--fs-2);color:var(--ink)}
+.rv-gauge-txt small{font-size:var(--fs-1);color:var(--grey)}
+.rv-gauge-bar{grid-column:2;height:7px;border-radius:var(--radius-pill);background:var(--line);overflow:hidden}
+.rv-gauge-bar i{display:block;height:100%;border-radius:var(--radius-pill);background:var(--gold);
+  transition:width var(--dur-base) var(--ease)}
+.rv-gauge.done .rv-gauge-bar i{background:var(--green)}
+
+.rv-locked,.rv-stale-note{margin-top:var(--space-3);padding:var(--space-3);border-radius:var(--radius-2);
+  font-size:var(--fs-2);font-weight:var(--fw-bold)}
+.rv-locked{background:var(--zebra);border:1px solid var(--line2);color:var(--grey)}
+.rv-error{margin-top:var(--space-3);padding:var(--space-3);border-radius:var(--radius-2);
+  background:var(--red-lt);border:1px solid var(--red);color:var(--red);
+  font-size:var(--fs-2);font-weight:var(--fw-black)}
+.rv-error[hidden]{display:none}
+.rv-stale-note{background:var(--gold-light);border:1px solid var(--gold);color:var(--gold-dark)}
+
+/* أدوات البحث والفلترة */
+.rv-tools{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:var(--space-4) 0 var(--space-3)}
+.rv-search{flex:1 1 240px;display:flex;align-items:center;gap:var(--space-2);padding:0 var(--space-3);
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--white)}
+.rv-search input{flex:1;min-height:42px;border:0;background:transparent;font-family:inherit;font-size:var(--fs-2)}
+.rv-search input:focus{outline:0}
+.rv-filters{display:flex;gap:var(--space-1);flex-wrap:wrap}
+.rv-fbtn{display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:0 var(--space-3);
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--white);
+  color:var(--grey);font-family:inherit;font-size:var(--fs-2);font-weight:var(--fw-bold);cursor:pointer}
+.rv-fbtn b{padding:1px 7px;border-radius:var(--radius-pill);background:var(--zebra);
+  font-size:var(--fs-1);color:var(--ink)}
+.rv-fbtn.active{background:var(--navy);border-color:var(--navy);color:var(--white)}
+.rv-fbtn.active b{background:rgba(255,255,255,.2);color:var(--white)}
+
+/* الأقسام */
+.rv-group{margin-bottom:var(--space-3);border:1px solid var(--line);border-radius:var(--radius-2);
+  background:var(--white);overflow:hidden}
+.rv-group.is-done{border-color:#bfe0cb}
+.rv-group.is-info{background:var(--zebra)}
+.rv-gh{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:var(--space-3);
+  padding:var(--space-3);background:var(--zebra);border-bottom:1px solid var(--line)}
+.rv-group.is-done .rv-gh{background:var(--green-lt)}
+.rv-gicon{display:grid;place-items:center;width:38px;height:38px;border-radius:var(--radius-1);
+  background:var(--white);border:1px solid var(--line);font-size:var(--fs-4)}
+.rv-gtitle{min-width:0}
+.rv-gtitle b{display:block;font-size:var(--fs-3);color:var(--navy)}
+.rv-gtitle small{font-size:var(--fs-1);color:var(--grey)}
+.rv-gstat{display:grid;justify-items:end;gap:2px}
+.rv-gcount{font-size:var(--fs-1);color:var(--grey);font-weight:var(--fw-black);font-variant-numeric:tabular-nums}
+.rv-gsum{font-size:var(--fs-3);font-variant-numeric:tabular-nums}
+.rv-gsum.out{color:var(--red)}
+.rv-gsum.in{color:var(--green)}
+.rv-gall{min-height:38px;padding:0 var(--space-3);border:1px solid var(--line2);border-radius:var(--radius-1);
+  background:var(--white);color:var(--navy);font-family:inherit;font-size:var(--fs-1);
+  font-weight:var(--fw-black);cursor:pointer;white-space:nowrap}
+.rv-gall:hover{background:var(--navy);color:var(--white);border-color:var(--navy)}
+.rv-ginfo{padding:var(--space-2) var(--space-3);background:#f3eefa;color:#5d4180;font-size:var(--fs-1)}
+
+/* البند — قلب الشاشة */
+.rv-list{display:grid}
+.rv-item{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:var(--space-3);
+  padding:var(--space-3);border-bottom:1px solid var(--line);
+  transition:background var(--dur-fast) var(--ease)}
+.rv-item:last-child{border-bottom:0}
+.rv-item.is-done{background:#f4faf6}
+.rv-item.is-stale{background:#fffaf0;box-shadow:inset 3px 0 0 var(--gold)}
+.rv-item[hidden]{display:none}
+.rv-pick{display:grid;place-items:center;width:44px;height:44px;cursor:pointer;margin:0}
+.rv-check{position:absolute;opacity:0;width:1px;height:1px}
+.rv-box{display:grid;place-items:center;width:26px;height:26px;border:2px solid var(--line2);
+  border-radius:8px;background:var(--white);transition:all var(--dur-fast) var(--ease)}
+.rv-box:after{content:"✓";font-size:var(--fs-2);font-weight:var(--fw-black);color:var(--white);
+  transform:scale(.4);opacity:0;transition:all var(--dur-fast) var(--ease)}
+.rv-check:checked + .rv-box{background:var(--green);border-color:var(--green)}
+.rv-check:checked + .rv-box:after{transform:scale(1);opacity:1}
+.rv-check:focus-visible + .rv-box{box-shadow:0 0 0 3px rgba(30,110,60,.25)}
+.rv-check:disabled + .rv-box{background:var(--zebra);border-color:var(--line);cursor:not-allowed}
+.rv-check:disabled:checked + .rv-box{background:var(--grey);border-color:var(--grey)}
+/* ⚠️ التسلسل البصري مقصود (طلب المالك: «اسم البند صغير جدًا ومش ظاهر»):
+   ① اسم البند   fs-4 أسود   ← أول حاجة العين تقع عليها
+   ② شارات التعريف fs-2       ← الإذن ونوعه والحاويات والحركة
+   ③ الحقائق      fs-2       ← العميل/الشركة/التوكيل/الجهة…
+   ممنوع أي نص هنا ينزل تحت fs-2 غير الختم والتحذير. */
+.rv-info{min-width:0;display:grid;gap:5px}
+.rv-title{margin:0;font-size:var(--fs-4);line-height:var(--lh-tight);
+  color:var(--navy);font-weight:var(--fw-black)}
+.rv-title-sub{margin-inline-start:var(--space-2);font-size:var(--fs-2);
+  color:var(--grey);font-weight:var(--fw-bold)}
+.rv-l1{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.rv-ref{padding:2px 9px;border-radius:var(--radius-pill);background:var(--navy);color:var(--white);
+  font-size:var(--fs-2);font-weight:var(--fw-black);letter-spacing:.2px}
+.rv-tag{padding:2px 9px;border-radius:var(--radius-pill);background:var(--zebra);border:1px solid var(--line);
+  font-size:var(--fs-2);color:var(--grey);font-weight:var(--fw-bold)}
+.rv-tag.visa{background:#f3eefa;border-color:#ddd0ee;color:#5d4180}
+.rv-tag.box{background:#eef4fa;border-color:#cddeee;color:var(--navy)}
+.rv-tag.type{background:var(--gold-light);border-color:#e0cf8f;color:var(--gold-dark)}
+.rv-tag.rep{background:#eaf6ef;border-color:#c3e2ce;color:var(--green)}
+/* سطر الحقائق: العميل/الشركة/التوكيل/الجهة/العربية… ظاهرة بلا فتح أي شيء */
+.rv-facts{display:flex;flex-wrap:wrap;gap:4px var(--space-4);margin:0}
+.rv-facts>div{display:flex;align-items:baseline;gap:5px;min-width:0}
+.rv-facts dt{font-size:var(--fs-2);color:var(--grey);white-space:nowrap}
+.rv-facts dt:after{content:":"}
+.rv-facts dd{margin:0;font-size:var(--fs-2);color:var(--ink);font-weight:var(--fw-bold)}
+.rv-stamp{font-size:var(--fs-1);color:var(--green);font-weight:var(--fw-bold)}
+.rv-warn{font-size:var(--fs-2);color:var(--gold-dark);font-weight:var(--fw-black)}
+.rv-money{display:grid;justify-items:end;gap:3px;white-space:nowrap}
+.rv-amt{font-size:var(--fs-5);font-weight:var(--fw-black);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rv-amt.out{color:var(--red)}
+.rv-amt.in{color:var(--green)}
+.rv-calc{font-size:var(--fs-2);color:var(--grey);font-variant-numeric:tabular-nums}
+.rv-actual{font-size:var(--fs-2);color:var(--green);font-weight:var(--fw-black);font-variant-numeric:tabular-nums}
+.rv-actual.missing{color:var(--grey);font-weight:var(--fw-bold)}
+.rv-open{display:grid;place-items:center;width:36px;height:36px;border-radius:var(--radius-1);
+  background:var(--zebra);color:var(--navy);text-decoration:none;font-weight:var(--fw-black)}
+.rv-open:hover{background:var(--navy);color:var(--white)}
+.rv-open.placeholder{background:transparent}
+
+.rv-empty{display:grid;justify-items:center;gap:var(--space-1);padding:var(--space-6);
+  border:1px dashed var(--line2);border-radius:var(--radius-2);background:var(--zebra);text-align:center}
+.rv-empty>span{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;
+  background:var(--green-lt);color:var(--green);font-weight:var(--fw-black)}
+.rv-empty b{font-size:var(--fs-3);color:var(--navy)}
+.rv-empty small{font-size:var(--fs-2);color:var(--grey)}
+.rv-nores{padding:var(--space-5);text-align:center;color:var(--grey);font-size:var(--fs-2)}
+.rv-manual{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);margin-top:var(--space-3)}
+.rv-manual small{font-size:var(--fs-1);color:var(--grey)}
+/* ⚠️ الإخفاء بالجافاسكريبت نفسه (`js-review` بتتحط من السكربت) مش من الخادم:
+   لو اتخفى بشرط الخادم، المتصفح اللي الجافاسكريبت متعطّل فيه كان هيفضل بلا أي
+   طريقة يحفظ بيها — الحفظ التلقائي والزرار الاحتياطي ما ينفعش يتشالوا مع بعض. */
+.cl-page.js-review .rv-manual{display:none}
+
+/* الإقفال */
+.cl-close{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:var(--space-4);
+  padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-3);background:var(--card)}
+.cl-close.is-ready{border-color:var(--gold);background:linear-gradient(135deg,var(--gold-light),var(--white))}
+.cl-close.is-closed{border-color:#bfe0cb;background:var(--green-lt)}
+.cl-close-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:var(--radius-2);
+  background:var(--zebra);font-size:var(--fs-5)}
+.cl-close.is-ready .cl-close-icon{background:var(--gold);color:var(--white)}
+.cl-close.is-closed .cl-close-icon{background:#cfe9d8}
+.cl-close-txt{display:grid;gap:2px;min-width:0}
+.cl-close-txt b{font-size:var(--fs-3);color:var(--navy)}
+.cl-close-txt span{font-size:var(--fs-2);color:var(--grey)}
+.cl-close-txt strong{color:var(--navy)}
+.cl-close-meta{font-size:var(--fs-1);color:var(--grey)}
+.cl-close-act small{display:block;max-width:280px;text-align:end;font-size:var(--fs-1);color:var(--grey)}
+.cl-close-act .btn{min-height:46px}
+.cl-close-act .btn:disabled{opacity:.55;cursor:not-allowed}
+
+/* شريط لاصق سفلي */
+.cl-bar{position:sticky;bottom:0;z-index:var(--z-sticky);display:grid;
+  grid-template-columns:auto 1fr auto;align-items:center;gap:var(--space-3);
+  padding:var(--space-2) var(--space-3);border:1px solid var(--line);border-radius:var(--radius-2);
+  background:rgba(255,255,255,.96);backdrop-filter:blur(6px);box-shadow:var(--shadow-3)}
+.cl-bar[data-ready="1"]{border-color:var(--green);background:rgba(227,241,231,.97)}
+.cl-bar-txt{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.cl-bar-txt b{font-size:var(--fs-3);color:var(--navy);font-variant-numeric:tabular-nums}
+.cl-bar-txt span{font-size:var(--fs-1);color:var(--grey)}
+.cl-bar-line{height:8px;border-radius:var(--radius-pill);background:var(--line);overflow:hidden}
+.cl-bar-line i{display:block;height:100%;background:var(--gold);transition:width var(--dur-base) var(--ease)}
+.cl-bar[data-ready="1"] .cl-bar-line i{background:var(--green)}
+
+/* ═══════════ الهاتف ═══════════ */
+@media(max-width:900px){
+  .cl-top{grid-template-columns:1fr;gap:var(--space-3)}
+  .cl-dates{flex-wrap:wrap}
+  .cl-dates form{flex:1 1 160px}
+  .cl-top-actions .btn{width:100%;justify-content:center}
+  .cl-flow .op{display:none}
+  .cl-cell{flex:1 1 calc(50% - var(--space-2))}
+  .cl-cell.result{flex:1 1 100%}
+  .rv-gauge{width:100%}
+  .rv-gh{grid-template-columns:auto 1fr;gap:var(--space-2) var(--space-3)}
+  .rv-gstat{grid-column:2;justify-items:start;grid-auto-flow:column;justify-content:start;gap:var(--space-3);align-items:baseline}
+  .rv-gall{grid-column:1/-1;width:100%}
+  .cl-close{grid-template-columns:auto 1fr}
+  .cl-close-act{grid-column:1/-1}
+  .cl-close-act .btn,.cl-close-act form{width:100%}
+  .cl-close-act .btn{justify-content:center}
+  .cl-close-act small{max-width:none;text-align:start}
+}
+@media(max-width:640px){
+  .cl-page{gap:var(--space-3)}
+  .cl-top{padding:var(--space-3)}
+  .cl-top h1{font-size:var(--fs-5)}
+  .cl-review{padding:var(--space-3)}
+  .cl-cell{flex:1 1 100%}
+  .rv-head{gap:var(--space-3)}
+  .rv-filters{width:100%}
+  .rv-fbtn{flex:1;justify-content:center}
+  /* البند بيتحوّل لكارت: العلامة والمبلغ في صف، والتفاصيل تحتهم */
+  .rv-item{grid-template-columns:auto 1fr auto;gap:var(--space-2) var(--space-3);
+    padding:var(--space-3);align-items:start}
+  .rv-info{grid-column:2/-1;grid-row:1}
+  .rv-money{grid-column:2;grid-row:2;justify-items:start;grid-auto-flow:column;
+    justify-content:start;gap:var(--space-3);align-items:baseline}
+  .rv-amt{font-size:var(--fs-4)}
+  .rv-open{grid-column:3;grid-row:2;justify-self:end}
+  .rv-pick{grid-row:1/3;align-self:start}
+  .rv-facts{gap:var(--space-1) var(--space-2)}
+  .cl-close{grid-template-columns:1fr;text-align:center;justify-items:center}
+  .cl-close-txt{justify-items:center}
+  .cl-bar{grid-template-columns:1fr auto;gap:var(--space-2)}
+  .cl-bar-line{grid-column:1/-1;grid-row:2}
+}
+@media(prefers-reduced-motion:reduce){
+  .rv-box,.rv-box:after,.rv-gauge-bar i,.cl-bar-line i,.rv-item{transition:none}
+}
 </style>
 
-<?php if ($recon['available'] && $reconEditable): ?>
+<?php if ($canReview): ?>
 <script>
-(function(){
-  var form=document.getElementById('reconForm');if(!form)return;
-  var money=function(n){return(Math.round(n*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})};
-  var num=function(el){var n=parseFloat(el&&el.value);return isFinite(n)?n:0};
-  function paint(el,diff,reviewed){if(!el)return;el.textContent=reviewed?money(diff):'—';el.classList.toggle('has-diff',reviewed&&Math.abs(diff)>=.005)}
-  function update(){var systemClients=0,manualClients=0,any=false;
-    form.querySelectorAll('.cl-client-card.recon-row').forEach(function(row){var system=parseFloat(row.dataset.systemTotal||0),input=row.querySelector('.manual-total'),reviewed=input&&input.value!=='',manual=num(input),diff=manual-system;systemClients+=system;manualClients+=manual;any=any||reviewed;paint(row.querySelector('.client-diff'),diff,reviewed);row.classList.toggle('is-match',reviewed&&Math.abs(diff)<.005);row.classList.toggle('is-different',reviewed&&Math.abs(diff)>=.005)});
-    var general=form.querySelector('.cl-general-card'),generalSystem=0,generalManual=0;if(general){generalSystem=parseFloat(general.dataset.systemTotal||0);var gi=general.querySelector('.manual-general'),reviewed=gi&&gi.value!=='';generalManual=num(gi);any=any||reviewed;paint(general.querySelector('.general-diff'),generalManual-generalSystem,reviewed)}
-    var manual=manualClients+generalManual,diff=manual-(systemClients+generalSystem);var manualEl=document.getElementById('manualCashTotal');if(manualEl)manualEl.textContent=any?money(manual):'—';['reconGrandDiff','reconGrandDiffBottom'].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent=any?money(diff):'—'});var summary=document.getElementById('reconGrandDiff')?.parentElement;if(summary)summary.classList.toggle('has-diff',any&&Math.abs(diff)>=.005);var bottom=document.getElementById('reconGrandDiffBottom')?.parentElement;if(bottom){bottom.classList.toggle('matched',any&&Math.abs(diff)<.005);var small=bottom.querySelector('small');if(small)small.textContent=any&&Math.abs(diff)<.005?'✓ الأرقام مطابقة':'يجب أن يصبح الفرق 0.00'}}
-  form.addEventListener('input',function(e){if(e.target.classList.contains('recon-input'))update()});update();
+/* مراجعة بنود التقفيل — حفظ فوري لكل علامة (مع مسار رجوع كامل بلا JS).
+   ⚠️ الفورم بيفضل موجود وشغّال: لو النداء فشل بنرجّع العلامة زي ما كانت
+      وبنوضّح السبب، فمستحيل المالك يفتكر إنه علّم بند وهو ما اتحفظش. */
+(function () {
+  var page = document.getElementById('clPage');
+  var form = document.getElementById('rvForm');
+  if (!page || !form) { return; }
+
+  var URL_ITEM  = <?= js_json(url('closing/review')) ?>;
+  var URL_GROUP = <?= js_json(url('closing/review-group')) ?>;
+  var CSRF      = <?= js_json(\App\Core\Auth::csrf()) ?>;
+  var DATE      = page.dataset.date;
+
+  var bar = document.getElementById('clBar');
+  var closeBtn = document.getElementById('clCloseBtn');
+  page.classList.add('js-review');   // الحفظ بقى تلقائي → الزرار الاحتياطي يتخفى
+
+  function post(url, data) {
+    var body = new FormData();
+    body.append('_csrf', CSRF);
+    body.append('date', DATE);
+    Object.keys(data).forEach(function (k) { body.append(k, data[k]); });
+    return fetch(url, { method: 'POST', body: body, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json().catch(function () { throw new Error('رد غير متوقّع من الخادم'); }); })
+      .then(function (j) { if (!j || !j.ok) { throw new Error((j && j.flash) || 'تعذّر الحفظ'); } return j; });
+  }
+
+  /* ⚠️ ممنوع alert/confirm الأصلية في الواجهات (قاعدة verify_forms_feedback):
+     الرسالة بتتعرض في شريط ثابت جوّه الشاشة، و`AppUI.notice` فوقه لو موجودة. */
+  var errBar = document.getElementById('rvError');
+  function fail(msg) {
+    if (errBar) {
+      errBar.textContent = '⚠️ ما اتحفظتش المراجعة: ' + msg;
+      errBar.hidden = false;
+    }
+    // ⚠️ توقيع الدالة `notice(message, title)` — التاني **نص** مش كائن.
+    //    تمرير كائن كان بيطبع «[object Object]» مكان العنوان. اتصادف فعليًّا.
+    if (window.AppUI && window.AppUI.notice) { window.AppUI.notice(msg, 'ما اتحفظتش المراجعة'); }
+  }
+  function clearFail() { if (errBar) { errBar.hidden = true; } }
+
+  /* ترسم حالة اليوم كله من رد الخادم — الخادم هو مصدر الحقيقة مش المتصفح. */
+  function paint(j) {
+    var t = j.totals || {};
+    var pct = t.percent || 0;
+    set('rvPercent', pct);
+    set('rvReviewed', t.blocking_reviewed);
+    set('rvCntAll', t.count);
+    set('rvCntPending', t.pending);
+    set('rvCntDone', t.reviewed);
+    var pendTxt = document.getElementById('rvPendingTxt');
+    if (pendTxt) { pendTxt.textContent = t.blocking_pending ? ('فاضل ' + t.blocking_pending + ' بند') : 'كل البنود اتراجعت ✓'; }
+    var g = document.getElementById('rvGauge');
+    if (g) { g.classList.toggle('done', !!j.complete); }
+    var barEl = document.getElementById('rvBar');
+    if (barEl) { barEl.style.width = pct + '%'; }
+
+    (j.items || []).forEach(function (it) {
+      var row = form.querySelector('.rv-item[data-key="' + cssEscape(it.key) + '"]');
+      if (!row) { return; }
+      row.classList.toggle('is-done', !!it.reviewed);
+      row.classList.toggle('is-stale', !!it.stale);
+      var box = row.querySelector('.rv-check');
+      if (box) { box.checked = !!it.reviewed; }
+      var stamp = row.querySelector('.rv-stamp');
+      if (stamp) {
+        stamp.hidden = !it.reviewed;
+        if (it.reviewed) { stamp.textContent = '✓ راجعه ' + (it.by || '—') + (it.at ? ' — ' + it.at : ''); }
+      }
+      if (!it.stale) { var w = row.querySelector('.rv-warn'); if (w) { w.remove(); } }
+    });
+
+    Object.keys(j.groups || {}).forEach(function (key) {
+      var gi = j.groups[key];
+      var el = document.querySelector('.rv-group[data-group="' + cssEscape(key) + '"]');
+      if (!el) { return; }
+      el.classList.toggle('is-done', !!gi.done);
+      var cnt = el.querySelector('[data-count-for]');
+      if (cnt) { cnt.textContent = gi.reviewed + '/' + gi.count; }
+      var all = el.querySelector('[data-group-toggle]');
+      if (all) { all.textContent = gi.done ? 'شيل علامات القسم' : 'علّم القسم كله'; }
+    });
+
+    if (bar) {
+      // القيمة "1" بالتحديد — مُحدِّد الـCSS هو [data-ready="1"] وtoggleAttribute بتحط قيمة فاضية
+      if (j.complete) { bar.setAttribute('data-ready', '1'); } else { bar.removeAttribute('data-ready'); }
+      set('clBarNum', (t.blocking_reviewed || 0) + '/' + (t.blocking || 0));
+      var msg = document.getElementById('clBarMsg');
+      if (msg) { msg.textContent = j.complete ? 'كل البنود اتراجعت' : 'بند اتراجع'; }
+      var fill = document.getElementById('clBarFill');
+      if (fill) { fill.style.width = pct + '%'; }
+      var go = document.getElementById('clBarGo');
+      if (go) { go.textContent = j.complete ? 'اقفل اليوم ↓' : 'اذهب للإقفال ↓'; }
+    }
+    if (closeBtn) { closeBtn.disabled = !j.complete; }
+    var blockTxt = document.getElementById('clBlockTxt');
+    if (blockTxt && !j.complete) { blockTxt.textContent = 'فاضل ' + (t.blocking_pending || 0) + ' بند من غير علامة مراجعة.'; }
+    applyFilter();
+  }
+
+  function set(id, val) { var el = document.getElementById(id); if (el && val !== undefined && val !== null) { el.textContent = val; } }
+  function cssEscape(s) { return String(s).replace(/["\\]/g, '\\$&'); }
+
+  /* علامة بند واحد */
+  form.addEventListener('change', function (e) {
+    var box = e.target;
+    if (!box.classList || !box.classList.contains('rv-check')) { return; }
+    var wanted = box.checked;
+    box.disabled = true;
+    post(URL_ITEM, { type: box.dataset.type, item_id: box.dataset.id, state: wanted ? '1' : '0' })
+      .then(function (j) { clearFail(); paint(j); })
+      .catch(function (err) { box.checked = !wanted; fail(err.message || 'تعذّر الحفظ'); })
+      .then(function () { box.disabled = false; });
+  });
+
+  /* علامة قسم كامل */
+  document.querySelectorAll('[data-group-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.dataset.groupToggle;
+      var el = document.querySelector('.rv-group[data-group="' + cssEscape(key) + '"]');
+      var wanted = !(el && el.classList.contains('is-done'));
+      btn.disabled = true;
+      post(URL_GROUP, { group: key, state: wanted ? '1' : '0' })
+        .then(function (j) { clearFail(); paint(j); })
+        .catch(function (err) { fail(err.message || 'تعذّر الحفظ'); })
+        .then(function () { btn.disabled = false; });
+    });
+  });
+
+  /* بحث وفلترة — كلها في المتصفح بلا أي طلب للخادم */
+  var search = document.getElementById('rvSearch');
+  var mode = 'all';
+  function applyFilter() {
+    var q = (search && search.value || '').trim().toLowerCase();
+    var shown = 0;
+    document.querySelectorAll('.rv-item').forEach(function (row) {
+      var done = row.classList.contains('is-done');
+      var okMode = mode === 'all' || (mode === 'pending' ? !done : done);
+      var okText = !q || (row.dataset.search || '').indexOf(q) !== -1;
+      var show = okMode && okText;
+      row.hidden = !show;
+      if (show) { shown++; }
+    });
+    document.querySelectorAll('.rv-group').forEach(function (g) {
+      g.hidden = !g.querySelector('.rv-item:not([hidden])');
+    });
+    var none = document.getElementById('rvNoRes');
+    if (none) { none.hidden = shown !== 0 || !document.querySelector('.rv-item'); }
+  }
+  if (search) { search.addEventListener('input', applyFilter); }
+  document.querySelectorAll('.rv-fbtn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.rv-fbtn').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      mode = b.dataset.filter;
+      applyFilter();
+    });
+  });
+
+  /* الضغط على أي مكان في صف البند بيعلّمه — أسهل بكتير على الهاتف */
+  form.addEventListener('click', function (e) {
+    if (e.target.closest('a, label, input, button')) { return; }
+    var row = e.target.closest('.rv-item');
+    if (!row) { return; }
+    var box = row.querySelector('.rv-check');
+    if (box && !box.disabled) { box.checked = !box.checked; box.dispatchEvent(new Event('change', { bubbles: true })); }
+  });
 })();
 </script>
 <?php endif; ?>

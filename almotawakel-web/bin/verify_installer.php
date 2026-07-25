@@ -24,9 +24,18 @@ $check = function (bool $condition, string $message) use (&$failures): void {
 };
 
 $migrations = MigrationRunner::discover();
-$expectedVersions = array_merge(range(2, 41), [44, 45]);
-$check(array_keys($migrations) === $expectedVersions, 'اكتشاف v2…v41 ثم v44 وv45 بترتيب رقمي، بما فيه اسم v30 ذي اللاحقة');
+$expectedVersions = array_merge(range(2, 41), range(44, 48));
+$check(array_keys($migrations) === $expectedVersions, 'اكتشاف v2…v41 ثم v44…v48 بترتيب رقمي، بما فيه اسم v30 ذي اللاحقة');
 $check(($migrations[30]['filename'] ?? '') === 'migrate_v30_container_types.php', 'تحليل migrate_v30_container_types.php كإصدار 30');
+$appliedBeforeTests = MigrationRunner::applied();
+$ledgerV2 = (string) ($appliedBeforeTests[2]['checksum'] ?? '');
+$currentV2 = (string) $migrations[2]['checksum'];
+$beforeGuardV2 = MigrationRunner::checksumBeforeCliGuard($migrations[2]['path']);
+$check(
+    $ledgerV2 !== ''
+    && (hash_equals($ledgerV2, $currentV2) || hash_equals($ledgerV2, $beforeGuardV2)),
+    'v2 إما baseline مُسوّى أو بصمته القديمة مثبتة بحذف حارس CLI فقط'
+);
 $tampered = $migrations;
 $tampered[40]['checksum'] = str_repeat('0', 64);
 try {
@@ -59,10 +68,11 @@ try {
     }
 
     unlink($tmp . '/migrate_vbad.php');
-    $failurePath = $tmp . '/migrate_v46_failure_probe.php';
+    $failureVersion = 999999;
+    $failurePath = $tmp . "/migrate_v{$failureVersion}_failure_probe.php";
     file_put_contents($failurePath, "<?php\nfwrite(STDERR, 'synthetic migration failure');\nexit(7);\n");
-    $migrations[46] = [
-        'version' => 46,
+    $migrations[$failureVersion] = [
+        'version' => $failureVersion,
         'filename' => basename($failurePath),
         'path' => $failurePath,
         'checksum' => hash_file('sha256', $failurePath),
@@ -73,8 +83,57 @@ try {
     } catch (RuntimeException $e) {
         $check(str_contains($e->getMessage(), 'synthetic migration failure'), 'fail-fast يعيد خطأ الترحيل بوضوح');
     }
-    $check(!Database::scalar('SELECT COUNT(*) FROM schema_migrations WHERE version=46'), 'لا يُسجّل الترحيل الفاشل في ledger');
-    $check((int) Database::scalar('SELECT COUNT(*) FROM schema_migrations') === 42, 'آخر إصدار ناجح محفوظ دون تغيير');
+    $check(!Database::scalar(
+        'SELECT COUNT(*) FROM schema_migrations WHERE version=?',
+        [$failureVersion]
+    ), 'لا يُسجّل الترحيل الفاشل في ledger');
+    $check(
+        (int) Database::scalar('SELECT COUNT(*) FROM schema_migrations') === count($appliedBeforeTests),
+        'آخر إصدار ناجح محفوظ دون تغيير'
+    );
+
+    $structuredVersion = 999998;
+    $structuredPath = $tmp . "/migrate_v{$structuredVersion}_contract_probe.php";
+    file_put_contents(
+        $structuredPath,
+        "<?php\nreturn [\n"
+        . "  'up' => static function (): void {},\n"
+        . "  'verify' => static fn(): bool => true,\n"
+        . "];\n"
+    );
+    $structuredMigrations = MigrationRunner::discover();
+    $structuredMigrations[$structuredVersion] = [
+        'version' => $structuredVersion,
+        'filename' => basename($structuredPath),
+        'path' => $structuredPath,
+        'checksum' => hash_file('sha256', $structuredPath),
+    ];
+    ksort($structuredMigrations, SORT_NUMERIC);
+    try {
+        $result = MigrationRunner::applyOneInProcess(
+            $structuredVersion,
+            $structuredMigrations,
+            ['backup_sha256' => str_repeat('a', 64), 'operator_name' => 'verify_installer']
+        );
+        $check($result['version'] === $structuredVersion, 'تشغيل structured migration داخل عملية واحدة');
+        $check(
+            (int) Database::scalar(
+                'SELECT COUNT(*) FROM schema_migrations WHERE version=?',
+                [$structuredVersion]
+            ) === 1,
+            'تسجيل structured migration بعد نجاح verify فقط'
+        );
+        $check(
+            (int) Database::scalar(
+                'SELECT COUNT(*) FROM schema_migration_events WHERE version=? AND action=?',
+                [$structuredVersion, 'applied']
+            ) === 1,
+            'تسجيل حدث append-only للترحيل الناجح'
+        );
+    } finally {
+        Database::exec('DELETE FROM schema_migration_events WHERE version=?', [$structuredVersion]);
+        Database::exec('DELETE FROM schema_migrations WHERE version=?', [$structuredVersion]);
+    }
 } finally {
     foreach (glob($tmp . '/*') ?: [] as $file) { unlink($file); }
     rmdir($tmp);
@@ -83,6 +142,21 @@ try {
 $installSource = (string) file_get_contents(App::basePath('bin/install.php'));
 $check(!str_contains($installSource, 'TRUNCATE TABLE'), 'install/update لا يحتويان مسار TRUNCATE');
 $check(!str_contains($installSource, "is_file(\$jsonPath)"), 'وجود old_data.json لا يفعّل الاستيراد تلقائيًا');
+
+$deploySource = (string) file_get_contents(App::basePath('bin/deploy.sh'));
+$check(
+    !str_contains($deploySource, 'ssh "$HOST" "cd \'$REMOTE\' && php $m"'),
+    'deploy لا يشغّل ملف migration خامًا'
+);
+$check(
+    str_contains($deploySource, 'php bin/migration.php apply-one'),
+    'deploy يمر عبر بوابة apply-one المتوافقة مع Hostinger'
+);
+$schemaSource = (string) file_get_contents(App::basePath('database/schema.sql'));
+$check(
+    str_contains($schemaSource, 'CREATE TABLE IF NOT EXISTS schema_migration_events'),
+    'schema الجديدة تحتوي سجل أحداث append-only'
+);
 
 if ($failures) {
     echo 'فشل ' . count($failures) . " اختبار.\n";

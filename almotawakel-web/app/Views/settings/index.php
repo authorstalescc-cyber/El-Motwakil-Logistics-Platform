@@ -42,7 +42,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 <!-- ============ تبويب: عام ============ -->
 <div class="tab-panel active" id="tab-general">
   <div class="card" style="padding:22px;max-width:760px">
-    <div class="section-head">🏢 بيانات الشركة والإعدادات العامة</div>
+    <div class="section-head"><?= icon('home', 17) ?> بيانات الشركة والإعدادات العامة</div>
     <form method="post" action="<?= url('settings/general') ?>">
       <?= csrfField() ?>
       <div class="set-grid">
@@ -105,7 +105,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 <!-- ============ تبويب: الأذونات والتايم لاين ============ -->
 <div class="tab-panel" id="tab-permits">
   <div class="card" style="padding:22px">
-    <div class="section-head">🗂️ إعدادات الأذونات والتايم لاين</div>
+    <div class="section-head"><?= icon('folder', 17) ?> إعدادات الأذونات والتايم لاين</div>
     <form method="post" action="<?= url('settings/permits') ?>">
       <?= csrfField() ?>
       <div class="set-grid" style="margin-bottom:22px">
@@ -147,7 +147,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         </tbody>
       </table></div>
 
-      <div class="section-head" style="margin-top:26px">🧾 قواعد مرشد الإيصالات</div>
+      <div class="section-head" style="margin-top:26px"><?= icon('receipt', 17) ?> قواعد مرشد الإيصالات</div>
       <p style="font-size:.82rem;color:var(--ink-mut);font-weight:700;margin:4px 0 14px">
         استرشادي بحت — بيقول «الإذن ده المتوقّع فيه كذا» بس، مايلزمش بأي حاجة. اكتب توكيل في كل سطر.
       </p>
@@ -184,7 +184,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 </style>
 <div class="tab-panel" id="tab-ai">
   <div class="card" style="padding:22px;max-width:760px">
-    <div class="section-head">🤖 مفاتيح المساعد الذكي (Groq AI)</div>
+    <div class="section-head"><?= icon('cpu', 17) ?> مفاتيح المساعد الذكي (Groq AI)</div>
     <p class="maint-note">المفتاح زي كلمة السر — بلاش تنشره لأي حد. تقدر تحفظ مفتاحين وتبدّل بينهم لو خلص رصيد واحد منهم. اضغط «اختبار» عشان تتأكد إن المفتاح شغّال قبل ما تعتمد عليه.</p>
     <form method="post" action="<?= url('settings/ai') ?>" id="ai-set-form" class="no-confirm">
       <?= csrfField() ?>
@@ -270,7 +270,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 <?php endif; ?>
   <div class="set-grid">
     <div class="card" style="padding:22px">
-      <div class="section-head">➕ إضافة مستخدم جديد</div>
+      <div class="section-head"><?= icon('plus', 17) ?> إضافة مستخدم جديد</div>
       <form method="post" action="<?= url('settings/users') ?>" autocomplete="off">
         <?= csrfField() ?>
         <div class="field">
@@ -294,7 +294,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
     </div>
 
     <div class="card" style="padding:22px">
-      <div class="section-head">👥 المستخدمون الحاليون</div>
+      <div class="section-head"><?= icon('users', 17) ?> المستخدمون الحاليون</div>
       <div class="table-wrap">
       <table class="data">
         <thead><tr><th>اسم الدخول</th><th>الاسم الظاهر</th><th>الدور</th><th>الدخول الحر</th><th></th></tr></thead>
@@ -355,7 +355,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
   <div class="set-grid">
     <?php if ($canManageSecrets): ?>
     <div class="card" style="padding:22px">
-      <div class="section-head">💾 النسخ الاحتياطي</div>
+      <div class="section-head"><?= icon('download', 17) ?> النسخ الاحتياطي</div>
       <form method="post" action="<?= url('backup') ?>" class="no-confirm">
         <?= csrfField() ?>
         <button class="btn" type="submit">⬇️ تنزيل نسخة احتياطية الآن</button>
@@ -364,7 +364,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
     <?php endif; ?>
 
     <div class="card" style="padding:22px">
-      <div class="section-head">🔤 توحيد المسميات المكررة</div>
+      <div class="section-head"><?= icon('file-text', 17) ?> توحيد المسميات المكررة</div>
       <form method="post" action="<?= url('settings/normalize') ?>" data-confirm="تشغيل توحيد المسميات المكررة الآن؟ سيتم تعديل البيانات لتوحيد الأسماء المتشابهة.">
         <?= csrfField() ?>
         <button class="btn gold" type="submit">🔤 توحيد المسميات الآن</button>

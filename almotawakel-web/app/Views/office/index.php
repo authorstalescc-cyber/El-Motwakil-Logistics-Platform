@@ -1,98 +1,103 @@
+<?php
+/**
+ * كروت الفيزا — رصيد المكتب (اتحوّلت للغة النظام في المرحلة ١٤).
+ *
+ * ⚠️ **ممنوع رقم أصمّ**: التلات أرقام فوق بيفتحوا بنودهم من
+ *    `GET /office/drill/{what}` — بيتجابوا عند الضغط بس.
+ *
+ * ⚠️ **العزل المالي زي ما هو (v22)**: الكارت حساب مستقل — المدفوع بالفيزا
+ *    ما بيتخصمش من خزنة المكتب ولا من التقفيل اليومي. الشاشة عرض بحت.
+ */
+$od = static fn (string $what): string => url('office/drill/' . $what);
+?>
 <div class="toolbar">
-  <div class="section-head" style="margin:0">💳 رصيد المكتب — كروت الفيزا</div>
+  <div class="section-head" style="margin:0"><?= icon('credit-card', 18) ?> رصيد المكتب — كروت الفيزا</div>
   <div class="spacer"></div>
-  <button type="button" class="btn ghost secret-toggle">👁 إظهار الأرصدة</button>
-  <a class="btn gold" href="<?= url('office/new') ?>?back=<?= urlencode(current_app_path() ?: 'office') ?>">➕ إضافة كارت</a>
+  <button type="button" class="btn ghost secret-toggle" aria-pressed="false">👁 إظهار الأرصدة</button>
+  <a class="btn gold" href="<?= url('office/new') ?>?back=<?= urlencode(current_app_path() ?: 'office') ?>"><?= icon('plus', 15) ?> إضافة كارت</a>
 </div>
 
-<!-- بطاقات النظرة العامة -->
-<div class="kpi-grid mb three">
-  <div class="kpi gold">
-    <div class="lbl">إجمالي الأرصدة المتاحة</div>
-    <div class="val" data-secret data-val="<?= e(intf($summary['balance'])) ?>">••••••</div>
-    <div style="opacity:.8;font-size:.8rem"><?= intf($summary['count']) ?> كارت</div>
-  </div>
-  <div class="kpi">
-    <div class="lbl">إجمالي الشحنات</div>
-    <div class="val pos"><?= intf($summary['deposits'] + $summary['opening']) ?></div>
-  </div>
-  <div class="kpi">
-    <div class="lbl">إجمالي المدفوع بالفيزا</div>
-    <div class="val neg"><?= intf($summary['payments']) ?></div>
-  </div>
-</div>
+<?php partial('stat_grid', ['items' => 3, 'class' => 'mb', 'body' => function () use ($summary, $od) { ?>
+  <?php partial('stat', [
+    'label' => 'إجمالي الأرصدة المتاحة', 'value' => intf($summary['balance']),
+    'unit'  => intf($summary['count']) . ' كارت',
+    'icon'  => 'credit-card', 'tone' => 'gold', 'secret' => true,
+    'drill' => $od('balance'), 'title' => 'رصيد كل كارت',
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'إجمالي الشحنات', 'value' => intf($summary['deposits'] + $summary['opening']),
+    'icon'  => 'wallet', 'tone' => 'green',
+    'drill' => $od('deposits'), 'title' => 'الشحنات على الكروت',
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'إجمالي المدفوع بالفيزا', 'value' => intf($summary['payments']),
+    'icon'  => 'trending-down', 'tone' => 'red',
+    'drill' => $od('payments'), 'title' => 'المدفوع من الكروت',
+  ]); ?>
+<?php }]); ?>
 
-<!-- جدول الكروت -->
-<div class="card mb">
-  <div class="section-head" style="padding:16px 18px 0;margin:0">🗂️ الكروت</div>
-  <div class="table-wrap"><table class="data">
-    <thead><tr>
-      <th class="g-identity">الكارت</th>
-      <th class="g-identity">صاحب الكارت</th>
-      <th class="g-identity">البنك</th>
-      <th class="g-revenue">شحنات الرصيد</th>
-      <th class="g-expense">مدفوع (فيزا)</th>
-      <th class="g-result">الرصيد المتاح</th>
-      <th class="g-identity"></th>
-    </tr></thead>
-    <tbody>
-      <?php if(!$cards): ?>
-        <tr><td colspan="7"><div class="empty"><div class="ic">💳</div><b>مفيش كروت فيزا</b><span>ضيف أول كارت عشان تتابع رصيده ومدفوعاته.</span><a class="btn sm" href="<?= url('office/new') ?>">➕ إضافة كارت</a></div></td></tr>
-      <?php else: foreach ($cards as $c): ?>
-        <tr<?= $c['status']==='inactive'?' style="opacity:.55"':'' ?>>
-          <td style="text-align:right;font-weight:700">
-            <a href="<?= url('office/'.$c['id']) ?>">💳 <?= e($c['name']) ?></a>
-            <?php if($c['status']==='inactive'): ?><span class="pill st-partial">متوقف</span><?php endif; ?>
-          </td>
-          <td style="text-align:right"><?= e($c['owner'] ?: '—') ?></td>
-          <td style="text-align:right"><?= e($c['bank'] ?: '—') ?></td>
-          <td class="pos"><?= money($c['dep_total'] + $c['opening_balance'],false) ?></td>
-          <td class="neg"><?= money($c['pay_total'],false) ?></td>
-          <td style="font-weight:800" class="<?= $c['balance']<0?'neg':'pos' ?>" data-secret data-val="<?= e(money($c['balance'],false)) ?>">••••••</td>
-          <td style="white-space:nowrap">
-            <a class="edit" href="<?= url('office/'.$c['id']) ?>" title="التفاصيل والسجل">🔎</a>
-            <a class="edit" href="<?= url('office/'.$c['id'].'/edit') ?>?back=<?= urlencode(current_app_path() ?: 'office') ?>" title="تعديل">✏️</a>
-          </td>
-        </tr>
-      <?php endforeach; endif; ?>
-    </tbody>
-  </table></div>
-</div>
+<?php /* الجدول (٧ أعمدة) اتشال: كل صف هنا **كارت** — كيان له اسم وصاحب ورصيد،
+         مش سطر مقارنة رقمية. الكارت بيتقرا بنظرة وبيشتغل على الموبايل. */ ?>
+<?php partial('panel', [
+  'title'  => 'الكروت',
+  'icon'   => 'layers',
+  'badge'  => $cards ? ['text' => intf(count($cards)), 'tone' => 'navy'] : null,
+  'action' => $cards ? ['label' => 'كل الأرصدة', 'drill' => $od('balance'), 'title' => 'رصيد كل كارت'] : null,
+  'class'  => 'mb',
+  'body'   => function () use ($cards) {
+    if (!$cards) {
+      partial('empty', [
+        'emoji' => '💳', 'title' => 'مفيش كروت فيزا',
+        'note'  => 'ضيف أول كارت عشان تتابع رصيده ومدفوعاته.',
+        'action' => ['label' => 'إضافة كارت', 'url' => url('office/new')],
+      ]);
+      return;
+    }
+    echo '<div class="rp-cards flat">';
+    foreach ($cards as $c) {
+      $tags = [
+        ['icon' => 'wallet', 'text' => 'شحن ' . money($c['dep_total'] + $c['opening_balance'], false)],
+        ['icon' => 'trending-down', 'text' => 'مدفوع ' . money($c['pay_total'], false), 'tone' => 'ex'],
+      ];
+      if ($c['bank']) { $tags[] = ['icon' => 'home', 'text' => $c['bank']]; }
+      if ($c['status'] === 'inactive') { $tags[] = ['icon' => 'clock', 'text' => 'متوقف', 'tone' => 'low']; }
+      partial('entity_card', [
+        'name'  => $c['name'],
+        'url'   => url('office/' . (int) $c['id']),
+        'sub'   => $c['owner'] ?: 'كارت فيزا',
+        'value' => money($c['balance'], false),
+        'value_label' => 'الرصيد المتاح',
+        'value_tone'  => $c['balance'] < 0 ? 'neg' : 'pos',
+        'secret' => true,
+        'alert'  => $c['balance'] < 0,
+        'tags'   => $tags,
+      ]);
+    }
+    echo '</div>';
+  },
+]); ?>
 
-<!-- الأرصدة حسب صاحب الكارت -->
-<?php if($byOwner): ?>
-<div class="card">
-  <div class="section-head" style="padding:16px 18px 0;margin:0">👥 الأرصدة حسب صاحب الكارت</div>
-  <div class="table-wrap"><table class="data">
-    <thead><tr>
-      <th class="g-identity">صاحب الكارت</th>
-      <th class="g-identity">عدد الكروت</th>
-      <th class="g-result">إجمالي الرصيد المتاح</th>
-    </tr></thead>
-    <tbody>
-      <?php foreach ($byOwner as $o): ?>
-        <tr>
-          <td style="text-align:right;font-weight:700"><?= e($o['owner']) ?></td>
-          <td><?= intf($o['cards']) ?></td>
-          <td style="font-weight:800" class="<?= $o['balance']<0?'neg':'pos' ?>" data-secret data-val="<?= e(money($o['balance'],false)) ?>">••••••</td>
-        </tr>
-      <?php endforeach; ?>
-    </tbody>
-  </table></div>
-</div>
+<?php if ($byOwner): ?>
+  <?php partial('panel', [
+    'title'  => 'الأرصدة حسب صاحب الكارت',
+    'icon'   => 'users',
+    'badge'  => ['text' => intf(count($byOwner)), 'tone' => 'navy'],
+    'action' => ['label' => 'التفاصيل', 'drill' => $od('owners'), 'title' => 'الأرصدة حسب صاحب الكارت'],
+    'scroll' => true,
+    'body'   => function () use ($byOwner) {
+      foreach ($byOwner as $o) {
+        partial('row_item', [
+          'title'  => $o['owner'],
+          'icon'   => 'user',
+          'meta'   => [['icon' => 'credit-card', 'text' => intf($o['cards']) . ' كارت']],
+          'amount' => money($o['balance'], false),
+          'amount_tone' => $o['balance'] < 0 ? 'neg' : 'pos',
+        ]);
+      }
+    },
+  ]); ?>
 <?php endif; ?>
 
-<script>
-(function(){
-  // الأرصدة مخفية افتراضيًّا (بيانات حسّاسة) — زر واحد يُظهر/يخفي الكل
-  var shown = false;
-  document.querySelectorAll('[data-secret]').forEach(function(el){ el.dataset.mask = el.textContent; });
-  function apply(){
-    document.querySelectorAll('[data-secret]').forEach(function(el){
-      el.textContent = shown ? (el.getAttribute('data-val') || '') : (el.dataset.mask || '••••••');
-    });
-    document.querySelectorAll('.secret-toggle').forEach(function(b){ b.textContent = shown ? '🙈 إخفاء الأرصدة' : '👁 إظهار الأرصدة'; });
-  }
-  document.addEventListener('click', function(e){ if (e.target.closest('.secret-toggle')) { shown = !shown; apply(); } });
-})();
-</script>
+<?php /* ⚠️ سكربت إظهار/إخفاء الأرصدة عام في `app.js` — كان محليًّا هنا بس،
+         فشاشات تانية بتستخدم `[data-secret]` كانت بتفضل مقنّعة للأبد بلا أي
+         زرار يكشفها. ما ترجّعهوش هنا وإلا الضغطة تتنفّذ مرتين. */ ?>

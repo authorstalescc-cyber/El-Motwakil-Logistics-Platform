@@ -41,6 +41,41 @@ class PaymentController extends Controller
         ]);
     }
 
+    /**
+     * تفاصيل أرقام شاشة التحصيلات — قاعدة المالك «ممنوع رقم أصمّ».
+     *
+     * ⚠️ **مسار خاص بالوحدة** بقائمة بيضا مقفولة، بيمرّ على `Access::enforce`.
+     * ⚠️ **بيحترم فلاتر الشاشة** — الرقم اللي المالك ضغط عليه محسوب على
+     *    المعروض، فلو النافذة جابت الكل تبقى بتقول رقمًا تاني.
+     */
+    private const DRILL = ['all', 'cash', 'visa', 'none'];
+
+    public function drill(string $what): void
+    {
+        $this->requireAuth();
+        if (!in_array($what, self::DRILL, true)) {
+            $this->notFound('نوع التفاصيل ده مش موجود.');
+        }
+        $f = [
+            'client' => trim($_GET['client'] ?? ''),
+            'route'  => $what === 'all' ? trim($_GET['route'] ?? '') : $what,
+            'from'   => trim($_GET['from'] ?? ''),
+            'to'     => trim($_GET['to'] ?? ''),
+            'q'      => trim($_GET['q'] ?? ''),
+        ];
+        // ⚠️ محروسة بـ`headers_sent()` (باج v50 — Warning جوّه جسم الرد)
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: private, no-store, max-age=0');
+        }
+        $this->render('payments/_drill', [
+            'what'      => $what,
+            'rows'      => ClientPayment::all($f),
+            'summary'   => ClientPayment::summary($f),
+            'visaCards' => VisaCard::all(false),
+        ], false);
+    }
+
     public function pay(): void
     {
         $this->requireAuth();

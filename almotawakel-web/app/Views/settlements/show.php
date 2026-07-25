@@ -1,6 +1,7 @@
 <?php use App\Models\Bill; use App\Core\FormState;
 $paymentState = $paymentState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'settlements/'.(int)$bill['id']];
 $payOld = $paymentState['old']; $payErrors = $paymentState['errors']; ?>
+<?php partial('owner_tabs', ['active' => 'settlements']); ?>
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('settlements') ?>">‹ رجوع لقائمة السداد</a>
   <a class="btn ghost" href="<?= url('bawalis/'.$bill['id'].'/edit') ?>">✏️ تعديل البوليصة</a>

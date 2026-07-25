@@ -73,6 +73,7 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
 </div>
 
 <?php if($isEntries): ?>
+<?php partial('count_note', ['shown'=>count($logs), 'total'=>(int)($logsTotal ?? count($logs)), 'unit'=>'إدخال']); ?>
 <div class="card"><div class="table-wrap"><table class="data entry-table">
   <thead><tr><th>وقت الإدخال</th><th>المستخدم</th><th>نوع الإدخال</th><th>البيان</th><th>تاريخ العمل</th><th>تاريخ المستند</th><th>المراجعة</th><th></th></tr></thead>
   <tbody><?php foreach ($logs as $log): $state=$entryState($log);$href=$entryHref($log); ?>
@@ -89,6 +90,7 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
   <?php endforeach; ?><?php if (!$logs): ?><tr><td colspan="8"><div class="empty">لا توجد إدخالات مطابقة للفلاتر.</div></td></tr><?php endif; ?></tbody>
 </table></div></div>
 <?php else: ?>
+<?php partial('count_note', ['shown'=>count($logs), 'total'=>(int)($logsTotal ?? count($logs)), 'unit'=>'عملية']); ?>
 <div class="card"><div class="table-wrap"><table class="data">
   <thead><tr><th>الوقت</th><th>تاريخ العمل</th><th>المستخدم</th><th>العملية</th><th>القسم</th><th>السجل</th><th>البيان</th><th>قبل / بعد</th><th></th></tr></thead>
   <tbody><?php foreach ($logs as $log): $changes=$diffRows($log); ?>
@@ -103,8 +105,9 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
   <?php endforeach; ?><?php if (!$logs): ?><tr><td colspan="9"><div class="empty">لا توجد عمليات مطابقة.</div></td></tr><?php endif; ?></tbody>
 </table></div></div>
 
-<div class="section-head" id="trash" style="margin-top:24px">🗑️ سلة المحذوفات</div>
+<div class="section-head" id="trash" style="margin-top:24px"><?= icon('trash', 17) ?> ️ سلة المحذوفات</div>
 <div class="alert" style="margin-bottom:10px">السلة تسترجع فقط: <?php foreach(($restorableEntities??[]) as $i=>$entity): ?><?= $i?'، ':'' ?><?= e($labels[$entity]??$entity) ?><?php endforeach; ?>. الفواتير والكشوف والتحصيلات المالية لا تُحذف؛ تُلغى أو تُعكس وتظل ظاهرة في سجل العمليات.</div>
+<?php partial('count_note', ['shown'=>count($trash), 'total'=>(int)($trashTotal ?? count($trash)), 'unit'=>'سجل']); ?>
 <div class="card"><div class="table-wrap"><table class="data">
   <thead><tr><th>وقت الحذف</th><th>المستخدم</th><th>القسم</th><th>السجل</th><th>البيان</th><th></th></tr></thead>
   <tbody><?php foreach ($trash as $item): ?>

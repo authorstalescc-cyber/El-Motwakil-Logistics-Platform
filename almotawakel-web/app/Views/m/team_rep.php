@@ -103,6 +103,8 @@ $spendRow = function (array $s) use ($num) {
         <i class="wait" style="width:<?= round($waitPct, 1) ?>%"></i>
       </div>
       <dl class="hm-dl">
+        <?php /* v49 — عهدة يوم العمل جوّه التراكمي عشان الفرق يبان بوضوح */ ?>
+        <div><dt>عهدة <?= e(dfmt((string) $d['day'])) ?></dt><dd><?= $num($d['day_b']['balance']) ?></dd></div>
         <div><dt>نزل له</dt><dd><?= $num($b['deposits']) ?></dd></div>
         <div><dt>صرف</dt><dd><?= $num($b['spent']) ?></dd></div>
         <?php if ($d['pending'] > 0): ?>

@@ -47,7 +47,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 
 <!-- كشف حساب العميل -->
 <div class="card cp-wrap mb" style="padding:18px 20px">
-  <div class="section-head" style="margin:0 0 14px">📊 كشف حساب العميل</div>
+  <div class="section-head" style="margin:0 0 14px"><?= icon('bar-chart', 17) ?> كشف حساب العميل</div>
   <div class="cp-stmt">
     <div class="cp-stmt-cell">
       <span>المطلوب من العميل</span>
@@ -71,7 +71,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 
 <!-- التحصيلات + التخصيص والتوجيه للعهدة -->
 <div class="card cp-wrap mb">
-  <div class="section-head" style="padding:18px 20px 0;margin:0">💳 تحصيلات العميل
+  <div class="section-head" style="padding:18px 20px 0;margin:0"><?= icon('credit-card', 17) ?> تحصيلات العميل
     <span style="color:var(--grey);font-weight:600">(<?= count($payments) ?>)</span></div>
 
   <div class="cp-form-box">
@@ -153,7 +153,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 </div>
 
 <div class="card" style="padding:20px;margin-bottom:16px">
-  <div class="section-head">🏢 الشركات التي يمثّلها هذا الوكيل <span style="color:var(--grey);font-weight:600">(<?= count($companies) ?>)</span></div>
+  <div class="section-head"><?= icon('home', 17) ?> الشركات التي يمثّلها هذا الوكيل <span style="color:var(--grey);font-weight:600">(<?= count($companies) ?>)</span></div>
   <?php if($companies): ?>
     <div class="co-grid">
       <?php foreach($companies as $c): ?>
@@ -170,7 +170,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 </div>
 
 <div class="card" style="margin-bottom:16px">
-  <div class="section-head" style="padding:18px 20px 0">🗂️ الأذونات لصالح شركات هذا الوكيل <span style="color:var(--grey);font-weight:600">(<?= count($permits) ?>)</span></div>
+  <div class="section-head" style="padding:18px 20px 0"><?= icon('folder', 17) ?> الأذونات لصالح شركات هذا الوكيل <span style="color:var(--grey);font-weight:600">(<?= count($permits) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">النوع</th><th class="g-identity">الرقم</th><th class="g-identity">التاريخ</th>
@@ -197,7 +197,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 
 <?php if($invoices): ?>
 <div class="card">
-  <div class="section-head" style="padding:18px 20px 0">🧾 فواتير شامل <span style="color:var(--grey);font-weight:600">(<?= count($invoices) ?>)</span></div>
+  <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير شامل <span style="color:var(--grey);font-weight:600">(<?= count($invoices) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">التاريخ</th><th class="g-identity">رقم الفاتورة</th><th class="g-identity">لصالح شركة</th>
@@ -221,7 +221,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 
 <?php $pinv = $permitInvoices ?? []; if($pinv): ?>
 <div class="card" style="margin-top:16px">
-  <div class="section-head" style="padding:18px 20px 0">🧾 فواتير الأذونات
+  <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير الأذونات
     <span style="color:var(--grey);font-weight:600">(<?= count($pinv) ?> — إجمالي <?= money($permitInvSum['total'] ?? 0,false) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>

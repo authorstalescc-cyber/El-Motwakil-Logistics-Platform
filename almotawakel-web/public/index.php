@@ -25,9 +25,22 @@ $r->post('/work-date', 'WorkDateController@save');
 // لوحة التحكم
 $r->get('/', 'DashboardController@index');
 $r->get('/dashboard/quick-options','DashboardController@quickOptions');
+// تفاصيل أي رقم في الداشبورد (قاعدة «ممنوع رقم أصمّ») — نوع محصور في قائمة بيضا
+$r->get('/dashboard/drill/{what}', 'DashboardController@drill');
 $r->post('/dashboard/quick-entries','DashboardController@quickEntries');
 // مركز الإشعارات — قراءة فقط، بلا جدول. مسار حرفي (مفيش /notifications/{id} أصلاً)
 $r->get('/notifications/ping', 'NotificationController@ping');
+
+// إشعارات التطبيق (Web Push) — v51.
+// ⚠️ `subscribe`/`unsubscribe` بيخدموا **جلسة المكتب وجلسة المندوب** مع بعض
+//    (الكنترولر بيحدّد الجمهور من الجلسة نفسها لا من الفورم)، عشان كده مش
+//    محطوطين تحت `/m` ولا تحت حراسة دور معيّن. الإرسال محكوم في `Access`.
+$r->get('/push',              'PushController@index');
+$r->get('/push/key',          'PushController@key');
+$r->post('/push/subscribe',   'PushController@subscribe');
+$r->post('/push/unsubscribe', 'PushController@unsubscribe');
+$r->post('/push/send',        'PushController@send');
+$r->post('/push/test',        'PushController@test');
 
 $r->post('/notes',            'DashboardController@addNote');
 $r->post('/notes/{id}/toggle','DashboardController@toggleNote');
@@ -132,6 +145,9 @@ $r->get('/m/login',   'RepPortalController@showLogin');
 $r->post('/m/login',  'RepPortalController@login');
 $r->post('/m/logout', 'RepPortalController@logout');
 $r->get('/m/ping', 'RepPortalController@ping');   // إشعارات حيّة (قراءة فقط) — حرفي قبل الجشع
+// تاريخ العمل للمندوب — حرفي قبل الجشع `/m/permit/{id}` و`/m/entry/{sid}` (تحذير 4)
+$r->get('/m/work-date',  'RepPortalController@workDateForm');
+$r->post('/m/work-date', 'RepPortalController@workDateSave');
 // متابعة المناديب للمشرف (v47) — قراءة فقط، حرفي قبل الجشع
 $r->get('/m/team',       'RepPortalController@team');
 $r->get('/m/team/{rid}', 'RepPortalController@teamRep');
@@ -169,7 +185,11 @@ $r->post('/movements/{id}/delete','MovementController@destroy');
 // التقفيل اليومي (تقفيل يوم للشركة) + الإقفال والترحيل
 $r->get('/closing',               'DailyClosingController@index');
 $r->get('/closing/print',         'DailyClosingController@printable');
-$r->post('/closing/reconcile',    'DailyClosingController@reconcile'); // حفظ مطابقة اليدوي مجمعة حسب العميل
+// ⚠️ v50: مطابقة اليدوي القديمة (/closing/reconcile) اتشالت بالكامل. المراجعة
+//    بقت علامة ✓ جنب كل بند — بند واحد، قسم كامل، أو حفظ الشاشة كلها بلا JS.
+$r->post('/closing/review',       'DailyClosingController@review');      // تعليم/إلغاء بند واحد
+$r->post('/closing/review-group', 'DailyClosingController@reviewGroup'); // تعليم/إلغاء قسم كامل
+$r->post('/closing/review-save',  'DailyClosingController@reviewSave');  // حفظ كل علامات الشاشة (بلا JS)
 $r->post('/closing/close',        'DailyClosingController@close');    // اقفل اليوم (تثبيت الرصيد)
 $r->post('/closing/reopen',       'DailyClosingController@reopen');   // افتح الإقفال (آخر يوم فقط)
 
@@ -183,6 +203,8 @@ $r->post('/custody/topup/{id}',           'CustodyController@updateTopup');
 // رصيد المكتب (كروت الفيزا) — المسارات الأخصّ قبل الجشعة /{id}
 $r->get('/office',                        'OfficeController@index');
 $r->get('/office/new',                    'OfficeController@create');
+// تفاصيل أرقام الكروت (ممنوع رقم أصمّ) — حرفي قبل الجشع /office/{id}
+$r->get('/office/drill/{what}',           'OfficeController@drill');
 $r->post('/office',                       'OfficeController@store');
 $r->get('/office/{id}/edit',              'OfficeController@edit');
 $r->post('/office/{id}/delete',           'OfficeController@destroy');
@@ -209,6 +231,7 @@ $r->get('/reps/{id}',                        'RepController@show');     // ال�
 // المسارات الحرفية قبل الجشعة /{id}
 $r->get('/rep-custody',                            'RepCustodyController@index');
 $r->get('/rep-custody/inbox',                      'RepCustodyController@inbox');   // حرفي قبل /{id}
+$r->get('/rep-custody/drill/{what}',               'RepCustodyController@drill');   // تفاصيل رقم — حرفي قبل /{id}
 $r->post('/rep-custody/approve-many',              'RepCustodyController@approveMany');
 $r->post('/rep-custody/reject-many',               'RepCustodyController@rejectMany');
 $r->post('/rep-custody/bulk-edit',                 'RepCustodyController@bulkEdit');
@@ -234,6 +257,8 @@ $r->get('/rep-custody/{id}',                       'RepCustodyController@card');
 
 // سداد العملاء (دفعات سداد العملاء عبر كل الوكلاء + توجيهها للعهدة/الفيزا)
 $r->get('/payments',                'PaymentController@index');
+// تفاصيل أرقام التحصيلات (ممنوع رقم أصمّ) — حرفي قبل /payments/{id}/delete
+$r->get('/payments/drill/{what}',   'PaymentController@drill');
 $r->post('/payments/pay',           'PaymentController@pay');
 $r->post('/payments/{id}/delete',   'PaymentController@delete');
 

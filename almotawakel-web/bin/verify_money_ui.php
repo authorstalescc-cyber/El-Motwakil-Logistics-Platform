@@ -1,0 +1,165 @@
+<?php
+// ═══ حارس: سطر الأوامر فقط ═══
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+/**
+ * فحص شاشات الفلوس باللغة الجديدة — المرحلة ١٤ (2026-07-25).
+ *
+ * الوحدات دي أخطر حاجة في النظام، فجت **بعد** ما اللغة اتجرّبت على عهدة
+ * المناديب والداشبورد والأذونات. الشغل هنا **عرض بحت** — ولا معادلة مالية
+ * واحدة اتلمست، ولا قاعدة من v18/v22/v42/v49.
+ *
+ * أهم المحروس:
+ *   • **ممنوع رقم أصمّ** — كل رقم في `/office` و`/custody` و`/payments` بيفتح
+ *     بنوده، وفي `/expenses` و`/debts` بيوصّل لقايمته المفلترة (شكل أقوى).
+ *   • **نافذة التحصيلات بتحترم الفلاتر** — الرقم محسوب على المعروض، فلو
+ *     النافذة جابت الكل تبقى بتقول رقمًا تاني.
+ *   • **مفيش استعلام جديد** — النوافذ بتقرا من نفس دوال الموديل.
+ *   • **العزل المالي** — رصيد الخزنة قبل = بعد، والشاشات مفيهاش استعلام كتابة.
+ *
+ * بيرندر الشاشات ونوافذها **فعليًّا** بلا أي كتابة.
+ * التشغيل:  php bin/verify_money_ui.php
+ */
+require dirname(__DIR__) . '/app/bootstrap.php';
+
+use App\Controllers\CustodyController;
+use App\Controllers\DebtController;
+use App\Controllers\ExpenseController;
+use App\Controllers\OfficeController;
+use App\Controllers\PaymentController;
+use App\Core\Access;
+use App\Core\Database;
+use App\Models\Closing;
+
+$pass = 0; $failures = [];
+function ok(string $m): void  { global $pass; $pass++; echo "  ✓ $m\n"; }
+function bad(string $m): void { global $failures; $failures[] = $m; echo "  ✗ $m\n"; }
+function chk(bool $c, string $m): void { $c ? ok($m) : bad($m); }
+function sec(string $m): void { echo "\n$m\n" . str_repeat('─', 62) . "\n"; }
+
+function code_only(string $src): string
+{
+    $src = preg_replace('~<!--.*?-->~s', '', $src) ?? $src;
+    return preg_replace('~/\*.*?\*/|(?<!:)//[^\n]*~s', '', $src) ?? $src;
+}
+
+echo "فحص شاشات الفلوس — المرحلة ١٤\n" . str_repeat('=', 62) . "\n";
+
+$root = dirname(__DIR__);
+$read = static fn (string $rel): string => (string) file_get_contents($root . '/' . $rel);
+$office   = code_only($read('app/Views/office/index.php'));
+$custody  = code_only($read('app/Views/custody/index.php'));
+$payments = code_only($read('app/Views/payments/index.php'));
+$expenses = code_only($read('app/Views/expenses/index.php'));
+$debts    = code_only($read('app/Views/debts/index.php'));
+$routes   = $read('public/index.php');
+
+$treasuryBefore = Closing::currentBalance();
+
+// ═══ ① كروت الفيزا
+sec('① /office — كروت الفيزا');
+chk(str_contains($office, "partial('stat_grid'") && !str_contains($office, 'class="kpi-grid'),
+    'الأرقام التلاتة بمكوّن `stat`');
+chk(substr_count($office, "'drill' =>") >= 3, 'وكلهم بيفتحوا بنودهم');
+chk(!str_contains($office, '<table'), 'الجدول (٧ أعمدة) اتشال — الكارت بقى `entity_card`');
+chk(str_contains($office, "partial('entity_card'") && str_contains($office, "partial('row_item'"),
+    'وبيستخدم كارت الكيان والصف');
+chk(str_contains($office, 'secret-toggle') && str_contains($office, "'secret' => true"),
+    'الأرصدة مقنّعة ومعاها زرار كشف (المعالج عام في app.js)');
+
+// ═══ ② خزنة المكتب
+sec('② /custody — خزنة المكتب');
+chk(str_contains($custody, "partial('stat_grid'"), 'الرصيد وتفكيكه بقوا أربع أرقام بمكوّن `stat`');
+chk(str_contains($custody, "'drill' => '#custodyBreak'"),
+    '⚠️ التفكيك **جاهز في الصفحة** — أربعة أرقام محسوبة أصلاً، مش محتاجة طلب تاني');
+chk(str_contains($custody, 'id="custodyBreak"'), 'وجسم النافذة موجود ومخفي');
+chk(!str_contains($custody, '<table'), 'جدول السجل (٨ أعمدة مليانة `—`) اتشال');
+chk(str_contains($custody, "partial('row_item'") && str_contains($custody, "partial('panel'"),
+    'والسجل بقى صفوف جوّه لوح');
+chk(str_contains($custody, 'الرصيد الجاري'),
+    'والرصيد الجاري لسه ظاهر (بقى سطر جنب المبلغ بدل عمود لوحده)');
+
+// ═══ ③ التحصيلات
+sec('③ /payments — تحصيلات العملاء');
+chk(str_contains($payments, "partial('stat_grid'") && !str_contains($payments, 'class="stat-strip'),
+    'الأربع أرقام بمكوّن `stat`');
+chk(substr_count($payments, "'drill' =>") === 4, 'وكلهم بيفتحوا دفعاتهم');
+chk(str_contains($payments, "http_build_query(\$pq)"),
+    '⚠️ والنافذة بتاخد **فلاتر الشاشة** — الرقم محسوب على المعروض');
+$pctrl = code_only($read('app/Controllers/PaymentController.php'));
+chk(str_contains($pctrl, "private const DRILL = ['all', 'cash', 'visa', 'none']"),
+    'النوع محصور في قائمة بيضا');
+chk(str_contains($pctrl, "'route'  => \$what === 'all' ? trim(\$_GET['route'] ?? '') : \$what"),
+    'والتوجيه بيتاخد من نوع النافذة مش من المستخدم');
+
+// ═══ ④ المصروفات والمديونيات — الرقم بيوصّل لقايمته
+sec('④ /expenses و/debts — الرقم بيوصّل لبنوده');
+chk(str_contains($expenses, '<a class="exp-src'),
+    '⚠️ كارت كل مصدر مصروف بقى **زرار فلترة** — الضغط بيعرض بنوده في السجل');
+chk(str_contains($expenses, "\$qs(['source' => \$isOn ? '' : \$key])"),
+    'والضغط تاني بيلغي التصفية');
+chk(str_contains($expenses, '.exp-src.on{'), 'والكارت المعروض دلوقتي بيبان معلَّم');
+chk(str_contains($debts, '<a class="kpi red" href="<?= url(\'debts\') ?>?tab=owners"'),
+    'رقم «إجمالي المديونيات» بقى رابط — كان الوحيد اللي مالوش طريق');
+chk(!preg_match('~<div class="kpi [a-z]+"><div class="lbl">~', $debts),
+    'ومفيش رقم باقي في /debts بلا طريق');
+
+// ═══ ⑤ ⚠️ المسارات محصورة وحرفية قبل الجشعة
+sec('⑤ ⚠️ مسارات التفاصيل');
+chk(str_contains($routes, "\$r->get('/office/drill/{what}'"), 'مسار تفاصيل الكروت مسجَّل');
+$oDrill = strpos($routes, "/office/drill/{what}");
+$oGreedy = strpos($routes, "\$r->get('/office/{id}'");
+chk($oDrill !== false && $oGreedy !== false && $oDrill < $oGreedy,
+    'وهو **حرفي قبل** الجشع `/office/{id}` (تحذير ٤)');
+chk(str_contains($routes, "\$r->get('/payments/drill/{what}'"), 'مسار تفاصيل التحصيلات مسجَّل');
+$pDrill = strpos($routes, "/payments/drill/{what}");
+$pGreedy = strpos($routes, "'/payments/{id}/delete'");
+chk($pDrill !== false && $pGreedy !== false && $pDrill < $pGreedy,
+    'وهو حرفي قبل `/payments/{id}/delete`');
+chk(Access::allows('owner', 'OfficeController@drill', 'GET')
+    && Access::allows('owner', 'PaymentController@drill', 'GET'),
+    'المسارين بيمرّوا على Access');
+
+// ═══ ⑥ رندر فعلي
+sec('⑥ الشاشات ونوافذها بترندر فعليًّا');
+$uid = (int) Database::scalar('SELECT MIN(id) FROM users');
+$_SESSION = ['uid' => $uid, 'role' => 'owner', 'uname' => 'فحص',
+             'last_activity' => time(), 'uid_checked' => time()];
+$_GET = [];
+$render = static function (callable $fn, string $where): string {
+    ob_start();
+    try { $fn(); $html = (string) ob_get_clean(); }
+    catch (\Throwable $e) { ob_end_clean(); bad("استثناء في {$where}: " . $e->getMessage()); return ''; }
+    preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $html, $m)
+        ? bad("خطأ PHP في {$where}: " . ($m[0] ?? ''))
+        : ok("{$where} بيرندر بلا أخطاء PHP");
+    return $html;
+};
+
+$render(static fn () => (new OfficeController())->index(), '/office');
+$render(static fn () => (new CustodyController())->index(), '/custody');
+$render(static fn () => (new PaymentController())->index(), '/payments');
+$render(static fn () => (new ExpenseController())->index(), '/expenses');
+$render(static fn () => (new DebtController())->index(), '/debts');
+foreach (['balance', 'deposits', 'payments', 'owners'] as $w) {
+    $out = $render(static fn () => (new OfficeController())->drill($w), "نافذة office/$w");
+    chk(!str_contains($out, '<html'), "نافذة office/$w بترجع جزءًا مش صفحة");
+}
+foreach (['all', 'cash', 'visa', 'none'] as $w) {
+    $out = $render(static fn () => (new PaymentController())->drill($w), "نافذة payments/$w");
+    chk(!str_contains($out, '<html'), "نافذة payments/$w بترجع جزءًا مش صفحة");
+}
+
+// ═══ ⑦ ⚠️ العزل المالي — الحد الأحمر
+sec('⑦ ⚠️ العزل المالي — الشغل كله عرض');
+foreach ([['office/_drill.php', 'office'], ['payments/_drill.php', 'payments']] as [$rel, $name]) {
+    chk(!preg_match('~Database::(exec|insert|update|delete)|\b(INSERT INTO|UPDATE\s+\w+\s+SET|DELETE FROM)\b~i',
+            code_only($read('app/Views/' . $rel))),
+        "نافذة {$name} مفيهاش أي استعلام كتابة");
+}
+chk(abs($treasuryBefore - Closing::currentBalance()) < 0.005,
+    'رصيد الخزنة قبل = بعد (' . money($treasuryBefore, false) . ')');
+
+echo "\n" . str_repeat('=', 62) . "\n";
+echo 'النتيجة: ' . $pass . ' ناجح · ' . count($failures) . " فاشل\n";
+if ($failures) { foreach ($failures as $f) { echo "  ✗ $f\n"; } exit(1); }
+exit(0);

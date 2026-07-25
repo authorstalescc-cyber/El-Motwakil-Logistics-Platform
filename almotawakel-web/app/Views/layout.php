@@ -60,6 +60,7 @@ $navRaw = [
     ['generators',  'المولدات',      'cpu',           'GeneratorsController@index',  null],
     ['reports',     'التقارير',      'bar-chart',     'ReportsController@index',     null],
     ['audit',       'سجل العمليات',  'clipboard',     'AuditController@index',       null],
+    ['push',        'إشعارات التطبيق','bell',         'PushController@index',        null],
     ['security',    'المراقبة الأمنية','alert',       'SecurityController@index',    'failed_logins'],
     ['settings',    'الإعدادات',     'settings',      'SettingsController@index',    'weak_pins'],
 ];
@@ -91,8 +92,14 @@ $nav = $clean;
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title ?? '') ?> — <?= e(App::setting('company_name','شركة المتوكل')) ?></title>
 <?php $appCss = \App\Core\App::basePath('public/assets/css/app.css'); $appCssV = is_file($appCss) ? filemtime($appCss) : 1; ?>
+<?php /* ⚠️ سمة العرض بتتحط على <html> **قبل أول رسمة** — لو اتأخرت لبعد
+         تحميل app.js الصفحة بتلمع أبيض ثم تغمق (flash of wrong theme). */ ?>
+<script>(function(){try{var t=localStorage.getItem('almotawakel:theme');
+  if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <link rel="stylesheet" href="<?= url('assets/css/app.css') ?>?v=<?= $appCssV ?>">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2315355B'/><text x='50' y='68' font-size='54' text-anchor='middle' fill='%23C9A227' font-family='Arial' font-weight='bold'>م</text></svg>">
+<?php /* تثبيت النظام على الموبايل + شاشة البدء — نفس الملف اللي بتستخدمه بوابة المناديب */ ?>
+<?php $pwaApp = 'office'; require __DIR__ . '/_pwa_head.php'; ?>
 </head>
 <body>
 <a class="skip-link" href="#main-content">تخطَّ إلى المحتوى الرئيسي</a>
@@ -139,6 +146,20 @@ $nav = $clean;
         <kbd class="search-kbd">Ctrl K</kbd>
       </button>
       <button type="button" class="btn ghost sm icon-btn" id="shortcut-help" title="اختصارات الإدخال" aria-label="اختصارات الإدخال">⌨</button>
+      <?php /* تبديل السمة: تلقائي (يتبع الجهاز) ← فاتح ← غامق. الاختيار في
+               localStorage، والسمة بتتحط في <head> فوق قبل أول رسمة. */ ?>
+      <button type="button" class="btn ghost sm icon-btn theme-btn" id="themeBtn"
+              title="وضع العرض: تلقائي" aria-label="غيّر وضع العرض">
+        <span class="th-ico th-auto"><?= icon('monitor', 17) ?></span>
+        <span class="th-ico th-light"><?= icon('sun', 17) ?></span>
+        <span class="th-ico th-dark"><?= icon('moon', 17) ?></span>
+      </button>
+      <?php /* تثبيت النظام كتطبيق — بيفضل مخفي، و`_pwa_head.php` بيوريه بس لو
+               التثبيت متاح فعلاً (أندرويد/كروم) أو الجهاز آيفون (خطوات يدوية). */ ?>
+      <button type="button" class="btn ghost sm icon-btn pwa-install" id="pwaInstallBtn" hidden
+              title="ثبّت النظام كتطبيق على موبايلك" aria-label="ثبّت النظام كتطبيق على موبايلك">
+        <?= icon('download', 17) ?><span class="lbl-hide">ثبّت التطبيق</span>
+      </button>
       <?php /* مركز الإشعارات — الجرس بيترسم فاضي والعدّاد بيتملّى من /notifications/ping
                بعد التحميل، فما بيزوّدش أي تكلفة على رندر أي صفحة. */ ?>
       <div class="nc" id="notifCenter">
@@ -376,9 +397,40 @@ foreach ($cmdCreate as [$label, $seg, $ic, $kw]) {
 }
 ?>
 <!-- كومة التنبيهات الطايرة — مكوّن واحد بيخدم رسائل الخادم ورسائل الـAJAX -->
-<div class="toast-stack" id="toastStack" role="region" aria-live="polite" aria-label="تنبيهات"></div>
+<?php /* ⚠️ الكومة نفسها **بلا `aria-live`** عن قصد: لما تكون منطقة معلَنة واحدة
+         بسياسة `polite`، سياسة الأب دي بتغلب على `role="alert"` بتاع أي تنبيه
+         جوّاها — فرسالة الخطأ كانت بتتعلن «بأدب» بدل ما تقاطع، يعني المستخدم
+         ممكن يكمّل شغل على غلطة ما سمعهاش. الإعلان بقى من منطقتين مخصّصتين
+         مخفيتين بصريًّا تحت، وكل تنبيه بيتقري في اللي تخصّه. */ ?>
+<div class="toast-stack" id="toastStack" role="region" aria-label="تنبيهات"></div>
+<div class="sr-only" id="toastLivePolite" role="status" aria-live="polite"></div>
+<div class="sr-only" id="toastLiveAssertive" role="alert" aria-live="assertive"></div>
+
+<?php /* ═══ نافذة التفاصيل — **نسخة واحدة عامة لكل الشاشات** (المرحلة 10) ═══
+         ⚠️ قاعدة المالك الدائمة: «ممنوع رقم أصمّ» — أي رقم أو كارت معروض لازم
+            يُضغط ويفتح التفاصيل اللي اتحسب منها.
+         ⚠️ **ممنوع تعمل نافذة محلية في أي شاشة.** الداشبورد كانت عاملة واحدة
+            جوّه ملفها، فباقي النظام ما قدرش يستخدمها — نفس مصيدة سكربت «إظهار
+            الأرصدة» اللي كان محليًّا في `office/index.php` فالأرصدة فضلت مقنّعة
+            للأبد في شاشتين تانيين. `verify_design_system.php` بيفشل لو رجعت.
+         بتستخدم `activateDialog()` بتاعة app.js فبتاخد حبس التركيز — البوب-أب
+         القديم ما كانش بيعمل كده والكيبورد كان بيهرب وراه. */ ?>
+<div class="d-modal" id="uiDrill" hidden role="dialog" aria-modal="true" aria-labelledby="uiDrillTitle">
+  <div class="d-modal-back" data-close></div>
+  <div class="d-modal-card">
+    <div class="d-modal-head">
+      <h3 id="uiDrillTitle"></h3>
+      <button type="button" class="d-modal-x" data-close aria-label="إغلاق">✕</button>
+    </div>
+    <div class="d-modal-body" id="uiDrillBody"></div>
+  </div>
+</div>
 <script>window.__SEARCH_API = <?= js_json(url('search/api')) ?>; window.__SEARCH_PAGE = <?= js_json(url('search')) ?>; window.__CMD_NAV = <?= js_json($cmdNav) ?>; window.__NAME_SUGGEST_API = <?= js_json(url('suggest/names')) ?>; window.__BILL_NUMBER_CHECK_API = <?= js_json(url('bawalis/check-number')) ?>; window.__TOASTS = <?= js_json($__toasts) ?>; window.__NOTIF_PING = <?= js_json(url('notifications/ping')) ?>;</script>
 <?php $appJs = \App\Core\App::basePath('public/assets/js/app.js'); $appJsV = is_file($appJs) ? filemtime($appJs) : 1; ?>
+<?php $rsJs = \App\Core\App::basePath('public/assets/js/resume-scroll.js'); $rsJsV = is_file($rsJs) ? filemtime($rsJs) : 1; ?>
+<?php /* الرجوع لنفس المكان بعد الحفظ — ملف مشترك مع بوابة المندوب (مش جوّه app.js
+         لأن /m ما بتحمّلوش). defer عشان يشتغل والـDOM جاهز. */ ?>
+<script defer src="<?= url('assets/js/resume-scroll.js') ?>?v=<?= $rsJsV ?>"></script>
 <script src="<?= url('assets/js/app.js') ?>?v=<?= $appJsV ?>"></script>
 <?= $scripts ?? '' ?>
 </body>

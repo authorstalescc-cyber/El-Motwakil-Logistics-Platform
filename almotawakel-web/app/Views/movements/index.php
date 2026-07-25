@@ -10,6 +10,10 @@
   <div class="spacer"></div>
   <span class="count-badge"><?= intf($total) ?> حركة</span>
 </div>
+<?php /* ⚠️ الاستعلام سقفه `LIMIT 300` بينما العدّاد فوق بيعرض الإجمالي الحقيقي —
+         يعني الشاشة كانت بتقول «١٢٤٠ حركة» وترسم ٣٠٠ **بلا أي إشارة**، فالمستخدم
+         يفتكر إنه شايف كل حاجة ويبني عليها قرار. (المرحلة ٨ج) */ ?>
+<?php partial('count_note', ['shown' => count($rows), 'total' => (int) $total, 'unit' => 'حركة']); ?>
 <div class="card"><div class="table-wrap">
   <table class="data">
     <thead><tr>

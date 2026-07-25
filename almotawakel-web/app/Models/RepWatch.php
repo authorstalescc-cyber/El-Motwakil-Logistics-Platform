@@ -73,6 +73,9 @@ class RepWatch
 
         $pendCnt  = self::pendingCounts();
         $lastSeen = self::lastActivity();
+        // v49 — عهدة يوم عمل المشرف نفسه، من نفس مصدر الكارت في المكتب.
+        $day    = \App\Core\RepAuth::workDate();
+        $dayMap = RepCustody::dayTotalsByRep($day);
 
         $reps = []; $low = 0;
         $tDep = $tSpent = $tBal = 0.0; $tPendCnt = 0; $tPendSum = 0.0;
@@ -84,6 +87,11 @@ class RepWatch
             $c['pending_sum'] = RepPortal::pendingAmount($rid);
             $c['pocket']      = round($c['balance'] - $c['pending_sum'], 2);
             $c['last_entry']  = $lastSeen[$rid] ?? null;
+            $dayRow = $dayMap[$rid] ?? null;
+            $c['day']          = $day;
+            $c['day_deposits'] = $dayRow['deposits'] ?? 0.0;
+            $c['day_spent']    = $dayRow['spent'] ?? 0.0;
+            $c['day_balance']  = $dayRow['balance'] ?? 0.0;
 
             $dep = (float) $c['deposits'];
             $c['pc_spent'] = $dep > 0 ? min(100, round($c['spent'] / $dep * 100, 1)) : 0.0;
@@ -121,6 +129,10 @@ class RepWatch
                 'pending_sum' => round($tPendSum, 2),
                 'reps'        => count($reps),
                 'low'         => $low,
+                'day'          => $day,
+                'day_deposits' => round(array_sum(array_column($reps, 'day_deposits')), 2),
+                'day_spent'    => round(array_sum(array_column($reps, 'day_spent')), 2),
+                'day_balance'  => round(array_sum(array_column($reps, 'day_balance')), 2),
             ],
         ];
     }
@@ -140,10 +152,14 @@ class RepWatch
 
         $b = RepCustody::breakdown($repId);
         $pending = RepPortal::pendingAmount($repId);
+        $day = \App\Core\RepAuth::workDate();
 
         return [
             'rep'          => $rep,
             'b'            => $b,
+            'day'          => $day,
+            'day_b'        => RepCustody::breakdown($repId, $day),   // v49 — عهدة يوم العمل
+            'day_ledger'   => RepCustody::dayLedger($repId, 30),
             'pending'      => $pending,
             'pending_cnt'  => self::pendingCounts()[$repId] ?? 0,
             'pocket'       => round($b['balance'] - $pending, 2),

@@ -8,6 +8,7 @@ use App\Core\PrivateFile;
 use App\Core\App;
 use App\Calc;
 use App\Models\Permit;
+use App\Models\PushNotify;
 use App\Models\PermitInvoice;
 use App\Models\Bill;
 use App\Models\Closing;
@@ -396,6 +397,10 @@ class PermitController extends Controller
         $this->claimForm('permits');
         $id = $this->save(null);
         Permit::createMovement($id);   // أول حركة جاهزة فورًا لإضافة البوالص/البنود
+        // إشعار للمكتب والمناديب. بعد الحفظ وخارج أي transaction — لو اتنادى
+        // قبل كده وحصل rollback كنا بعتنا خبرًا عن إذن ما اتعملش.
+        PushNotify::permitCreated($id, (string) ($_POST['permit_no'] ?? ''),
+            (string) ($_POST['company'] ?? ''), (string) ($_POST['client'] ?? ''), (string) \App\Core\Auth::user());
         flash('success', 'تم إنشاء الإصدار — أكمِل بياناته من التايم لاين.');
         redirect('permits/'.$id.'/manage');
     }
@@ -540,16 +545,43 @@ class PermitController extends Controller
     }
 
     /** صفحة عرض الإذن — للقراءة فقط بشكل احترافي (الضغط على الإذن يفتحها) */
+    /**
+     * شاشة الإذن — **وضع العرض**.
+     *
+     * ⚠️ من المرحلة ١٣ الشاشتان بقوا **شاشة واحدة بوضعين** (`permits/show`):
+     *    شريط الإجراءات والهيرو ومرشد الإيصالات بيترسموا مرة واحدة في الغلاف.
+     *    المساران القديمان زي ما هما عشان الروابط المحفوظة تفضل شغّالة.
+     */
     public function view(string $id): void
     {
+        $this->showPage((int) $id, 'view');
+    }
+
+    /** غلاف مشترك للوضعين — نقطة واحدة تجمع بيانات الشاشة وتقرّر عنوانها. */
+    private function showPage(int $pid, string $mode): void
+    {
         $this->requireAuth();
-        $pid  = (int)$id;
         $data = $this->gather($pid);
-        $data['title'] = Permit::typeLabel($data['p']['permit_type']) . ' — ' . ($data['p']['permit_no'] ?: '#'.$pid);
-        // تفصيل الحاويات (عدد×تصنيف) + تغطية الإيصالات المتوقّعة — للعرض الذكي
-        $data['ctBreakdown'] = self::containerBreakdown('permit_id', [$pid])[$pid] ?? [];
-        $data['rcpCoverage'] = Permit::receiptCoverageForPermit($pid);
-        $this->render('permits/view', $data);
+        $data['mode'] = $mode;
+        $label = Permit::typeLabel($data['p']['permit_type']) . ' — ' . ($data['p']['permit_no'] ?: '#' . $pid);
+
+        if ($mode === 'manage') {
+            $state = FormState::consume('permits.manage.' . $pid, 'permits/' . $pid . '/manage#stage-data');
+            if ($state['old']) { $data['p'] = array_replace($data['p'], $state['old']); }
+            $data['title']   = 'إدارة: ' . $label;
+            $data['nameMap'] = \App\Models\Party::nameMap();
+            $data['carMap']  = \App\Models\Party::carOwnerMap();
+            $data['declOwners'] = self::declarationOwners();
+            $data['receiptMoveTargets'] = Permit::receiptMoveTargets($pid);
+            $data['permitFormState'] = $state;
+        } else {
+            $data['title'] = $label;
+            // تفصيل الحاويات (عدد×تصنيف) + تغطية الإيصالات المتوقّعة — للعرض الذكي
+            $data['ctBreakdown'] = self::containerBreakdown('permit_id', [$pid])[$pid] ?? [];
+            $data['rcpCoverage'] = Permit::receiptCoverageForPermit($pid);
+        }
+
+        $this->render('permits/show', $data);
     }
 
     /**
@@ -656,19 +688,10 @@ class PermitController extends Controller
     }
 
     /** صفحة إدارة/تعديل الإذن — التايم لاين التفاعلي (يُفتح بزر «تعديل») */
+    /** شاشة الإذن — **وضع التعديل** (نفس الشاشة، الغلاف واحد). */
     public function manage(string $id): void
     {
-        $this->requireAuth();
-        $data = $this->gather((int)$id);
-        $state = FormState::consume('permits.manage.' . (int) $id, 'permits/' . (int) $id . '/manage#stage-data');
-        if ($state['old']) { $data['p'] = array_replace($data['p'], $state['old']); }
-        $data['title']   = 'إدارة: ' . Permit::typeLabel($data['p']['permit_type']) . ' — ' . ($data['p']['permit_no'] ?: '#'.(int)$id);
-        $data['nameMap'] = \App\Models\Party::nameMap();
-        $data['carMap']  = \App\Models\Party::carOwnerMap();
-        $data['declOwners'] = self::declarationOwners();
-        $data['receiptMoveTargets'] = Permit::receiptMoveTargets((int)$id);
-        $data['permitFormState'] = $state;
-        $this->render('permits/manage', $data);
+        $this->showPage((int) $id, 'manage');
     }
 
     /** أسماء أصحاب البيان المستخدَمة سابقًا (لاقتراحها في نموذج البوليصة) */

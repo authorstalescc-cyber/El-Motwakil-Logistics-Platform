@@ -95,14 +95,45 @@ class Audit
         string $to = ''
     ): array
     {
+        [$where, $params] = self::recentWhere($entity, $action, $from, $to);
+        $sql = 'SELECT * FROM audit_logs' . $where
+             . ' ORDER BY id DESC LIMIT ' . max(1, min(500, $limit));
+        return Database::all($sql, $params);
+    }
+
+    /**
+     * عدد السجلات المطابقة **بلا سقف** — عشان الشاشة تقول «بنعرض ٣٠٠ من ١٢٤٠»
+     * بدل ما تقطع بالسكوت. لازم تستخدم **نفس شرط `recent()` بالحرف**، وعشان
+     * كده الشرط اتنقل لدالة واحدة (`recentWhere`) بدل ما يتكتب مرتين ويفترقوا.
+     */
+    public static function countRecent(
+        string $entity = '',
+        string $action = '',
+        string $from = '',
+        string $to = ''
+    ): int
+    {
+        [$where, $params] = self::recentWhere($entity, $action, $from, $to);
+        return (int) Database::scalar('SELECT COUNT(*) FROM audit_logs' . $where, $params);
+    }
+
+    /** المصدر الوحيد لشرط فلترة السجل — يقرأه `recent()` و`countRecent()`. */
+    private static function recentWhere(string $entity, string $action, string $from, string $to): array
+    {
         $where = []; $params = [];
         if ($entity !== '') { $where[] = 'entity=?'; $params[] = $entity; }
         if ($action !== '') { $where[] = 'action=?'; $params[] = $action; }
         if (self::validDate($from)) { $where[] = 'COALESCE(record_date,work_date,DATE(created_at))>=?'; $params[] = $from; }
         if (self::validDate($to)) { $where[] = 'COALESCE(record_date,work_date,DATE(created_at))<=?'; $params[] = $to; }
-        $sql = 'SELECT * FROM audit_logs' . ($where ? ' WHERE '.implode(' AND ', $where) : '')
-             . ' ORDER BY id DESC LIMIT ' . max(1, min(500, $limit));
-        return Database::all($sql, $params);
+        return [$where ? ' WHERE ' . implode(' AND ', $where) : '', $params];
+    }
+
+    /** عدد سجلات السلة بلا سقف — نفس شرط `trashRows()`. */
+    public static function countTrash(bool $includeRestored = false): int
+    {
+        return (int) Database::scalar(
+            'SELECT COUNT(*) FROM deleted_records' . ($includeRestored ? '' : ' WHERE restored_at IS NULL')
+        );
     }
 
     public static function trashRows(bool $includeRestored = false): array

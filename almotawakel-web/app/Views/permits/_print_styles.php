@@ -1,4 +1,7 @@
+<?php partial('print_base'); ?>
 <style>
+  /* ⚠️ override مقصود فوق `print_base`: ورقة المراجعة بخلفية أفتح
+     وذهب أفتح شوية عشان الجداول الكتير فيها ما تبقاش تقيلة. */
   :root{ --navy:#15355B; --navy2:#1e4a7a; --gold:#C9A227; --gold-l:#f6edcf; --gold-d:#8a6d10;
          --ink:#1A2433; --muted:#5A6472; --line:#E2E7EE; --bg:#EEF1F6; --red:#B4383E; --green:#1f7a52;
          --sader:#a76a1e; --warid:#1e4a7a; }

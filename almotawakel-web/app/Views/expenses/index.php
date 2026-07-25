@@ -19,7 +19,10 @@ $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','takhl
 .exp-grand .lbl{font-size:.85rem;opacity:.85}
 .exp-grand .val{font-size:1.7rem;font-weight:800;color:var(--gold);margin-top:4px}
 .exp-grand .sub{font-size:.8rem;opacity:.8;margin-top:4px}
-.exp-src{flex:1 1 150px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+.exp-src{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px;
+  display:block;color:inherit;text-decoration:none;transition:border-color var(--dur-fast) var(--ease),transform var(--dur-fast) var(--ease)}
+.exp-src:hover{border-color:var(--gold);transform:translateY(-1px)}
+.exp-src.on{border-color:var(--gold);background:var(--gold-light)}
 .exp-src .lbl{font-size:.85rem;color:var(--grey);display:flex;align-items:center;gap:6px}
 .exp-src .val{font-size:1.15rem;font-weight:700;margin-top:4px}
 .exp-src .cnt{font-size:.75rem;color:var(--grey)}
@@ -41,12 +44,16 @@ tr.norec:hover{background:transparent!important}
     <div class="val"><?= money($isDebtFilter ? $debtTotal : $totals['grand']) ?></div>
     <div class="sub"><?= intf($total) ?> بند<?= (!$isDebtFilter && $debtTotal>0) ? ' · سداد المديونيات ('.money($debtTotal,false).') خارج الإجمالي' : '' ?></div>
   </div>
+  <?php /* ⚠️ **ممنوع رقم أصمّ**: كارت كل مصدر بقى **زرار فلترة** — الضغط بيعرض
+           بنوده في السجل تحت بفلاتره وتصديره، وده أقوى من نافذة تفاصيل. */ ?>
   <?php foreach ($totals['by_source'] as $key => $s): if ($s['count']===0 && $f['source']==='') continue; ?>
-    <div class="exp-src">
+    <?php $isOn = ($f['source'] === $key); ?>
+    <a class="exp-src<?= $isOn ? ' on' : '' ?>" href="<?= url('expenses?' . $qs(['source' => $isOn ? '' : $key])) ?>"
+       title="<?= $isOn ? 'إلغاء تصفية المصدر' : 'اعرض بنود المصدر ده بس' ?>">
       <div class="lbl"><span class="src-pill src-<?= $srcClass[$key]??'manual' ?>"><?= e($s['label']) ?></span></div>
       <div class="val"><?= money($s['value'], false) ?></div>
-      <div class="cnt"><?= intf($s['count']) ?> بند<?= $key==='debt' ? ' · خارج الإجمالي' : '' ?></div>
-    </div>
+      <div class="cnt"><?= intf($s['count']) ?> بند<?= $key==='debt' ? ' · خارج الإجمالي' : '' ?><?= $isOn ? ' · معروض دلوقتي' : '' ?></div>
+    </a>
   <?php endforeach; ?>
 </div>
 
@@ -80,8 +87,8 @@ tr.norec:hover{background:transparent!important}
   </form>
   <div class="spacer"></div>
   <span class="count-badge"><?= intf($total) ?> بند</span>
-  <a class="btn ghost" href="<?= url('expenses/receipts') ?>">🧾 استكمال بيانات الإيصالات</a>
-  <a class="btn gold" href="<?= url('expenses/new?back=' . rawurlencode($returnPath)) ?>">➕ إضافة مصروف يدوي</a>
+  <a class="btn ghost" href="<?= url('expenses/receipts') ?>"><?= icon('clipboard', 15) ?> استكمال بيانات الإيصالات</a>
+  <a class="btn gold" href="<?= url('expenses/new?back=' . rawurlencode($returnPath)) ?>"><?= icon('plus', 15) ?> إضافة مصروف يدوي</a>
 </div>
 
 <div class="card">
@@ -102,7 +109,12 @@ tr.norec:hover{background:transparent!important}
       <tbody>
         <?php if (!$rows): ?>
           <tr class="norec"><td colspan="8">
-            <div class="empty"><div class="ic">📭</div><b>مفيش مصروفات مطابقة</b><span>جرّب تغيّر الفلاتر، أو سجّل مصروف جديد.</span><a class="btn sm" href="<?= url('expenses/new') ?>">➕ إضافة مصروف يدوي</a></div>
+            <?php partial('empty', [
+                'emoji'  => '📭',
+                'title'  => 'مفيش مصروفات مطابقة',
+                'note'   => 'جرّب تغيّر الفلاتر، أو سجّل مصروف جديد.',
+                'action' => ['label' => '➕ إضافة مصروف يدوي', 'url' => url('expenses/new')],
+            ]); ?>
           </td></tr>
         <?php else: $i = ($page-1)*50; foreach ($rows as $r): $i++;
           $src = $r['source'];
@@ -148,18 +160,6 @@ tr.norec:hover{background:transparent!important}
     </table>
   </div>
 
-  <?php if ($pages > 1): ?>
-  <div class="pager">
-    <?php if ($page>1): ?><a href="?<?= $qs(['page'=>$page-1]) ?>">‹ السابق</a><?php endif; ?>
-    <?php
-      $start=max(1,$page-2); $end=min($pages,$page+2);
-      if ($start>1) echo '<a href="?'.$qs(['page'=>1]).'">1</a>'.($start>2?'<span class="dots">…</span>':'');
-      for ($p=$start;$p<=$end;$p++):
-        echo $p==$page ? '<span class="cur">'.$p.'</span>' : '<a href="?'.$qs(['page'=>$p]).'">'.$p.'</a>';
-      endfor;
-      if ($end<$pages) echo ($end<$pages-1?'<span class="dots">…</span>':'').'<a href="?'.$qs(['page'=>$pages]).'">'.$pages.'</a>';
-    ?>
-    <?php if ($page<$pages): ?><a href="?<?= $qs(['page'=>$page+1]) ?>">التالي ›</a><?php endif; ?>
-  </div>
-  <?php endif; ?>
+  <?php /* الترقيم كان مكرَّرًا بالحرف في ٦ شاشات — بقى مكوّنًا واحدًا (المرحلة ٧) */ ?>
+  <?php partial('pager', ['page' => $page, 'pages' => $pages, 'qs' => $qs]); ?>
 </div>

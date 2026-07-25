@@ -1,26 +1,9 @@
-<?php /* وسوم الـPWA لشاشات المندوب — تتضمّن داخل <head>. آمنة على أي شاشة. */ ?>
-<link rel="manifest" href="<?= url('manifest.webmanifest') ?>">
-<link rel="apple-touch-icon" href="<?= url('assets/img/logo.png') ?>">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="المتوكل">
-<meta name="application-name" content="المتوكل">
-<script>
-(function () {
-  'use strict';
-  // تسجيل الـService Worker — بيخلّي التطبيق يفتح أسرع وبصفحة أوفلاين لطيفة.
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register('<?= url('sw.js') ?>', { scope: '/' }).catch(function () {});
-    });
-  }
-  // نمسك حدث «التثبيت» بدري ونخزّنه، والصفحة تعرض زرار «ثبّت التطبيق» لما يتاح.
-  window.__almInstall = null;
-  window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault();
-    window.__almInstall = e;
-    window.dispatchEvent(new CustomEvent('alm-installable'));
-  });
-})();
-</script>
+<?php /* وسوم الـPWA لشاشات المندوب — تتضمّن داخل <head>. آمنة على أي شاشة.
+         الوسوم والسكربتات نفسها بقت في ملف واحد مشترك مع المكتب (`_pwa_head.php`)
+         عشان الأيقونة وشاشة البدء ما يتفرّعوش لنسختين تختلفوا مع الوقت. */ ?>
+<?php $pwaApp = 'rep'; require dirname(__DIR__) . '/_pwa_head.php'; ?>
+<?php /* الرجوع لنفس المكان بعد الحفظ — نفس وحدة المكتب بالحرف. البوابة دي
+         **ما بتحمّلش app.js**، فلو الوحدة فضلت هناك كانت شاشات المندوب
+         هتفضل بترجع لأول الصفحة بعد كل حفظ. defer عشان الـDOM يبقى جاهز. */ ?>
+<?php $rsJs = \App\Core\App::basePath('public/assets/js/resume-scroll.js'); ?>
+<script defer src="<?= url('assets/js/resume-scroll.js') ?>?v=<?= is_file($rsJs) ? filemtime($rsJs) : 1 ?>"></script>

@@ -106,10 +106,9 @@ $money = fn($v) => number_format((float) $v, 2, '.', ',');
     </div>
 
     <div class="field" id="field-handover_date" <?= $err('handover_date') ? 'data-error="1"' : '' ?>>
-      <label for="d">تاريخ التسليم</label>
-      <input type="date" id="d" name="handover_date" required max="<?= e($today) ?>"
-             value="<?= $o('handover_date', $today) ?>" aria-describedby="err-handover_date"
-             <?= $err('handover_date') ? 'aria-invalid="true"' : '' ?>>
+      <?php /* v49: التسليم بيتخصم من عهدة يوم العمل — الخادم بيفرض التاريخ */ ?>
+      <?php $wd = $workDate ?? date('Y-m-d'); $wdLabel = 'تاريخ التسليم — من عهدة يوم';
+            require __DIR__ . '/_workday.php'; ?>
       <p class="field-error" id="err-handover_date" <?= $err('handover_date') ? '' : 'hidden' ?>><?= e($err('handover_date')) ?></p>
     </div>
 

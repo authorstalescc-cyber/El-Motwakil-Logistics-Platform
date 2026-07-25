@@ -23,7 +23,7 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 
 use App\Core\Database;
 use App\Models\Closing;
-use App\Models\DailyReconciliation;
+use App\Models\DailyReview;
 use App\Models\Permit;
 use App\Models\RepCustody;
 
@@ -44,7 +44,7 @@ chk(!method_exists(RepCustody::class, 'excludeSql'),
 
 $drawerFiles = [
     'app/Models/Closing.php',
-    'app/Models/DailyReconciliation.php',
+    'app/Models/DailyReview.php',
     'app/Controllers/DailyClosingController.php',
     'app/Controllers/PermitController.php',
 ];
@@ -101,12 +101,15 @@ if ($lastRepDay === null || $lastRepDay === false) {
     chk((float) $day['expenses'] > $withoutRep + 0.005 || near($repSum, 0.0),
         'مصروفات التقفيل بتشمل بنود المناديب (مش بتستثنيها)');
 
-    if (DailyReconciliation::available()) {
-        $view = DailyReconciliation::view($lastRepDay);
-        chk((float) $view['totals']['system_cash'] > $withoutRep + 0.005 || near($repSum, 0.0),
-            'مطابقة التقفيل بتشوف بنود المناديب في إجمالي السيستم');
+    // v50: بدل «إجمالي السيستم» في المطابقة القديمة، بنقيس إجمالي أقسام المراجعة النقدية.
+    if (DailyReview::available()) {
+        $view = DailyReview::view($lastRepDay);
+        $cash = 0.0;
+        foreach (['permits', 'general', 'custody'] as $g) { $cash += (float) $view['groups'][$g]['total']; }
+        chk($cash > $withoutRep + 0.005 || near($repSum, 0.0),
+            'مراجعة التقفيل بتشوف بنود المناديب في الإجمالي النقدي');
     } else {
-        echo "  ℹ️  جداول المطابقة مش موجودة — الفحص اتساب.\n";
+        echo "  ℹ️  جدول المراجعة مش موجود — الفحص اتساب.\n";
     }
 }
 

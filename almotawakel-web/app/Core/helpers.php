@@ -178,6 +178,51 @@ function dfmt($v): string
    اللي **مفيش حاجة في المشروع كله بتكتب فيه**، ومفيش view واحد كان بينادّيها.
    الاحتفاظ بالمدخلات عند الخطأ بيتم عبر `App\Core\FormState` وهو المصدر الوحيد. */
 
+/* ══════════════════════════════════════════════════════════════════════════
+   مكتبة المكوّنات المشتركة — المرحلة ٧
+   ─────────────────────────────────────────────────────────────────────────
+   المشروع كان **بلا أي مجلد مكوّنات**: ٨٥ شاشة كل واحدة متبنية بإيدها،
+   والنتيجة ١٠١٢ `style=` inline و١٣ طريقة لعمل كارت و١٤ اسم لحالة الفراغ.
+   `partial()` هي نقطة الاستدعاء الوحيدة لكل مكوّن في `app/Views/partials/`.
+
+   ⚠️ **مصيدة `Controller::render` المتجنَّبة هنا:** `render()` بتعمل
+      `extract($data, EXTR_SKIP)` **واسم معاملها نفسه `$data`** — فأي مفتاح
+      اسمه `data` بيتخطّى بالسكوت. عشان كده كل متغيّرات `partial()` الداخلية
+      مسبوقة بـ`__p_` فمستحيل مفتاح من الاستدعاء يتصادم معاها، ومستحيل
+      المكوّن يدهس متغيّرات الشاشة اللي نادته (النطاق منفصل بحكم إنها دالة).
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** يعرض مكوّنًا مشتركًا من `app/Views/partials/`. الأسماء بلا امتداد. */
+function partial(string $__p_name, array $__p_vars = []): void
+{
+    $__p_file = App::basePath('app/Views/partials/' . $__p_name . '.php');
+    if (!is_file($__p_file)) {
+        // الفشل ظاهر في مصدر الصفحة بدل ما يختفي بالسكوت (زي مصيدة مفتاح `data`)
+        echo '<!-- partial مفقود: ' . e($__p_name) . ' -->';
+        return;
+    }
+    extract($__p_vars, EXTR_SKIP);
+    require $__p_file;
+}
+
+/** نفس `partial()` لكن بترجّع الناتج نصًّا بدل ما تطبعه. */
+function partial_str(string $__p_name, array $__p_vars = []): string
+{
+    ob_start();
+    partial($__p_name, $__p_vars);
+    return (string) ob_get_clean();
+}
+
+/**
+ * يطبع جسم مكوّن غلاف (كارت/نافذة): يقبل نصًّا جاهزًا أو دالة بتطبع بنفسها.
+ * بيخلّي المكوّنات الغلافية ممكنة في PHP بلا ما نقسمها لـ`_open`/`_close`.
+ */
+function partial_body($__p_body): void
+{
+    if (is_callable($__p_body)) { $__p_body(); return; }
+    echo (string) $__p_body;
+}
+
 /** حقل CSRF مخفي */
 function csrfField(): string
 {
@@ -466,6 +511,7 @@ function icon(string $name, int $size = 20, string $class = ''): string
         'x'           => '<path d="M18 6 6 18M6 6l12 12"/>',
         'check-circle'=> '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>',
         'undo'        => '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>',
+        'download'    => '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
     ];
     $body = $paths[$name] ?? '<circle cx="12" cy="12" r="9"/>';
     $cls  = 'ico' . ($class ? ' ' . $class : '');

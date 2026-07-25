@@ -162,18 +162,8 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
   </div>
 
   <?php if ($pages > 1): ?>
-  <div class="pager">
-    <?php if ($page>1): ?><a href="?<?= $qs(['page'=>$page-1]) ?>">‹ السابق</a><?php endif; ?>
-    <?php
-      $start=max(1,$page-2); $end=min($pages,$page+2);
-      if ($start>1) echo '<a href="?'.$qs(['page'=>1]).'">1</a>'.($start>2?'<span class="dots">…</span>':'');
-      for ($p=$start;$p<=$end;$p++):
-        echo $p==$page ? '<span class="cur">'.$p.'</span>' : '<a href="?'.$qs(['page'=>$p]).'">'.$p.'</a>';
-      endfor;
-      if ($end<$pages) echo ($end<$pages-1?'<span class="dots">…</span>':'').'<a href="?'.$qs(['page'=>$pages]).'">'.$pages.'</a>';
-    ?>
-    <?php if ($page<$pages): ?><a href="?<?= $qs(['page'=>$page+1]) ?>">التالي ›</a><?php endif; ?>
-  </div>
+  <?php /* الترقيم بقى مكوّنًا واحدًا بدل نسخة مكرّرة في كل شاشة (المرحلة ٧) */ ?>
+  <?php partial('pager', ['page' => $page, 'pages' => $pages, 'qs' => $qs]); ?>
   <?php endif; ?>
 </div>
 

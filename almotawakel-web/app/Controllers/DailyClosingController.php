@@ -6,7 +6,7 @@ use App\Core\Controller;
 use App\Core\Database;
 use App\Models\Closing;
 use App\Models\Custody;
-use App\Models\DailyReconciliation;
+use App\Models\DailyReview;
 use App\Models\Permit;
 
 /**
@@ -17,316 +17,178 @@ use App\Models\Permit;
  *    ويبقى مسجَّلاً على الإصدار للأبد.
  *  • عهدة السائقين = مصروف (تُخصم من التقفيل، لا تُضاف كإيراد). يُطرح مبلغ ثابت
  *    (افتراضي 100ج) من عهدة كل بوليصة قبل خصمها: المخصوم = العهدة − 100.
- *    راجع محفظة العهدة `App\Models\Custody` (صفحة «رصيد العهدة»).
+ *    راجع محفظة العهدة `App\Models\Custody` (صفحة «خزنة المكتب»).
  *  • الرسوم المحصّلة لا تدخل صندوق التقفيل نهائياً (قرار صاحب الشركة).
  *
  *  المرحّل = باقي سابق − مصروفات اليوم − عهد السائقين (بعد خصم 100 لكل بوليصة)
- *  (باقي سابق = رصيد افتتاحي − مصروفات الأيام السابقة − عهد سائقيها المخصومة)
+ *
+ * ⚠️ **المراجعة قبل الإقفال بقت علامة ✓ جنب كل بند (v50).** المطابقة اليدوية
+ *    القديمة (v28: اكتب إجمالي كل عميل وطارد الفرق) اتشالت بالكامل بقرار المالك.
+ *    المصدر الوحيد لحالة المراجعة `App\Models\DailyReview`.
  */
 class DailyClosingController extends Controller
 {
     public function index(): void
     {
         $this->requireAuth();
-        $this->render('closing/index', $this->compute());
+        $date = $this->requestedDate();
+        $this->render('closing/index', $this->base($date) + [
+            'review' => DailyReview::view($date),
+        ]);
     }
 
     public function printable(): void
     {
         $this->requireAuth();
-        $this->render('closing/print', $this->compute(), false);
+        $date = $this->requestedDate();
+        $this->render('closing/print', $this->base($date) + $this->details($date) + [
+            'review' => DailyReview::view($date),
+        ], false);
     }
 
-    private function compute(): array
-    {
-        $date = trim($_GET['date'] ?? work_date());
-        $expSql = Permit::expenseSql('s');
-        $rate   = Custody::deductionRate();
+    // ───────────────────────────────────────────── علامات المراجعة
 
-        // مصروفات اليوم — كل بند مصروف تاريخه = اليوم (مهما كان تاريخ الإصدار)
-        // بنود «فيزا» (is_visa=1) لا تدخل صندوق التقفيل — تُدفع بالفيزا لا نقداً — لكنها تظل في وحدة المصروفات.
-        // بنود «عهدة المناديب» (paid_by_rep_id) تدخل التقفيل عادي من v42: فلوس المندوب
-        // أصلها من الدرج، والتنزيل نفسه مالوش أثر، فالخصم بيحصل يوم الصرف.
-        $expenses = Database::all(
-            "SELECT s.id, s.amount, s.entry_date, s.ref_no, s.note, s.stage_key, s.status,
-                    p.id AS permit_id, p.permit_no, p.permit_type, p.company, p.client,
-                    p.destination, p.shipping_co, p.agency, p.port
-             FROM permit_stages s
-             JOIN permits p ON p.id = s.permit_id
-             WHERE $expSql AND s.is_visa = 0 AND s.amount <> 0 AND s.entry_date = ?
-             ORDER BY p.permit_no, s.id",
-            [$date]
-        );
-        foreach ($expenses as &$ex) { $ex['stage_label'] = Permit::label($ex['stage_key']); }
-        unset($ex);
-
-        // المصاريف اليدوية المؤرَّخة باليوم — تدخل تقفيل يومها أيضاً (وحدة المصروفات) — عدا الفيزا
-        $manual = Database::all(
-            "SELECT id, amount, category, beneficiary, note
-             FROM manual_expenses WHERE is_visa = 0 AND exp_date = ? ORDER BY id",
-            [$date]
-        );
-        foreach ($manual as $m) {
-            $expenses[] = [
-                'is_manual'   => true,
-                'manual_id'   => (int) $m['id'],
-                'permit_id'   => null,
-                'permit_no'   => 'يدوي',
-                'permit_type' => null,
-                'company'     => $m['beneficiary'] ?: '—',
-                'client'      => null,
-                'destination' => null,
-                'shipping_co' => null,
-                'agency'      => null,
-                'port'        => null,
-                'stage_key'   => 'manual',
-                'stage_label' => $m['category'] ?: 'مصروف يدوي',
-                'note'        => $m['note'],
-                'ref_no'      => null,
-                'status'      => 'done',
-                'amount'      => $m['amount'],
-            ];
-        }
-
-        // كاش المناديب (سُلف + دفعات تسوية) جزء من مصروفات الإقفال، لذلك يظهر
-        // في جدول التفاصيل أيضًا ولا يُخصم من الرصيد في الخفاء.
-        $hasRepEntries = (bool) Database::scalar(
-            "SELECT COUNT(*) FROM information_schema.tables
-             WHERE table_schema=DATABASE() AND table_name='rep_entries'"
-        );
-        if ($hasRepEntries) {
-            foreach (Database::all(
-                "SELECT e.rep_id,e.kind,e.amount,e.note,r.name
-                 FROM rep_entries e JOIN reps r ON r.id=e.rep_id
-                 WHERE e.kind IN ('advance','settlement') AND e.is_visa=0
-                   AND e.amount<>0 AND e.entry_date=? ORDER BY e.id", [$date]
-            ) as $rep) {
-                $expenses[] = [
-                    'is_rep'      => true,
-                    'rep_id'      => (int) $rep['rep_id'],
-                    'permit_id'   => null,
-                    'permit_no'   => 'مندوب',
-                    'company'     => $rep['name'] ?: '—',
-                    'stage_key'   => 'reps',
-                    'stage_label' => $rep['kind'] === 'advance' ? 'سُلفة مندوب' : 'تسوية حساب مندوب',
-                    'note'        => $rep['note'],
-                    'ref_no'      => null,
-                    'status'      => 'done',
-                    'amount'      => $rep['amount'],
-                ];
-            }
-        }
-
-        // نثريات المناديب (v39) — مصروف شركة بلا إذن. بقت تُخصم من الخزنة في v42
-        // فلازم تظهر في جدول التفاصيل ولا تُخصم من الرصيد في الخفاء.
-        $hasRepMisc = (bool) Database::scalar(
-            "SELECT COUNT(*) FROM information_schema.tables
-             WHERE table_schema=DATABASE() AND table_name='rep_misc_expenses'"
-        );
-        if ($hasRepMisc) {
-            foreach (Database::all(
-                // v45: الكاش بس بيدخل صندوق التقفيل. المدفوع بالفيزا بيظهر تحت
-                // في جدول الفيزا المعلوماتي زي أي بند فيزا.
-                "SELECT x.id,x.rep_id,x.amount,x.category,x.note,x.ref_no,r.name
-                 FROM rep_misc_expenses x JOIN reps r ON r.id=x.rep_id
-                 WHERE x.amount<>0 AND " . \App\Models\RepMiscExpense::cashOnlySql('x') . "
-                   AND x.exp_date=? ORDER BY x.id", [$date]
-            ) as $mx) {
-                $expenses[] = [
-                    'is_rep_misc' => true,
-                    'rep_id'      => (int) $mx['rep_id'],
-                    'permit_id'   => null,
-                    'permit_no'   => 'نثرية',
-                    'company'     => $mx['name'] ?: '—',
-                    'stage_key'   => 'rep_misc',
-                    'stage_label' => $mx['category'] ?: 'نثريات',
-                    'note'        => $mx['note'],
-                    'ref_no'      => $mx['ref_no'],
-                    'status'      => 'done',
-                    'amount'      => $mx['amount'],
-                ];
-            }
-        }
-
-        // مدفوعات الفيزا (is_visa=1) المؤرَّخة باليوم — تُدفع بالفيزا لا نقداً، فلا تدخل صندوق التقفيل،
-        // لكن تُعرض في جدول صغير منفصل للاطلاع. من بنود الإصدارات + المصاريف اليدوية.
-        $visaRows = Database::all(
-            "SELECT s.amount, s.note, s.stage_key, p.permit_no, p.company
-             FROM permit_stages s
-             JOIN permits p ON p.id = s.permit_id
-             WHERE $expSql AND s.is_visa = 1 AND s.amount <> 0 AND s.entry_date = ?
-             ORDER BY p.permit_no, s.id",
-            [$date]
-        );
-        foreach ($visaRows as &$v) { $v['stage_label'] = Permit::label($v['stage_key']); }
-        unset($v);
-        foreach (Database::all(
-            "SELECT amount, category, beneficiary, note FROM manual_expenses
-             WHERE is_visa = 1 AND exp_date = ? ORDER BY id", [$date]) as $mv) {
-            $visaRows[] = [
-                'amount'      => $mv['amount'],
-                'note'        => $mv['note'],
-                'stage_label' => $mv['category'] ?: 'مصروف يدوي',
-                'permit_no'   => 'يدوي',
-                'company'     => $mv['beneficiary'] ?: '—',
-            ];
-        }
-        // نثريات المناديب المدفوعة بالفيزا (v45) — نفس المعاملة: معلوماتية بس.
-        if ($hasRepMisc && \App\Models\RepMiscExpense::visaReady()) {
-            foreach (Database::all(
-                "SELECT x.amount, x.category, x.note, r.name
-                 FROM rep_misc_expenses x JOIN reps r ON r.id=x.rep_id
-                 WHERE x.amount<>0 AND x.is_visa=1 AND x.exp_date=? ORDER BY x.id", [$date]) as $mv) {
-                $visaRows[] = [
-                    'amount'      => $mv['amount'],
-                    'note'        => $mv['note'],
-                    'stage_label' => $mv['category'] ?: 'نثريات',
-                    'permit_no'   => 'نثرية',
-                    'company'     => $mv['name'] ?: '—',
-                ];
-            }
-        }
-        $totVisa = round((float) array_sum(array_map(fn($x)=>(float)$x['amount'], $visaRows)), 2);
-
-        // عهد السائقين — عهدة بوالص تاريخها = اليوم. تُحتسب مصروفاً بعد طرح الـ100 لكل بوليصة.
-        $custodyRows = Database::all(
-            "SELECT b.id, b.bill_number, b.bill_date, b.driver, b.company, b.custody, b.car_no,
-                    b.permit_id, p.permit_no
-             FROM bawalis b LEFT JOIN permits p ON p.id = b.permit_id
-             WHERE b.is_legacy = 0 AND b.bill_date = ? AND b.custody > 0
-             ORDER BY b.id",
-            [$date]
-        );
-        foreach ($custodyRows as &$c) { $c['deduction'] = Custody::billDeduction((float) $c['custody'], $c['car_no'] ?? null); }
-        unset($c);
-
-        $totExpense    = round((float) array_sum(array_map(fn($x)=>(float)$x['amount'], $expenses)), 2);
-        $totCustody    = round((float) array_sum(array_map(fn($x)=>(float)$x['custody'], $custodyRows)), 2);
-        $totCustodyExp = round((float) array_sum(array_map(fn($x)=>(float)$x['deduction'], $custodyRows)), 2);
-
-        // ── نظام الإقفال اليومي والترحيل (App\Models\Closing).
-        //    القيم المالية تأتي من dayView: إن كان اليوم متقفلًا تُعرض القيم المجمّدة
-        //    المخزَّنة وقت الإقفال، وإلا تُحسب حيًّا انطلاقًا من آخر يوم متقفل (وتخصم المصروفات).
-        $day        = Closing::dayView($date);
-        $isClosed   = Closing::isClosedExact($date);
-        $lastClosed = Closing::lastClosedDate();
-        $canReopen  = $isClosed && $lastClosed !== null && $date === $lastClosed;
-
-        $prevBalance = $day['opening'];                              // باقي سابق = رصيد بداية اليوم
-        $totTopups   = $day['topups'];                               // عهد مضافة للرصيد اليوم
-        $totOutflow  = round($day['expenses'] + $day['driver'], 2);  // صادر = مصروفات + عهد سائقين مخصومة
-        $available   = round($prevBalance + $totTopups, 2);          // المتاح = باقي سابق + عهد مضافة
-        $carried     = $day['closing'];                             // المرحّل لليوم التالي (مجمّد لو متقفل)
-        $reconciliation = DailyReconciliation::view($date);
-
-        return [
-            'title'         => 'التقفيل اليومي',
-            'date'          => $date,
-            'rate'          => $rate,
-            'expenses'      => $expenses,
-            'visaRows'      => $visaRows,
-            'totVisa'       => $totVisa,
-            'custodyRows'   => $custodyRows,
-            'totExpense'    => $totExpense,     // مصروفات نقدية (بنود المصروفات)
-            'totCustody'    => $totCustody,     // إجمالي عهد السائقين قبل الخصم
-            'totCustodyExp' => $totCustodyExp,  // عهد السائقين بعد خصم 100 (المخصوم فعلاً)
-            'totTopups'     => $totTopups,      // عهد مضافة للرصيد اليوم (إيراد)
-            'totOutflow'    => $totOutflow,     // الإجمالي: مصروفات + عهد سائقين مخصومة
-            'prevBalance'   => $prevBalance,
-            'available'     => $available,
-            'carried'       => $carried,
-            // ── حالة الإقفال (للعرض والأزرار)
-            'isClosed'      => $isClosed,        // لهذا اليوم صفّ إقفال بالضبط
-            'isLocked'      => $day['is_locked'],// يقع ضمن فترة متقفلة (لا كتابة)
-            'canReopen'     => $canReopen,       // آخر يوم متقفل → يمكن فتحه
-            'lastClosed'    => $lastClosed,
-            'closedBy'      => $day['closed_by'],
-            'closedAt'      => $day['closed_at'],
-            // ── مطابقة اليدوي حسب الإذن (v28)
-            'reconciliation'=> $reconciliation,
-            // إعادة تعبئة المطابقة بعد الرفض — المبالغ المكتوبة كانت بتضيع كلها
-            'reconRestore'  => \App\Core\FormState::consume(
-                'closing.reconcile.' . $date,
-                'closing?date=' . urlencode($date) . '#reconciliation'
-            ),
-        ];
-    }
-
-    /** حفظ مطابقة الإجماليات اليدوية مع إيصالات ومصروفات كل إذن. */
-    public function reconcile(): void
+    /** تعليم/إلغاء بند واحد (نداء AJAX من الشاشة، وله مسار رجوع بلا جافاسكريبت). */
+    public function review(): void
     {
         $this->requireAuth();
         $this->requireCsrf();
         $date = trim((string) ($_POST['date'] ?? ''));
-        if (!$this->validDate($date)) {
-            $this->fail('تاريخ المطابقة غير صحيح.', 'closing');
-        }
-        if (Closing::isLocked($date)) {
-            $this->fail(
-                'اليوم متقفل. افتح الإقفال أولًا قبل تعديل المطابقة.',
-                'closing?date=' . urlencode($date) . '#reconciliation'
-            );
-        }
+        $back = 'closing?date=' . urlencode($date) . '#review';
+        if (!$this->validDate($date)) { $this->fail('تاريخ غير صحيح.', 'closing'); }
+        if ($msg = $this->lockMessage($date)) { $this->fail($msg, $back); }
 
+        $type  = preg_replace('/[^a-z_]/', '', strtolower((string) ($_POST['type'] ?? '')));
+        $id    = (int) ($_POST['item_id'] ?? 0);
+        $state = (string) ($_POST['state'] ?? '1') === '1';
         try {
-            $totalInputs = is_array($_POST['manual_total'] ?? null) ? $_POST['manual_total'] : [];
-            $noteInputs = is_array($_POST['row_note'] ?? null) ? $_POST['row_note'] : [];
-            $items = [];
-            foreach ($totalInputs as $key => $value) {
-                if (!is_string($key) || !preg_match('/^[a-f0-9]{64}$/', $key)) { continue; }
-                $items[$key] = [
-                    'total' => $this->postedAmount($value, 'إجمالي العميل اليدوي'),
-                    'note' => trim((string) ($noteInputs[$key] ?? '')),
-                ];
-            }
-
-            $general = $this->postedAmount($_POST['manual_general_expenses'] ?? 0, 'المصروفات العامة اليدوية');
-            DailyReconciliation::save(
-                $date, $items, $general, trim((string) ($_POST['reconciliation_note'] ?? '')), Auth::user()
-            );
-            $check = DailyReconciliation::view($date);
-            $backTo = 'closing?date=' . urlencode($date) . '#reconciliation';
-            if ($check['matched']) {
-                $this->done('تم حفظ المطابقة: كل إيصالات ومصروفات اليوم مطابقة للسيستم.', $backTo);
-            }
-            $this->done('تم الحفظ، وما زالت فيه فروق. الصفوف غير المطابقة مميزة بالأحمر.', $backTo, '', 'warning');
+            $view = DailyReview::mark($date, (string) $type, $id, $state, Auth::user());
         } catch (\Throwable $e) {
-            // ⚠️ كان بيضيّع **كل** المبالغ المكتوبة في الشاشة: المالك بيملّي
-            // عشرات الصفوف بإيده، وأول رقم غلط كان بيرجّع الشاشة فاضية.
-            // دلوقتي بترجع متعبّية ومعاها سبب الرفض.
-            $this->formFailure(
-                'closing.reconcile.' . $date,
-                'closing?date=' . urlencode($date) . '#reconciliation',
-                [
-                    'manual_total'            => is_array($_POST['manual_total'] ?? null) ? $_POST['manual_total'] : [],
-                    'row_note'                => is_array($_POST['row_note'] ?? null) ? $_POST['row_note'] : [],
-                    'manual_general_expenses' => (string) ($_POST['manual_general_expenses'] ?? ''),
-                    'reconciliation_note'     => (string) ($_POST['reconciliation_note'] ?? ''),
-                ],
-                ['_form' => $e->getMessage()],
-                'closing?date=' . urlencode($date) . '#reconciliation'
-            );
+            $this->fail($e->getMessage(), $back);
         }
+        $this->respond($view, $state ? 'تم تعليم البند كمراجَع.' : 'تم إلغاء علامة المراجعة.', $back);
     }
 
-    /** إقفال يوم (زر «اقفل اليوم»). */
+    /** تعليم/إلغاء كل بنود مجموعة دفعة واحدة. */
+    public function reviewGroup(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $date = trim((string) ($_POST['date'] ?? ''));
+        $back = 'closing?date=' . urlencode($date) . '#review';
+        if (!$this->validDate($date)) { $this->fail('تاريخ غير صحيح.', 'closing'); }
+        if ($msg = $this->lockMessage($date)) { $this->fail($msg, $back); }
+
+        $group = preg_replace('/[^a-z_]/', '', strtolower((string) ($_POST['group'] ?? '')));
+        $state = (string) ($_POST['state'] ?? '1') === '1';
+        try {
+            $view = DailyReview::markGroup($date, (string) $group, $state, Auth::user());
+        } catch (\Throwable $e) {
+            $this->fail($e->getMessage(), $back);
+        }
+        $this->respond($view, $state ? 'تم تعليم كل بنود القسم.' : 'تم إلغاء علامات القسم.', $back);
+    }
+
+    /**
+     * حفظ كل العلامات من الفورم — مسار الرجوع لو الجافاسكريبت متعطّل.
+     * اللي متعلّم يتسجّل واللي مش متعلّم تتشال علامته، فالشاشة هي مصدر الحقيقة.
+     */
+    public function reviewSave(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $date = trim((string) ($_POST['date'] ?? ''));
+        $back = 'closing?date=' . urlencode($date) . '#review';
+        if (!$this->validDate($date)) { $this->fail('تاريخ غير صحيح.', 'closing'); }
+        if ($msg = $this->lockMessage($date)) { $this->fail($msg, $back); }
+
+        $keys = is_array($_POST['reviewed'] ?? null) ? $_POST['reviewed'] : [];
+        try {
+            $view = DailyReview::saveSet($date, $keys, Auth::user());
+        } catch (\Throwable $e) {
+            $this->fail($e->getMessage(), $back);
+        }
+        $pending = (int) $view['totals']['blocking_pending'];
+        $this->respond(
+            $view,
+            $pending === 0
+                ? 'تمت مراجعة كل بنود اليوم. تقدر تقفل اليوم دلوقتي.'
+                : 'اتحفظت المراجعة. فاضل ' . intf($pending) . ' بند بدون علامة.',
+            $back,
+            $pending === 0 ? 'success' : 'warning'
+        );
+    }
+
+    /**
+     * رد موحّد: JSON لنداء الشاشة، أو رجوع عادي للمسار بلا جافاسكريبت.
+     *
+     * ⚠️ **`exit` بعد `json()` إجبارية** (نفس نمط `fail()`/`notFound()` في الكلاس
+     *    الأساسي): `json()` بتطبع بس وما بتوقفش التنفيذ، فمن غير `exit` الكود كان
+     *    بيكمّل لـ`done()` → `redirect()` → `header()` بعد ما الخرج اتبعت، فPHP
+     *    بتلزق تحذير «Cannot modify header information» جوّه الرد نفسه فيبوظ الـJSON
+     *    والمتصفح يقول «رد غير متوقّع من الخادم». اتصادفت فعليًّا.
+     */
+    private function respond(array $view, string $msg, string $back, string $type = 'success'): never
+    {
+        if ($this->wantsJson()) {
+            $groups = [];
+            foreach ($view['groups'] as $key => $group) {
+                $groups[$key] = [
+                    'count' => $group['count'], 'reviewed' => $group['reviewed'],
+                    'pending' => $group['pending'], 'stale' => $group['stale'], 'done' => $group['done'],
+                ];
+            }
+            $this->json([
+                'ok' => true, 'flash' => $msg, 'totals' => $view['totals'],
+                'groups' => $groups, 'complete' => $view['complete'],
+                'items' => array_map(
+                    static fn($item) => [
+                        'key' => $item['key'], 'reviewed' => $item['reviewed'], 'stale' => $item['stale'],
+                        'by' => $item['reviewed_by'], 'at' => $item['reviewed_at'],
+                    ],
+                    array_merge(...array_values(array_map(static fn($g) => $g['items'], $view['groups']))) ?: []
+                ),
+            ]);
+            exit;   // ⚠️ لازمة — اقرا التعليق فوق
+        }
+        $this->done($msg, $back, '', $type);
+    }
+
+    /** رسالة منع الكتابة على يوم متقفل، أو null. */
+    private function lockMessage(string $date): ?string
+    {
+        if (!DailyReview::available()) {
+            return 'شغّل php bin/migrate_v50.php مرة واحدة لتفعيل المراجعة.';
+        }
+        if (Closing::isLocked($date)) {
+            return 'اليوم متقفل. افتح الإقفال أولًا قبل تعديل المراجعة.';
+        }
+        return null;
+    }
+
+    // ───────────────────────────────────────────── إقفال / فتح
+
+    /** إقفال يوم (زر «اقفل اليوم») — مشروط بمراجعة كل بنود اليوم. */
     public function close(): void
     {
         $this->requireAuth();
         $this->requireCsrf();
         $date = trim($_POST['date'] ?? '');
         if ($this->validDate($date)) {
-            $reconciliation = DailyReconciliation::view($date);
-            if (!$reconciliation['available']) {
-                flash('error', 'شغّل ترحيل المطابقة v28 قبل إقفال اليوم.');
-                redirect('closing?date=' . urlencode($date) . '#reconciliation');
+            $review = DailyReview::view($date);
+            if (!$review['available']) {
+                $this->fail('شغّل php bin/migrate_v50.php قبل إقفال اليوم.',
+                    'closing?date=' . urlencode($date) . '#review');
             }
-            if (!$reconciliation['matched']) {
-                flash('error', 'لا يمكن إقفال اليوم قبل حفظ مطابقة الإيصالات والمصروفات بدون فروق.');
-                redirect('closing?date=' . urlencode($date) . '#reconciliation');
+            if (!$review['complete']) {
+                $this->fail(
+                    'فاضل ' . intf((int) $review['totals']['blocking_pending'])
+                    . ' بند من غير علامة مراجعة. علّم كل البنود الأول ثم اقفل اليوم.',
+                    'closing?date=' . urlencode($date) . '#review'
+                );
             }
         }
-        $res  = Closing::closeDay($date, Auth::user());
+        $res = Closing::closeDay($date, Auth::user());
         flash($res['ok'] ? 'success' : 'error', $res['msg']);
         redirect('closing?date=' . urlencode($date));
     }
@@ -342,26 +204,156 @@ class DailyClosingController extends Controller
         redirect('closing?date=' . urlencode($date));
     }
 
+    // ───────────────────────────────────────────── بيانات الشاشة
+
+    private function requestedDate(): string
+    {
+        $date = trim($_GET['date'] ?? '');
+        return $this->validDate($date) ? $date : work_date();
+    }
+
+    /** أرقام اليوم وحالة إقفاله — تشترك فيها شاشتا العرض والطباعة. */
+    private function base(string $date): array
+    {
+        // ── نظام الإقفال اليومي والترحيل (App\Models\Closing).
+        //    القيم المالية تأتي من dayView: إن كان اليوم متقفلًا تُعرض القيم المجمّدة
+        //    المخزَّنة وقت الإقفال، وإلا تُحسب حيًّا انطلاقًا من آخر يوم متقفل.
+        $day        = Closing::dayView($date);
+        $isClosed   = Closing::isClosedExact($date);
+        $lastClosed = Closing::lastClosedDate();
+
+        return [
+            'title'         => 'التقفيل اليومي',
+            'date'          => $date,
+            'rate'          => Custody::deductionRate(),
+            'prevBalance'   => $day['opening'],
+            'totTopups'     => $day['topups'],
+            'totExpense'    => $day['expenses'],
+            'totCustodyExp' => $day['driver'],
+            'available'     => round($day['opening'] + $day['topups'], 2),
+            'carried'       => $day['closing'],
+            'isClosed'      => $isClosed,
+            'isLocked'      => $day['is_locked'],
+            'canReopen'     => $isClosed && $lastClosed !== null && $date === $lastClosed,
+            'lastClosed'    => $lastClosed,
+            'closedBy'      => $day['closed_by'],
+            'closedAt'      => $day['closed_at'],
+        ];
+    }
+
+    /** جداول التفاصيل المسطّحة — تستخدمها صفحة الطباعة فقط. */
+    private function details(string $date): array
+    {
+        $expSql = Permit::expenseSql('s');
+
+        $expenses = Database::all(
+            "SELECT s.id, s.amount, s.ref_no, s.note, s.stage_key,
+                    p.id AS permit_id, p.permit_no, p.company, p.client,
+                    p.destination, p.shipping_co, p.agency, p.port
+             FROM permit_stages s
+             JOIN permits p ON p.id = s.permit_id
+             WHERE $expSql AND s.is_visa = 0 AND s.amount <> 0 AND s.entry_date = ?
+             ORDER BY p.permit_no, s.id", [$date]
+        );
+        foreach ($expenses as &$ex) { $ex['stage_label'] = Permit::label($ex['stage_key']); }
+        unset($ex);
+        foreach (Database::all(
+            "SELECT id, amount, category, beneficiary, note FROM manual_expenses
+             WHERE is_visa = 0 AND exp_date = ? ORDER BY id", [$date]) as $m) {
+            $expenses[] = ['permit_no'=>'يدوي','company'=>$m['beneficiary'] ?: '—',
+                'stage_label'=>$m['category'] ?: 'مصروف يدوي','note'=>$m['note'],
+                'ref_no'=>null,'amount'=>$m['amount']];
+        }
+        // ⚠️ كاش المناديب ونثرياتهم بيتخصموا من الخزنة (v42) — لازم يظهروا في ورقة
+        //    الطباعة زي أي مصروف، وإلا مجموع الجدول يقول رقم والرصيد يقول رقم تاني.
+        if ($this->tableExists('rep_entries')) {
+            $cash = \App\Models\Rep::cashKindsList();
+            foreach (Database::all(
+                "SELECT e.kind, e.amount, e.note, r.name FROM rep_entries e
+                 JOIN reps r ON r.id = e.rep_id
+                 WHERE e.kind IN ($cash) AND e.is_visa = 0 AND e.amount <> 0 AND e.entry_date = ?
+                 ORDER BY e.id", [$date]) as $r) {
+                $expenses[] = ['permit_no'=>'مندوب','company'=>$r['name'] ?: '—',
+                    'stage_label'=>\App\Models\Rep::kindLabel((string) $r['kind']),
+                    'note'=>$r['note'],'ref_no'=>null,'amount'=>$r['amount']];
+            }
+        }
+        if ($this->tableExists('rep_misc_expenses')) {
+            $cashOnly = \App\Models\RepMiscExpense::cashOnlySql('x');
+            foreach (Database::all(
+                "SELECT x.amount, x.category, x.note, x.ref_no, r.name FROM rep_misc_expenses x
+                 JOIN reps r ON r.id = x.rep_id
+                 WHERE x.amount <> 0 AND $cashOnly AND x.exp_date = ? ORDER BY x.id", [$date]) as $r) {
+                $expenses[] = ['permit_no'=>'نثرية','company'=>$r['name'] ?: '—',
+                    'stage_label'=>$r['category'] ?: \App\Models\RepMiscExpense::CATEGORY,
+                    'note'=>$r['note'],'ref_no'=>$r['ref_no'],'amount'=>$r['amount']];
+            }
+        }
+
+        $visaRows = Database::all(
+            "SELECT s.amount, s.note, s.stage_key, p.permit_no, p.company
+             FROM permit_stages s JOIN permits p ON p.id = s.permit_id
+             WHERE $expSql AND s.is_visa = 1 AND s.amount <> 0 AND s.entry_date = ?
+             ORDER BY p.permit_no, s.id", [$date]
+        );
+        foreach ($visaRows as &$v) { $v['stage_label'] = Permit::label($v['stage_key']); }
+        unset($v);
+        foreach (Database::all(
+            "SELECT amount, category, beneficiary, note FROM manual_expenses
+             WHERE is_visa = 1 AND exp_date = ? ORDER BY id", [$date]) as $mv) {
+            $visaRows[] = ['amount'=>$mv['amount'],'note'=>$mv['note'],
+                'stage_label'=>$mv['category'] ?: 'مصروف يدوي','permit_no'=>'يدوي',
+                'company'=>$mv['beneficiary'] ?: '—'];
+        }
+        if ($this->tableExists('rep_misc_expenses') && \App\Models\RepMiscExpense::visaReady()) {
+            foreach (Database::all(
+                "SELECT x.amount, x.category, x.note, r.name FROM rep_misc_expenses x
+                 JOIN reps r ON r.id = x.rep_id
+                 WHERE x.amount <> 0 AND x.is_visa = 1 AND x.exp_date = ? ORDER BY x.id", [$date]) as $mv) {
+                $visaRows[] = ['amount'=>$mv['amount'],'note'=>$mv['note'],
+                    'stage_label'=>$mv['category'] ?: \App\Models\RepMiscExpense::CATEGORY,
+                    'permit_no'=>'نثرية','company'=>$mv['name'] ?: '—'];
+            }
+        }
+
+        $custodyRows = Database::all(
+            "SELECT b.id, b.bill_number, b.driver, b.company, b.custody, b.car_no, p.permit_no
+             FROM bawalis b LEFT JOIN permits p ON p.id = b.permit_id
+             WHERE b.is_legacy = 0 AND b.bill_date = ? AND b.custody > 0 ORDER BY b.id", [$date]
+        );
+        foreach ($custodyRows as &$c) {
+            $c['deduction'] = Custody::billDeduction((float) $c['custody'], $c['car_no'] ?? null);
+        }
+        unset($c);
+
+        $sum = static fn(array $rows, string $col): float => round(
+            (float) array_sum(array_map(static fn($x) => (float) $x[$col], $rows)), 2);
+
+        return [
+            'expenses'    => $expenses,
+            'visaRows'    => $visaRows,
+            'custodyRows' => $custodyRows,
+            'totVisa'     => $sum($visaRows, 'amount'),
+            'totCustody'  => $sum($custodyRows, 'custody'),
+        ];
+    }
+
+    /** وجود جدول اختياري (وحدات المناديب ممكن تكون لسه ما اترحّلتش). */
+    private function tableExists(string $name): bool
+    {
+        static $cache = [];
+        if (!array_key_exists($name, $cache)) {
+            $cache[$name] = (bool) Database::scalar(
+                'SELECT COUNT(*) FROM information_schema.tables
+                 WHERE table_schema=DATABASE() AND table_name=?', [$name]);
+        }
+        return $cache[$name];
+    }
+
     private function validDate(string $date): bool
     {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) { return false; }
         $d = \DateTime::createFromFormat('!Y-m-d', $date);
         return $d !== false && $d->format('Y-m-d') === $date;
-    }
-
-    /** مبلغ إدخال يدوي غير سالب، مع دعم الأرقام العربية والفواصل. */
-    private function postedAmount($value, string $label): float
-    {
-        $s = trim((string) $value);
-        if ($s === '') { return 0.0; }
-        $s = strtr($s, [
-            '٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9',
-            '٫'=>'.','٬'=>'',','=>'', ' '=>'',
-        ]);
-        if (!is_numeric($s)) { throw new \InvalidArgumentException($label . ': اكتب رقمًا صحيحًا.'); }
-        $amount = round((float) $s, 2);
-        if ($amount < 0) { throw new \InvalidArgumentException($label . ': لا يمكن إدخال مبلغ سالب.'); }
-        if ($amount > 999999999999.99) { throw new \InvalidArgumentException($label . ': المبلغ أكبر من الحد المسموح.'); }
-        return $amount;
     }
 }

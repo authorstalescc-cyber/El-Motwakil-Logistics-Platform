@@ -25,6 +25,38 @@ class OfficeController extends Controller
         ]);
     }
 
+    /**
+     * تفاصيل أي رقم في شاشة الكروت — قاعدة المالك «ممنوع رقم أصمّ».
+     *
+     * ⚠️ **مسار خاص بالوحدة — مش مسار تفاصيل عام** ياخد اسم جدول ويرجّع صفوف.
+     *    النوع محصور في قائمة بيضا، والمسار بيمرّ على `Access::enforce` زي أي
+     *    مسار (الرفض هو الافتراضي — تحذير ٥). بيرندر بلا layout ويرجّع HTML.
+     *
+     * ⚠️ **ما بيكتبش استعلامًا جديدًا** — بيقرا من نفس دوال `VisaCard` اللي
+     *    الأرقام اتحسبت منها، فمستحيل النافذة تقول رقمًا والكارت يقول غيره.
+     */
+    private const DRILL = ['balance', 'deposits', 'payments', 'owners'];
+
+    public function drill(string $what): void
+    {
+        $this->requireAuth();
+        if (!in_array($what, self::DRILL, true)) {
+            $this->notFound('نوع التفاصيل ده مش موجود.');
+        }
+        // ⚠️ محروسة بـ`headers_sent()` — أي مخرَج سابق بيلزق Warning جوّه جسم
+        //    الرد فالنافذة تستقبل HTML متلوّث (باج v50).
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: private, no-store, max-age=0');
+        }
+        $this->render('office/_drill', [
+            'what'    => $what,
+            'cards'   => VisaCard::withBalances(),
+            'summary' => VisaCard::summary(),
+            'byOwner' => VisaCard::byOwner(),
+        ], false);
+    }
+
     // ─────────────────────────────────────────── صفحة كارت
     public function card(string $id): void
     {

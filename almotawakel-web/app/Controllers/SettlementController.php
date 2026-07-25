@@ -6,6 +6,7 @@ use App\Core\Database;
 use App\Core\FormState;
 use App\Models\Bill;
 use App\Models\Lookup;
+use App\Models\OwnerStatement;
 
 /**
  * سداد البوالص — متمحور حول «صاحب البيان» (صاحب المديونية الذي نصرف له).
@@ -201,6 +202,11 @@ class SettlementController extends Controller
             'filtered'   => $this->anyFilter($f),
             'backQS'     => http_build_query($qs),
             'payState'   => $payState,
+            /* المرحلة ٩ — الدمج: كشوف صاحب البيان بتظهر **في صفحته** بدل ما
+               المالك يرجع للقائمة ويدخل وحدة `/statements` ويدوّر على اسمه.
+               `forOwner()` بتمرّ على `PartyMaster` فبتلمّ تهجئات الاسم
+               المختلفة (تحذير ٣)، وبترجّع [] بأمان لو الجدول مش موجود. */
+            'statements' => OwnerStatement::forOwner($owner),
         ] + $this->lookups());
     }
 

@@ -7,6 +7,7 @@ use App\Core\Controller;
 use App\Core\RepAuth;
 use App\Core\PrivateFile;
 use App\Models\RepDriverHandover;
+use App\Models\PushNotify;
 use App\Models\RepPortal;
 use App\Models\RepSubmissionValidationException;
 
@@ -49,7 +50,8 @@ class RepPortalController extends Controller
             flash('error', $res['msg']);
             redirect('m/login');
         }
-        redirect('m');
+        // نسأله بيشتغل بتاريخ إمتى قبل ما يبدأ (زي بوابة المكتب) — الافتراضي النهاردة.
+        redirect('m/work-date');
     }
 
     public function logout(): void
@@ -71,19 +73,23 @@ class RepPortalController extends Controller
         if (!in_array($status, ['', 'pending', 'approved', 'rejected'], true)) { $status = ''; }
         $clearDraft = (string) ($_SESSION['_m_clear_draft'] ?? '');
         unset($_SESSION['_m_clear_draft']);
+        $workDate = RepAuth::workDate();
         $this->render('m/home', [
             'title'       => 'شغلي',
             'tab'         => $tab,
             'status'      => $status,
             'clearDraft'  => $clearDraft,
+            'workDate'    => $workDate,                // عهدة اليوم اللي كل الأرقام تحته
             'canAddPermit'=> RepPortal::canCreatePermit($repId),   // v44 — الزرار بيظهر للمسموح لهم بس
             'canWatchTeam'=> RepPortal::canWatchReps($repId),      // v47 — تبويب «المناديب» للمشرف بس
-            'pocket'      => RepPortal::pocket($repId),
+            // ⚠️ v49 — كل أرقام الشاشة دي **ليوم العمل ده وبس** (قرار المالك):
+            //    عهدة اليوم والمدخلات اللي اتدخلت عليها. أي بند أو تنزيل من يوم
+            //    تاني بيبان وكأنه خصم من عهدة النهاردة، وده اللي اتشال.
+            'pocket'      => RepPortal::dayPocket($repId, $workDate),
             'permits'     => RepPortal::myPermits($repId),
-            'submissions' => RepPortal::mySubmissions($repId, 40, $status),
-            'counts'      => RepPortal::myCounts($repId),
-            'lastSettle'  => RepPortal::lastSettlement($repId),    // «بنودي» فترة جديدة بعد التسوية
-            'deposits'    => RepPortal::recentDeposits($repId),    // لتنبيه «نزلت عهدة جديدة»
+            'submissions' => RepPortal::mySubmissions($repId, 40, $status, $workDate),
+            'counts'      => RepPortal::myCounts($repId, $workDate),
+            'deposits'    => RepPortal::recentDeposits($repId, 5, $workDate),   // تنبيه «نزلت عهدة» لليوم ده
         ], false);
     }
 
@@ -94,8 +100,50 @@ class RepPortalController extends Controller
     public function ping(): void
     {
         $this->requireRep();
-        $this->json(RepPortal::pingState(RepAuth::repId()));
+        $this->json(RepPortal::pingState(RepAuth::repId(), RepAuth::workDate()));
         exit;
+    }
+
+    // ═══════════════════════════════════════════ تاريخ العمل
+
+    /**
+     * شاشة «بتشتغل بتاريخ إمتى؟» — بتظهر عقب الدخول، وكمان لما يدوس «غيّر»
+     * من بانر الصفحة الرئيسية. نفس فكرة WorkDateController بتاع المكتب، بس
+     * بجلسة المندوب (RepAuth) وشكل الموبايل.
+     */
+    public function workDateForm(): void
+    {
+        $this->requireRep();
+        $this->render('m/workdate', [
+            'title'   => 'تاريخ العمل',
+            'current' => RepAuth::workDate(),
+            'today'   => date('Y-m-d'),
+        ], false);
+    }
+
+    /** حفظ تاريخ العمل ثم الرجوع للشاشة الرئيسية. */
+    public function workDateSave(): void
+    {
+        $this->requireRep();
+        $this->requireCsrf();
+        $date = trim((string) ($_POST['work_date'] ?? ''));
+        if (!RepAuth::setWorkDate($date)) {
+            flash('error', 'التاريخ اللي اخترته مش صح — اختار يوم مش في المستقبل.');
+            redirect('m/work-date');
+        }
+        // v49: اليوم المتقفل ينفع يتفرّج عليه، إنما الكتابة عليه مرفوضة — نقولها
+        // من هنا بدل ما يملا فورم كامل ويترفض في آخر خطوة.
+        $lock = \App\Models\RepCustody::dayLockReason($date);
+        if ($lock !== null) {
+            // ⚠️ شاشات /m بتقرا `error`/`success` بس (مش داخل الـlayout بتاع المكتب)،
+            //    فاستخدام نوع تالت هنا معناه رسالة تروح في السكوت.
+            flash('error', $lock);
+        } elseif (RepAuth::isWorkDateToday()) {
+            flash('success', 'هتشتغل بتاريخ النهاردة.');
+        } else {
+            flash('success', 'دلوقتي شغّال بيوم ' . dfmt($date) . ' — كل اللي هتسجّله هيتحسب على عهدة اليوم ده.');
+        }
+        redirect('m');
     }
 
     // ═══════════════════════════════════════════ متابعة المناديب (v47)
@@ -211,6 +259,10 @@ class RepPortalController extends Controller
             $this->submitFailure($e, 'm/permit/new');
             return;   // submitFailure بتعمل redirect/exit؛ ده للوضوح بس
         }
+        // نفس إشعار إذن المكتب بالظبط — الحدث واحد مهما كان اللي فتحه
+        PushNotify::permitCreated((int) $res['id'], (string) ($_POST['permit_no'] ?? ''),
+            (string) ($_POST['company'] ?? ''), (string) ($_POST['client'] ?? ''),
+            'مندوب: ' . (string) ($_SESSION['rep_name'] ?? ''));
         flash('success', 'اتفتح ' . $res['label'] . ' ✓ — تقدر تسجّل عليه بنودك دلوقتي.');
         redirect('m/permit/' . $res['id']);
     }
@@ -252,7 +304,7 @@ class RepPortalController extends Controller
         $photo = null;
         try {
             $photo = $this->handlePhoto();
-            $data = $this->postedData($permitId);
+            $data = $this->postedData($permitId, true);   // v49: على عهدة يوم العمل
             $data['photo'] = $photo ?? '';
             $subId = RepPortal::submit($repId, $data);
 
@@ -265,6 +317,9 @@ class RepPortalController extends Controller
             if ($photo) { $this->deletePhoto($photo); }
             $this->submitFailure($e, 'm/permit/' . $permitId);
         }
+
+        // إشعار للمكتب إن فيه بند مستنّي مراجعة (بعد نجاح الحفظ وخارج أي transaction)
+        $this->notifyOffice($repId, $data ?? [], false);
 
         $draftKey = $this->draftKey('new', $permitId);
         $_SESSION['_m_clear_draft'] = $draftKey;
@@ -313,7 +368,7 @@ class RepPortalController extends Controller
         $photo = null;
         try {
             $photo = $this->handlePhoto();
-            $data = $this->postedData(0);
+            $data = $this->postedData(0, true);   // v49: على عهدة يوم العمل
             $data['kind']  = 'misc';   // الخادم هو اللي بيقرّر، مش الفورم
             $data['photo'] = $photo ?? '';
             $subId = RepPortal::submit($repId, $data);
@@ -326,6 +381,8 @@ class RepPortalController extends Controller
             if ($photo) { $this->deletePhoto($photo); }
             $this->submitFailure($e, 'm/misc');
         }
+
+        $this->notifyOffice($repId, $data ?? [], true);
 
         $draftKey = $this->draftKey('misc', 0);
         $_SESSION['_m_clear_draft'] = $draftKey;
@@ -454,7 +511,8 @@ class RepPortalController extends Controller
             'permits'   => $permits,
             'bills'     => $bills,
             'recent'    => RepDriverHandover::forRep($repId, 10),
-            'pocket'    => RepPortal::pocket($repId),
+            'pocket'    => RepPortal::dayPocket($repId, RepAuth::workDate()),   // v49 — عهدة اليوم
+            'workDate'  => RepAuth::workDate(),
         ], false);
     }
 
@@ -472,7 +530,7 @@ class RepPortalController extends Controller
                 'driver_name'   => (string) ($_POST['driver_name'] ?? ''),
                 'car_no'        => (string) ($_POST['car_no'] ?? ''),
                 'amount'        => (string) ($_POST['amount'] ?? ''),
-                'handover_date' => trim((string) ($_POST['handover_date'] ?? '')),
+                'handover_date' => RepAuth::workDate(),   // v49: بيتخصم من عهدة يوم العمل
                 'note'          => (string) ($_POST['note'] ?? ''),
                 'attachment'    => $photo ?? '',
             ]);
@@ -534,7 +592,8 @@ class RepPortalController extends Controller
             'errors'  => $errors,
             'mates'   => $mates,
             'recent'  => \App\Models\RepTransfer::outgoingFor($repId, 10),
-            'pocket'  => RepPortal::pocket($repId),
+            'pocket'  => RepPortal::dayPocket($repId, RepAuth::workDate()),   // v49 — عهدة اليوم
+            'workDate'=> RepAuth::workDate(),
         ], false);
     }
 
@@ -547,7 +606,7 @@ class RepPortalController extends Controller
             \App\Models\RepTransfer::create($repId, [
                 'to_rep_id'     => (int) ($_POST['to_rep_id'] ?? 0),
                 'amount'        => (string) ($_POST['amount'] ?? ''),
-                'transfer_date' => trim((string) ($_POST['transfer_date'] ?? '')),
+                'transfer_date' => RepAuth::workDate(),   // v49: بيتحرّك على عهدة يوم العمل
                 'note'          => (string) ($_POST['note'] ?? ''),
             ]);
         } catch (\Throwable $e) {
@@ -593,9 +652,18 @@ class RepPortalController extends Controller
         PrivateFile::delete($rel);
     }
 
-    /** القيم الخام؛ التحقق والتطبيع النهائي داخل RepPortal. */
-    private function postedData(int $permitId): array
+    /**
+     * القيم الخام؛ التحقق والتطبيع النهائي داخل RepPortal.
+     *
+     * ⚠️ v49: **البند الجديد بياخد يوم العمل إجباريًّا** ($forceWorkDate) — هو
+     *    اليوم اللي المندوب شايف عهدته وبيسحب منها، فمينفعش الفورم يبعت يوم تاني
+     *    ويخصم من عهدة يوم مش شايفه. التعديل بيفضل على تاريخ البند الأصلي.
+     */
+    private function postedData(int $permitId, bool $forceWorkDate = false): array
     {
+        $date = $forceWorkDate
+            ? RepAuth::workDate()
+            : trim((string) ($_POST['entry_date'] ?? ''));
         return [
             'permit_id'   => $permitId,
             'movement_id' => (int) ($_POST['movement_id'] ?? 0),
@@ -603,7 +671,7 @@ class RepPortalController extends Controller
             'note'        => (string) ($_POST['note'] ?? ''),
             'qty'         => (int) ($_POST['qty'] ?? 1),
             'unit_amount' => (string) ($_POST['unit_amount'] ?? ''),
-            'entry_date'  => trim((string) ($_POST['entry_date'] ?? '')),
+            'entry_date'  => $date,
             'ref_no'      => (string) ($_POST['ref_no'] ?? ''),
             'client_token'=> trim((string) ($_POST['client_token'] ?? '')),
             // v45 — الوسم والكارت؛ RepPortal بيتحقق إن الكارت شغّال فعلاً
@@ -637,7 +705,8 @@ class RepPortalController extends Controller
             'old'         => $old,
             'errors'      => $errors,
             'submission'  => $submission,
-            'pocket'      => RepPortal::pocket($repId),
+            'pocket'      => RepPortal::dayPocket($repId, RepAuth::workDate()),   // v49 — عهدة اليوم
+            'workDate'    => RepAuth::workDate(),   // تاريخ البند = يوم العمل (إجباري للجديد)
             'draftKey'    => $this->draftKey($mode, $keyId),
         ], false);
     }
@@ -652,7 +721,8 @@ class RepPortalController extends Controller
             'old'        => $old,
             'errors'     => $errors,
             'submission' => $submission,
-            'pocket'     => RepPortal::pocket($repId),
+            'pocket'     => RepPortal::dayPocket($repId, RepAuth::workDate()),   // v49 — عهدة اليوم
+            'workDate'   => RepAuth::workDate(),   // تاريخ الصرف = يوم العمل (إجباري للجديد)
             'draftKey'   => $this->draftKey(
                 $submission ? 'editmisc' : 'misc',
                 $submission ? (int) $submission['id'] : 0
@@ -682,5 +752,23 @@ class RepPortalController extends Controller
     private function draftKey(string $mode, int $id): string
     {
         return 'alm:m:draft:' . $mode . ':' . RepAuth::repId() . ':' . $id;
+    }
+
+    /**
+     * إشعار للمكتب إن مندوب سجّل بندًا جديدًا مستنّي مراجعة (v51).
+     *
+     * ⚠️ المبلغ اللي بيتبعت هو **اللي المندوب دفعه**، مش سعر العميل — الشاشة
+     *    دي أصلاً ما بتشوفش `actual_amount` (قاعدة v35).
+     */
+    private function notifyOffice(int $repId, array $data, bool $isMisc): void
+    {
+        $qty  = max(1, (int) ($data['qty'] ?? 1));
+        $unit = (float) ($data['unit_amount'] ?? $data['amount'] ?? 0);
+        PushNotify::submissionNew(
+            (string) ($_SESSION['rep_name'] ?? 'مندوب'),
+            (string) ($data['note'] ?? ''),
+            round($unit * $qty, 2),
+            $isMisc
+        );
     }
 }

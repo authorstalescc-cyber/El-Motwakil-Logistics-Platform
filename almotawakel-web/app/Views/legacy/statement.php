@@ -91,9 +91,8 @@ $renderTable = function (array $rows) use ($cols) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title) ?> — <?= e($company) ?></title>
+<?php partial('print_base'); ?>
 <style>
-  :root{ --navy:#15355B; --navy2:#1e4a7a; --gold:#C9A227; --gold-l:#f3e6bd;
-         --ink:#1A2433; --muted:#5A6472; --line:#E2E7EE; --bg:#F4F6FA; --red:#B4383E; --green:#1f7a52; }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--ink);
     font-family:'Segoe UI',Tahoma,'Cairo',sans-serif;direction:rtl;text-align:right;

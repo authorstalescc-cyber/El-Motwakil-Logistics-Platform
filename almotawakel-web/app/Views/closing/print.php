@@ -7,7 +7,11 @@ $currency = App::setting('currency', 'ج.م');
 $phone    = App::setting('company_phone', '');
 $email    = App::setting('company_email', '');
 $address  = App::setting('company_address', '');
-$recon    = $reconciliation ?? ['saved'=>false,'matched'=>false,'rows'=>[],'general'=>[],'totals'=>[]];
+/* v50: المطابقة اليدوية القديمة اتشالت — اللي بيتطبع دلوقتي هو **حصيلة المراجعة**
+   (كام بند اتراجع من كام) زي ما هي في الشاشة، بلا أي رقم بيتحسب هنا. */
+$rv        = $review ?? ['available'=>false,'groups'=>[],'totals'=>[],'complete'=>false,'last_at'=>null,'last_by'=>null];
+$rvTotals  = $rv['totals'] ?? [];
+$totOutflow = round((float) $totExpense + (float) $totCustodyExp, 2);
 
 // اللوجو: يُستخدم ملف الصورة إن وُجد، وإلا شعار نصّي بألوان الشركة
 $logoRel = null;
@@ -21,9 +25,8 @@ $dash = fn($v) => ($v === null || $v === '') ? '—' : $v;
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>التقفيل اليومي — <?= e(dfmt($date)) ?> — <?= e($company) ?></title>
+<?php partial('print_base'); ?>
 <style>
-  :root{ --navy:#15355B; --navy2:#1e4a7a; --gold:#C9A227; --gold-l:#f3e6bd;
-         --ink:#1A2433; --muted:#5A6472; --line:#E2E7EE; --bg:#F4F6FA; --red:#B4383E; --green:#1f7a52; }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--ink);
     font-family:'Segoe UI',Tahoma,'Cairo',sans-serif;direction:rtl;text-align:right;
@@ -100,6 +103,7 @@ $dash = fn($v) => ($v === null || $v === '') ? '—' : $v;
   .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     font-size:340px;font-weight:900;color:rgba(21,53,91,.035);pointer-events:none;z-index:0}
   .pad>*{position:relative;z-index:1}
+  .rvnote{margin-top:6px;font-size:11px;color:var(--muted)}
   .bar{max-width:210mm;margin:0 auto;display:flex;gap:10px;justify-content:center;padding:6px}
   .btn{padding:10px 22px;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;
     font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
@@ -215,29 +219,31 @@ $dash = fn($v) => ($v === null || $v === '') ? '—' : $v;
       </table>
     <?php endif; ?>
 
-    <?php if (!empty($recon['saved'])): ?>
-      <div class="sec">✓ مطابقة اليدوي حسب العميل <span class="c"><?= $recon['matched'] ? 'مطابقة كاملة' : 'توجد فروق وقت الطباعة' ?></span></div>
+    <?php if (!empty($rv['available'])): ?>
+      <div class="sec">✓ حصيلة المراجعة
+        <span class="c"><?= !empty($rv['complete']) ? 'كل البنود اتراجعت' : 'فاضل '.intf((int)($rvTotals['blocking_pending'] ?? 0)).' بند بدون علامة' ?></span>
+      </div>
       <table class="data">
-        <thead><tr><th class="bayan">العميل</th><th>عدد الأذونات</th><th>إجمالي السيستم</th><th>إجمالي اليدوي</th><th>الفرق</th></tr></thead>
+        <thead><tr><th class="bayan">القسم</th><th>عدد البنود</th><th>اللي اتراجع</th><th>الإجمالي</th></tr></thead>
         <tbody>
-        <?php foreach ($recon['rows'] as $rr): ?>
+        <?php foreach (($rv['groups'] ?? []) as $g): if (!$g['count']) { continue; } ?>
           <tr>
-            <td class="bayan"><?= e($rr['client_name']) ?></td>
-            <td><?= intf(count($rr['permits'])) ?></td>
-            <td class="num"><?= money($rr['system_total'],false) ?></td>
-            <td class="num"><?= money($rr['manual_total'],false) ?></td>
-            <td class="num"><?= money($rr['difference'],false) ?></td>
+            <td class="bayan"><?= e($g['title']) ?><?= $g['kind'] === 'info' ? ' (لا يمنع الإقفال)' : '' ?></td>
+            <td><?= intf($g['count']) ?></td>
+            <td><?= intf($g['reviewed']) ?><?= $g['done'] ? ' ✓' : '' ?></td>
+            <td class="num"><?= money($g['total'],false) ?></td>
           </tr>
         <?php endforeach; ?>
-        <tr>
-          <td class="bayan">مصروفات عامة بدون إذن</td><td>—</td>
-          <td class="num"><?= money($recon['general']['system'] ?? 0,false) ?></td>
-          <td class="num"><?= money($recon['general']['manual'] ?? 0,false) ?></td>
-          <td class="num"><?= money($recon['general']['difference'] ?? 0,false) ?></td>
-        </tr>
         </tbody>
-        <tfoot><tr><td class="lbl" colspan="4">إجمالي فرق المطابقة</td><td class="num"><?= money($recon['totals']['difference'] ?? 0,false) ?></td></tr></tfoot>
+        <tfoot><tr>
+          <td class="lbl" colspan="2">إجمالي البنود المراجَعة</td>
+          <td class="num"><?= intf((int)($rvTotals['reviewed'] ?? 0)) ?> / <?= intf((int)($rvTotals['count'] ?? 0)) ?></td>
+          <td class="num"><?= money((float)($rvTotals['cash'] ?? 0),false) ?></td>
+        </tr></tfoot>
       </table>
+      <?php if (!empty($rv['last_at'])): ?>
+        <div class="rvnote">آخر مراجعة: <?= e($rv['last_at']) ?><?= $rv['last_by'] ? ' — بواسطة '.e($rv['last_by']) : '' ?></div>
+      <?php endif; ?>
     <?php endif; ?>
 
     <!-- عهد السائقين -->

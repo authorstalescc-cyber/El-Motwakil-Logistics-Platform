@@ -68,8 +68,11 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
 
 <!-- ============ نظرة عامة ============ -->
 <div class="kpi-grid mb four">
-  <div class="kpi red"><div class="lbl">إجمالي المديونيات على الشركة</div>
-    <div class="val"><?= intf($ov['grand_remaining']) ?><span class="cur">ج.م</span></div></div>
+  <?php /* ⚠️ **ممنوع رقم أصمّ**: الرقم ده مجموع التلاتة اللي جنبه، فبيوصّل
+           لأول تبويب فيهم بدل ما يفضل رقمًا مالوش طريق. */ ?>
+  <a class="kpi red" href="<?= url('debts') ?>?tab=owners" title="تفاصيل المديونيات">
+    <div class="lbl">إجمالي المديونيات على الشركة</div>
+    <div class="val"><?= intf($ov['grand_remaining']) ?><span class="cur">ج.م</span></div></a>
   <a class="kpi navy" href="<?= url('settlements') ?>" title="أصحاب بيان البوالص">
     <div class="lbl">متبقّي أصحاب البيان</div>
     <div class="val"><?= intf($ov['owners']['remaining']) ?><span class="cur">ج.م</span></div></a>
@@ -236,12 +239,12 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
 <div class="tab-panel<?= $tab==='others'?' active':'' ?>" id="tab-others">
   <div class="two-col">
     <div class="card" style="padding:18px">
-      <div class="section-head">➕ إضافة مديونية جديدة</div>
+      <div class="section-head"><?= icon('plus', 17) ?> إضافة مديونية جديدة</div>
       <?= formErrorSummary($accountState['errors']) ?>
       <form class="form-card js-dirty-form" method="post" action="<?= url('debts/account') ?>" style="box-shadow:none;padding:0;border:0">
         <?= csrfField() ?>
         <?= formStateFields($accountState['token'], $accountState['back']) ?>
-        <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="form-grid one">
           <div class="field"><label>اسم الجهة الدائنة</label>
             <input type="text" name="name" value="<?= e($accountState['old']['name'] ?? '') ?>" required<?= fieldErrorAttrs('name', $accountState['errors']) ?>><?= fieldError('name', $accountState['errors']) ?></div>
           <div class="field"><label>أصل المديونية</label>
@@ -304,7 +307,7 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
 
   <!-- إضافة عملية فيزا -->
   <div class="card" style="padding:16px;margin-bottom:16px">
-    <div class="section-head">➕ إضافة عملية مدفوعة بالفيزا</div>
+    <div class="section-head"><?= icon('plus', 17) ?> إضافة عملية مدفوعة بالفيزا</div>
     <?= formErrorSummary($visaState['errors']) ?>
     <form class="inline-form js-dirty-form" method="post" action="<?= url('debts/visa') ?>" style="flex-wrap:wrap">
       <?= csrfField() ?>

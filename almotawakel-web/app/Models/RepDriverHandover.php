@@ -138,12 +138,30 @@ class RepDriverHandover
             "SELECT * FROM rep_driver_handovers WHERE id = ? AND rep_id = ?", [$id, $repId]);
     }
 
-    /** إجمالي تسليمات مندوب — بيتخصم من عهدته. */
-    public static function totalFor(int $repId): float
+    /**
+     * إجمالي تسليمات مندوب — بيتخصم من عهدته.
+     * $day (v49): يوم واحد بالظبط = تسليمات عهدة اليوم ده بس. null = كل الأيام.
+     */
+    public static function totalFor(int $repId, ?string $day = null): float
     {
         if (!self::available()) { return 0.0; }
+        $args = [$repId]; $dayW = '';
+        if ($day !== null && $day !== '') { $dayW = ' AND handover_date = ?'; $args[] = $day; }
         return round((float) Database::scalar(
-            "SELECT COALESCE(SUM(amount),0) FROM rep_driver_handovers WHERE rep_id = ?", [$repId]), 2);
+            "SELECT COALESCE(SUM(amount),0) FROM rep_driver_handovers WHERE rep_id = ?$dayW", $args), 2);
+    }
+
+    /** [تاريخ => إجمالي] لمندوب واحد — لكشف «عهدة كل يوم» (v49). */
+    public static function totalsByDay(int $repId): array
+    {
+        if (!self::available()) { return []; }
+        $out = [];
+        foreach (Database::all(
+            "SELECT handover_date d, SUM(amount) total FROM rep_driver_handovers
+             WHERE rep_id = ? GROUP BY handover_date", [$repId]) as $r) {
+            $out[(string) $r['d']] = round((float) $r['total'], 2);
+        }
+        return $out;
     }
 
     /** إجمالي تسليمات كل المناديب (لبطاقة الملخّص). */
@@ -154,13 +172,18 @@ class RepDriverHandover
             "SELECT COALESCE(SUM(amount),0) FROM rep_driver_handovers"), 2);
     }
 
-    /** [rep_id => إجمالي] — لصفحة كروت العهدة بلا استعلام لكل مندوب. */
-    public static function totalsByRep(): array
+    /**
+     * [rep_id => إجمالي] — لصفحة كروت العهدة بلا استعلام لكل مندوب.
+     * $day (v49): يوم واحد بالظبط، أو null لكل الأيام (السلوك القديم).
+     */
+    public static function totalsByRep(?string $day = null): array
     {
         if (!self::available()) { return []; }
+        $args = []; $dayW = '';
+        if ($day !== null && $day !== '') { $dayW = ' WHERE handover_date = ?'; $args[] = $day; }
         $out = [];
         foreach (Database::all(
-            "SELECT rep_id, SUM(amount) total FROM rep_driver_handovers GROUP BY rep_id") as $r) {
+            "SELECT rep_id, SUM(amount) total FROM rep_driver_handovers$dayW GROUP BY rep_id", $args) as $r) {
             $out[(int) $r['rep_id']] = round((float) $r['total'], 2);
         }
         return $out;
@@ -243,6 +266,8 @@ class RepDriverHandover
         $date = trim((string) ($d['handover_date'] ?? ''));
         if (!self::validDate($date)) { $errors['handover_date'] = 'اكتب تاريخ تسليم صحيح.'; }
         elseif ($date > date('Y-m-d')) { $errors['handover_date'] = 'تاريخ التسليم ما ينفعش يكون في المستقبل.'; }
+        // v49: التسليم بيخصم من عهدة يومه، فاليوم المتقفل مرفوض زي أي بند.
+        elseif (($lock = RepCustody::dayLockReason($date)) !== null) { $errors['handover_date'] = $lock; }
 
         $note = preg_replace('/\s+/u', ' ', trim((string) ($d['note'] ?? '')));
         if (mb_strlen($note) > 255) { $errors['note'] = 'الملاحظة لازم تكون 255 حرف أو أقل.'; }

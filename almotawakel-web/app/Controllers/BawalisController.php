@@ -12,6 +12,7 @@ use App\Calc;
 use App\Schema;
 use App\Models\Audit;
 use App\Models\PartyMaster;
+use App\Models\PushNotify;
 
 class BawalisController extends CrudController
 {
@@ -437,6 +438,14 @@ class BawalisController extends CrudController
         $isLegacy = (int) Database::scalar('SELECT is_legacy FROM bawalis WHERE id = ?', [$id]) === 1;
         if (!$isLegacy) {
             Movement::ensureForBill($id);   // تُنشأ الحركة أوتوماتيك فور إنشاء البوليصة
+        }
+
+        // إشعار للمكتب بالبوليصة الجديدة (v51).
+        // ⚠️ **البوالص القديمة (`is_legacy`) مستثناة** — استيراد الأرشيف كان
+        //    هيبعت مئات الإشعارات دفعة واحدة.
+        if ($isNew && !$isLegacy) {
+            PushNotify::billCreated($id, (string) ($data['bill_number'] ?? ''),
+                (string) ($data['company'] ?? ''), (string) ($data['destination'] ?? ''));
         }
     }
 }

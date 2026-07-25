@@ -421,6 +421,8 @@ if ($remote === null) {
     foreach ([
         '/config/config.php'   => 'باسورد قاعدة البيانات ومفتاح Groq',
         '/bin/install.php'     => 'سكربت فيه DROP DATABASE',
+        '/bin/migration.php'   => 'بوابة تشغيل وتسجيل الترحيلات',
+        '/bin/reconcile_migrations.php' => 'أداة تسوية ledger',
         '/bin/migrate_v47.php' => 'هجرة بتعدّل القاعدة',
         '/app/Core/Auth.php'   => 'كود المصادقة',
         '/storage/'            => 'سجلات ونسخ احتياطية',

@@ -24,7 +24,7 @@ $p = $summary['permits']; $inv = $summary['invoices'];
 </div>
 
 <div class="card" style="padding:20px;margin-bottom:16px">
-  <div class="section-head">👤 الوكلاء الذين يمثّلون هذه الشركة <span style="color:var(--grey);font-weight:600">(<?= count($agents) ?>)</span></div>
+  <div class="section-head"><?= icon('user', 17) ?> الوكلاء الذين يمثّلون هذه الشركة <span style="color:var(--grey);font-weight:600">(<?= count($agents) ?>)</span></div>
   <?php if($agents): ?>
     <div class="co-grid">
       <?php foreach($agents as $a): ?>
@@ -41,7 +41,7 @@ $p = $summary['permits']; $inv = $summary['invoices'];
 </div>
 
 <div class="card" style="margin-bottom:16px">
-  <div class="section-head" style="padding:18px 20px 0">🗂️ الأذونات الصادرة لصالح هذه الشركة <span style="color:var(--grey);font-weight:600">(<?= count($permits) ?>)</span></div>
+  <div class="section-head" style="padding:18px 20px 0"><?= icon('folder', 17) ?> الأذونات الصادرة لصالح هذه الشركة <span style="color:var(--grey);font-weight:600">(<?= count($permits) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">النوع</th><th class="g-identity">الرقم</th><th class="g-identity">التاريخ</th>
@@ -66,7 +66,7 @@ $p = $summary['permits']; $inv = $summary['invoices'];
 
 <?php if($invoices): ?>
 <div class="card">
-  <div class="section-head" style="padding:18px 20px 0">🧾 فواتير شامل <span style="color:var(--grey);font-weight:600">(<?= count($invoices) ?>)</span></div>
+  <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير شامل <span style="color:var(--grey);font-weight:600">(<?= count($invoices) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">التاريخ</th><th class="g-identity">رقم الفاتورة</th><th class="g-identity">الوكيل</th>
@@ -90,7 +90,7 @@ $p = $summary['permits']; $inv = $summary['invoices'];
 
 <?php $pinv = $permitInvoices ?? []; if($pinv): ?>
 <div class="card" style="margin-top:16px">
-  <div class="section-head" style="padding:18px 20px 0">🧾 فواتير الأذونات
+  <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير الأذونات
     <span style="color:var(--grey);font-weight:600">(<?= count($pinv) ?> — إجمالي <?= money($permitInvSum['total'] ?? 0,false) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>

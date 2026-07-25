@@ -4,6 +4,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Performance;
+use App\Models\Closing;
 use App\Models\Custody;
 use App\Models\Metrics;
 use App\Models\Note;
@@ -26,17 +27,14 @@ class DashboardController extends Controller
         /* ⚠️ استعلامات الرسوم الأربعة اتشالت (المرحلة ٤): الرسوم اتنقلت
            لـ/reports، واتنين منها كانوا مكرَّرين هناك أصلاً. ده بيوفّر أربع
            تجميعات ثقيلة من **كل** فتحة للداشبورد. */
+        /* ⚠️ المرحلة ١١ — الداشبورد اتعادت بناؤها بأربع طبقات، وكل بوب-أب
+           بقى **يُجلَب عند الضغط** من `drill()` تحت بدل ما يترندر مع كل فتحة
+           للصفحة في `#popStore`. اللي اتشال من هنا: `recentActivity` و
+           `custodyDay` وتصفية مصروفات/إيصالات اليوم — كلها بقت في المسار
+           الكسول، فالصفحة ما بتدفعش تكلفتها إلا لو المالك فتح التفاصيل. */
         $custodyBalance = $profile('dashboard.custody', fn() => Custody::balance());
         $readyData = $profile('dashboard.ready', fn() => Metrics::readyToInvoiceDashboard(8));
-        $timeline = $profile('dashboard.feed', fn() => Metrics::expenseReceiptFeed($date, 300));
-        $dayExpenses = $profile('dashboard.day_expenses', static fn() => array_values(array_filter(
-            $timeline,
-            fn($row) => $row['d'] === $date && !$row['is_receipt']
-        )));
-        $dayReceipts = $profile('dashboard.day_receipts', static fn() => array_values(array_filter(
-            $timeline,
-            fn($row) => $row['d'] === $date && $row['is_receipt']
-        )));
+        $timeline = $profile('dashboard.feed', fn() => Metrics::expenseReceiptFeed($date, 40));
         $quickOld = $_SESSION['_quick_entry_old'] ?? [];
         unset($_SESSION['_quick_entry_old']);
         // إشارة النجاح لمرة واحدة (تُستهلك هنا) → الواجهة تمسح المسودة المحفوظة
@@ -56,13 +54,11 @@ class DashboardController extends Controller
             'ready'    => $readyData['rows'],
             'readySum' => $readyData['summary'],
             'openList' => $profile('dashboard.open_permits', fn() => Metrics::openPermitsList(8)),
-            'feed'     => array_slice($timeline, 0, 14),
-            'dayExp'   => $dayExpenses,
-            'dayRec'   => $dayReceipts,
-            'custodyDay'=> $profile('dashboard.custody_day', fn() => Metrics::custodyDay($date, $custodyBalance)),
-            'activity' => $profile('dashboard.activity', fn() => Metrics::recentActivity(10)),
-            // لوحة متابعة عهدة المناديب — قراءة فقط؛ الصرف المعتمد يدخل الخزنة (v42)
-            'repsPanel'=> $profile('dashboard.reps', fn() => RepCustody::dashboard($date, 6, 6)),
+            'feed'     => array_slice($timeline, 0, 12),
+            'locked'   => Closing::isLocked($date),
+            /* عهدة المناديب — الرقم بس؛ الكروت والمدخلات مكانها `/rep-custody`
+               (اللوحة المفصّلة اتشالت في المرحلة ١١ لأنها كانت بتكرّر الصفحة). */
+            'repsPanel'=> $profile('dashboard.reps', fn() => RepCustody::dashboard($date, 0, 0)),
             'notes'    => $profile('dashboard.notes', fn() => Note::all(20)),
             // قائمة الأذونات قد تكون مئات الصفوف؛ تُحمّل فقط عند فتح الإدخال السريع.
             'quickPermits' => [],
@@ -73,6 +69,66 @@ class DashboardController extends Controller
             'quickApplied' => $quickApplied,
             'quickToken' => $quickToken,
         ]);
+    }
+
+    /**
+     * تفاصيل أي رقم في الداشبورد — قاعدة المالك «ممنوع رقم أصمّ».
+     *
+     * ⚠️ ده بديل `#popStore` القديم اللي كان بيرندر تفاصيل **كل** البوب-أبات
+     *    مع كل فتحة للصفحة حتى لو المالك ما فتحش ولا واحد. دلوقتي البيانات
+     *    بتتجاب وقت الضغط بس، فالصفحة خفّت والقاعدة بقت قابلة للتعميم.
+     *
+     * ⚠️ النوع محصور في **قائمة بيضا** — مش اسم جدول جاي من المستخدم.
+     * ⚠️ بيرندر **بلا layout** ويرجّع HTML مش JSON عشان الصفوف تستخدم نفس
+     *    مكوّن `row_item` بتاع الصفحة.
+     */
+    public function drill(string $what): void
+    {
+        $this->requireAuth();
+        if (!in_array($what, ['expenses', 'receipts', 'custody', 'reps', 'ready', 'permits_open', 'activity'], true)) {
+            $this->notFound('نوع التفاصيل ده مش موجود.');
+        }
+        $date = Auth::workDate();
+        $data = ['what' => $what, 'date' => $date];
+
+        switch ($what) {
+            case 'expenses':
+            case 'receipts':
+                $wantReceipt = ($what === 'receipts');
+                $data['rows'] = array_values(array_filter(
+                    Metrics::expenseReceiptFeed($date, 300),
+                    static fn ($row) => $row['d'] === $date && (bool) $row['is_receipt'] === $wantReceipt
+                ));
+                $data['daily'] = Metrics::dashDaily($date);
+                break;
+            case 'custody':
+                $balance = Custody::balance();
+                $data['balance'] = $balance;
+                $data['cday'] = Metrics::custodyDay($date, $balance);
+                break;
+            case 'reps':
+                $data['reps'] = RepCustody::dashboard($date, 1, 12);
+                break;
+            case 'ready':
+                $ready = Metrics::readyToInvoiceDashboard(40);
+                $data['rows'] = $ready['rows'];
+                $data['summary'] = $ready['summary'];
+                break;
+            case 'permits_open':
+                $data['rows'] = Metrics::openPermitsList(40);
+                $data['permits'] = Metrics::permitsSummary();
+                break;
+            default:   // activity
+                $data['rows'] = Metrics::recentActivity(20);
+        }
+
+        // ⚠️ محروسة بـ`headers_sent()`: أي مخرَج سابق بيخلّي `header()` ترمي
+        //    Warning **جوّه جسم الرد** فالنافذة تستقبل HTML متلوّث (باج v50).
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: private, no-store, max-age=0');
+        }
+        $this->render('dashboard/_drill', $data, false);
     }
 
     /** خيارات الإدخال السريع الثقيلة — تُجلب عند فتح الأداة بدل تضخيم الداشبورد. */

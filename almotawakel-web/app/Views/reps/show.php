@@ -69,7 +69,7 @@ $kindColor = function(string $k) use ($creditKinds): string {
 
 <!-- إضافة بند للسجل -->
 <div class="card mb" style="padding:16px 18px">
-  <div class="section-head" style="margin:0 0 10px">➕ إضافة بند لسجل المندوب</div>
+  <div class="section-head" style="margin:0 0 10px"><?= icon('plus', 17) ?> إضافة بند لسجل المندوب</div>
   <?php if ($eErr !== ''): ?><div class="flash error" role="alert"><?= icon('alert',17) ?> <?= e($eErr) ?></div><?php endif; ?>
   <form method="post" action="<?= url('reps/'.$rep['id'].'/entry') ?>" class="entry-form">
     <?= csrfField() ?>
@@ -110,7 +110,7 @@ $kindColor = function(string $k) use ($creditKinds): string {
 
 <!-- كشف الحساب -->
 <div class="card mb">
-  <div class="section-head" style="padding:16px 18px 0;margin:0">📒 كشف حساب المندوب</div>
+  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('layers', 17) ?> كشف حساب المندوب</div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th>التاريخ</th><th>النوع</th><th>البيان</th>
@@ -150,11 +150,11 @@ $kindColor = function(string $k) use ($creditKinds): string {
 <!-- تقفيل الحساب -->
 <div class="two-col">
   <div class="card" style="padding:16px 18px">
-    <div class="section-head" style="margin:0 0 10px">🧾 تقفيل الحساب (يدوي من–إلى)</div>
+    <div class="section-head" style="margin:0 0 10px"><?= icon('receipt', 17) ?> تقفيل الحساب (يدوي من–إلى)</div>
     <?php if ($sErr !== ''): ?><div class="flash error" role="alert"><?= icon('alert',17) ?> <?= e($sErr) ?></div><?php endif; ?>
     <form method="post" action="<?= url('reps/'.$rep['id'].'/settle') ?>" class="confirm-financial" data-confirm="تقفيل حساب المندوب عن الفترة المحدّدة وتسجيل دفعة التسوية؟">
       <?= csrfField() ?>
-      <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="form-grid two">
         <div class="field"><label>من تاريخ</label><input type="date" name="period_from" value="<?= e($sOld['period_from'] ?? '') ?>"></div>
         <div class="field"><label>إلى تاريخ</label><input type="date" name="period_to" value="<?= e($sOld['period_to'] ?? '') ?>"></div>
         <div class="field"><label>تاريخ الدفع</label><input type="date" name="pay_date" value="<?= e($sOld['pay_date'] ?? work_date()) ?>"></div>
@@ -174,7 +174,7 @@ $kindColor = function(string $k) use ($creditKinds): string {
   </div>
 
   <div class="card" style="padding:16px 18px">
-    <div class="section-head" style="margin:0 0 10px">📑 تقفيلات سابقة</div>
+    <div class="section-head" style="margin:0 0 10px"><?= icon('receipt', 17) ?> تقفيلات سابقة</div>
     <?php if(!$settlements): ?>
       <div class="empty" style="padding:20px"><div class="ic">🗂️</div>لسه مفيش تقفيلات.</div>
     <?php else: ?>

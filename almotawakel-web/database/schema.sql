@@ -620,3 +620,21 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     PRIMARY KEY (version),
     UNIQUE KEY uq_schema_migration_file (filename)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- سجل append-only لأحداث الترحيل والتسوية. منفصل عن schema_migrations حتى
+-- يحتفظ بسبب تغيير baseline والبصمات القديمة ومرجع النسخة الاحتياطية.
+CREATE TABLE IF NOT EXISTS schema_migration_events (
+    id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    version          INT UNSIGNED NOT NULL,
+    action           VARCHAR(32) NOT NULL,
+    old_checksum     CHAR(64) NULL,
+    new_checksum     CHAR(64) NOT NULL,
+    backup_sha256    CHAR(64) NULL,
+    evidence_sha256  CHAR(64) NULL,
+    operator_name    VARCHAR(120) NOT NULL,
+    details_json     LONGTEXT NULL,
+    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_schema_migration_event_version (version, created_at),
+    KEY idx_schema_migration_event_action (action, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -1,6 +1,7 @@
 <?php
 /** @var array $owners @var string $q */
 ?>
+<?php partial('owner_tabs', ['active' => 'statements']); ?>
 <div class="page-head">
   <div><h1 style="margin:0">📑 إصدار كشف حساب — اختر صاحب البيان</h1></div>
   <a class="btn ghost" href="<?= url('statements') ?>">‹ سجل الكشوف</a>

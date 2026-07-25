@@ -16,7 +16,11 @@ class AuditController extends Controller
         $this->render('audit/index', [
             'title' => $mode === 'entries' ? 'سجل الإدخالات' : 'سجل العمليات وسلة المحذوفات',
             'logs' => Audit::recent(500, trim($_GET['entity'] ?? ''), $action, $from, $to),
+            /* الإجمالي الحقيقي بلا سقف — الشاشة تقول «بنعرض ٥٠٠ من ١٢٤٠»
+               بدل ما تقطع بالسكوت وتخلّي المستخدم يفتكر إنه شايف كل حاجة. */
+            'logsTotal' => Audit::countRecent(trim($_GET['entity'] ?? ''), $action, $from, $to),
             'trash' => Audit::trashRows(),
+            'trashTotal' => Audit::countTrash(),
             'mode' => $mode,
             'entity' => trim($_GET['entity'] ?? ''),
             'action' => $action,

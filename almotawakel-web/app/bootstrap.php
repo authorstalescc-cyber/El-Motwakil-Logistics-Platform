@@ -3,6 +3,15 @@
  * إقلاع التطبيق: المُحمّل التلقائي + الإعدادات + الدوال المساعدة + الجلسة.
  */
 
+// بعض أدوات CLI المحكومة تحمّل bootstrap أولًا لفحص السجل ثم تضمّن ملف
+// migration قديمًا يحتوي `require app/bootstrap.php` بنفسه. جعل الإقلاع
+// idempotent يمنع إعادة تعريف helpers أو بدء الجلسة مرتين، من غير تعديل ملفات
+// الترحيلات التاريخية وبصماتها مرة أخرى.
+if (defined('ALMOTAWAKEL_BOOTSTRAPPED')) {
+    return;
+}
+define('ALMOTAWAKEL_BOOTSTRAPPED', true);
+
 // مُحمّل تلقائي بسيط (PSR-4) لمساحة الأسماء App\
 spl_autoload_register(function (string $class) {
     $prefix = 'App\\';

@@ -38,6 +38,7 @@ $num = fn($v) => number_format((float) $v, 0);
     <p class="hm-amt"><i>ج</i><b><?= $num($totals['balance']) ?></b></p>
     <div class="hm-more-box">
       <dl class="hm-dl">
+        <div><dt>عهدة <?= e(dfmt((string) $totals['day'])) ?></dt><dd><?= $num($totals['day_balance']) ?></dd></div>
         <div><dt>نزل لهم</dt><dd><?= $num($totals['deposits']) ?></dd></div>
         <div><dt>صرفوا</dt><dd><?= $num($totals['spent']) ?></dd></div>
         <div><dt>مناديب</dt><dd><?= $num($totals['reps']) ?></dd></div>
@@ -110,6 +111,13 @@ $num = fn($v) => number_format((float) $v, 0);
       <div class="tw-bar" role="img"
            aria-label="صرف <?= $num($r['spent']) ?> من <?= $num($r['deposits']) ?>">
         <i style="width:<?= round((float) $r['pc_spent'], 1) ?>%"></i>
+      </div>
+
+      <?php /* v49 — عهدة يوم العمل نفسه؛ الرقم الكبير فوق هو التراكمي (كل الأيام) */ ?>
+      <div class="tw-day">
+        <span>عهدة <?= e(dfmt((string) $r['day'])) ?></span>
+        <b class="<?= (float) $r['day_balance'] < 0 ? 'is-neg' : '' ?>"><?= $num($r['day_balance']) ?></b>
+        <small>نزل <?= $num($r['day_deposits']) ?> · صرف <?= $num($r['day_spent']) ?></small>
       </div>
 
       <div class="tw-facts">

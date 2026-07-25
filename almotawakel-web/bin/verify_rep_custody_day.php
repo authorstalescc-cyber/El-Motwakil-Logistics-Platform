@@ -1,0 +1,311 @@
+<?php
+// ═══ حارس: سطر الأوامر فقط ═══
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+/**
+ * فحص إعادة تصميم عهدة المناديب بعدسة اليوم (2026-07-25).
+ *
+ * الشاشة القديمة كانت بتعرض **كل الأيام مع بعض** في صفحة واحدة فيها ١١ قسم فوق
+ * بعض، فالمالك مايعرفش «اللي حصل النهاردة» من غير ما يقرا الجدول كله. دلوقتي:
+ *   • `/rep-custody`      → كروت وأعمدة **يوم العمل** (`Auth::workDate`).
+ *   • `/rep-custody/{id}` → ٤ تبويبات بروابط حقيقية، الافتراضي «اليوم».
+ *
+ * الفحص **بيرندر الصفحات فعليًّا** ببيانات حقيقية — مش فحص نصّي — عشان يمسك
+ * الفشل الصامت الموثَّق في `Controller::render` (مفتاح بيتخطّى بـEXTR_SKIP).
+ *
+ * أهم المحروس هنا:
+ *   • **بند يوم تاني ما بيظهرش في تبويب اليوم** — دي الميزة نفسها؛ لو فشلت
+ *     تبقى الشاشة رجعت لسلوكها القديم بالسكوت.
+ *   • **مفيش تعريف تاني لأي رقم** — مجاميع `dayActivity` = `breakdown($rep,$day)`
+ *     بالمليم، ومجموع كروت الشاشة = `dayTotalsByRep` بالظبط.
+ *   • **كل مسار حفظ بيحمل `?tab=`** — من غيره المرساة (`#deposit-form`) تروح
+ *     على تبويب مش معروض فالمالك ما يشوفش الخطأ.
+ *   • **التبويبات روابط `<a href>`** لا تبديل بجافاسكريبت (قاعدة مكوّن `tabs`).
+ *   • **العزل المالي** — رصيد الخزنة قبل = بعد.
+ *
+ * كله جوّه transaction وبيعمل rollback، فما بيسيبش أي أثر.
+ * التشغيل:  php bin/verify_rep_custody_day.php
+ */
+require dirname(__DIR__) . '/app/bootstrap.php';
+
+use App\Core\Database;
+use App\Controllers\RepCustodyController;
+use App\Models\Closing;
+use App\Models\RepCustody;
+
+$pass = 0; $failures = [];
+function ok(string $m): void  { global $pass; $pass++; echo "  ✓ $m\n"; }
+function bad(string $m): void { global $failures; $failures[] = $m; echo "  ✗ $m\n"; }
+function chk(bool $c, string $m): void { $c ? ok($m) : bad($m); }
+function sec(string $m): void { echo "\n$m\n" . str_repeat('─', 62) . "\n"; }
+
+echo "فحص عهدة المناديب — عدسة اليوم\n" . str_repeat('=', 62) . "\n";
+
+$pdo = Database::conn();
+$treasuryBefore = Closing::currentBalance();
+$lockedDay = Closing::lastClosedDate();
+
+// يوم مفتوح للاختبار + يوم قبله (عشان نثبت إن القديم مش بيتسرّب)
+$day = date('Y-m-d');
+for ($i = 0; $i < 400 && $lockedDay !== null && $day <= $lockedDay; $i++) {
+    $day = date('Y-m-d', strtotime("+$i day"));
+}
+$prevDay = date('Y-m-d', strtotime($day . ' -1 day'));
+
+$ctrlSrc = (string) file_get_contents(__DIR__ . '/../app/Controllers/RepCustodyController.php');
+$cardSrc = (string) file_get_contents(__DIR__ . '/../app/Views/rep_custody/card.php');
+$idxSrc  = (string) file_get_contents(__DIR__ . '/../app/Views/rep_custody/index.php');
+
+$pdo->beginTransaction();
+try {
+    $tag = '__rcd_' . bin2hex(random_bytes(4));
+    Database::exec("INSERT INTO reps(name,status) VALUES(?,'active')", [$tag]);
+    $repId = Database::lastId();
+    Database::exec(
+        "INSERT INTO permits(permit_no,permit_date,status,company,client) VALUES(?,?,'open',?,?)",
+        [$tag, $day, $tag . ' شركة', $tag . ' وكيل']);
+    $permitId = Database::lastId();
+    Database::exec("INSERT INTO permit_movements(permit_id,seq) VALUES(?,1)", [$permitId]);
+    $movId = Database::lastId();
+
+    // عهدة اليوم: نزل 3000 وصرف إيصال 400 (2×200) ومصروف 150
+    Database::exec(
+        "INSERT INTO rep_custody_deposits(rep_id,dep_date,amount,note) VALUES(?,?,?,?)",
+        [$repId, $day, 3000, $tag . ' عهدة اليوم']);
+    // ويوم قبله: نزل 5000 وصرف إيصال 900 — **ممنوع يتسرّب لتبويب اليوم**
+    Database::exec(
+        "INSERT INTO rep_custody_deposits(rep_id,dep_date,amount,note) VALUES(?,?,?,?)",
+        [$repId, $prevDay, 5000, $tag . ' عهدة إمبارح']);
+    $treasuryAfterDeposits = Closing::currentBalance();
+
+    $stage = static function (string $d, string $key, string $note, int $qty, float $unit)
+                     use ($permitId, $movId, $repId): void {
+        Database::exec(
+            "INSERT INTO permit_stages
+                (permit_id, movement_id, stage_key, direction, note, qty, amount, entry_date,
+                 is_visa, paid_by_rep_id)
+             VALUES (?,?,?,?,?,?,?,?,0,?)",
+            [$permitId, $movId, $key, $key === 'receipts' ? 'expense' : 'expense',
+             $note, $qty, $unit * $qty, $d, $repId]);
+    };
+    $stage($day, 'receipts', $tag . ' إيصال النهاردة', 2, 200);
+    $stage($day, 'custom',   $tag . ' مصروف النهاردة', 1, 150);
+    $stage($prevDay, 'receipts', $tag . ' إيصال إمبارح', 1, 900);
+
+    // ═══ ① الأرقام: مفيش تعريف تاني
+    sec('① الأرقام كلها من مصدر واحد');
+    $act = RepCustody::dayActivity($repId, $day);
+    $b   = RepCustody::breakdown($repId, $day);
+    chk(abs($act['cash'] - $b['spent']) < 0.005,
+        'مجموع كاش dayActivity = breakdown(day).spent بالمليم ('
+        . number_format($act['cash'], 2) . ')');
+    chk(abs($b['deposits'] - 3000) < 0.005, 'نزل له اليوم = 3,000 (بلا عهدة إمبارح)');
+    chk(abs($b['balance'] - (3000 - 550)) < 0.005,
+        'فاضل من عهدة اليوم = 2,450 — **مفيش ترحيل** من إمبارح');
+    chk($act['receipts']['cnt'] === 1 && abs($act['receipts']['sum'] - 400) < 0.005,
+        'إيصالات اليوم: بند واحد بـ400 (2 × 200)');
+    chk($act['expenses']['cnt'] === 1 && abs($act['expenses']['sum'] - 150) < 0.005,
+        'مصروفات الأذونات اليوم: بند واحد بـ150');
+
+    $cum = RepCustody::breakdown($repId);
+    chk(abs($cum['deposits'] - 8000) < 0.005 && abs($cum['spent'] - 1450) < 0.005,
+        'التراكمي ما اتلمسش (8,000 نازل · 1,450 مصروف) — أساس التسوية وحد التحويل');
+    chk(abs(RepCustody::balance($repId) - $cum['balance']) < 0.005,
+        'balance() = breakdown() — مفيش تعريفين للرصيد');
+
+    $map = RepCustody::dayTotalsByRep($day);
+    chk(isset($map[$repId]) && abs($map[$repId]['balance'] - $b['balance']) < 0.005,
+        'dayTotalsByRep (اللي بتغذّي الشاشة الرئيسية) = breakdown(day) للمندوب نفسه');
+
+    // ═══ ② العزل: spending($day) بيرجّع اليوم بس
+    sec('② فلتر اليوم على كشف الصرف');
+    $allRows = RepCustody::spending($repId);
+    $dayRows = RepCustody::spending($repId, $day);
+    chk(count($allRows) === 3, 'الكشف الكامل فيه 3 بنود (اليومين مع بعض)');
+    chk(count($dayRows) === 2, 'كشف اليوم فيه بندين بس');
+    $leak = false;
+    foreach ($dayRows as $r) { if ((string) $r['d'] !== $day) { $leak = true; } }
+    chk(!$leak, 'ولا بند من يوم تاني تسرّب لكشف اليوم');
+
+    // ═══ ③ رندر الشاشة الرئيسية
+    sec('③ /rep-custody بيرندر بعدسة اليوم');
+    $_SESSION = ['uid' => (int) Database::scalar('SELECT MIN(id) FROM users'), 'role' => 'owner',
+                 'uname' => 'فحص', 'last_activity' => time(), 'uid_checked' => time(),
+                 'work_date' => $day];
+    $render = static function (callable $fn) : string {
+        ob_start();
+        try { $fn(); return (string) ob_get_clean(); }
+        catch (\Throwable $e) { ob_end_clean(); bad('استثناء وقت الرندر: ' . $e->getMessage()); return ''; }
+    };
+    $ctrl = new RepCustodyController();
+    $_GET = ['q' => $tag];
+    $html = $render(static fn () => $ctrl->index());
+    $noPhpError = static function (string $h, string $where) {
+        preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $h, $m)
+            ? bad("خطأ PHP في $where: " . ($m[0] ?? ''))
+            : ok("$where بيرندر بلا أخطاء PHP");
+    };
+    if ($html === '') { bad('/rep-custody ما رندرش'); } else {
+        $noPhpError($html, '/rep-custody');
+        chk(str_contains($html, $tag), 'المندوب ظاهر في الشاشة');
+        // ⚠️ الفحص على **السلوك** مش على ماركب بعينه: الجدول اتحوّل لكروت في
+        //    المرحلة ١٠، والمطلوب إن أرقام اليوم هي الأساسية بغض النظر عن الشكل.
+        chk(str_contains($html, 'نزل للمناديب اليوم') && str_contains($html, 'فاضل من عهدة اليوم'),
+            'أرقام اليوم هي الأساسية في الشاشة');
+        chk(str_contains($html, 'برّه مع المناديب (كل الأيام)')
+            || str_contains($html, 'برّه معاه (كل الأيام)'),
+            'التراكمي ظاهر جنب اليوم مش بدله (الحقيقة المالية)');
+        chk(str_contains($html, 'غيّر يوم العمل'),
+            'فيه طريق واضح لتغيير يوم العمل من الشاشة');
+    }
+
+    // ═══ ④ رندر كارت المندوب — التبويبات الأربعة
+    sec('④ كارت المندوب: ٤ تبويبات وكلها بترندر');
+    $tabs = ['day', 'permits', 'account', 'settings'];
+    $tabHtml = [];
+    foreach ($tabs as $t) {
+        $_GET = ['tab' => $t];
+        $tabHtml[$t] = $render(static fn () => $ctrl->card((string) $repId));
+        $tabHtml[$t] === ''
+            ? bad("تبويب $t ما رندرش")
+            : $noPhpError($tabHtml[$t], "تبويب $t");
+    }
+    // تبويب غير معروف بيرجع لليوم بدل ما يفضى
+    $_GET = ['tab' => 'zzz'];
+    $fallback = $render(static fn () => $ctrl->card((string) $repId));
+    chk($fallback !== '' && str_contains($fallback, 'أداء المندوب اليوم'),
+        'تبويب مش معروف بيرجع للافتراضي «اليوم» بدل صفحة فاضية');
+    $_GET = [];
+
+    // ═══ ⑤ الميزة نفسها: تبويب اليوم ما بيعرضش يوم تاني
+    sec('⑤ ⚠️ تبويب اليوم بيعرض اليوم بس (لو فشل يبقى رجع للسلوك القديم)');
+    $d = $tabHtml['day'] ?? '';
+    if ($d === '') { bad('تبويب اليوم ما رندرش — الفحص اتخطّى'); } else {
+        chk(str_contains($d, $tag . ' إيصال النهاردة'), 'إيصال اليوم ظاهر');
+        chk(str_contains($d, $tag . ' مصروف النهاردة'), 'مصروف اليوم ظاهر');
+        chk(!str_contains($d, $tag . ' إيصال إمبارح'), '**بند إمبارح مش ظاهر** في تبويب اليوم');
+        chk(str_contains($d, $tag . ' عهدة اليوم'), 'تنزيل عهدة اليوم ظاهر');
+        chk(!str_contains($d, $tag . ' عهدة إمبارح'), '**تنزيل إمبارح مش ظاهر** في تبويب اليوم');
+        chk(str_contains($d, 'أداء المندوب اليوم'), 'قسم أداء المندوب موجود');
+        chk(str_contains($d, 'id="deposit-form"'), 'فورم تنزيل العهدة في تبويب اليوم');
+    }
+    $a = $tabHtml['account'] ?? '';
+    chk($a !== '' && str_contains($a, $tag . ' إيصال إمبارح'),
+        'بند إمبارح موجود في تبويب «الحساب الكامل» (ما اتشالش من النظام)');
+    chk($a !== '' && str_contains($a, 'id="settle-form"'), 'فورم التسوية في تبويب الحساب');
+    chk(($tabHtml['permits'] ?? '') !== '' && str_contains($tabHtml['permits'], 'id="assign-form"'),
+        'فورم تنزيل الأذونات في تبويب الأذونات');
+    chk(($tabHtml['settings'] ?? '') !== '' && str_contains($tabHtml['settings'], 'id="account-form"')
+        && str_contains($tabHtml['settings'], 'id="permit-perm"'),
+        'حساب الدخول والصلاحيات في تبويب الإعدادات');
+
+    // ═══ ⑥ التبويبات روابط حقيقية
+    sec('⑥ التبويبات روابط حقيقية مش تبديل بجافاسكريبت');
+    chk(preg_match_all('/<a class="tab[^"]*" href="[^"]*tab=/', $d ?: '') >= 4,
+        'كل تبويب `<a href>` — الرجوع بالمتصفح والمشاركة بيشتغلوا');
+    chk(!preg_match('/\.tab-panel|classList\.toggle\([\'"]active/', $cardSrc),
+        'مفيش لوحات مخفية بالجافاسكريبت في الكارت');
+
+    // ═══ ⑦ كل مسار حفظ بيحمل ?tab=
+    sec('⑦ ⚠️ كل رجوع بعد الحفظ بيحمل تبويبه (وإلا المرساة تضيع)');
+    $src = preg_replace('!/\*.*?\*/|//[^\n]*!s', '', $ctrlSrc) ?? $ctrlSrc;
+    chk(!preg_match("/(redirect|claimForm|formFailure)\(.*'rep-custody\/' \. \\\$repId/", $src),
+        'مفيش مسار رجوع لكارت المندوب مكتوب بالإيد بلا تبويب');
+    chk(substr_count($src, 'self::cardUrl(') >= 40,
+        'كل مسارات الكارت بتمرّ على cardUrl() — نقطة واحدة لو التبويبات اتغيّرت');
+    chk(str_contains($src, "\$out = 'rep-custody/' . \$repId . '?tab=' . \$tab"),
+        'cardUrl بتبني `?tab=` دايمًا');
+    foreach ([['account-form', 'TAB_SETTINGS'], ['assign-form', 'TAB_PERMITS'],
+              ['deposit-form', 'TAB_DAY'], ['settle-form', 'TAB_ACCOUNT']] as [$anchor, $tabConst]) {
+        chk(str_contains($src, "self::cardUrl(\$repId, self::$tabConst, '$anchor')"),
+            "مرساة #$anchor بترجع على $tabConst");
+    }
+
+    // ═══ ⑧ الشاشة ما بتخترعش أرقام
+    sec('⑧ الشاشة قراءة فقط — بتقرا الموديل ما بتحسبش');
+    foreach (['card.php', '_tab_day.php', '_tab_permits.php', '_tab_account.php', '_tab_settings.php',
+              'index.php'] as $f) {
+        $v = (string) file_get_contents(__DIR__ . '/../app/Views/rep_custody/' . $f);
+        chk(!preg_match('/\b(INSERT|UPDATE|DELETE|Database::)\b/', $v),
+            "$f مافيهوش أي SQL ولا كتابة");
+    }
+    chk(!str_contains($idxSrc, 'json_encode'), 'index.php مافيهوش json_encode (قاعدة js_json الأمنية)');
+    chk(!str_contains($cardSrc, 'json_encode'), 'card.php مافيهوش json_encode');
+
+    // ═══ ⑨ب نوافذ التفاصيل — قاعدة «ممنوع رقم أصمّ» شغّالة فعليًّا
+    sec('⑨ب نوافذ التفاصيل بترندر ببيانات حقيقية');
+    foreach (['deposits' => 'العهدة النازلة', 'spent' => 'الصرف',
+              'pending' => 'المستني', 'balance' => 'الفاضل'] as $what => $lbl) {
+        $_GET = [];
+        $html = $render(static fn () => $ctrl->drill($what));
+        if ($html === '') { bad("نافذة «{$lbl}» ما رندرتش"); continue; }
+        $noPhpError($html, "نافذة «{$lbl}»");
+        chk(str_contains($html, 'drill-how'), "نافذة «{$lbl}» بتقول إزاي اتحسب الرقم");
+        chk(str_contains($html, 'drill-foot') || str_contains($html, 'class="empty"'),
+            "نافذة «{$lbl}» فيها مجموع وطريق للشاشة الكاملة (أو حالة فراغ)");
+        chk(!str_contains($html, '<!doctype') && !str_contains($html, '<aside'),
+            "نافذة «{$lbl}» بترندر **بلا layout** (جسم النافذة بس)");
+    }
+    // البيانات اللي زرعناها لازم تبان جوّه النوافذ — وبعدسة اليوم زي الشاشة
+    $_GET = [];
+    $spentHtml = $render(static fn () => $ctrl->drill('spent'));
+    chk(str_contains($spentHtml, $tag . ' إيصال النهاردة'),
+        'نافذة الصرف فيها إيصال اليوم فعلاً');
+    chk(!str_contains($spentHtml, $tag . ' إيصال إمبارح'),
+        '**وبند إمبارح مش فيها** — النافذة بعدسة اليوم زي الشاشة');
+    $depHtml = $render(static fn () => $ctrl->drill('deposits'));
+    chk(str_contains($depHtml, $tag . ' عهدة اليوم') && !str_contains($depHtml, $tag . ' عهدة إمبارح'),
+        'نافذة التنزيلات فيها تنزيل اليوم بس');
+    /* ⚠️ نوع مش في القائمة البيضا: **ما ينفعش يتجرَّب في نفس العملية** لأن
+       `notFound()` بتعمل `exit` (وده صح — بتوقف التنفيذ فورًا)، فاستدعاؤها هنا
+       كان بيقتل الفاحص قبل باقي الأقسام. الفحص بقى على الكود، والسلوك نفسه
+       محروس في `verify_design_system.php` §⑥. */
+    $drillSrc = preg_replace('~/\*.*?\*/~s', '',
+        (string) file_get_contents(__DIR__ . '/../app/Controllers/RepCustodyController.php')) ?? '';
+    /* القائمة البيضا بقت ثابتين (`DRILL_ALL` للشاشة العامة و`DRILL_REP` لكارت
+       المندوب) بعد ما اتضافت تفاصيل على مستوى المندوب في المرحلة ١٢. */
+    chk(str_contains($drillSrc, 'private const DRILL_ALL')
+        && str_contains($drillSrc, 'private const DRILL_REP')
+        && str_contains($drillSrc, 'private const DRILL_INBOX')
+        && str_contains($drillSrc, 'array_merge(self::DRILL_ALL, self::DRILL_REP, self::DRILL_INBOX)')
+        && str_contains($drillSrc, "\$this->notFound('نوع التفاصيل ده مش موجود.')"),
+        '⚠️ نوع تفاصيل مش في القائمة البيضا بيترفض بـnotFound');
+    chk(str_contains($drillSrc, "\$this->notFound('المندوب ده مش موجود.')"),
+        '⚠️ وتفاصيل مندوب لازم `?rep=` لمندوب موجود فعلاً');
+
+    // ═══ ⑩ باج متحقَّق: الأرصدة كانت مقنّعة للأبد بلا زرار يكشفها
+    sec('⑩ إظهار الأرصدة — معالج واحد عام');
+    $appJs   = (string) file_get_contents(__DIR__ . '/../public/assets/js/app.js');
+    $officeV = (string) file_get_contents(__DIR__ . '/../app/Views/office/index.php');
+    chk(str_contains($appJs, 'secretValues'),
+        'معالج [data-secret] في app.js — بيخدم كل الشاشات مش شاشة واحدة');
+    chk(!preg_match('/data-secret\][^\n]*forEach[\s\S]{0,400}secret-toggle/', $officeV),
+        'مفيش نسخة تانية من المعالج في office/index.php (الضغطة كانت هتتنفّذ مرتين)');
+    foreach (['index.php', 'card.php'] as $f) {
+        $v = (string) file_get_contents(__DIR__ . '/../app/Views/rep_custody/' . $f);
+        /* التقنيع بقى من مكوّن `stat`/`entity_card` (`'secret' => true`) بعد
+           التحويل، فالفحص بيقبل الاتنين — المهم إن الرقم مقنّع وله زرار كشف. */
+        chk((str_contains($v, 'data-secret') || str_contains($v, "'secret' => true"))
+            && str_contains($v, 'secret-toggle'),
+            "rep_custody/$f فيها زرار كشف الأرصدة (كانت `••••••` للأبد قبل كده)");
+    }
+
+    // ═══ ⑨ العزل المالي — قاعدة v42 بالحرف
+    sec('⑨ العزل المالي (قاعدة v42)');
+    chk(abs($treasuryAfterDeposits - $treasuryBefore) < 0.005,
+        'تنزيل العهدة (8,000) ما مسّش خزنة المكتب — تحويل داخلي');
+    chk(abs(Closing::currentBalance() - ($treasuryBefore - 1450)) < 0.005,
+        'صرف المندوب المعتمَد (1,450) اتخصم من الخزنة يوم صرفه — إعادة التصميم ما غيّرتش ده');
+
+    $_SESSION = [];
+} finally {
+    $pdo->rollBack();
+}
+
+$treasuryAfter = Closing::currentBalance();
+chk(abs($treasuryAfter - $treasuryBefore) < 0.005,
+    'رصيد الخزنة قبل = بعد (' . number_format($treasuryBefore, 2) . ') — الفحص ما ساب أثر');
+
+echo "\n" . str_repeat('=', 62) . "\n";
+echo 'النتيجة: ' . $pass . ' ناجح · ' . count($failures) . " فاشل\n";
+if ($failures) { foreach ($failures as $f) { echo "  ✗ $f\n"; } exit(1); }
+exit(0);

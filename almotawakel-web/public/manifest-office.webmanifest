@@ -1,0 +1,44 @@
+{
+  "id": "/",
+  "name": "المتوكل — نظام إدارة النقل والتخليص",
+  "short_name": "المتوكل",
+  "description": "أذونات وبوالص وفواتير وخزنة وعهدة المناديب — نظام شركة المتوكل لمقاولات النقل.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#15355B",
+  "theme_color": "#FFFFFF",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/assets/img/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/pwa/icon-256.png", "sizes": "256x256", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/pwa/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/pwa/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/img/pwa/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "الأذونات والشهادات",
+      "short_name": "الأذونات",
+      "url": "/permits",
+      "icons": [{ "src": "/assets/img/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "التقفيل اليومي",
+      "short_name": "التقفيل",
+      "url": "/closing",
+      "icons": [{ "src": "/assets/img/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "مراجعة بنود المناديب",
+      "short_name": "بنود المناديب",
+      "url": "/rep-custody/inbox",
+      "icons": [{ "src": "/assets/img/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

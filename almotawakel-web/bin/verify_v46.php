@@ -39,7 +39,7 @@ echo "فحص v46 — تحويل عهدة بين المناديب\n" . str_repeat
 
 sec('0) البنية + العزل');
 RepTransfer::available() ? ok('جدول rep_custody_transfers موجود') : bad('الجدول ناقص — شغّل migrate_v46');
-$treasuryFiles = ['app/Models/Closing.php','app/Models/DailyReconciliation.php','app/Models/Metrics.php',
+$treasuryFiles = ['app/Models/Closing.php','app/Models/DailyReview.php','app/Models/Metrics.php',
     'app/Models/Expense.php','app/Models/Custody.php','app/Controllers/DailyClosingController.php','bin/backfill_closings.php'];
 $leak = [];
 foreach ($treasuryFiles as $f) {

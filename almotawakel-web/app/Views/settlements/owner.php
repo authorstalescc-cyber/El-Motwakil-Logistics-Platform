@@ -15,6 +15,7 @@
  * @var array  $ctypes
  */
 ?>
+<?php partial('owner_tabs', ['active' => 'settlements']); ?>
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('settlements') ?>">‹ رجوع لأصحاب البيان</a>
   <span style="flex:1"></span>
@@ -101,6 +102,73 @@
 
 <!-- جدول البوالص + الدفع الجماعي (ملف مشترك) -->
 <?php $showOwner = false; require __DIR__ . '/_bills.php'; ?>
+
+<?php
+/* ══════════════════════════════════════════════════════════════════════════
+   كشوف حساب صاحب البيان — المرحلة ٩ (دمج المحتوى)
+   ─────────────────────────────────────────────────────────────────────────
+   قبل كده: كشوف صاحب البيان كانت في **وحدة تانية خالص** (`/statements`)،
+   فالمالك وهو واقف على صفحة صاحب البيان شايف رصيده وبوالصه، لكن عشان يشوف
+   كشوفه السابقة أو يصدر كشفًا جديدًا كان لازم يرجع للقائمة الجانبية ويدخل
+   الوحدة التانية **ويدوّر على نفس الاسم من الأول**.
+   دلوقتي كشوفه معروضة هنا، وزر الإصدار محمّل باسمه.
+
+   ⚠️ `OwnerStatement::forOwner()` بتمرّ على `PartyMaster` فبتلمّ **تهجئات
+      الاسم المختلفة** (تحذير ٣: الربط نصّي بلا FK)، وبترجّع [] بأمان لو
+      الجدول لسه مش موجود.
+   ══════════════════════════════════════════════════════════════════════════ */
+$statements = $statements ?? [];
+$stNewUrl   = url('statements/form?owner=' . urlencode($owner));
+?>
+<div class="card mb" id="owner-statements">
+  <div class="card-head">
+    <div class="card-head-txt">
+      <div class="section-head"><?= icon('receipt', 17) ?> كشوف حساب <?= e($ownerLabel) ?></div>
+      <div class="card-head-sub"><?= intf(count($statements)) ?> كشف مُصدَر</div>
+    </div>
+    <div class="card-head-tools">
+      <a class="btn gold sm" href="<?= e($stNewUrl) ?>">➕ إصدار كشف جديد</a>
+    </div>
+  </div>
+  <?php if (!$statements): ?>
+    <?php partial('empty', [
+        'emoji'  => '📑',
+        'title'  => 'مفيش كشوف حساب لصاحب البيان ده',
+        'note'   => 'الكشف بيتعمل من بوالصه المستلَمة والباقية، وبيتحفظ كلقطة ثابتة.',
+        'action' => ['label' => '➕ إصدار كشف جديد', 'url' => $stNewUrl],
+    ]); ?>
+  <?php else: ?>
+    <div class="table-wrap"><table class="data">
+      <thead><tr>
+        <th class="g-identity">رقم المستند</th>
+        <th class="g-identity">التاريخ</th>
+        <th class="g-vehicle">بوالص مستلَمة</th>
+        <th class="g-vehicle">بوالص باقية</th>
+        <th class="g-revenue">استلم (المدرَج)</th>
+        <th class="g-result">فاضل له (كلّي)</th>
+        <th class="g-identity" data-no-sort data-no-hide></th>
+      </tr></thead>
+      <tbody>
+        <?php foreach ($statements as $st): ?>
+          <tr<?= (($st['status'] ?? 'issued') === 'void') ? ' style="opacity:.55"' : '' ?>>
+            <td style="font-weight:800"><?= e($st['doc_no'] ?: '#' . $st['id']) ?></td>
+            <td><?= dfmt($st['statement_date']) ?></td>
+            <td><?= intf($st['paid_count']) ?></td>
+            <td><?= intf($st['remaining_count']) ?></td>
+            <td class="pos"><?= money($st['paid_sum'], false) ?></td>
+            <td style="font-weight:800;color:var(--navy)"><?= money($st['stat_remaining'], false) ?></td>
+            <td><div class="actions">
+              <a class="edit" href="<?= url('statements/' . $st['id']) ?>" target="_blank" title="طباعة الكشف">🖨️</a>
+              <?php if (($st['status'] ?? 'issued') === 'void'): ?>
+                <span class="pill st-unpaid">ملغى</span>
+              <?php endif; ?>
+            </div></td>
+          </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table></div>
+  <?php endif; ?>
+</div>
 
 <style>
 .set-hero{display:flex;align-items:center;gap:18px;padding:20px 24px;background:linear-gradient(135deg,var(--navy),var(--navy-mid));color:#fff;border-radius:18px;box-shadow:var(--shadow-lg);margin-bottom:16px;flex-wrap:wrap}

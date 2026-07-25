@@ -25,6 +25,15 @@ class Lookup
         'expense_cat'    => 'فئات المصروفات اليدوية',
     ];
 
+    /**
+     * أنواع «أسماء البنود» (إيصالات/مصروفات الحركة). اسم البند دلوقتي مايصحّش
+     * يكون فيه رقم — الكمية ليها خانة مستقلة (`qty`، v17). فبنرفض أي قيمة فيها
+     * رقم عشان الاقتراحات اللي بتظهر للمندوب ما تتلوّثش بأخطاء زي «٢ جيش هيئة».
+     * ⚠️ القاعدة دي للأنواع دي بس — `container_type` مثلاً فيه أرقام مشروعة
+     *    («40 قدم»)، فممنوع نعمّم المنع على كل الأنواع.
+     */
+    private const NOTE_TYPES = ['mv_receipt', 'mv_expense', 'mv_misc'];
+
     /** كل القوائم مجمّعة حسب النوع */
     public static function allGrouped(): array
     {
@@ -67,6 +76,10 @@ class Lookup
     {
         $value = trim($value);
         if ($value === '' || !isset(self::TYPES[$type])) {
+            return;
+        }
+        // اسم إيصال/مصروف فيه رقم = خطأ إدخال (الكمية ليها خانتها) — ما نلوّثش بيه الاقتراحات.
+        if (in_array($type, self::NOTE_TYPES, true) && preg_match('/[0-9]/', ar2en_digits($value))) {
             return;
         }
         Database::exec(

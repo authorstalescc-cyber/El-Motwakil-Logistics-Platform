@@ -1,4 +1,12 @@
 <?php
+/**
+ * جسم شاشة الإذن — **وضع العرض** (قراءة فقط).
+ *
+ * ⚠️ الشاشة واحدة (`permits/show.php`) والوضعان جسمان: الهيرو وشريط الإجراءات
+ *    ومرشد الإيصالات بيترسموا مرة واحدة في الغلاف، والملف ده بيرسم المراحل
+ *    للقراءة بس. مُصيّرا المراحل مختلفان **فعلاً** (التحرير مربوط بعقد AJAX
+ *    في `_movement.php`) فدمجهم في واحد كان هيعقّد بلا مكسب.
+ */
 use App\Models\Permit;
 use App\Models\Bill;
 
@@ -11,13 +19,7 @@ $pStages = Permit::scopedStages('permit');
 $mStages = Permit::scopedStages('movement');
 $primaryDef = Permit::primaryFeesDefault($pid);
 
-// التقدّم (نفس منطق الإدارة)
-$done = 0; $tot = 0;
-foreach ($pStages as $k => $m) { if ($k==='generators') continue; $tot++;
-  $has = $k==='data' ? true : !empty($permitStages[$k] ?? []); if ($has) $done++; }
-foreach ($movements as $mv) { foreach ($mStages as $k => $m) { if ($k==='generators') continue; $tot++;
-  $has = $k==='bills' ? !empty($mv['bills']) : !empty($mv['stages'][$k] ?? []); if ($has) $done++; } }
-$progress = $tot ? (int) round($done / $tot * 100) : 0;
+/* التقدّم بيتحسب في الغلاف `show.php` — الهيرو محتاجه قبل الجسم. */
 
 $statusBadge = fn(string $st) => $st === 'pending'
     ? '<span class="tl-st pending">ناقصة</span>' : '<span class="tl-st done">تمّت</span>';
@@ -95,14 +97,6 @@ $roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0
     <?php return ob_get_clean();
 };
 ?>
-<!-- شريط الإجراءات — جزء مشترك مع شاشة الإدارة -->
-<?php $mode = 'view'; include __DIR__ . '/_bar.php'; ?>
-
-<!-- HERO — جزء مشترك (كان مكرَّرًا حرفيًا في الشاشتين) -->
-<?php include __DIR__ . '/_hero.php'; ?>
-
-<!-- ===== مرشد الإيصالات الذكي (استرشادي — v32) ===== -->
-<?php $back = 'view'; include __DIR__ . '/_rcp_guide.php'; ?>
 
 <!-- ===== تفاصيل إضافية (بلا تكرار لبيانات الهيرو) ===== -->
 <?php

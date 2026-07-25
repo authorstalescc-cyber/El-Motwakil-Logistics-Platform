@@ -8,6 +8,7 @@ use App\Core\FormState;
  */
 $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
 ?>
+<?php partial('owner_tabs', ['active' => 'unassigned']); ?>
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('settlements') ?>">‹ رجوع لأصحاب البيان</a>
   <span style="flex:1"></span>

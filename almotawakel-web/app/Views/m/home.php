@@ -15,16 +15,23 @@
  *
  * @var array $pocket @var array $permits @var array $submissions @var array $counts
  * @var array $deposits @var string $tab @var string $status @var string $clearDraft
- * @var bool $canAddPermit
+ * @var bool $canAddPermit @var string $workDate
  */
-$owed  = $pocket['pocket'] < 0;         // صرف أكتر من عهدته = دفع من جيبه
+$workDate = $workDate ?? date('Y-m-d');
+$wdToday  = $workDate === date('Y-m-d');
+// ⚠️ v49 — الأرقام دي كلها **عهدة يوم العمل بس** (RepPortal::dayPocket).
+//    قرار المالك: الشاشة دي تعرض عهدة اليوم والمدخلات اللي اتدخلت عليها **وبس**؛
+//    ممنوع أي رقم من يوم تاني (تراكمي أو بند قديم) يبان هنا، لأنه بيتقري وكأنه
+//    خصم من عهدة النهاردة. التراكمي شغل المكتب وشاشة المشرف.
+$wdLocked = !empty($pocket['locked']);
+$owed  = $pocket['pocket'] < 0;         // صرف في اليوم ده أكتر من اللي نزل له فيه
 $shown = abs($pocket['pocket']);
 $dep   = max($pocket['deposits'], 0.01);
 $usedPct = min(100, max(0, ($pocket['spent'] / $dep) * 100));
 $waitPct = min(100 - $usedPct, max(0, ($pocket['pending'] / $dep) * 100));
 
-// العهدة «قربت تخلص»: صرف ≥80% أو الفاضل أقل من 500، وطبعًا مش لو مدين (دفع من جيبه)
-$lowCustody = !$owed && $pocket['deposits'] > 0 && ($shown <= 500 || $usedPct >= 80);
+// عهدة اليوم «قربت تخلص»: صرف ≥80% أو الفاضل أقل من 500، ومش لو مدين (دفع من جيبه)
+$lowCustody = !$owed && !$wdLocked && $pocket['deposits'] > 0 && ($shown <= 500 || $usedPct >= 80);
 
 $repName = (string) \App\Core\RepAuth::repName();
 $initial = mb_substr(trim($repName) !== '' ? trim($repName) : '؟', 0, 1);
@@ -146,10 +153,17 @@ $permitCard = function (array $p) use ($num) {
     <span class="x" id="installDismiss" role="button" aria-label="إخفاء">✕</span>
   </button>
 
-  <!-- الرقم الوحيد اللي بيهمّه؛ الباقي جوّه «التفاصيل» -->
+  <!-- تفعيل الإشعارات (v51) — بيظهر بس لو الجهاز يقدر ولسه مش مفعّلها -->
+  <button type="button" class="hm-install" id="pushBtn" hidden>
+    <span class="ic">🔔</span>
+    <span id="pushBtnTxt">فعّل الإشعارات — عشان يوصلك قرار بنودك فورًا</span>
+    <span class="x" id="pushDismiss" role="button" aria-label="إخفاء">✕</span>
+  </button>
+
+  <!-- عهدة يوم العمل: الرقم الوحيد اللي بيسحب منه؛ الباقي جوّه «التفاصيل» -->
   <section class="hm-balance <?= $owed ? 'is-owed' : '' ?>">
     <div class="hm-balance-head">
-      <span><?= $owed ? 'دفعت من جيبك — ليك عندنا' : 'معايا دلوقتي' ?></span>
+      <span><?= $owed ? 'صرفت أكتر من عهدة اليوم' : 'فاضل من عهدة اليوم' ?></span>
       <button type="button" class="hm-toggle" id="detailsBtn" aria-expanded="false" aria-controls="balanceMore">
         التفاصيل
       </button>
@@ -163,10 +177,16 @@ $permitCard = function (array $p) use ($num) {
         <i class="wait" style="width:<?= round($waitPct, 1) ?>%"></i>
       </div>
       <dl class="hm-dl">
-        <div><dt>نزل لك</dt><dd><?= $num($pocket['deposits']) ?></dd></div>
-        <div><dt>صرفت</dt><dd><?= $num($pocket['spent']) ?></dd></div>
+        <div><dt>نزل لك اليوم</dt><dd><?= $num($pocket['deposits']) ?></dd></div>
+        <div><dt>صرفت اليوم</dt><dd><?= $num($pocket['spent']) ?></dd></div>
         <?php if ($pocket['pending'] > 0): ?>
           <div><dt>مستني مراجعة</dt><dd><?= $num($pocket['pending']) ?></dd></div>
+        <?php endif; ?>
+        <?php if (($pocket['transfer_in'] ?? 0) > 0): ?>
+          <div><dt>وصلك من زميل</dt><dd><?= $num($pocket['transfer_in']) ?></dd></div>
+        <?php endif; ?>
+        <?php if (($pocket['transfer_out'] ?? 0) > 0): ?>
+          <div><dt>حوّلت لزميل</dt><dd><?= $num($pocket['transfer_out']) ?></dd></div>
         <?php endif; ?>
         <?php if ($pocket['returned'] > 0): ?>
           <div><dt>رجّعت</dt><dd><?= $num($pocket['returned']) ?></dd></div>
@@ -174,6 +194,24 @@ $permitCard = function (array $p) use ($num) {
       </dl>
     </div>
   </section>
+
+  <?php /* عهدة يوم — اليوم اللي كل البنود بتتسجّل عليه وبتتخصم من عهدته */ ?>
+  <a class="hm-wd <?= $wdLocked ? 'is-locked' : ($wdToday ? '' : 'is-past') ?>" href="<?= url('m/work-date') ?>">
+    <span class="hm-wd-ic"><?= $wdLocked ? '🔒' : '📅' ?></span>
+    <span class="hm-wd-txt">
+      <small><?= $wdLocked ? 'اليوم ده اتقفل في المكتب' : 'بتسجّل على عهدة يوم' ?></small>
+      <b><?= e(dfmt($workDate)) ?><?= $wdToday ? '' : ' — مش النهاردة' ?></b>
+    </span>
+    <span class="hm-wd-go">غيّر</span>
+  </a>
+
+  <?php if ($wdLocked): ?>
+    <div class="hm-locked" role="alert">
+      <b>مش هتقدر تسجّل على اليوم ده</b>
+      <span><?= e((string) $pocket['lock_reason']) ?></span>
+      <a class="hm-locked-btn" href="<?= url('m/work-date') ?>">اختار يوم تاني</a>
+    </div>
+  <?php endif; ?>
 
   <?php if ($lowCustody): ?>
     <div class="hm-low">
@@ -264,12 +302,9 @@ $permitCard = function (array $p) use ($num) {
 
   <?php else: ?>
     <div class="hm-sheet-head">
-      <h2>بنودي</h2>
+      <h2>بنود يوم <?= e(dfmt($workDate)) ?></h2>
+      <span class="hm-sheet-sub">اللي دخّلته على عهدة اليوم ده بس</span>
     </div>
-
-    <?php if (!empty($lastSettle['date'])): ?>
-      <p class="hm-period">✅ اتعملت تسوية يوم <?= e(dfmt($lastSettle['date'])) ?> — دي بنود الفترة الجديدة. القديمة متسجّلة عند المكتب.</p>
-    <?php endif; ?>
 
     <div class="hm-filters" aria-label="فلترة البنود">
       <?php foreach (['' => 'الكل', 'pending' => 'مستني', 'approved' => 'اتقبل', 'rejected' => 'اترفض'] as $k => $label): ?>
@@ -279,8 +314,8 @@ $permitCard = function (array $p) use ($num) {
     </div>
 
     <?php if (!$submissions): ?>
-      <div class="hm-empty"><span class="ic">🧾</span><b>لسه ما سجّلتش حاجة</b>
-        <p>اختار إذن من «أذوناتي» وسجّل أول بند.</p></div>
+      <div class="hm-empty"><span class="ic">🧾</span><b>مفيش بنود في يوم <?= e(dfmt($workDate)) ?></b>
+        <p>اختار إذن من «أذوناتي» وسجّل أول بند، أو <a href="<?= url('m/work-date') ?>">غيّر اليوم</a> لو بتدوّر على بند يوم تاني.</p></div>
     <?php else: foreach ($submissions as $s): ?>
       <?php $isMisc = \App\Models\RepPortal::isMisc((string) $s['kind']); ?>
       <article class="hm-slip is-<?= e($s['status']) ?>">
@@ -432,6 +467,32 @@ $permitCard = function (array $p) use ($num) {
       }
       var d = window.__almInstall; if (!d) { return; }
       d.prompt(); d.userChoice.finally(function () { window.__almInstall = null; installBtn.hidden = true; });
+    });
+  }
+
+  // ── تفعيل الإشعارات (v51) ────────────────────────────
+  // بيظهر بس لو الجهاز يقدر يستقبل ولسه مش مفعّل، وبيختفي بعد التفعيل.
+  var pushBtn = document.getElementById('pushBtn');
+  var pushTxt = document.getElementById('pushBtnTxt');
+  if (pushBtn && window.almPush) {
+    var hidden = false;
+    try { hidden = localStorage.getItem('alm:m:push-hide') === '1'; } catch (e) {}
+    if (!hidden) {
+      window.almPush.state().then(function (s) {
+        if (s.canEnable) { pushBtn.hidden = false; }
+      });
+    }
+    pushBtn.addEventListener('click', function (e) {
+      if (e.target.id === 'pushDismiss') {
+        pushBtn.hidden = true;
+        try { localStorage.setItem('alm:m:push-hide', '1'); } catch (x) {}
+        return;
+      }
+      pushTxt.textContent = 'لحظة…';
+      window.almPush.enable().then(function (s) {
+        if (s.subscribed) { pushBtn.hidden = true; }
+        else { pushTxt.textContent = s.message; }
+      });
     });
   }
 

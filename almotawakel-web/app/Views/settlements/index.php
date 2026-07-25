@@ -18,6 +18,7 @@
  */
 $isSearch = ($mode ?? 'directory') === 'search';
 ?>
+<?php partial('owner_tabs', ['active' => 'settlements']); ?>
 <!-- شريط البحث + الفلترة الموسّعة (يعمل في الوضعين) -->
 <div class="toolbar" style="flex-direction:column;align-items:stretch;gap:12px">
   <form method="get" action="<?= url('settlements') ?>" style="width:100%">

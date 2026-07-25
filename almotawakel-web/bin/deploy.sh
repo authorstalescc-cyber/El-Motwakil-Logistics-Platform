@@ -10,7 +10,7 @@
 #   1) نسخة احتياطية من قاعدة **الإنتاج** (على السيرفر + نسخة تتنزّل محليًا).
 #   2) رفع الكود بـrsync --checksum وبلا --delete.
 #   3) تظبيط الصلاحيات (755/644 + config 600).
-#   4) تشغيل الهجرات المطلوبة (--migrate) والفحوصات (--verify) على السيرفر.
+#   4) تشغيل كل الهجرات المعلقة تلقائيًّا من بوابة ledger ثم الفحوصات.
 #   5) التأكد إن الموقع بيرد 200، وطباعة ملخّص.
 #
 # ⚠️ مصائد متحقَّق منها فعليًا ومعالَجة هنا (متشيلهاش):
@@ -24,7 +24,8 @@
 #
 # التشغيل:
 #   bash bin/deploy.sh
-#   bash bin/deploy.sh --migrate bin/migrate_v47.php --verify bin/verify_v47.php
+#   bash bin/deploy.sh --verify bin/verify_v49.php
+#   bash bin/deploy.sh --operator deploy-karim
 #   bash bin/deploy.sh --dry-run          # يوري اللي هيترفع بلا ما يرفع
 # ============================================================================
 set -euo pipefail
@@ -34,17 +35,25 @@ REMOTE="/home/u348648638/domains/almutawakkil.com/public_html/al-mutawakkil-syst
 LOCAL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 DRY=0
-MIGRATE=()
 VERIFY=()
+MIGRATION_OPERATOR="deploy.sh"
+BACKUP_SHA=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY=1; shift ;;
-    --migrate) MIGRATE+=("$2"); shift 2 ;;
-    --verify)  VERIFY+=("$2");  shift 2 ;;
+    --migrate)
+      echo "خيار --migrate اتلغى: deploy يشغّل pending تلقائيًّا من bin/migration.php." >&2
+      exit 2
+      ;;
+    --verify) VERIFY+=("$2"); shift 2 ;;
+    --operator) MIGRATION_OPERATOR="$2"; shift 2 ;;
     *) echo "خيار مش معروف: $1" >&2; exit 2 ;;
   esac
 done
+
+[[ "$MIGRATION_OPERATOR" =~ ^[A-Za-z0-9._@-]{1,120}$ ]] \
+  || { echo "قيمة --operator غير آمنة؛ استخدم حروفًا/أرقامًا و._@- فقط." >&2; exit 2; }
 
 say() { printf '\n\033[1;36m%s\033[0m\n%s\n' "$1" "────────────────────────────────────────────────────────────"; }
 ok()  { printf '  \033[32m✓\033[0m %s\n' "$1"; }
@@ -123,7 +132,10 @@ else
   gzip -t "$LOCAL_COPY" || die "النسخة اللي نزلت تالفة."
   gzip -dc "$LOCAL_COPY" | tail -3 | grep -q 'Dump completed' \
     || die "النسخة اللي نزلت ناقصة (مفيش سطر Dump completed)."
+  BACKUP_SHA="$(shasum -a 256 "$LOCAL_COPY" | awk '{print $1}')"
+  [[ "$BACKUP_SHA" =~ ^[a-f0-9]{64}$ ]] || die "تعذّر حساب SHA-256 لنسخة الإنتاج."
   ok "نسخة محلية سليمة: database/backups/prod/$(basename "$REMOTE_BACKUP")"
+  ok "SHA-256: $BACKUP_SHA"
 
   # ── تنظيف: نسيب آخر KEEP نسخة بس ────────────────────────────────────────
   # كل رفعة بتعمل نسخة، فمن غير تنظيف بتتراكم للأبد على السيرفر وعلى الجهاز.
@@ -206,13 +218,43 @@ ssh "$HOST" "cd '$REMOTE' && \
 ok "755 للمجلدات · 644 للملفات · 600 لـconfig والنسخ الاحتياطية (منع 403)"
 
 # ── 4) الهجرات والفحوصات ──────────────────────────────────────────────────
-if [[ ${#MIGRATE[@]} -gt 0 ]]; then
-  say "4) الهجرات على قاعدة الإنتاج"
-  for m in "${MIGRATE[@]}"; do
-    echo "  ← $m"
-    ssh "$HOST" "cd '$REMOTE' && php $m" 2>&1 | sed 's/^/    /' || die "فشلت الهجرة $m"
-  done
+# ممنوع تشغيل migrate_vN.php مباشرة: ده كان بيطبّق schema من غير ما يسجّل
+# ledger. البوابة الجديدة تتحقق من البصمات، تمسك advisory lock، وتشغّل
+# إصدارًا واحدًا في كل عملية PHP (متوافق مع تعطيل proc_open على Hostinger).
+say "4) الهجرات على قاعدة الإنتاج عبر ledger"
+[[ "$BACKUP_SHA" =~ ^[a-f0-9]{64}$ ]] || die "بصمة نسخة ما قبل النشر غير متاحة."
+
+REMOTE_DB="$(ssh "$HOST" "cd '$REMOTE' && php -r '\$c=require \"config/config.php\"; echo \$c[\"db\"][\"name\"];'")"
+[[ "$REMOTE_DB" =~ ^[A-Za-z0-9_]{1,64}$ ]] || die "اسم قاعدة الإنتاج غير آمن أو غير مقروء."
+
+if ! PENDING="$(ssh "$HOST" "cd '$REMOTE' && php bin/migration.php pending --lines" 2>&1)"; then
+  printf '%s\n' "$PENDING" | sed 's/^/  /' >&2
+  die "بوابة المايجريشن رفضت النشر. لا تشغّل ملفًا خامًا؛ أصلح ledger أولًا."
 fi
+
+if [[ -z "$PENDING" ]]; then
+  ok "لا توجد ترحيلات معلقة"
+else
+  while IFS= read -r version; do
+    [[ "$version" =~ ^[0-9]+$ ]] || die "بوابة pending أعادت إصدارًا غير صالح: $version"
+    echo "  ← v$version"
+    ssh "$HOST" "cd '$REMOTE' && php bin/migration.php apply-one \
+      --version='$version' \
+      --confirm-database='$REMOTE_DB' \
+      --backup-sha256='$BACKUP_SHA' \
+      --operator='$MIGRATION_OPERATOR'" 2>&1 | sed 's/^/    /' \
+      || die "فشل الترحيل v$version؛ توقف النشر ولم تُشغّل الإصدارات التالية."
+  done <<< "$PENDING"
+fi
+
+if ! MIGRATION_STATUS="$(ssh "$HOST" "cd '$REMOTE' && php bin/migration.php status" 2>&1)"; then
+  printf '%s\n' "$MIGRATION_STATUS" | sed 's/^/  /' >&2
+  die "فشل فحص ledger بعد الترحيلات."
+fi
+printf '%s\n' "$MIGRATION_STATUS" | sed 's/^/  /'
+echo "$MIGRATION_STATUS" | grep -q 'pending=none' \
+  || die "النشر توقف: ما زالت هناك ترحيلات معلقة."
+ok "ledger متطابق وصفر pending"
 
 if [[ ${#VERIFY[@]} -gt 0 ]]; then
   say "5) الفحوصات على السيرفر"

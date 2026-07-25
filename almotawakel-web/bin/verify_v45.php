@@ -10,7 +10,7 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 use App\Core\App;
 use App\Core\Database;
 use App\Models\Closing;
-use App\Models\DailyReconciliation;
+use App\Models\DailyReview;
 use App\Models\RepCustody;
 
 $database = (string) App::config('db')['name'];
@@ -99,11 +99,12 @@ try {
     $after = Closing::currentBalance();
     $check(abs(($before - $after) - 130.0) < 0.005,
         'الخزنة تخصم كاش الإذن والنثرية فقط ولا تخصم الفيزا أو تسليم السائق');
-    $reconciliation = DailyReconciliation::view('2037-02-03');
-    $check(abs((float) $reconciliation['general']['system'] - 30.0) < 0.005,
-        'المطابقة العامة تعد نثرية الكاش');
-    $check(abs((float) $reconciliation['general']['visa_excluded'] - 40.0) < 0.005,
-        'المطابقة تعرض نثرية الفيزا كمستبعدة من الدرج');
+    // v50: المراجعة بندًا بندًا — النثرية الكاش في القسم العام، والفيزا في قسمها.
+    $review = DailyReview::view('2037-02-03');
+    $check(abs((float) $review['groups']['general']['total'] - 30.0) < 0.005,
+        'قسم المصروفات العامة في المراجعة يعد نثرية الكاش');
+    $check(abs((float) $review['groups']['visa']['total'] - 40.0) < 0.005,
+        'قسم الفيزا في المراجعة يعرض نثرية الفيزا مستبعدة من الدرج');
 
     $closingSource = (string) file_get_contents(App::basePath('app/Models/Closing.php'));
     $check(!str_contains($closingSource, 'rep_driver_handovers'),

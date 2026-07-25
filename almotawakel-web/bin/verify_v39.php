@@ -75,7 +75,7 @@ sec('2) الوصل بالخزنة — كود التقفيل لازم يشوف ا
 // النثرية كاش خرج من الدرج عبر عهدة المندوب، فلازم تتخصم وتظهر في التقفيل.
 $cashFiles = [
     'app/Models/Closing.php'                     => true,   // sumExpenses + hasMovementBetween + earliestMovementDate
-    'app/Models/DailyReconciliation.php'         => true,   // الصف العام
+    'app/Models/DailyReview.php'         => true,   // الصف العام
     'app/Controllers/DailyClosingController.php' => true,   // جدول التفاصيل
     'bin/backfill_closings.php'                  => true,   // اكتشاف أيام الترحيل
 ];

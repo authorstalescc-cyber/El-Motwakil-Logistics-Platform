@@ -224,24 +224,33 @@ class RepPortal
 
     // ─────────────────────────────────────────── البنود المرسَلة
 
-    /** بنود المندوب (الأحدث أولاً) — للعرض على شاشته. */
-    public static function mySubmissions(int $repId, int $limit = 40, string $status = ''): array
+    /**
+     * بنود المندوب في **يوم العمل ده بس** (الأحدث أولاً) — للعرض على شاشته.
+     *
+     * ⚠️ v49 — قرار المالك: شاشة المندوب تعرض **عهدة اليوم والمدخلات اللي دخلت
+     *    على العهدة دي وبس**. أي بند من يوم تاني ممنوع يبان هنا، لأنه بيخلّي
+     *    الأرقام تبان وكأنها خصومات من عهدة اليوم وهي مش منها.
+     *    لو عايز يشوف يوم تاني، يغيّر يوم العمل — ده هو التنقّل بين الأيام.
+     *
+     *    ده **بدّل** فلتر «صفحة جديدة بعد التسوية» القديم (`periodCutoff`):
+     *    فلتر اليوم أضيق منه وبيغطّيه، وتشغيل الاتنين مع بعض كان ممكن يخفي
+     *    بنود اليوم نفسه لو حصلت تسوية النهاردة.
+     *
+     * ⚠️ الفلتر ده **على شاشة المندوب بس** — المكتب بيقرا `rep_submissions`
+     *    مباشرة بلا أي فلتر، فمفيش بند بيضيع من المراجعة ولا من الفواتير.
+     */
+    public static function mySubmissions(int $repId, int $limit = 40, string $status = '', string $day = ''): array
     {
         $limit = max(1, min(200, $limit));
         $where = 's.rep_id = ?';
         $params = [$repId];
+        if ($day !== '') {
+            $where .= ' AND s.entry_date = ?';
+            $params[] = $day;
+        }
         if (in_array($status, ['pending', 'approved', 'rejected'], true)) {
             $where .= ' AND s.status = ?';
             $params[] = $status;
-        }
-        // «صفحة جديدة بعد التسوية» (قرار المالك): بعد آخر تسوية بيبان بس بنود
-        // الفترة الجديدة على موبايل المندوب + أي مستني قديم لسه محتاج قرار.
-        // القديم المتسوّى بيختفي من عنده بس **بيفضل كامل في المكتب** (الكارت
-        // بيقرا rep_submissions مباشرة بلا الفلتر ده، والفواتير ما تتأثرش).
-        $cutoff = self::periodCutoff($repId);
-        if ($cutoff !== null) {
-            $where .= " AND (s.created_at > ? OR s.status = 'pending')";
-            $params[] = $cutoff;
         }
         return Database::all(
             "SELECT s.*, p.permit_no, p.permit_type, p.company
@@ -299,15 +308,16 @@ class RepPortal
         ];
     }
 
-    /** عدّادات سريعة لشاشة المندوب. */
-    public static function myCounts(int $repId): array
+    /**
+     * عدّادات سريعة لشاشة المندوب — **ليوم العمل ده بس**.
+     * لازم تفضل بنفس فلتر `mySubmissions` بالظبط، وإلا الشارة تقول رقم
+     * والقايمة تحته تعرض رقم تاني.
+     */
+    public static function myCounts(int $repId, string $day = ''): array
     {
-        // نفس فلتر mySubmissions عشان العدّادات تطابق اللي ظاهر: المستني كله
-        // بيتعدّ (دايمًا ظاهر)، والمعتمد/المرفوض بس اللي في الفترة الجديدة.
-        $cutoff = self::periodCutoff($repId);
-        $extra = $cutoff !== null ? " AND (created_at > ? OR status='pending')" : '';
         $params = [$repId];
-        if ($cutoff !== null) { $params[] = $cutoff; }
+        $extra = '';
+        if ($day !== '') { $extra = ' AND entry_date = ?'; $params[] = $day; }
         $row = Database::row(
             "SELECT
                 COALESCE(SUM(status='pending'),0)  AS pending,
@@ -331,11 +341,14 @@ class RepPortal
      *    دلوقتي» وهو لسه مستني — وإلا يبان إن عهدته نقصت بحاجة ما دفعهاش كاش.
      *    (نفس منطق استثناء الفيزا في spentTotal و RepCustody::dashboard.)
      */
-    public static function pendingAmount(int $repId): float
+    public static function pendingAmount(int $repId, ?string $day = null): float
     {
+        $args = [$repId];
+        $w = '';
+        if ($day !== null && $day !== '') { $w = ' AND entry_date = ?'; $args[] = $day; }
         return round((float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM rep_submissions
-             WHERE rep_id = ? AND status = 'pending' AND is_visa = 0", [$repId]), 2);
+             WHERE rep_id = ? AND status = 'pending' AND is_visa = 0$w", $args), 2);
     }
 
     /**
@@ -357,17 +370,71 @@ class RepPortal
     }
 
     /**
+     * ⚠️ v49 — **عهدة يوم العمل**، وهي الرقم اللي المندوب بيشوفه وبيسحب منه.
+     *
+     * كل يوم عهدة مستقلة بلا أي ترحيل من اليوم اللي قبله (قرار المالك)، فالرقم
+     * ده = المنزَّل في اليوم + المستلَم فيه − المصروف فيه − المرتجع − المحوَّل.
+     * `pocket` بيخصم كمان اللي دفعه ولسه مستني اعتماد — فلوسه خرجت فعلاً.
+     *
+     * ⚠️ **مفيش أي رقم تراكمي هنا عن قصد (قرار المالك).** شاشة المندوب تعرض
+     *    عهدة اليوم والمدخلات اللي اتدخلت على العهدة دي **وبس** — أي رقم من
+     *    أيام تانية بيبان وكأنه خصم من عهدة النهاردة وهو مش منها. الرصيد
+     *    التراكمي شغل المكتب (`/rep-custody`) وشاشة المشرف، مش شاشته هو.
+     *    لو ضفت مفتاح تراكمي هنا، `bin/verify_v49.php` بيفشل.
+     *
+     * `locked` = اليوم متقفل في المكتب فالكتابة عليه مرفوضة (نفس حارس الكتابة).
+     */
+    public static function dayPocket(int $repId, string $day): array
+    {
+        $b = RepCustody::breakdown($repId, $day);
+        $pending = self::pendingAmount($repId, $day);
+        return [
+            'day'          => $day,
+            'deposits'     => $b['deposits'],
+            'spent'        => $b['spent'],
+            'returned'     => $b['returned'],
+            'transfer_in'  => $b['transfer_in'],
+            'transfer_out' => $b['transfer_out'],
+            'pending'      => $pending,
+            'official'     => $b['balance'],
+            'pocket'       => round($b['balance'] - $pending, 2),
+            'locked'       => RepCustody::isDayLocked($day),
+            'lock_reason'  => RepCustody::dayLockReason($day),
+        ];
+    }
+
+    /**
+     * ⚠️ حارس اليوم المتقفل — لازم يتنادى قبل أي كتابة مؤرَّخة من بوابة المندوب.
+     *
+     * قرار المالك (v49): لو المكتب قفل اليوم، المندوب مش بيسجّل عليه ولا بيعدّل
+     * فيه. ده متسق مع v42 — بند المندوب بيتخصم من خزنة يوم صرفه، واليوم المتقفل
+     * رصيده مثبَّت. الحارس هنا (في الموديل) مش في الواجهة: إخفاء الزرار مش حماية.
+     */
+    public static function assertDayOpen(string $day): void
+    {
+        $reason = RepCustody::dayLockReason($day);
+        if ($reason !== null) {
+            throw new RepSubmissionValidationException(['entry_date' => $reason]);
+        }
+    }
+
+    /**
      * حالة خفيفة للـping (إشعارات حيّة والتطبيق مفتوح) — قراءة فقط، بلا أثر مالي.
      * بترجّع أحدث ختم زمني لأذون مفتوح ولتنزيل عهدة + عدّاد المستني.
      */
-    public static function pingState(int $repId): array
+    public static function pingState(int $repId, string $day = ''): array
     {
+        // v49: التنزيل والمستنّي مقصورين على يوم العمل — الشارة لازم تطابق
+        // اللي ظاهر على الشاشة، وإلا الجرس يقول رقم والقايمة تقول تاني.
+        $depArgs = [$repId];
+        $depWhere = '';
+        if ($day !== '') { $depWhere = ' AND dep_date = ?'; $depArgs[] = $day; }
         return [
             'permit_at'  => Database::scalar(
                 "SELECT MAX(created_at) FROM permits WHERE status = 'open'"),
             'deposit_at' => RepCustody::available() ? Database::scalar(
-                "SELECT MAX(created_at) FROM rep_custody_deposits WHERE rep_id = ?", [$repId]) : null,
-            'pending'    => self::myCounts($repId)['pending'],
+                "SELECT MAX(created_at) FROM rep_custody_deposits WHERE rep_id = ?$depWhere", $depArgs) : null,
+            'pending'    => self::myCounts($repId, $day)['pending'],
         ];
     }
 
@@ -376,10 +443,16 @@ class RepPortal
      * الواجهة بتقارن `at` بآخر زيارة محفوظة في المتصفح (localStorage) عشان
      * تعرف الجديد بلا أي هجرة ولا عمود «آخر مشاهدة» في القاعدة.
      */
-    public static function recentDeposits(int $repId, int $limit = 5): array
+    public static function recentDeposits(int $repId, int $limit = 5, string $day = ''): array
     {
+        $rows = RepCustody::deposits($repId);
+        // v49: تنبيه «نزلت عهدة جديدة» يخصّ عهدة يوم العمل بس — تنزيل يوم تاني
+        // مالوش علاقة بالعهدة اللي هو بيصرف منها دلوقتي.
+        if ($day !== '') {
+            $rows = array_values(array_filter($rows, static fn(array $d): bool => (string) $d['dep_date'] === $day));
+        }
         $out = [];
-        foreach (array_slice(RepCustody::deposits($repId), 0, max(1, $limit)) as $d) {
+        foreach (array_slice($rows, 0, max(1, $limit)) as $d) {
             $out[] = [
                 'amount' => round((float) $d['amount'], 2),
                 'date'   => $d['dep_date'],
@@ -554,6 +627,9 @@ class RepPortal
         $date = trim((string) ($d['entry_date'] ?? ''));
         if (!self::validDate($date)) { $errors['entry_date'] = 'اكتب تاريخ دفع صحيح.'; }
         elseif ($date > date('Y-m-d')) { $errors['entry_date'] = 'تاريخ الدفع ما ينفعش يكون في المستقبل.'; }
+        // ⚠️ v49 — اليوم المتقفل مرفوض هنا (نقطة الاختناق الوحيدة للإضافة والتعديل
+        //    مع بعض)، فمفيش مسار كتابة يقدر يفوّته حتى لو الفورم اتزوّر.
+        elseif (($lock = RepCustody::dayLockReason($date)) !== null) { $errors['entry_date'] = $lock; }
 
         $ref = preg_replace('/\s+/u', ' ', trim((string) ($d['ref_no'] ?? '')));
         if (mb_strlen($ref) > 120) { $errors['ref_no'] = 'رقم الإيصال لازم يكون 120 حرف أو أقل.'; }

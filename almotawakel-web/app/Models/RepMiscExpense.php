@@ -84,7 +84,7 @@ class RepMiscExpense
      * بيرجع '1' قبل الترحيل، فالنظام يفضل بسلوكه القديم بدل ما يكسر.
      *
      * بيستخدمه: Closing::sumRepMisc/hasMovementBetween/earliestMovementDate ·
-     * DailyReconciliation · DailyClosingController · RepMiscExpense::total* ·
+     * DailyReview · DailyClosingController · RepMiscExpense::total* ·
      * bin/backfill_closings.php
      */
     public static function cashOnlySql(string $alias = ''): string
@@ -126,13 +126,33 @@ class RepMiscExpense
     /**
      * إجمالي نثريات مندوب **الكاش بس** — بيتخصم من عهدته (دفعها من فلوسه النازلة).
      * المدفوع بالفيزا مستثنى: خرج من كارت المكتب مش من جيبه (v45).
+     *
+     * $day (v49): يوم واحد بالظبط = نثريات عهدة اليوم ده بس. null = كل الأيام
+     * (السلوك القديم بالحرف). العهدة اليومية بتتحسب من نفس الصف ونفس شرط الكاش
+     * — مفيش تعريف موازٍ ممكن يختلف.
      */
-    public static function totalFor(int $repId): float
+    public static function totalFor(int $repId, ?string $day = null): float
     {
         if (!self::available()) { return 0.0; }
+        $args = [$repId];
+        $dayW = '';
+        if ($day !== null && $day !== '') { $dayW = ' AND exp_date = ?'; $args[] = $day; }
         return round((float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM rep_misc_expenses
-             WHERE rep_id = ? AND " . self::cashOnlySql(), [$repId]), 2);
+             WHERE rep_id = ? AND " . self::cashOnlySql() . $dayW, $args), 2);
+    }
+
+    /** [تاريخ => إجمالي كاش] لمندوب واحد — لكشف «عهدة كل يوم» (v49). */
+    public static function totalsByDay(int $repId): array
+    {
+        if (!self::available()) { return []; }
+        $out = [];
+        foreach (Database::all(
+            "SELECT exp_date d, SUM(amount) total FROM rep_misc_expenses
+             WHERE rep_id = ? AND " . self::cashOnlySql() . " GROUP BY exp_date", [$repId]) as $r) {
+            $out[(string) $r['d']] = round((float) $r['total'], 2);
+        }
+        return $out;
     }
 
     /** إجمالي نثريات كل المناديب الكاش (لبطاقة الملخّص). */
@@ -143,14 +163,19 @@ class RepMiscExpense
             "SELECT COALESCE(SUM(amount),0) FROM rep_misc_expenses WHERE " . self::cashOnlySql()), 2);
     }
 
-    /** [rep_id => إجمالي كاش] — لصفحة كروت العهدة بلا استعلام لكل مندوب. */
-    public static function totalsByRep(): array
+    /**
+     * [rep_id => إجمالي كاش] — لصفحة كروت العهدة بلا استعلام لكل مندوب.
+     * $day (v49): يوم واحد بالظبط، أو null لكل الأيام (السلوك القديم).
+     */
+    public static function totalsByRep(?string $day = null): array
     {
         if (!self::available()) { return []; }
+        $args = []; $dayW = '';
+        if ($day !== null && $day !== '') { $dayW = ' AND exp_date = ?'; $args[] = $day; }
         $out = [];
         foreach (Database::all(
             "SELECT rep_id, SUM(amount) total FROM rep_misc_expenses
-             WHERE " . self::cashOnlySql() . " GROUP BY rep_id") as $r) {
+             WHERE " . self::cashOnlySql() . $dayW . " GROUP BY rep_id", $args) as $r) {
             $out[(int) $r['rep_id']] = round((float) $r['total'], 2);
         }
         return $out;

@@ -34,7 +34,7 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
   </div>
 
   <div class="card" style="padding:16px 18px">
-    <div class="section-head" style="margin:0 0 10px">📌 نظرة سريعة</div>
+    <div class="section-head" style="margin:0 0 10px"><?= icon('info', 17) ?> نظرة سريعة</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
       <div style="flex:1;min-width:140px;background:var(--bg);border-radius:10px;padding:10px 12px">
         <div style="color:var(--grey);font-size:.78rem">آخر رصيد مضاف</div>
@@ -62,7 +62,7 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
 
 <!-- أداء الكارت: تفكيك المصروف حسب المصدر + إجماليات -->
 <div class="card mb" style="padding:16px 18px">
-  <div class="section-head" style="margin:0 0 12px">📊 أداء الكارت</div>
+  <div class="section-head" style="margin:0 0 12px"><?= icon('bar-chart', 17) ?> أداء الكارت</div>
   <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
     <div style="flex:1;min-width:130px"><div style="color:var(--grey);font-size:.78rem">عدد العمليات</div><div style="font-weight:800;font-size:1.2rem"><?= intf($stats['count']) ?></div></div>
     <div style="flex:1;min-width:130px"><div style="color:var(--grey);font-size:.78rem">إجمالي المصروف</div><div class="neg" style="font-weight:800;font-size:1.2rem"><?= money($stats['total'],false) ?></div></div>
@@ -95,7 +95,7 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
 <!-- تفكيك الرصيد + شحن رصيد -->
 <div class="two-col mb">
   <div class="card" style="padding:16px 18px">
-    <div class="section-head" style="margin:0 0 10px">🧮 من إيه اتكوّن الرصيد</div>
+    <div class="section-head" style="margin:0 0 10px"><?= icon('bar-chart', 17) ?> من إيه اتكوّن الرصيد</div>
     <table class="data">
       <?php if((float)$card['opening_balance'] != 0): ?>
       <tr><td style="background:var(--bg);font-weight:700;text-align:right">رصيد افتتاحي</td><td><?= money($card['opening_balance']) ?></td></tr>
@@ -106,7 +106,7 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
     </table>
   </div>
   <div class="card" id="deposit" style="padding:16px 18px">
-    <div class="section-head" style="margin:0 0 10px">➕ شحن رصيد للكارت</div>
+    <div class="section-head" style="margin:0 0 10px"><?= icon('plus', 17) ?> شحن رصيد للكارت</div>
     <?= formErrorSummary($depositErrors) ?>
     <form class="js-dirty-form" method="post" action="<?= url('office/'.$card['id'].'/deposit') ?>" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">
       <?= csrfField() ?>
@@ -121,7 +121,7 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
 
 <!-- السجل الكامل بالوقت -->
 <div class="card">
-  <div class="section-head" style="padding:16px 18px 0;margin:0">📒 سجل حركات الكارت <span style="color:var(--grey);font-weight:400;font-size:.85rem">(بتوقيت الإدخال)</span></div>
+  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('layers', 17) ?> سجل حركات الكارت <span style="color:var(--grey);font-weight:400;font-size:.85rem">(بتوقيت الإدخال)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">التاريخ / الوقت</th>

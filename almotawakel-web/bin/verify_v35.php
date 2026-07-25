@@ -26,7 +26,7 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 use App\Core\Database;
 use App\Core\RepAuth;
 use App\Models\Closing;
-use App\Models\DailyReconciliation;
+use App\Models\DailyReview;
 use App\Models\Expense;
 use App\Models\Permit;
 use App\Models\RepAssignment;
@@ -71,7 +71,7 @@ if (!$col) { echo "\nالبنية ناقصة — شغّل php bin/migrate_v35.ph
 sec('2) بقايا v35 — مفيش حساب خزنة لسه بيستثني بنود المناديب (اتعكس في v42)');
 $syncFiles = [
     'app/Models/Closing.php',
-    'app/Models/DailyReconciliation.php',
+    'app/Models/DailyReview.php',
     'app/Controllers/DailyClosingController.php',
     'app/Controllers/PermitController.php',
 ];
@@ -175,18 +175,15 @@ try {
 
     // ═══════════════════════════════════════════ 6) غايب من حسابات الخزنة
     sec('6) والبند لازم يغيب عن كل حسابات الخزنة');
-    if (DailyReconciliation::available()) {
-        $v = DailyReconciliation::view($today);
+    // v50: المطابقة اليدوية اتشالت — البند دلوقتي لازم يبان كسطر في مراجعة اليوم.
+    if (DailyReview::available()) {
+        $v = DailyReview::view($today);
         $inRec = false;
-        foreach (($v['rows'] ?? []) as $row) {
-            foreach (($row['permits'] ?? []) as $p) {
-                foreach (($p['details'] ?? []) as $d) {
-                    if (abs(((float) ($d['amount'] ?? 0)) - 500) < 0.005) { $inRec = true; }
-                }
-            }
+        foreach (($v['groups']['permits']['items'] ?? []) as $it) {
+            if (abs(((float) ($it['amount'] ?? 0)) - 500) < 0.005) { $inRec = true; }
         }
-        is('ظاهر في مطابقة التقفيل اليومي (v28) — قاعدة v42', $inRec, true);
-    } else { skip('مطابقة التقفيل غير متاحة'); }
+        is('ظاهر كبند في مراجعة التقفيل اليومي (v50) — قاعدة v42', $inRec, true);
+    } else { skip('مراجعة التقفيل غير متاحة (شغّل migrate_v50)'); }
 
     // ═══════════════════════════════════════════ 7) حدود صلاحية المندوب
     sec('7) حدود صلاحية المندوب');

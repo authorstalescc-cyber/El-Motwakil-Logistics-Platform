@@ -86,10 +86,9 @@ $num = fn($v) => number_format((float) $v, 0);
     </div>
 
     <div class="field" id="field-transfer_date" <?= $err('transfer_date') ? 'data-error="1"' : '' ?>>
-      <label for="d">تاريخ التحويل</label>
-      <input type="date" id="d" name="transfer_date" required max="<?= e($today) ?>"
-             value="<?= $o('transfer_date', $today) ?>" aria-describedby="err-transfer_date"
-             <?= $err('transfer_date') ? 'aria-invalid="true"' : '' ?>>
+      <?php /* v49: التحويل بيتحرّك على عهدة يوم العمل — الخادم بيفرض التاريخ */ ?>
+      <?php $wd = $workDate ?? date('Y-m-d'); $wdLabel = 'تاريخ التحويل — من عهدة يوم';
+            require __DIR__ . '/_workday.php'; ?>
       <p class="field-error" id="err-transfer_date" <?= $err('transfer_date') ? '' : 'hidden' ?>><?= e($err('transfer_date')) ?></p>
     </div>
 

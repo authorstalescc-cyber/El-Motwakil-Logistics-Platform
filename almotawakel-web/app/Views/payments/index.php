@@ -11,22 +11,48 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to']!=='' || $f['q']!=='');
 ?>
 <div class="toolbar">
-  <div class="section-head" style="margin:0">💳 تحصيلات العملاء</div>
+  <div class="section-head" style="margin:0"><?= icon('banknote', 18) ?> تحصيلات العملاء</div>
   <div class="spacer"></div>
   <span class="count-badge"><?= intf($summary['count']) ?> دفعة</span>
 </div>
 
-<!-- الإجماليات -->
-<div class="stat-strip mb">
-  <div class="stat-item"><div class="si-ic gold">💰</div><div><b><?= money($summary['grand'],false) ?></b><span>إجمالي المحصّل</span></div></div>
-  <div class="stat-item"><div class="si-ic green">💵</div><div><b><?= money($br['cash']['value'],false) ?></b><span>عهدة نقدية (<?= intf($br['cash']['count']) ?>)</span></div></div>
-  <div class="stat-item"><div class="si-ic teal">💳</div><div><b><?= money($br['visa']['value'],false) ?></b><span>شحن فيزا (<?= intf($br['visa']['count']) ?>)</span></div></div>
-  <div class="stat-item"><div class="si-ic navy">📝</div><div><b><?= money($br['none']['value'],false) ?></b><span>بدون توجيه (<?= intf($br['none']['count']) ?>)</span></div></div>
-</div>
+<?php /* ⚠️ **ممنوع رقم أصمّ**: كل رقم بيفتح دفعاته من `GET /payments/drill/{what}`،
+         و**بيمرّر الفلاتر الحالية** — الرقم محسوب على المعروض، فلو النافذة
+         جابت الكل تبقى بتقول رقمًا تاني. */ ?>
+<?php $pq = array_filter(['client' => $f['client'], 'route' => $f['route'],
+                          'from' => $f['from'], 'to' => $f['to'], 'q' => $f['q']], static fn ($x) => $x !== '');
+      $pd = static fn (string $w): string => url('payments/drill/' . $w
+            . ($pq ? '?' . http_build_query($pq) : '')); ?>
+<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($summary, $br, $pd) { ?>
+  <?php partial('stat', [
+    'label' => 'إجمالي المحصّل', 'value' => intf($summary['grand']),
+    'unit'  => intf($summary['count']) . ' دفعة',
+    'icon'  => 'banknote', 'tone' => 'gold',
+    'drill' => $pd('all'), 'title' => 'كل التحصيلات المعروضة',
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'عهدة نقدية', 'value' => intf($br['cash']['value']),
+    'unit'  => intf($br['cash']['count']) . ' دفعة',
+    'icon'  => 'wallet', 'tone' => 'green',
+    'drill' => $pd('cash'), 'title' => 'التحصيلات المتوجّهة للعهدة النقدية',
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'شحن فيزا', 'value' => intf($br['visa']['value']),
+    'unit'  => intf($br['visa']['count']) . ' دفعة',
+    'icon'  => 'credit-card', 'tone' => 'teal',
+    'drill' => $pd('visa'), 'title' => 'التحصيلات المتوجّهة لشحن الكروت',
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'بدون توجيه', 'value' => intf($br['none']['value']),
+    'unit'  => intf($br['none']['count']) . ' دفعة',
+    'icon'  => 'file-text', 'tone' => 'navy',
+    'drill' => $pd('none'), 'title' => 'تحصيلات في حساب العميل بس',
+  ]); ?>
+<?php }]); ?>
 
 <!-- نموذج تسجيل دفعة -->
 <div class="card cp-wrap mb">
-  <div class="section-head" style="padding:16px 20px 0;margin:0">➕ تسجيل تحصيل من عميل</div>
+  <div class="section-head" style="padding:16px 20px 0;margin:0"><?= icon('plus', 17) ?> تسجيل تحصيل من عميل</div>
   <div class="cp-form-box" style="border-bottom:0">
     <?= formErrorSummary($formErrors) ?>
     <form method="post" action="<?= url('payments/pay') ?>" id="cpForm" class="js-dirty-form">
@@ -107,7 +133,7 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
 
 <!-- السجل -->
 <div class="card">
-  <div class="section-head" style="padding:16px 18px 0;margin:0">📒 سجل الدفعات <span style="color:var(--grey);font-weight:400;font-size:.85rem">(<?= count($payments) ?>)</span></div>
+  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('layers', 17) ?> سجل الدفعات <span style="color:var(--grey);font-weight:400;font-size:.85rem">(<?= count($payments) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">التاريخ</th><th class="g-identity">العميل</th><th class="g-identity">المبلغ</th>

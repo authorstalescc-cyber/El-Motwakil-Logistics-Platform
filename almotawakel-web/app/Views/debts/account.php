@@ -16,7 +16,7 @@ $payOld = $paymentState['old']; $payErrors = $paymentState['errors'];
 
 <div class="two-col">
   <div class="card" style="padding:20px">
-    <div class="section-head">📌 <?= e($acc['name']) ?></div>
+    <div class="section-head"><?= icon('info', 17) ?> <?= e($acc['name']) ?></div>
     <table class="data"><tbody>
       <tr><td style="background:var(--bg);font-weight:700">أصل المديونية</td><td style="font-weight:800"><?= money($totals['charges']) ?></td></tr>
       <tr><td style="background:var(--bg);font-weight:700">المدفوع</td><td class="pos"><?= money($totals['paid']) ?></td></tr>

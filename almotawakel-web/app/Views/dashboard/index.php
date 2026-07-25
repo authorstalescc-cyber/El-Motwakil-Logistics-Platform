@@ -1,333 +1,220 @@
 <?php
+/**
+ * لوحة التحكم — أُعيد بناؤها بالكامل في المرحلة ١١ (2026-07-25).
+ *
+ * كانت ٧٢٩ سطر و**٩ أقسام ورا بعض** (تحية + محتاج منك + ٤ مؤشرات + جاهز
+ * للفوترة + أذونات مفتوحة + لوحة مناديب فيها ٤ إحصائيات و٦ كروت و٧ مدخلات
+ * + فلوس اليوم + ملاحظات + آخر ما اتسجّل). المالك كان بينزل **٤ شاشات**
+ * عشان يوصل لآخرها، ولوحة المناديب كانت **بتكرّر صفحة العهدة كلها**.
+ *
+ * البناء الجديد — أربع طبقات بأولوية واضحة:
+ *   ① اليوم        — إحنا في أنهي يوم وحالته إيه والخزنة فيها كام
+ *   ② محتاج منك    — أعمل إيه دلوقتي
+ *   ③ الأرقام      — ٤ أرقام عن اليوم، كل واحد بيفتح بنوده
+ *   ④ الشغل الجاري — متابعة، مش إنذار
+ *
+ * ⚠️ **ممنوع رقم أصمّ** (قاعدة المالك الدائمة): كل رقم فوق ليه `drill` بيجيب
+ *    بنوده من `DashboardController::drill` **عند الضغط بس**. البوب-أب القديم
+ *    (`#popStore` + `#dModal`) اتشال: كان بيرندر تفاصيل كل الأرقام مع **كل**
+ *    فتحة للصفحة، ونافذته كانت محلية بلا حبس تركيز.
+ *
+ * ⚠️ **اللي اتشال عن قصد:** التحية والوقت (بتاخد شاشة وما بتقولش حاجة) ·
+ *    لوحة المناديب المفصّلة (بقت رقم في ③ + صف في ② + نافذة تفاصيل؛ مكانها
+ *    الطبيعي `/rep-custody`) · قسم «آخر ما اتسجّل» (بقى نافذة من ترويسة ④،
+ *    فاستعلامه ما بقاش بيتدفع مع كل فتحة).
+ */
 use App\Core\App;
-use App\Models\Permit;
 
-/* تحية حسب الوقت */
-$h = (int) date('H');
-$greet = $h < 12 ? 'صباح الخير' : ($h < 17 ? 'نهارك سعيد' : 'مساء الخير');
-$company = App::setting('company_name', 'شركة المتوكل');
+require __DIR__ . '/_rows.php';   // مُصيّرا الصفوف — مشتركان مع نوافذ التفاصيل
+
 $cur = App::setting('currency', 'ج.م');
-$isToday = ($date === date('Y-m-d'));
-
-/* بطاقات المؤشرات — **أرقام النهاردة بس** (المرحلة ٤).
-   كانوا ٦ وكله بنفس الوزن. اللي اتشال منهم مكانه أوضح دلوقتي:
-     • «جاهز للفوترة» بقى صف تصرّف في «محتاج منك» فوق.
-     • «أذونات مفتوحة» له قايمة كاملة تحت مباشرةً (③).
-   بدون نولون وبدون «المتبقي للعملاء» — قرار صاحب المشروع. */
-$kpis = [
-  ['expenses',     'مصروفات اليوم',   'red',    'trending-down', $daily['expenses'],     1, $cur,    'مصروفات '.dfmt($date)],
-  ['receipts',     'إيصالات اليوم',   'gold',   'clipboard',     $daily['receipts_cnt'], 0, 'إيصال', 'إيصالات '.dfmt($date)],
-  ['custody',      'خزنة المكتب',     'purple', 'briefcase',     $custody,               1, $cur,    'تفاصيل خزنة المكتب'],
-];
-/* عهدة المناديب — كارت رابع يظهر بس لو الوحدة متاحة (v35) */
-$rp = $repsPanel;
-if ($rp['available']) {
-  $kpis[] = ['reps','برّه مع المناديب','sader','users',$rp['totals']['outstanding'],1,$cur,'متابعة عهدة المناديب ومدخلاتهم'];
-}
-
-/* خريطة أنواع سجل النشاط */
-$kindMeta = [
-  'bawalis'    => ['truck',    'بوليصة',      'navy',  fn($r)=>url('bawalis/'.$r['id'])],
-  /* أرشيف: مفيش صفحة لـshamil فالصف بيتعرض بلا رابط بدل ما يوصّل 404 */
-  'shamil'     => ['layers',   'فاتورة (أرشيف)', 'teal',  fn($r)=>null],
-  'takhlis'    => ['clipboard','شهادة تخليص',  'purple',fn($r)=>url('takhlis/'.$r['id'].'/edit')],
-  'generators' => ['cpu',      'مولدات',       'gold',  fn($r)=>url('generators/'.$r['id'].'/edit')],
-  'permits'    => ['folder',   'إصدار',        'green', fn($r)=>url('permits/'.$r['id'])],
-  'payment'    => ['banknote', 'سداد',          'green', fn($r)=>url('settlements')],
-];
-
-/* ── مُصيّرات مشتركة (لتفادي التكرار بين اللوحات والبوب-أب) ── */
-$rowPermit = function(array $p, string $mode) {
-  $th = Permit::theme($p['permit_type']);
-  ob_start(); ?>
-  <?php if ($mode==='ready'): ?><div class="d-row"><?php else: ?><a class="d-row" href="<?= url('permits/'.$p['id']) ?>"><?php endif; ?>
-    <span class="d-type <?= e($th['cls']) ?>" title="<?= e($th['full']) ?>"><?= e($th['arrow']) ?></span>
-    <div class="d-row-body">
-      <div class="d-row-t"><b><?= e($p['party']) ?></b><?php if (!empty($p['permit_no'])): ?><span class="d-ref">#<?= e($p['permit_no']) ?></span><?php endif; ?></div>
-      <div class="d-row-m">
-        <?php if (!empty($p['ct_label'])): ?><span class="d-cchip"><?= icon('package',12) ?> <?= e($p['ct_label']) ?></span><?php endif; ?>
-        <?php if ($mode==='ready'): ?><span><?= icon('truck',12) ?> <?= intf($p['bills']) ?> بوليصة</span><span><?= icon('calendar',12) ?> <?= e(dfmt($p['permit_date'])) ?></span>
-        <?php else: ?><span><?= icon('layers',12) ?> <?= intf($p['stages']) ?> بند</span><span><?= icon('clock',12) ?> <?= e(dfmt($p['last_activity'])) ?></span><?php endif; ?>
-      </div>
-    </div>
-    <?php if ($mode==='ready'): ?><a class="d-act-btn green" href="<?= url('permits/'.$p['id'].'/invoice') ?>">فوترة <?= icon('chevron',13) ?></a></div>
-    <?php else: ?><span class="d-go"><?= icon('chevron',16) ?></span></a><?php endif; ?>
-  <?php return ob_get_clean();
-};
-$rowFeed = function(array $f, int $i = 0) {
-  $rc = !empty($f['is_receipt']);
-  ob_start(); ?>
-  <div class="d-feed-row" style="--i:<?= $i ?>">
-    <span class="d-feed-ic <?= $rc?'rc':'ex' ?>"><?= icon($rc?'clipboard':'trending-down',16) ?></span>
-    <div class="d-feed-body">
-      <div class="d-feed-t"><b><?= e($f['label'] ?: ($rc?'إيصال':'مصروف')) ?></b>
-        <?php if ($f['ref_kind']==='permit' && !empty($f['ref'])): ?><span class="d-feed-ref permit"><?= icon('folder',11) ?> إذن #<?= e($f['ref']) ?></span>
-        <?php elseif ($f['ref_kind']==='bill' && !empty($f['ref'])): ?><span class="d-feed-ref bill"><?= icon('truck',11) ?> بوليصة #<?= e($f['ref']) ?></span>
-        <?php else: ?><span class="d-feed-ref manual"><?= icon('wallet',11) ?> يدوي</span><?php endif; ?>
-      </div>
-      <span class="d-feed-note"><?= e(($f['owner'] ? $f['owner'].' — ' : '').($f['note'] ?: '')) ?: '—' ?></span>
-    </div>
-    <div class="d-feed-side"><b class="<?= $rc?'rc':'ex' ?>"><?= money0($f['amount']) ?></b><span><?= e(dfmt($f['d'])) ?></span></div>
-  </div>
-  <?php return ob_get_clean();
-};
-
-/* صف مُدخَل مندوب — مشترك بين اللوحة والبوب-أب */
-$subMeta = [
-  'pending'  => ['hourglass',    'مستنّي',  'wait'],
-  'approved' => ['check-circle', 'معتمد',   'ok'],
-  'rejected' => ['alert',        'مرفوض',   'no'],
-];
-$rowSub = function(array $s) use ($subMeta) {
-  [$sic,$slbl,$scls] = $subMeta[$s['status']] ?? ['clock','—','wait'];
-  $isRc = ($s['kind'] === 'receipt');
-  ob_start(); ?>
-  <div class="rp-sub <?= $scls ?>">
-    <span class="rp-sub-ic <?= $isRc?'rc':'ex' ?>"><?= icon($isRc?'clipboard':'trending-down',15) ?></span>
-    <div class="rp-sub-body">
-      <div class="rp-sub-t">
-        <b><?= e($s['note'] ?: ($isRc?'إيصال':'مصروف')) ?></b>
-        <?php if ((int)($s['qty'] ?? 1) > 1): ?><span class="rp-qty">×<?= intf($s['qty']) ?></span><?php endif; ?>
-        <?php if (!empty($s['photo'])): ?><span class="rp-cam" title="مرفق صورة">📎</span><?php endif; ?>
-      </div>
-      <div class="rp-sub-m">
-        <span class="rp-who"><?= icon('user',11) ?> <?= e($s['rep_name']) ?></span>
-        <?php if (!empty($s['permit_no'])): ?>
-          <a class="rp-ref" href="<?= url('permits/'.$s['permit_id']) ?>"><?= icon('folder',11) ?> إذن #<?= e($s['permit_no']) ?></a>
-        <?php endif; ?>
-        <span><?= icon('calendar',11) ?> <?= e(dfmt($s['entry_date'])) ?></span>
-      </div>
-      <?php if ($s['status']==='rejected' && !empty($s['review_note'])): ?>
-        <span class="rp-why"><?= icon('alert',11) ?> <?= e($s['review_note']) ?></span>
-      <?php endif; ?>
-    </div>
-    <div class="rp-sub-side">
-      <b><?= money0($s['amount']) ?></b>
-      <span class="rp-pill <?= $scls ?>"><?= icon($sic,11) ?> <?= e($slbl) ?></span>
-    </div>
-  </div>
-  <?php return ob_get_clean();
-};
+$rp  = $repsPanel;
+$drill = static fn (string $what): string => url('dashboard/drill/' . $what);
 ?>
 <div class="dash2">
 
-<!-- ═══════════════ ① محتاج منك — أول حاجة تشوفها ═══════════════ -->
-<?php
-/* المرحلة ٤: الداشبورد بقى يجاوب على «أعمل إيه دلوقتي؟» الأول.
-   المصدر هو **نفس** مجمّع الإشعارات بتاع الجرس والشارات (App\Models\Notification)
-   فمستحيل الأرقام تختلف، والاستدعاء متكاش في الجلسة 30 ثانية. */
-$todo = \App\Models\Notification::feed();
-?>
-<section class="d-hero compact">
-  <div class="d-hero-glow"></div>
-  <div class="d-hero-left">
-    <span class="d-hero-eyebrow"><?= icon('sparkles',14) ?> <?= e($company) ?></span>
-    <h1 class="d-hero-title"><?= e($greet) ?> <span class="wave">👋</span></h1>
-    <div class="d-hero-chips">
-      <span class="d-hchip <?= $isToday?'':'warn' ?>"><?= icon('calendar',14) ?> <?= e(dfmt($date)) ?><?= $isToday?' · النهاردة':'' ?></span>
-      <button type="button" class="d-hchip quick" id="quickEntryOpen"><?= icon('plus',14) ?> إدخال سريع للإيصالات والمصاريف</button>
-    </div>
-  </div>
-</section>
+<?php /* ═══════════ ① اليوم — أول سؤال في دماغ المالك ═══════════ */ ?>
+<?php partial('day_bar', [
+  'day'    => $date,
+  'locked' => $locked,
+  'note'   => $locked
+      ? 'اليوم ده اتقفل — الأرقام مثبَّتة والكتابة عليه مرفوضة.'
+      : 'كل الأرقام والقوايم تحت عن اليوم ده.',
+  'facts'  => [[
+    'label' => 'خزنة المكتب',
+    'value' => money0($custody) . ' ' . $cur,
+    'tone'  => $custody < 0 ? 'neg' : '',
+  ]],
+  'actions' => static function () {
+    ?><button type="button" class="btn gold" id="quickEntryOpen"><?= icon('plus', 15) ?> إدخال سريع</button><?php
+  },
+]); ?>
 
+<?php /* ═══════════ ② محتاج منك — «أعمل إيه دلوقتي؟» ═══════════
+   المصدر هو **نفس** مجمّع الإشعارات بتاع الجرس وشارات القائمة
+   (App\Models\Notification) فمستحيل الأرقام تختلف بين التلاتة. */ ?>
+<?php $todo = \App\Models\Notification::feed(); ?>
 <div class="d-todo mb<?= $todo['count'] ? '' : ' clear' ?>">
   <div class="d-todo-head">
-    <?= icon('check-circle',18) ?>
+    <?= icon('check-circle', 18) ?>
     <b>محتاج منك</b>
     <?php if ($todo['count']): ?><span class="d-badge red"><?= intf($todo['count']) ?></span><?php endif; ?>
   </div>
   <?php if (!$todo['count']): ?>
-    <div class="d-todo-empty"><?= icon('check',22) ?><b>كله تمام النهاردة ✓</b><span>مفيش حاجة مستنية منك.</span></div>
+    <div class="d-todo-empty"><?= icon('check', 22) ?><b>كله تمام النهاردة</b><span>مفيش حاجة مستنية منك.</span></div>
   <?php else: ?>
     <div class="d-todo-list">
       <?php foreach ($todo['items'] as $t): ?>
         <a class="d-todo-row <?= e($t['kind']) ?>" href="<?= e($t['url']) ?>">
           <span class="d-todo-ic"><?= icon($t['icon'], 18) ?></span>
           <span class="d-todo-tx"><b><?= e($t['title']) ?></b><span><?= e($t['body']) ?></span></span>
-          <span class="d-todo-go"><?= icon('chevron',16) ?></span>
+          <span class="d-todo-go"><?= icon('chevron', 16) ?></span>
         </a>
       <?php endforeach; ?>
     </div>
   <?php endif; ?>
 </div>
 
-<!-- ═══════════════ مؤشرات (عدّاد متحرك، تفتح بوب-أب) ═══════════════ -->
-<div class="d-kpis <?= count($kpis)>=4 ? 'four' : 'three' ?>">
-  <?php foreach ($kpis as [$pop,$lbl,$cls,$ic,$val,$dec,$suf,$ttl]): ?>
-  <button type="button" class="d-kpi <?= $cls ?>" data-pop="<?= e($pop) ?>" data-title="<?= e($ttl) ?>">
-    <span class="d-kpi-ic"><?= icon($ic,20) ?></span>
-    <div class="d-kpi-val"><span class="count" data-to="<?= (float)$val ?>" data-dec="<?= $dec ?>">0</span><?php if ($suf): ?><span class="d-kpi-suf"><?= e($suf) ?></span><?php endif; ?></div>
-    <div class="d-kpi-lbl"><?= e($lbl) ?> <span class="d-kpi-eye"><?= icon('search',12) ?></span></div>
-  </button>
-  <?php endforeach; ?>
-</div>
+<?php /* ═══════════ ③ الأرقام — ٤ بس، وكلها عن اليوم ═══════════
+   الرقم اللي مالوش تصرّف وراه = ضوضاء. «جاهز للفوترة» بقى صف في ②
+   وقايمة في ④، و«أذونات مفتوحة» ليها لوحها هي كمان. */ ?>
+<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($daily, $custody, $rp, $cur, $date, $drill) { ?>
+  <?php partial('stat', [
+    'label' => 'مصروفات اليوم', 'value' => money0($daily['expenses']), 'unit' => $cur,
+    'icon' => 'trending-down', 'tone' => 'red',
+    'drill' => $drill('expenses'), 'title' => 'مصروفات ' . dfmt($date),
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'إيصالات اليوم', 'value' => intf($daily['receipts_cnt']), 'unit' => 'إيصال',
+    'icon' => 'clipboard', 'tone' => 'gold',
+    'drill' => $drill('receipts'), 'title' => 'إيصالات ' . dfmt($date),
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'خزنة المكتب', 'value' => money0($custody), 'unit' => $cur,
+    'icon' => 'briefcase', 'tone' => 'purple', 'secret' => true,
+    'drill' => $drill('custody'), 'title' => 'حركة خزنة المكتب',
+  ]); ?>
+  <?php if ($rp['available']): ?>
+    <?php partial('stat', [
+      'label' => 'برّه مع المناديب', 'value' => money0($rp['totals']['outstanding']), 'unit' => $cur,
+      'icon' => 'users', 'tone' => 'sader', 'secret' => true,
+      'drill' => $drill('reps'), 'title' => 'عهدة المناديب — مندوبًا مندوبًا',
+    ]); ?>
+  <?php else: ?>
+    <?php partial('stat', [
+      'label' => 'أذونات مفتوحة', 'value' => intf($permits['open']), 'unit' => 'إذن',
+      'icon' => 'folder', 'tone' => 'navy',
+      'drill' => $drill('permits_open'), 'title' => 'الأذونات المفتوحة',
+    ]); ?>
+  <?php endif; ?>
+<?php }]); ?>
 
-<!-- ═══════════════ جاهز للفوترة + أذونات مفتوحة ═══════════════ -->
-<div class="d-grid2 mb">
-  <div class="d-card">
-    <div class="d-card-head">
-      <h3><?= icon('receipt',18) ?> جاهز للفوترة<?php if ($readySum['count']>0): ?><span class="d-badge red"><?= intf($readySum['count']) ?></span><?php endif; ?></h3>
-      <button type="button" class="btn ghost sm" data-pop="ready" data-title="الأذونات الجاهزة للفوترة">عرض التفاصيل <?= icon('chevron',15) ?></button>
-    </div>
-    <div class="d-list" id="dashReadyList">
-      <?php if (!$ready): ?>
-        <div class="d-empty"><?= icon('check',26) ?><b>تمام!</b><span>مفيش أذونات مُغلقة مستنية فاتورة.</span></div>
-      <?php else: foreach (array_slice($ready,0,8) as $p) echo $rowPermit($p,'ready'); endif; ?>
-    </div>
-  </div>
-  <div class="d-card">
-    <div class="d-card-head">
-      <h3><?= icon('folder',18) ?> أذونات مفتوحة <span class="d-badge navy"><?= intf($permits['open']) ?></span></h3>
-      <button type="button" class="btn ghost sm" data-pop="permits_open" data-title="الأذونات المفتوحة">عرض التفاصيل <?= icon('chevron',15) ?></button>
-    </div>
-    <div class="d-list" id="dashOpenList">
-      <?php if (!$openList): ?>
-        <div class="d-empty"><?= icon('folder',26) ?><b>لا يوجد</b><span>مفيش أذونات مفتوحة حاليًا.</span></div>
-      <?php else: foreach (array_slice($openList,0,8) as $p) echo $rowPermit($p,'open'); endif; ?>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════ عهدة المناديب ومدخلاتهم (قراءة فقط؛ الصرف المعتمد يدخل الخزنة) ═══════════════ -->
-<?php if ($rp['available']): $rt = $rp['totals']; $rd = $rp['day']; ?>
+<?php /* ═══════════ ④ الشغل الجاري — متابعة مش إنذار ═══════════ */ ?>
 <div class="d-sec-head">
-  <?= icon('users',17) ?><span>عهدة المناديب ومدخلاتهم</span>
-  <?php if ($rt['pending_cnt']>0): ?><em class="d-sec-year alert"><?= intf($rt['pending_cnt']) ?> مستنّي المراجعة</em><?php endif; ?>
+  <?= icon('layers', 17) ?><span>الشغل الجاري</span>
+  <button type="button" class="btn ghost sm d-sec-act"
+          data-drill="<?= e($drill('activity')) ?>" data-drill-title="آخر ما اتسجّل في النظام">
+    <?= icon('clock', 14) ?> آخر ما اتسجّل
+  </button>
 </div>
 
-<div class="rp-panel mb" id="dashRepsPanel">
-  <!-- شريط الملخّص -->
-  <div class="rp-strip">
-    <div class="rp-stat"><span><?= icon('wallet',15) ?> نازل للمناديب</span><b><?= money0($rt['deposits']) ?></b></div>
-    <div class="rp-stat"><span><?= icon('trending-down',15) ?> مصروف معتمد</span><b class="ex"><?= money0($rt['spent']) ?></b></div>
-    <div class="rp-stat"><span><?= icon('hourglass',15) ?> مستنّي المراجعة</span><b class="wait"><?= money0($rt['pending_sum']) ?><small><?= intf($rt['pending_cnt']) ?> بند</small></b></div>
-    <div class="rp-stat hi"><span><?= icon('users',15) ?> برّه مع المناديب</span><b><?= money0($rt['outstanding']) ?><small><?= intf($rt['reps']) ?> مندوب</small></b></div>
-  </div>
-
-  <div class="rp-grid">
-    <!-- كروت المناديب -->
-    <div class="d-card">
-      <div class="d-card-head">
-        <h3><?= icon('briefcase',18) ?> أرصدة العهدة<?php if ($rt['low']>0): ?><span class="d-badge red"><?= intf($rt['low']) ?> محتاج تنزيل</span><?php endif; ?></h3>
-        <a class="btn ghost sm" href="<?= url('rep-custody') ?>">إدارة العهدة <?= icon('chevron',15) ?></a>
-      </div>
-      <div class="rp-cards">
-        <?php if (!$rp['reps']): ?>
-          <div class="d-empty"><?= icon('users',26) ?><b>مفيش عهدة نازلة</b><span>نزّل عهدة لأي مندوب من صفحة عهدة المناديب.</span></div>
-        <?php else: foreach ($rp['reps'] as $c): ?>
-        <a class="rp-card<?= $c['low']?' low':'' ?>" href="<?= url('rep-custody/'.$c['id']) ?>">
-          <div class="rp-card-top">
-            <span class="rp-av"><?= e(mb_substr(trim($c['name']),0,1,'UTF-8')) ?></span>
-            <div class="rp-id">
-              <b><?= e($c['name']) ?></b>
-              <span><?php if ($c['last_spend']): ?>آخر حركة <?= e(dfmt($c['last_spend'])) ?><?php else: ?>لسه مفيش حركة<?php endif; ?></span>
-            </div>
-            <div class="rp-bal">
-              <b class="<?= $c['balance']>0?'pos':($c['balance']<0?'neg':'') ?>"><?= money0($c['balance']) ?></b>
-              <span>فاضل معاه</span>
-            </div>
-          </div>
-          <!-- شريط استهلاك العهدة: مصروف / مستنّي / مرتجع -->
-          <div class="rp-bar" title="نازل <?= money0($c['deposits']) ?> · مصروف <?= money0($c['spent']) ?>">
-            <i class="sp" style="width:<?= $c['pc_spent'] ?>%"></i>
-            <i class="pd" style="width:<?= $c['pc_pending'] ?>%"></i>
-            <i class="rt" style="width:<?= $c['pc_return'] ?>%"></i>
-          </div>
-          <div class="rp-card-foot">
-            <span class="rp-tag"><?= icon('wallet',11) ?> نازل <?= money0($c['deposits']) ?></span>
-            <span class="rp-tag ex"><?= icon('trending-down',11) ?> صرف <?= money0($c['spent']) ?></span>
-            <?php if ($c['pending_cnt']>0): ?><span class="rp-tag wait"><?= icon('hourglass',11) ?> <?= intf($c['pending_cnt']) ?> مستنّي · <?= money0($c['pending_sum']) ?></span><?php endif; ?>
-            <?php if ($c['low']): ?><span class="rp-tag low"><?= icon('alert',11) ?> محتاج تنزيل</span><?php endif; ?>
-          </div>
-        </a>
-        <?php endforeach; endif; ?>
-      </div>
-    </div>
-
-    <!-- آخر المدخلات -->
-    <div class="d-card">
-      <div class="d-card-head">
-        <h3><?= icon('inbox',18) ?> آخر مدخلات المناديب<?php if ($rt['pending_cnt']>0): ?><span class="d-badge red"><?= intf($rt['pending_cnt']) ?></span><?php endif; ?></h3>
-        <a class="btn ghost sm" href="<?= url('rep-custody/inbox') ?>">صندوق المراجعة <?= icon('chevron',15) ?></a>
-      </div>
-      <div class="rp-day">
-        <div><span><?= icon('send',13) ?> اتبعت في <?= e(dfmt($date)) ?></span><b><?= intf($rd['sent_cnt']) ?> بند · <?= money0($rd['sent_sum']) ?></b></div>
-        <div><span><?= icon('check-circle',13) ?> معتمد بتاريخه</span><b class="ok"><?= intf($rd['paid_cnt']) ?> بند · <?= money0($rd['paid_sum']) ?></b></div>
-      </div>
-      <div class="rp-subs">
-        <?php if (!$rp['feed']): ?>
-          <div class="d-empty"><?= icon('inbox',26) ?><b>الصندوق فاضي</b><span>المناديب لسه مبعتوش أي بند من الموبايل.</span></div>
-        <?php else: foreach (array_slice($rp['feed'],0,7) as $s) echo $rowSub($s); endif; ?>
-      </div>
-    </div>
-  </div>
+<div class="d-grid2 mb">
+  <?php partial('panel', [
+    'title' => 'جاهز للفوترة', 'icon' => 'receipt', 'scroll' => true,
+    'badge' => $readySum['count'] > 0 ? ['text' => intf($readySum['count']), 'tone' => 'red'] : null,
+    'action' => ['label' => 'عرض التفاصيل', 'drill' => $drill('ready'), 'title' => 'الأذونات الجاهزة للفوترة'],
+    'body' => function () use ($ready) {
+      if (!$ready) {
+        partial('empty', ['emoji' => '✅', 'title' => 'تمام!', 'note' => 'مفيش أذونات مُغلقة مستنية فاتورة.']);
+        return;
+      }
+      foreach (array_slice($ready, 0, 8) as $p) { dash_permit_row($p, true); }
+    },
+  ]); ?>
+  <?php partial('panel', [
+    'title' => 'أذونات مفتوحة', 'icon' => 'folder', 'scroll' => true,
+    'badge' => ['text' => intf($permits['open']), 'tone' => 'navy'],
+    'action' => ['label' => 'عرض التفاصيل', 'drill' => $drill('permits_open'), 'title' => 'الأذونات المفتوحة'],
+    'body' => function () use ($openList) {
+      if (!$openList) {
+        partial('empty', [
+          'emoji' => '📁', 'title' => 'مفيش أذونات مفتوحة',
+          'note' => 'افتح إذنًا جديدًا من شاشة الأذونات.',
+          'action' => ['label' => 'الأذونات والشهادات', 'url' => url('permits')],
+        ]);
+        return;
+      }
+      foreach (array_slice($openList, 0, 8) as $p) { dash_permit_row($p, false); }
+    },
+  ]); ?>
 </div>
-<?php endif; ?>
 
-<!-- ═══════════════ سجل المصروفات/الإيصالات + الملاحظات ═══════════════ -->
 <div class="d-grid-feed mb">
-  <div class="d-card">
-    <div class="d-card-head">
-      <h3><?= icon('trending-down',18) ?> فلوس <?= e(dfmt($date)) ?><small class="d-head-sub">المصروفات والإيصالات على تاريخ العمل</small></h3>
-      <a class="btn ghost sm" href="<?= url('expenses') ?>">سجل المصروفات <?= icon('chevron',15) ?></a>
-    </div>
-    <div class="d-feed">
-      <?php if (!$feed): ?>
-        <div class="d-empty"><?= icon('trending-down',26) ?><b>لا يوجد</b><span>مفيش مصروفات أو إيصالات على هذا التاريخ.</span></div>
-      <?php else: foreach ($feed as $i => $f) echo $rowFeed($f,$i); endif; ?>
-    </div>
-  </div>
+  <?php partial('panel', [
+    'title' => 'فلوس ' . dfmt($date), 'icon' => 'trending-down', 'scroll' => true,
+    'sub' => 'المصروفات والإيصالات على تاريخ العمل',
+    'action' => ['label' => 'سجل المصروفات', 'url' => url('expenses')],
+    'body' => function () use ($feed, $date) {
+      if (!$feed) {
+        partial('empty', [
+          'emoji' => '💸', 'title' => 'مفيش حركة فلوس في ' . dfmt($date),
+          'note' => 'مفيش مصروفات ولا إيصالات على التاريخ ده.',
+        ]);
+        return;
+      }
+      foreach ($feed as $f) { dash_feed_row($f); }
+    },
+  ]); ?>
 
   <div class="d-card d-notes">
-    <?php $pending = 0; foreach ($notes as $n) if (empty($n['done'])) $pending++; ?>
-    <div class="d-card-head"><h3><?= icon('file-text',18) ?> ملاحظات</h3><span class="chip"><?= intf($pending) ?><?php if (count($notes) > $pending): ?> / <?= intf(count($notes)) ?><?php endif; ?></span></div>
+    <?php $pending = 0; foreach ($notes as $n) { if (empty($n['done'])) { $pending++; } } ?>
+    <div class="d-card-head"><h3><?= icon('file-text', 18) ?> ملاحظات</h3><span class="chip"><?= intf($pending) ?><?php if (count($notes) > $pending): ?> / <?= intf(count($notes)) ?><?php endif; ?></span></div>
     <form class="d-note-form no-confirm" method="post" action="<?= url('notes') ?>">
       <?= csrfField() ?>
       <textarea name="body" rows="2" maxlength="500" placeholder="اكتب تذكير أو ملاحظة سريعة…" required></textarea>
       <div class="d-note-tools">
         <div class="d-note-colors">
           <?php foreach (['gold','navy','green','red','teal','purple'] as $ci): ?>
-          <label class="d-note-color <?= $ci ?>"><input type="radio" name="color" value="<?= $ci ?>" <?= $ci==='gold'?'checked':'' ?>><span></span></label>
+          <label class="d-note-color <?= $ci ?>"><input type="radio" name="color" value="<?= $ci ?>" <?= $ci === 'gold' ? 'checked' : '' ?>><span></span></label>
           <?php endforeach; ?>
         </div>
-        <button class="btn sm" type="submit"><?= icon('plus',15) ?> إضافة</button>
+        <button class="btn sm" type="submit"><?= icon('plus', 15) ?> إضافة</button>
       </div>
     </form>
     <div class="d-note-list">
       <?php if (!$notes): ?>
-        <div class="d-empty sm"><?= icon('file-text',22) ?><span>مفيش ملاحظات. أضف أول واحدة.</span></div>
+        <div class="d-empty sm"><?= icon('file-text', 22) ?><span>مفيش ملاحظات. أضف أول واحدة.</span></div>
       <?php else: foreach ($notes as $n): $done = !empty($n['done']); ?>
-      <div class="d-note <?= e($n['color'] ?: 'gold') ?><?= $done ? ' done' : '' ?>" id="note-<?= (int)$n['id'] ?>">
+      <div class="d-note <?= e($n['color'] ?: 'gold') ?><?= $done ? ' done' : '' ?>" id="note-<?= (int) $n['id'] ?>">
         <div class="d-note-main">
-          <form method="post" action="<?= url('notes/'.$n['id'].'/toggle') ?>" class="no-confirm d-note-check-f">
+          <form method="post" action="<?= url('notes/' . $n['id'] . '/toggle') ?>" class="no-confirm d-note-check-f">
             <?= csrfField() ?>
-            <button class="d-note-check" type="submit" title="<?= $done?'إلغاء الإكمال':'تعليم كمكتمل' ?>"><?= $done ? icon('check-circle',16) : '' ?></button>
+            <button class="d-note-check" type="submit" title="<?= $done ? 'إلغاء الإكمال' : 'تعليم كمكتمل' ?>"><?= $done ? icon('check-circle', 16) : '' ?></button>
           </form>
           <p><?= nl2br(e($n['body'])) ?></p>
         </div>
         <div class="d-note-foot">
-          <span><?= icon('clock',11) ?> <?php if ($done && $n['done_at']): ?>اكتملت <?= e(dfmt($n['done_at'])) ?><?php else: ?><?= e(dfmt($n['created_at'])) ?><?php endif; ?><?php if ($n['author']): ?> · <?= e($n['author']) ?><?php endif; ?></span>
+          <span><?= icon('clock', 11) ?> <?php if ($done && $n['done_at']): ?>اكتملت <?= e(dfmt($n['done_at'])) ?><?php else: ?><?= e(dfmt($n['created_at'])) ?><?php endif; ?><?php if ($n['author']): ?> · <?= e($n['author']) ?><?php endif; ?></span>
           <div class="d-note-actions">
-            <button type="button" class="d-note-ic" data-edit="<?= (int)$n['id'] ?>" title="تعديل"><?= icon('edit',13) ?></button>
-            <form method="post" action="<?= url('notes/'.$n['id'].'/delete') ?>" class="confirm-delete" data-confirm="حذف الملاحظة؟" style="margin:0">
+            <button type="button" class="d-note-ic" data-edit="<?= (int) $n['id'] ?>" title="تعديل"><?= icon('edit', 13) ?></button>
+            <form method="post" action="<?= url('notes/' . $n['id'] . '/delete') ?>" class="confirm-delete" data-confirm="حذف الملاحظة؟" style="margin:0">
               <?= csrfField() ?>
-              <button class="d-note-ic del" type="submit" title="حذف"><?= icon('trash',13) ?></button>
+              <button class="d-note-ic del" type="submit" title="حذف"><?= icon('trash', 13) ?></button>
             </form>
           </div>
         </div>
-        <!-- فورم التعديل (مخفي) -->
-        <form method="post" action="<?= url('notes/'.$n['id']) ?>" class="no-confirm d-note-edit" id="edit-<?= (int)$n['id'] ?>" hidden>
+        <form method="post" action="<?= url('notes/' . $n['id']) ?>" class="no-confirm d-note-edit" id="edit-<?= (int) $n['id'] ?>" hidden>
           <?= csrfField() ?>
           <textarea name="body" rows="2" maxlength="500" required><?= e($n['body']) ?></textarea>
           <div class="d-note-tools">
             <div class="d-note-colors">
               <?php foreach (['gold','navy','green','red','teal','purple'] as $ci): ?>
-              <label class="d-note-color <?= $ci ?>"><input type="radio" name="color" value="<?= $ci ?>" <?= ($n['color']?:'gold')===$ci?'checked':'' ?>><span></span></label>
+              <label class="d-note-color <?= $ci ?>"><input type="radio" name="color" value="<?= $ci ?>" <?= ($n['color'] ?: 'gold') === $ci ? 'checked' : '' ?>><span></span></label>
               <?php endforeach; ?>
             </div>
             <div class="d-note-edit-btns">
-              <button type="button" class="btn ghost sm" data-cancel="<?= (int)$n['id'] ?>">إلغاء</button>
-              <button type="submit" class="btn sm"><?= icon('check',14) ?> حفظ</button>
+              <button type="button" class="btn ghost sm" data-cancel="<?= (int) $n['id'] ?>">إلغاء</button>
+              <button type="submit" class="btn sm"><?= icon('check', 14) ?> حفظ</button>
             </div>
           </div>
         </form>
@@ -337,57 +224,7 @@ $todo = \App\Models\Notification::feed();
   </div>
 </div>
 
-<?php /* ═══ الرسوم اتنقلت للتقارير (المرحلة ٤) ═══
-   • «الأداء الشهري» و«توزيع المصروفات» كانوا **مكرَّرين حرفيًا** في /reports.
-   • «حجم العمليات — آخر ١٤ يوم» اتنقل لـ/reports.
-   • «المتبقي للعملاء» اتشال: بيخالف قرار صاحب المشروع الموثَّق إن الداشبورد
-     **بلا نولون وبلا «المتبقي للعملاء»** — رجع بالغلط في وقت ما. والمعلومة
-     موجودة أصلاً في /reports (Metrics::clientDebts).
-   المكسب: ٤ استعلامات ثقيلة اتشالت من كل فتحة للداشبورد. */ ?>
-
-<!-- ═══════════════ آخر الحركات ═══════════════ -->
-<div class="d-card mb" style="margin-top:16px">
-  <div class="d-card-head">
-    <h3><?= icon('clock',18) ?> آخر ما اتسجّل في النظام<small class="d-head-sub">أحدث السجلات من كل الوحدات — مش مربوط بتاريخ العمل</small></h3>
-    <a class="btn ghost sm" href="<?= url('search') ?>">بحث شامل <?= icon('chevron',15) ?></a>
-  </div>
-  <div class="activity">
-    <?php if (!$activity): ?>
-      <div class="empty">لا توجد عمليات مسجّلة بعد.</div>
-    <?php else: foreach ($activity as $a):
-      [$ic,$lbl,$col,$linkFn] = $kindMeta[$a['kind']] ?? ['file-text','عملية','slate',fn($r)=>null];
-      $link = $linkFn($a);
-      /* الصفوف الأرشيفية (shamil) مالهاش صفحة — تتعرض بلا رابط بدل ما
-         href="" يعيد تحميل نفس الصفحة ويوهم المستخدم إنها لينك مكسور. */
-      $tag = $link ? 'a' : 'div';
-    ?>
-    <<?= $tag ?> class="act <?= $col ?><?= $link ? '' : ' act-flat' ?>"<?= $link ? ' href="'.e($link).'"' : '' ?>>
-      <span class="act-ic"><?= icon($ic,18) ?></span>
-      <span class="act-body">
-        <span class="act-top"><b><?= e($lbl) ?></b><?php if ($a['ref'] && $a['ref']!=='—'): ?><span class="act-ref">#<?= e($a['ref']) ?></span><?php endif; ?></span>
-        <span class="act-sub"><?= e($a['party'] ?: 'بدون جهة') ?></span>
-      </span>
-      <span class="act-side">
-        <?php if ($a['kind']==='permits'): ?><b class="act-amt"><?= intf($a['amount']) ?> حاوية</b>
-        <?php elseif ($a['kind']==='payment'): ?><b class="act-amt pos">+ <?= money0($a['amount']) ?></b>
-        <?php else: ?><b class="act-amt"><?= e(dfmt($a['d'])) ?></b><?php endif; ?>
-        <span class="act-date"><?= e(dfmt($a['d'])) ?></span>
-      </span>
-    </<?= $tag ?>>
-    <?php endforeach; endif; ?>
-  </div>
-</div>
-
 </div><!-- /.dash2 -->
-
-<!-- ═══════════════ البوب-أب (المستهدف فقط) ═══════════════ -->
-<div class="d-modal" id="dModal" hidden>
-  <div class="d-modal-back" data-close></div>
-  <div class="d-modal-card" role="dialog" aria-modal="true">
-    <div class="d-modal-head"><h3 id="dModalTitle"></h3><button type="button" class="d-modal-x" data-close aria-label="إغلاق">✕</button></div>
-    <div class="d-modal-body" id="dModalBody"></div>
-  </div>
-</div>
 
 <!-- ═══════════════ الإدخال السريع الجماعي ═══════════════ -->
 <style>
@@ -463,67 +300,6 @@ $todo = \App\Models\Notification::feed();
 
 <datalist id="qeReceiptNames"><?php foreach($quickReceipts as $name): ?><option value="<?= e($name) ?>"><?php endforeach; ?></datalist>
 <datalist id="qeExpenseNames"><?php foreach($quickExpenses as $name): ?><option value="<?= e($name) ?>"><?php endforeach; ?></datalist>
-
-<div id="popStore" hidden>
-  <!-- أذونات مفتوحة -->
-  <div data-pop="permits_open">
-    <?php if (!$openList): ?><div class="d-empty"><?= icon('folder',26) ?><span>مفيش أذونات مفتوحة.</span></div>
-    <?php else: ?><div class="d-modal-strip"><?= icon('folder',14) ?> <b><?= intf($permits['open']) ?></b> إذن مفتوح · <b><?= intf($permits['containers']) ?></b> حاوية</div>
-      <div data-clone="#dashOpenList"></div><a class="btn ghost sm" style="margin:12px 14px" href="<?= url('permits') ?>">فتح متابعة كل الأذونات <?= icon('chevron',15) ?></a><?php endif; ?>
-  </div>
-  <!-- جاهز للفوترة -->
-  <div data-pop="ready">
-    <?php if (!$ready): ?><div class="d-empty"><?= icon('check',26) ?><b>تمام!</b><span>مفيش أذونات مستنية فاتورة.</span></div>
-    <?php else: ?><div class="d-modal-strip gold"><?= icon('receipt',14) ?> <b><?= intf($readySum['count']) ?></b> إذن مُغلق جاهز للفوترة · <b><?= intf($readySum['containers']) ?></b> حاوية</div>
-      <div data-clone="#dashReadyList"></div><a class="btn ghost sm" style="margin:12px 14px" href="<?= url('invoices/new') ?>">فتح كل الجاهز للفوترة <?= icon('chevron',15) ?></a><?php endif; ?>
-  </div>
-  <!-- مصروفات اليوم -->
-  <div data-pop="expenses">
-    <?php if (!$dayExp): ?><div class="d-empty"><?= icon('trending-down',26) ?><span>مفيش مصروفات على <?= e(dfmt($date)) ?>.</span></div>
-    <?php else: ?><div class="d-modal-strip red"><?= icon('trending-down',14) ?> <b><?= intf(count($dayExp)) ?></b> بند · إجمالي <b><?= money0($daily['expenses']) ?></b></div>
-      <div class="d-feed flat"><?php foreach (array_slice($dayExp,0,12) as $i=>$f) echo $rowFeed($f,$i); ?></div>
-      <?php if(count($dayExp)>12): ?><a class="btn ghost sm" style="margin:12px 14px" href="<?= url('expenses?from='.rawurlencode($date).'&to='.rawurlencode($date)) ?>">عرض سجل اليوم كاملًا <?= icon('chevron',15) ?></a><?php endif; ?><?php endif; ?>
-  </div>
-  <!-- إيصالات اليوم -->
-  <div data-pop="receipts">
-    <?php if (!$dayRec): ?><div class="d-empty"><?= icon('clipboard',26) ?><span>مفيش إيصالات على <?= e(dfmt($date)) ?>.</span></div>
-    <?php else: ?><div class="d-modal-strip gold"><?= icon('clipboard',14) ?> <b><?= intf($daily['receipts_cnt']) ?></b> إيصال · إجمالي <b><?= money0($daily['receipts_val']) ?></b></div>
-      <div class="d-feed flat"><?php foreach (array_slice($dayRec,0,12) as $i=>$f) echo $rowFeed($f,$i); ?></div>
-      <?php if(count($dayRec)>12): ?><a class="btn ghost sm" style="margin:12px 14px" href="<?= url('expenses?from='.rawurlencode($date).'&to='.rawurlencode($date)) ?>">عرض سجل اليوم كاملًا <?= icon('chevron',15) ?></a><?php endif; ?><?php endif; ?>
-  </div>
-  <!-- رصيد العهدة -->
-  <div data-pop="custody">
-    <div class="d-cust-hero"><span>الرصيد الحالي للعهدة</span><b class="<?= $custody<0?'neg':'pos' ?>"><?= money0($custody) ?></b></div>
-    <div class="d-cust-grid">
-      <div class="d-cust-tile"><span><?= icon('wallet',16) ?> عهد مضافة اليوم</span><b class="pos">+ <?= money0($custodyDay['topups_sum']) ?></b></div>
-      <div class="d-cust-tile"><span><?= icon('truck',16) ?> عهد سائقين اليوم</span><b><?= money0($custodyDay['drivers_sum']) ?></b></div>
-      <div class="d-cust-tile"><span><?= icon('trending-down',16) ?> مصروفات الأذونات اليوم</span><b class="neg">- <?= money0($custodyDay['day_expense']) ?></b></div>
-    </div>
-    <?php if ($custodyDay['topups'] || $custodyDay['drivers']): ?>
-    <div class="d-cust-list">
-      <?php foreach ($custodyDay['topups'] as $t): ?>
-      <div class="d-feed-row"><span class="d-feed-ic rc"><?= icon('wallet',16) ?></span><div class="d-feed-body"><div class="d-feed-t"><b>إضافة عهدة</b><?php if($t['driver']): ?><span class="d-feed-ref manual"><?= e($t['driver']) ?></span><?php endif; ?></div><span class="d-feed-note"><?= e($t['note'] ?: '—') ?></span></div><div class="d-feed-side"><b class="rc">+ <?= money0($t['amount']) ?></b><span><?= e(dfmt($t['d'])) ?></span></div></div>
-      <?php endforeach; foreach ($custodyDay['drivers'] as $t): ?>
-      <div class="d-feed-row"><span class="d-feed-ic ex"><?= icon('truck',16) ?></span><div class="d-feed-body"><div class="d-feed-t"><b>عهدة سائق</b><span class="d-feed-ref bill"><?= e($t['driver']) ?></span></div><span class="d-feed-note"><?= e($t['note'] ?: '—') ?></span></div><div class="d-feed-side"><b class="ex"><?= money0($t['amount']) ?></b><span><?= e(dfmt($t['d'])) ?></span></div></div>
-      <?php endforeach; ?>
-    </div>
-    <?php else: ?><div class="d-empty sm"><?= icon('briefcase',22) ?><span>مفيش حركة عهدة على <?= e(dfmt($date)) ?>.</span></div><?php endif; ?>
-    <a class="btn ghost sm" style="margin:12px 14px" href="<?= url('custody') ?>">فتح محفظة العهدة <?= icon('chevron',15) ?></a>
-  </div>
-  <!-- عهدة المناديب -->
-  <?php if ($rp['available']): $rt = $rp['totals']; ?>
-  <div data-pop="reps">
-    <div class="d-cust-hero"><span>الفلوس اللي برّه مع المناديب دلوقتي</span><b class="<?= $rt['outstanding']<0?'neg':'pos' ?>"><?= money0($rt['outstanding']) ?></b></div>
-    <div class="d-modal-strip">تنزيل العهدة لا يخصم من الخزنة؛ المصروف المعتمد يُخصم بتاريخ صرفه، والمرتجع لا يُضاف للخزنة.</div>
-    <div class="d-cust-grid">
-      <div class="d-cust-tile"><span><?= icon('wallet',16) ?> نازل للمناديب</span><b class="pos"><?= money0($rt['deposits']) ?></b></div>
-      <div class="d-cust-tile"><span><?= icon('trending-down',16) ?> مصروف معتمد</span><b class="neg">- <?= money0($rt['spent']) ?></b></div>
-      <div class="d-cust-tile"><span><?= icon('hourglass',16) ?> مستنّي المراجعة</span><b><?= money0($rt['pending_sum']) ?></b></div>
-    </div>
-    <a class="btn ghost sm" style="margin:12px 14px" href="<?= url('rep-custody') ?>">فتح عهدة المناديب <?= icon('chevron',15) ?></a>
-  </div>
-  <?php endif; ?>
-</div>
 
 <?php /* Chart.js (200KB) اتشال من الداشبورد مع الرسوم — بيتحمّل في /reports بس */ ?>
 <script>
@@ -675,35 +451,8 @@ $todo = \App\Models\Notification::feed();
   <?php if(!empty($_GET['quick'])): ?>open();<?php endif; ?>
 })();
 
-/* ── عدّاد متحرك ── */
-(function(){
-  const fmt=(v,dec)=>new Intl.NumberFormat('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec}).format(v);
-  document.querySelectorAll('.count').forEach(el=>{
-    const to=parseFloat(el.dataset.to)||0, dec=parseInt(el.dataset.dec)||0, dur=900; let s=null;
-    function step(ts){ if(!s)s=ts; const p=Math.min((ts-s)/dur,1),e=1-Math.pow(1-p,3);
-      el.textContent=fmt(to*e,dec); if(p<1)requestAnimationFrame(step); }
-    requestAnimationFrame(step);
-  });
-})();
-
 /* الشريط المتحرك اتشال (المرحلة ٤): كان بيعرض بند واحد ويلفّ كل ٣ ثواني،
    يعني بيخبّي معلومات ويجبر المستخدم يستنى بدل ما يقرا بسرعته. */
-
-/* ── البوب-أب ── */
-(function(){
-  const modal=document.getElementById('dModal'), body=document.getElementById('dModalBody'),
-        titleEl=document.getElementById('dModalTitle'), store=document.getElementById('popStore');
-  function open(key,title){ const src=store.querySelector('[data-pop="'+key+'"]'); if(!src)return;
-    body.innerHTML=src.innerHTML;body.querySelectorAll('[data-clone]').forEach(slot=>{const source=document.querySelector(slot.dataset.clone);if(!source)return;const clone=source.cloneNode(true);clone.removeAttribute('id');clone.classList.add('flat');slot.replaceWith(clone);});titleEl.textContent=title||''; modal.hidden=false;
-    document.body.style.overflow='hidden'; }
-  function close(){ modal.hidden=true; body.innerHTML=''; document.body.style.overflow=''; }
-  document.querySelectorAll('[data-pop]').forEach(el=>{
-    if(el.closest('#popStore')) return;
-    el.addEventListener('click',()=>open(el.dataset.pop, el.dataset.title));
-  });
-  modal.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',close));
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!modal.hidden)close(); });
-})();
 
 /* ── تعديل الملاحظات (إظهار/إخفاء الفورم) ── */
 (function(){

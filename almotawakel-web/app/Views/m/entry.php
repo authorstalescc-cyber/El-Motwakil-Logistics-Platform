@@ -1,6 +1,6 @@
 <?php
 /** @var array $permit @var array $old @var array $pocket @var array $errors
- *  @var array|null $submission @var string $draftKey */
+ *  @var array|null $submission @var string $draftKey @var string $workDate */
 $movs = $permit['movements'];
 $editing = !empty($submission);
 $o = fn(string $k, $d = '') => e((string) ($old[$k] ?? $d));
@@ -11,6 +11,9 @@ $receiptNotes = array_values(array_unique(\App\Models\Lookup::ofType('mv_receipt
 $expenseNotes = array_values(array_unique(\App\Models\Lookup::ofType('mv_expense')));
 $action = $editing ? url('m/entry/' . (int) $submission['id']) : url('m/permit/' . $permit['id']);
 $today = date('Y-m-d');
+// تاريخ البند الافتراضي = عهدة يوم العمل (وعند التعديل بيفضل تاريخ البند الأصلي)
+$wd = $workDate ?? $today;
+$wdToday = $wd === $today;
 ?>
 <!doctype html>
 <html lang="ar" dir="rtl">
@@ -161,10 +164,15 @@ $today = date('Y-m-d');
     </div>
 
     <div class="field" id="field-entry_date" <?= $err('entry_date') ? 'data-error="1"' : '' ?>>
-      <label for="d">تاريخ الدفع</label>
-      <input type="date" id="d" name="entry_date" required max="<?= e($today) ?>"
-             value="<?= $o('entry_date', $today) ?>" aria-describedby="err-entry_date"
-             <?= $err('entry_date') ? 'aria-invalid="true"' : '' ?>>
+      <?php if ($editing): ?>
+        <label for="d">تاريخ الدفع</label>
+        <input type="date" id="d" name="entry_date" required max="<?= e($today) ?>"
+               value="<?= $o('entry_date', $wd) ?>" aria-describedby="err-entry_date"
+               <?= $err('entry_date') ? 'aria-invalid="true"' : '' ?>>
+      <?php else: ?>
+        <?php /* v49: الخادم بيفرض يوم العمل — فالتاريخ عرض مش إدخال */ ?>
+        <?php $wdLabel = 'تاريخ الدفع — من عهدة يوم'; require __DIR__ . '/_workday.php'; ?>
+      <?php endif; ?>
       <p class="field-error" id="err-entry_date" <?= $err('entry_date') ? '' : 'hidden' ?>><?= e($err('entry_date')) ?></p>
     </div>
 
@@ -367,9 +375,10 @@ $today = date('Y-m-d');
     if (!note.value.trim()) { errors.note = 'اكتب البيان، زي تخصيص أو حمولة.'; }
     if (moneyValue() <= 0) { errors.unit_amount = 'اكتب المبلغ اللي دفعته.'; }
     var q = parseInt(qty.value, 10); if (!q || q < 1 || q > 10000) { errors.qty = 'الكمية لازم تكون من 1 لـ10000.'; }
-    var date = form.elements.entry_date.value;
-    if (!date) { errors.entry_date = 'اكتب تاريخ الدفع.'; }
-    else if (date > <?= js_json($today) ?>) { errors.entry_date = 'تاريخ الدفع ما ينفعش يكون في المستقبل.'; }
+    // v49: البند الجديد بلا خانة تاريخ (الخادم بيفرض يوم العمل) — نتحقق بس لو الخانة ظاهرة (وضع التعديل).
+    var dateEl = form.elements.entry_date;
+    if (dateEl && !dateEl.value) { errors.entry_date = 'اكتب تاريخ الدفع.'; }
+    else if (dateEl && dateEl.value > <?= js_json($today) ?>) { errors.entry_date = 'تاريخ الدفع ما ينفعش يكون في المستقبل.'; }
     var vc = document.getElementById('visaChk'), vcard = document.getElementById('visaCard');
     if (vc && vc.checked && vcard && !vcard.value) { errors.visa_card_id = 'اختر الكارت اللي دفعت بيه.'; }
     return errors;

@@ -76,6 +76,8 @@ class RepTransfer
         $date = trim((string) ($d['transfer_date'] ?? ''));
         if (!self::validDate($date)) { $errors['transfer_date'] = 'اكتب تاريخ تحويل صحيح.'; }
         elseif ($date > date('Y-m-d')) { $errors['transfer_date'] = 'تاريخ التحويل ما ينفعش يكون في المستقبل.'; }
+        // v49: التحويل بيحرّك عهدة يومه عند الطرفين، فاليوم المتقفل مرفوض.
+        elseif (($lock = RepCustody::dayLockReason($date)) !== null) { $errors['transfer_date'] = $lock; }
 
         $note = preg_replace('/\s+/u', ' ', trim((string) ($d['note'] ?? '')));
         if (mb_strlen($note) > 255) { $errors['note'] = 'الملاحظة لازم تكون 255 حرف أو أقل.'; }
@@ -170,41 +172,75 @@ class RepTransfer
             "SELECT * FROM rep_custody_transfers WHERE id = ? AND from_rep_id = ?", [$id, $fromRepId]);
     }
 
-    /** إجمالي اللي حوّله المندوب لغيره (يتخصم من عهدته). */
-    public static function outTotal(int $repId): float
+    /**
+     * إجمالي اللي حوّله المندوب لغيره (يتخصم من عهدته).
+     * $day (v49): يوم واحد بالظبط = تحويلات عهدة اليوم ده بس. null = كل الأيام.
+     */
+    public static function outTotal(int $repId, ?string $day = null): float
     {
-        if (!self::available()) { return 0.0; }
-        return round((float) Database::scalar(
-            "SELECT COALESCE(SUM(amount),0) FROM rep_custody_transfers WHERE from_rep_id = ?", [$repId]), 2);
+        return self::sideTotal('from_rep_id', $repId, $day);
     }
 
     /** إجمالي اللي استلمه المندوب من غيره (يتزاد لعهدته). */
-    public static function inTotal(int $repId): float
+    public static function inTotal(int $repId, ?string $day = null): float
+    {
+        return self::sideTotal('to_rep_id', $repId, $day);
+    }
+
+    private static function sideTotal(string $col, int $repId, ?string $day): float
     {
         if (!self::available()) { return 0.0; }
+        $args = [$repId]; $dayW = '';
+        if ($day !== null && $day !== '') { $dayW = ' AND transfer_date = ?'; $args[] = $day; }
         return round((float) Database::scalar(
-            "SELECT COALESCE(SUM(amount),0) FROM rep_custody_transfers WHERE to_rep_id = ?", [$repId]), 2);
+            "SELECT COALESCE(SUM(amount),0) FROM rep_custody_transfers WHERE $col = ?$dayW", $args), 2);
     }
 
     /** [rep_id => إجمالي محوَّل] — لصفحة الكروت بلا استعلام لكل مندوب. */
-    public static function outTotalsByRep(): array
+    public static function outTotalsByRep(?string $day = null): array
     {
-        return self::totalsBy('from_rep_id');
+        return self::totalsBy('from_rep_id', $day);
     }
 
     /** [rep_id => إجمالي مستلَم] — لصفحة الكروت. */
-    public static function inTotalsByRep(): array
+    public static function inTotalsByRep(?string $day = null): array
     {
-        return self::totalsBy('to_rep_id');
+        return self::totalsBy('to_rep_id', $day);
     }
 
-    private static function totalsBy(string $col): array
+    /** [تاريخ => إجمالي محوَّل] لمندوب واحد — لكشف «عهدة كل يوم» (v49). */
+    public static function outTotalsByDay(int $repId): array
+    {
+        return self::totalsByDay('from_rep_id', $repId);
+    }
+
+    /** [تاريخ => إجمالي مستلَم] لمندوب واحد — لكشف «عهدة كل يوم» (v49). */
+    public static function inTotalsByDay(int $repId): array
+    {
+        return self::totalsByDay('to_rep_id', $repId);
+    }
+
+    private static function totalsBy(string $col, ?string $day = null): array
+    {
+        if (!self::available()) { return []; }
+        $args = []; $dayW = '';
+        if ($day !== null && $day !== '') { $dayW = ' WHERE transfer_date = ?'; $args[] = $day; }
+        $out = [];
+        foreach (Database::all(
+            "SELECT $col rid, SUM(amount) total FROM rep_custody_transfers$dayW GROUP BY $col", $args) as $r) {
+            $out[(int) $r['rid']] = round((float) $r['total'], 2);
+        }
+        return $out;
+    }
+
+    private static function totalsByDay(string $col, int $repId): array
     {
         if (!self::available()) { return []; }
         $out = [];
         foreach (Database::all(
-            "SELECT $col rid, SUM(amount) total FROM rep_custody_transfers GROUP BY $col") as $r) {
-            $out[(int) $r['rid']] = round((float) $r['total'], 2);
+            "SELECT transfer_date d, SUM(amount) total FROM rep_custody_transfers
+             WHERE $col = ? GROUP BY transfer_date", [$repId]) as $r) {
+            $out[(string) $r['d']] = round((float) $r['total'], 2);
         }
         return $out;
     }

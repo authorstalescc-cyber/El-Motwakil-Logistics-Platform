@@ -2,7 +2,7 @@
 /** شاشة النثرية (v39) — مصروف عام **مش مربوط بأي إذن**.
  *  الفرق عن m/entry.php: مفيش إذن ولا حركة ولا نوع بند — نثرية وخلاص.
  *  @var array $old @var array $errors @var array|null $submission
- *  @var array $pocket @var string $draftKey */
+ *  @var array $pocket @var string $draftKey @var string $workDate */
 $editing = !empty($submission);
 $o = fn(string $k, $d = '') => e((string) ($old[$k] ?? $d));
 $err = fn(string $k) => (string) ($errors[$k] ?? '');
@@ -14,6 +14,9 @@ if (!$miscNotes) {
 }
 $action = $editing ? url('m/entry/' . (int) $submission['id']) : url('m/misc');
 $today = date('Y-m-d');
+// تاريخ الصرف الافتراضي = عهدة يوم العمل (وعند التعديل بيفضل تاريخ النثرية الأصلي)
+$wd = $workDate ?? $today;
+$wdToday = $wd === $today;
 ?>
 <!doctype html>
 <html lang="ar" dir="rtl">
@@ -124,10 +127,15 @@ $today = date('Y-m-d');
     </div>
 
     <div class="field" id="field-entry_date" <?= $err('entry_date') ? 'data-error="1"' : '' ?>>
-      <label for="d">تاريخ الصرف</label>
-      <input type="date" id="d" name="entry_date" required max="<?= e($today) ?>"
-             value="<?= $o('entry_date', $today) ?>" aria-describedby="err-entry_date"
-             <?= $err('entry_date') ? 'aria-invalid="true"' : '' ?>>
+      <?php if ($editing): ?>
+        <label for="d">تاريخ الصرف</label>
+        <input type="date" id="d" name="entry_date" required max="<?= e($today) ?>"
+               value="<?= $o('entry_date', $wd) ?>" aria-describedby="err-entry_date"
+               <?= $err('entry_date') ? 'aria-invalid="true"' : '' ?>>
+      <?php else: ?>
+        <?php /* v49: الخادم بيفرض يوم العمل — فالتاريخ عرض مش إدخال */ ?>
+        <?php $wdLabel = 'تاريخ الصرف — من عهدة يوم'; require __DIR__ . '/_workday.php'; ?>
+      <?php endif; ?>
       <p class="field-error" id="err-entry_date" <?= $err('entry_date') ? '' : 'hidden' ?>><?= e($err('entry_date')) ?></p>
     </div>
 
@@ -314,9 +322,10 @@ $today = date('Y-m-d');
     if (!note.value.trim()) { errors.note = 'اكتب النثرية دي إيه، زي مواصلات.'; }
     if (moneyValue() <= 0) { errors.unit_amount = 'اكتب المبلغ اللي دفعته.'; }
     var q = parseInt(qty.value, 10); if (!q || q < 1 || q > 10000) { errors.qty = 'العدد لازم يكون من 1 لـ10000.'; }
-    var date = form.elements.entry_date.value;
-    if (!date) { errors.entry_date = 'اكتب تاريخ الصرف.'; }
-    else if (date > <?= js_json($today) ?>) { errors.entry_date = 'تاريخ الصرف ما ينفعش يكون في المستقبل.'; }
+    // v49: النثرية الجديدة بلا خانة تاريخ (الخادم بيفرض يوم العمل) — نتحقق بس لو الخانة ظاهرة (وضع التعديل).
+    var dateEl = form.elements.entry_date;
+    if (dateEl && !dateEl.value) { errors.entry_date = 'اكتب تاريخ الصرف.'; }
+    else if (dateEl && dateEl.value > <?= js_json($today) ?>) { errors.entry_date = 'تاريخ الصرف ما ينفعش يكون في المستقبل.'; }
     var vc = document.getElementById('visaChk'), vcard = document.getElementById('visaCard');
     if (vc && vc.checked && vcard && !vcard.value) { errors.visa_card_id = 'اختر الكارت اللي دفعت بيه.'; }
     return errors;

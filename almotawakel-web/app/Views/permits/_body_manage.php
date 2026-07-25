@@ -1,4 +1,9 @@
 <?php
+/**
+ * جسم شاشة الإذن — **وضع التعديل**.
+ *
+ * ⚠️ اقرأ رأس `_body_view.php`: الغلاف مشترك والجسمان منفصلان عن قصد.
+ */
 use App\Models\Permit;
 
 $pid  = (int)$p['id'];
@@ -14,23 +19,7 @@ $nameMap = $nameMap ?? ['agentCompanies'=>[], 'companyAgents'=>[]];
 $carMap  = $carMap ?? [];
 $receiptMoveTargets = $receiptMoveTargets ?? [];
 
-// ---- حساب التقدّم (مراحل الإذن + مراحل كل حركة) ----
-$done = 0; $tot = 0;
-foreach ($pStages as $k => $m) {
-    if ($k === 'generators') continue;
-    $tot++;
-    $has = $k === 'data' ? true : !empty($permitStages[$k] ?? []);
-    if ($has) $done++;
-}
-foreach ($movements as $mv) {
-    foreach ($mStages as $k => $m) {
-        if ($k === 'generators') continue;
-        $tot++;
-        $has = $k === 'bills' ? !empty($mv['bills']) : !empty($mv['stages'][$k] ?? []);
-        if ($has) $done++;
-    }
-}
-$progress = $tot ? (int) round($done / $tot * 100) : 0;
+/* التقدّم بيتحسب في الغلاف `show.php` — الهيرو محتاجه قبل الجسم. */
 
 // حاويات الإذن: الإجمالي المُدخَل على الإذن مقابل الموزّع على البوالص
 $ctTotal = (int)($p['containers'] ?? 0);
@@ -157,18 +146,6 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
     <?php return ob_get_clean();
 };
 ?>
-<!-- شريط الإجراءات -->
-<?php $permitFormState = $permitFormState ?? ['token'=>'','old'=>[],'errors'=>[],'back'=>'permits/'.$pid.'/manage#stage-data']; ?>
-<?= formErrorSummary($permitFormState['errors']) ?>
-<?php $mode = 'manage'; include __DIR__ . '/_bar.php'; ?>
-
-<div class="permit-manage">
-
-<!-- HERO — جزء مشترك (كان مكرَّرًا حرفيًا في الشاشتين) -->
-<?php include __DIR__ . '/_hero.php'; ?>
-
-<!-- ===== مرشد الإيصالات الذكي (استرشادي — v32) ===== -->
-<?php $back = 'manage'; include __DIR__ . '/_rcp_guide.php'; ?>
 
 <!-- ===== مراحل على مستوى الإذن (بيانات + رسوم أولية) ===== -->
 <div class="sec-head"><span>🗂️ بيانات الإذن ورسومه</span></div>

@@ -6,6 +6,10 @@
 <title>تسجيل الدخول — <?= e(App::setting('company_name','شركة المتوكل')) ?></title>
 <?php $appCss = App::basePath('public/assets/css/app.css'); $appCssV = is_file($appCss) ? filemtime($appCss) : 1; ?>
 <link rel="stylesheet" href="<?= url('assets/css/app.css') ?>?v=<?= $appCssV ?>">
+<?php /* ⚠️ لازم هنا كمان: أول صفحة بيشوفها المالك على الموبايل هي الدخول،
+         والمتصفح ما بيعرضش «ثبّت التطبيق» غير لو الصفحة **اللي هو فيها**
+         مربوطة بالـmanifest. من غير السطر ده التثبيت ما يظهرش قبل الدخول. */ ?>
+<?php $pwaApp = 'office'; require dirname(__DIR__) . '/_pwa_head.php'; ?>
 </head>
 <body>
 <main class="login-page" id="main-content">

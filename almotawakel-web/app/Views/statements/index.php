@@ -1,6 +1,7 @@
 <?php
 /** @var array $rows @var array $sums @var int $total @var int $page @var int $pages */
 ?>
+<?php partial('owner_tabs', ['active' => 'statements']); ?>
 <div class="page-head">
   <div><h1 style="margin:0">📑 كشوف أصحاب البيان</h1></div>
   <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn ghost" target="_blank" href="<?= url('statements/batch?scope=all&autoprint=1') ?>">🖨️ كشف مجمع لكل أصحاب البيان</a><a class="btn ghost" target="_blank" href="<?= url('statements/batch?scope=due&autoprint=1') ?>">🔴 كشف مجمع لأصحاب المديونية</a><a class="btn gold" href="<?= url('statements/new') ?>">➕ إصدار كشف جديد</a></div>

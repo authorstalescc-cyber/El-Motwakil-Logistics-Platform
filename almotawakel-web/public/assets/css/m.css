@@ -10,6 +10,17 @@
      وكل حاجة تانية تهدى.
    • هوية الصادر/الوارد (برونزي/تركوازي) من نظام المكتب نفسه — المندوب بيعرف
      نوع الإذن من اللون من غير ما يقرا.
+
+   ⚠️ **ألوان الهوية هنا لازم تفضل مطابقة لـ`app.css`** (navy · gold · sader ·
+      warid · green · red). البوابة ليها `:root` خاص بها عن قصد — الملف ده مش
+      بيحمّل `app.css` أصلاً — لكن **اختلاف لون هوية بين النظامين = المالك
+      والمندوب بيتكلّموا عن نفس الحاجة بلونين**. `bin/verify_reps_ui.php`
+      بيفشل لو واحد اتغيّر من غير التاني.
+
+      الثلاثة اللي **مختلفة عن قصد** (مش سهو): `--ink` و`--line` و`--bg` —
+      البوابة بتشتغل في شمس الميناء فمحتاجة تباينًا أعلى وحوافّ أوضح.
+      (المرحلة ١٢: `m.css` ما اتكتبش من الأول — شكلها كويس وشغّال والتغيير
+       فيه مخاطرة بلا مكسب.)
    • «الإيصال» = التوقيع البصري: كل بند بيتسجّل بيظهر كقصاصة ورق بحافة مخرّمة،
      التوأم الرقمي للورقة اللي في إيده.
    ============================================================================ */
@@ -812,6 +823,80 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   background:rgba(255,255,255,.22); border:0; color:#fff; font:inherit; font-weight:800; font-size:.8rem;
 }
 
+/* عهدة يوم — تاريخ العمل (بانر أعلى الصفحة الرئيسية، جوّه الهيدر الغامق) */
+.hm-wd{
+  display:flex; align-items:center; gap:11px; margin-top:12px; text-decoration:none;
+  background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px 14px;
+}
+.hm-wd:active{transform:scale(.99)}
+.hm-wd-ic{font-size:1.1rem; flex:none}
+.hm-wd-txt{display:flex; flex-direction:column; line-height:1.35; flex:1; min-width:0}
+.hm-wd-txt small{color:var(--hm-on-dark-dim); font-size:.75rem}
+.hm-wd-txt b{color:#fff; font-size:.92rem; font-variant-numeric:tabular-nums}
+.hm-wd-go{
+  margin-inline-start:auto; flex:none; min-height:34px; padding:0 15px; border-radius:10px;
+  background:rgba(255,255,255,.16); color:#fff; font-weight:800; font-size:.8rem;
+  display:inline-flex; align-items:center;
+}
+.hm-wd.is-past{background:rgba(212,175,55,.15); border-color:rgba(212,175,55,.5)}
+.hm-wd.is-past .hm-wd-txt b{color:#F0DFA8}
+.hm-wd.is-locked{background:rgba(214,69,69,.2); border-color:rgba(255,138,138,.55)}
+.hm-wd.is-locked .hm-wd-txt b{color:#FFC9C9}
+
+/* اليوم متقفل — بلوك تحذير على الشيت الأبيض تحت بانر اليوم مباشرةً (v49) */
+.hm-locked{
+  margin:12px 16px 0; padding:13px 15px; border-radius:14px;
+  background:#FFF1F1; border:1px solid #F3C4C4; display:flex; flex-direction:column; gap:4px;
+}
+.hm-locked b{color:#8E1F1F; font-size:.95rem}
+.hm-locked span{color:#A24040; font-size:.83rem; line-height:1.6}
+.hm-locked-btn{
+  align-self:flex-start; margin-top:6px; min-height:38px; padding:0 16px; border-radius:10px;
+  background:#8E1F1F; color:#fff; font-weight:800; font-size:.83rem;
+  display:inline-flex; align-items:center; text-decoration:none;
+}
+
+/* «إجمالي اللي معاك من كل الأيام» — سطر مفصول عن أرقام اليوم عشان ما يتخلطش بيها */
+.hm-dl-all{border-top:1px dashed var(--hm-line); margin-top:6px; padding-top:8px}
+
+/* بطاقة «عهدة يوم العمل» في الفورمات — بديل خانة التاريخ (v49) */
+.wd-card{
+  border:1px solid var(--hm-line, #E3E7ED); border-radius:14px; padding:12px 14px;
+  background:#F7F9FC; display:flex; flex-direction:column; gap:9px;
+}
+.wd-card.is-past{background:#FFFBEF; border-color:#E8D9A8}
+.wd-card.is-locked{background:#FFF1F1; border-color:#F3C4C4}
+.wd-card-top{display:flex; align-items:center; gap:10px}
+.wd-card-ic{font-size:1.05rem; flex:none}
+.wd-card-txt{display:flex; flex-direction:column; line-height:1.35; flex:1; min-width:0}
+.wd-card-txt small{color:var(--grey); font-size:.75rem; font-weight:700}
+.wd-card-txt b{color:var(--navy); font-size:.92rem; font-weight:900; font-variant-numeric:tabular-nums}
+.wd-card-go{
+  flex:none; min-height:34px; padding:0 13px; border-radius:10px; text-decoration:none;
+  background:var(--navy); color:#fff; font-weight:800; font-size:.78rem;
+  display:inline-flex; align-items:center;
+}
+.wd-card-bal{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  border-top:1px dashed #D9E0E8; padding-top:8px; font-size:.83rem; color:var(--grey); font-weight:700;
+}
+.wd-card-bal b{color:#14713E; font-size:1rem; font-weight:900; font-variant-numeric:tabular-nums}
+.wd-card-bal b.is-neg{color:#B3261E}
+.wd-card-hint{margin:0; font-size:.78rem; color:var(--grey); line-height:1.6}
+.wd-card-lock{margin:0; font-size:.83rem; color:#8E1F1F; font-weight:700; line-height:1.6}
+.wd-card-over{
+  margin:0; font-size:.8rem; font-weight:800; line-height:1.6; color:#8A5A00;
+  background:#FFF6E0; border:1px solid #F0DFA8; border-radius:10px; padding:8px 10px;
+}
+
+/* سطر «عهدة يوم» فوق حقل التاريخ في فورمي الإيصال/النثرية (على الشيت الأبيض) */
+.hf-wd{
+  font-size:.8rem; color:var(--grey); font-weight:700; margin-bottom:8px;
+  display:flex; gap:6px; flex-wrap:wrap; align-items:center;
+}
+.hf-wd b{color:var(--navy); font-weight:900}
+.hf-wd a{color:var(--gold-dk); font-weight:800; text-decoration:underline}
+
 /* إحصائيات الإذن (بوالص/عربيات/سائقين/حركات) */
 .hm-metrics{display:flex; flex-wrap:wrap; gap:7px; margin-top:11px}
 .hm-metrics span{
@@ -1021,12 +1106,9 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   .hm-actions a:first-child{border-inline-start:0}
 }
 
-/* لافتة «فترة جديدة بعد التسوية» في تبويب بنودي */
-.hm-period{
-  background:var(--green-lt); color:var(--green); border:1px solid #C4E3CE;
-  border-radius:12px; padding:10px 13px; font-size:.83rem; font-weight:700;
-  line-height:1.6; margin-bottom:12px;
-}
+/* سطر توضيحي تحت عنوان التبويب — بيقول إن المعروض ليوم العمل بس (v49) */
+.hm-sheet-sub{display:block; font-size:.76rem; color:var(--hm-muted, #6B7683); font-weight:600; margin-top:2px}
+.hm-empty a{color:var(--gold-dk); font-weight:800; text-decoration:underline}
 
 /* ══════════════════════════════════════════════════════════════
    متابعة المناديب (v47) — شاشة المشرف `/m/team`.
@@ -1075,3 +1157,19 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-top .hf-back{background:var(--hm-ink-2); border:1px solid var(--hm-ink-3); color:var(--hm-on-dark)}
 .hm-top .hf-title{color:var(--hm-on-dark); font-size:1.05rem; font-weight:800}
 .tw-facts .is-done{background:var(--green-lt); border-color:#C4E3CE; color:var(--green)}
+
+/* سطر «عهدة اليوم» في كارت المندوب على شاشة المشرف (v49) */
+.tw-day{
+  display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin:9px 0 0;
+  padding:7px 10px; border-radius:11px; background:var(--hm-sheet, #F5F7FA);
+  border:1px solid var(--hm-line, #E3E7ED);
+}
+.tw-day>span{font-size:.75rem; color:var(--hm-muted, #6B7683); font-weight:700}
+.tw-day>b{font-size:.95rem; font-weight:900; font-variant-numeric:tabular-nums; color:var(--hm-text, #16202B)}
+.tw-day>b.is-neg{color:#B3261E}
+.tw-day>small{margin-inline-start:auto; font-size:.74rem; color:var(--hm-muted, #6B7683); font-variant-numeric:tabular-nums}
+
+/* لمعة توجيه بعد الرجوع لنفس المكان (resume-scroll.js) — نفس اسم صنف المكتب
+   عشان الوحدة المشتركة ما تحتاجش تعرف هي في أي نظام. */
+.mv-flash{animation:mvflash 1s ease}
+@keyframes mvflash{0%{background:rgba(212,175,55,.28)}100%{background:transparent}}

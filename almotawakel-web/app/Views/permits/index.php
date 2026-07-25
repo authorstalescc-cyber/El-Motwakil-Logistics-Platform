@@ -6,45 +6,45 @@
 <div class="pv-head">
   <nav class="pv-tabs">
     <a class="pv-tab <?= $mode==='follow'?'on':'' ?>"    href="<?= url('permits') ?>">
-      <span class="pvt-ic">🗂️</span> متابعة الأذونات
+      <span class="pvt-ic"><?= icon('folder', 16) ?></span> متابعة الأذونات
       <?php if($mode==='follow' && ($incomplete??0)>0): ?><span class="pvt-badge"><?= intf($incomplete) ?></span><?php endif; ?>
     </a>
-    <a class="pv-tab <?= $mode==='movements'?'on':'' ?>" href="<?= url('permits?view=movements') ?>"><span class="pvt-ic">🔀</span> الحركات</a>
-    <a class="pv-tab <?= $mode==='records'?'on':'' ?>"   href="<?= url('permits?view=records') ?>"><span class="pvt-ic">📚</span> السجلّات</a>
+    <a class="pv-tab <?= $mode==='movements'?'on':'' ?>" href="<?= url('permits?view=movements') ?>"><span class="pvt-ic"><?= icon('shuffle', 16) ?></span> الحركات</a>
+    <a class="pv-tab <?= $mode==='records'?'on':'' ?>"   href="<?= url('permits?view=records') ?>"><span class="pvt-ic"><?= icon('layers', 16) ?></span> السجلّات</a>
   </nav>
   <span style="flex:1"></span>
-  <a class="btn gold pv-new" href="<?= url('permits/new') ?>">➕ إصدار جديد</a>
+  <a class="btn gold pv-new" href="<?= url('permits/new') ?>"><?= icon('plus', 15) ?> إصدار جديد</a>
 </div>
 
 <!-- مؤشرات تفاعلية قابلة للنقر -->
 <div class="pv-kpis">
   <a class="pv-kpi k-total" href="<?= url('permits?view=records') ?>">
-    <span class="pv-kpi-ic">📄</span>
+    <span class="pv-kpi-ic"><?= icon('file-text', 18) ?></span>
     <span class="pv-kpi-tx"><span class="pv-kpi-v num"><?= intf($stats['total']) ?></span><span class="pv-kpi-l">إجمالي الأذونات</span></span>
   </a>
   <a class="pv-kpi k-open" href="<?= url('permits?view=records&st=open') ?>">
-    <span class="pv-kpi-ic">🟠</span>
+    <span class="pv-kpi-ic"><?= icon('folder', 18) ?></span>
     <span class="pv-kpi-tx"><span class="pv-kpi-v num warn"><?= intf($stats['open_cnt']) ?></span><span class="pv-kpi-l">مفتوحة</span></span>
   </a>
   <a class="pv-kpi k-closed" href="<?= url('permits?view=records&st=closed') ?>">
-    <span class="pv-kpi-ic">✅</span>
+    <span class="pv-kpi-ic"><?= icon('check-circle', 18) ?></span>
     <span class="pv-kpi-tx"><span class="pv-kpi-v num good"><?= intf($stats['closed_cnt']) ?></span><span class="pv-kpi-l">مقفولة</span></span>
   </a>
   <?php if ($mode==='follow'): ?>
     <?php if($incomplete>0): ?><a class="pv-kpi k-inc is-alert" href="<?= url('permits?state=warn') ?>">
-      <span class="pv-kpi-ic"><?= $incomplete>0?'⚠️':'🎉' ?></span>
+      <span class="pv-kpi-ic"><?= icon($incomplete>0?'alert':'check-circle', 18) ?></span>
       <span class="pv-kpi-tx"><span class="pv-kpi-v num <?= $incomplete>0?'bad':'good' ?>"><?= intf($incomplete) ?></span><span class="pv-kpi-l">تحتاج استكمال</span></span>
     </a><?php else: ?><div class="pv-kpi k-inc">
-      <span class="pv-kpi-ic">🎉</span><span class="pv-kpi-tx"><span class="pv-kpi-v num good">0</span><span class="pv-kpi-l">تحتاج استكمال</span></span>
+      <span class="pv-kpi-ic"><?= icon('check-circle', 18) ?></span><span class="pv-kpi-tx"><span class="pv-kpi-v num good">0</span><span class="pv-kpi-l">تحتاج استكمال</span></span>
     </div><?php endif; ?>
   <?php elseif ($mode==='movements'): ?>
     <div class="pv-kpi k-static">
-      <span class="pv-kpi-ic">🔀</span>
+      <span class="pv-kpi-ic"><?= icon('shuffle', 18) ?></span>
       <span class="pv-kpi-tx"><span class="pv-kpi-v num"><?= intf($movesCount) ?></span><span class="pv-kpi-l">إجمالي الحركات</span></span>
     </div>
   <?php else: ?>
     <div class="pv-kpi k-static">
-      <span class="pv-kpi-ic">🔎</span>
+      <span class="pv-kpi-ic"><?= icon('search', 18) ?></span>
       <span class="pv-kpi-tx"><span class="pv-kpi-v num"><?= intf($total) ?></span><span class="pv-kpi-l">نتيجة العرض</span></span>
     </div>
   <?php endif; ?>
@@ -232,14 +232,8 @@
       <?php endforeach; ?>
     </div>
     <div class="pv-count" style="justify-content:center;margin-top:12px">عرض <?= intf((($followPage-1)*48)+1) ?>–<?= intf((($followPage-1)*48)+count($rows)) ?> من <?= intf($followTotal) ?> إذن مطابق</div>
-    <?php if($followPages>1): ?><nav class="pager" aria-label="صفحات متابعة الأذونات">
-      <?php if($followPage>1): ?><a href="?<?= e($followQs(['page'=>$followPage-1])) ?>">‹ السابق</a><?php endif; ?>
-      <?php $start=max(1,$followPage-2);$end=min($followPages,$followPage+2);
-        if($start>1)echo '<a href="?'.e($followQs(['page'=>1])).'">1</a>'.($start>2?'<span class="dots">…</span>':'');
-        for($p=$start;$p<=$end;$p++)echo $p===$followPage?'<span class="cur">'.$p.'</span>':'<a href="?'.e($followQs(['page'=>$p])).'">'.$p.'</a>';
-        if($end<$followPages)echo ($end<$followPages-1?'<span class="dots">…</span>':'').'<a href="?'.e($followQs(['page'=>$followPages])).'">'.$followPages.'</a>'; ?>
-      <?php if($followPage<$followPages): ?><a href="?<?= e($followQs(['page'=>$followPage+1])) ?>">التالي ›</a><?php endif; ?>
-    </nav><?php endif; ?>
+    <?php partial('pager', ['page' => $followPage, 'pages' => $followPages,
+                          'qs' => $followQs, 'label' => 'صفحات متابعة الأذونات']); ?>
   <?php endif; ?>
 
 <?php elseif ($mode === 'movements'): ?>
@@ -484,14 +478,8 @@
     </table>
   </div>
   <?php if(($pages??1)>1): // $recordQs معرَّف أعلى الشاشة ويحمل تصفية الشركة/الوكيل ?>
-  <nav class="pager" aria-label="صفحات سجل الأذونات">
-    <?php if($page>1): ?><a href="?<?= e($recordQs(['page'=>$page-1])) ?>">‹ السابق</a><?php endif; ?>
-    <?php $start=max(1,$page-2);$end=min($pages,$page+2);
-      if($start>1)echo '<a href="?'.e($recordQs(['page'=>1])).'">1</a>'.($start>2?'<span class="dots">…</span>':'');
-      for($p=$start;$p<=$end;$p++)echo $p===$page?'<span class="cur">'.$p.'</span>':'<a href="?'.e($recordQs(['page'=>$p])).'">'.$p.'</a>';
-      if($end<$pages)echo ($end<$pages-1?'<span class="dots">…</span>':'').'<a href="?'.e($recordQs(['page'=>$pages])).'">'.$pages.'</a>'; ?>
-    <?php if($page<$pages): ?><a href="?<?= e($recordQs(['page'=>$page+1])) ?>">التالي ›</a><?php endif; ?>
-  </nav>
+  <?php partial('pager', ['page' => $page, 'pages' => $pages,
+                        'qs' => $recordQs, 'label' => 'صفحات سجل الأذونات']); ?>
   <?php endif; ?>
 <?php endif; ?>
 

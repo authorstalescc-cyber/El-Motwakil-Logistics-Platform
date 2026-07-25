@@ -521,28 +521,23 @@ str_contains($crudView, 'data-reopen')
     ? ok('نافذة اللصق بتتفتح لوحدها عشان المستخدم يشوف الخطأ')
     : bad('نافذة اللصق مش بتتفتح بعد الفشل — الخطأ هيتخبّى');
 
-// مطابقة التقفيل — المالك بيملّي عشرات الصفوف بإيده
+/* مراجعة التقفيل (v50) — مفيش أرقام تتكتب بالإيد أصلاً، فمفيش مُدخَل ممكن يضيع.
+   اللي لازم يفضل مضمون: العلامة بتتحفظ لحظيًّا، وفيه مسار كامل بلا جافاسكريبت،
+   وفشل الحفظ بيرجّع العلامة زي ما كانت بدل ما المالك يفتكر إنها اتحفظت. */
 $clSrc = php_code((string) file_get_contents($root . '/app/Controllers/DailyClosingController.php'));
 $clView = (string) file_get_contents($root . '/app/Views/closing/index.php');
-str_contains($clSrc, "formFailure(\n                'closing.reconcile.")
-    || str_contains($clSrc, "'closing.reconcile.'")
-    ? ok('مطابقة التقفيل: الرفض بيحفظ كل المبالغ المكتوبة')
-    : bad('مطابقة التقفيل: المبالغ لسه بتضيع');
-$allFour = str_contains($clView, "\$reconOld['manual_total']")
-    && str_contains($clView, "\$reconOld['row_note']")
-    && str_contains($clView, "\$reconOld['manual_general_expenses']")
-    && str_contains($clView, "\$reconOld['reconciliation_note']");
-$allFour ? ok('شاشة المطابقة بترجّع الأربع مجموعات (مبالغ/ملاحظات/عام/ملاحظة)')
-         : bad('شاشة المطابقة مش بترجّع كل المُدخَل');
-str_contains($clView, '$reconErr')
-    ? ok('سبب رفض المطابقة بيتعرض للمستخدم')
-    : bad('سبب رفض المطابقة مش بيتعرض');
-
-/* ⚠️ مصيدة تصادم أسماء مفاتيح render (زي مصيدة `data` الموثَّقة): الشاشة
-   بتستخدم `$reconState` لكلاس الحالة، فمفتاح الرندر اتسمّى `reconRestore`. */
-!preg_match("/'reconState'\s*=>/", $clSrc)
-    ? ok('مفتاح الرندر مش بيتصادم مع $reconState اللي في الشاشة')
-    : bad('مفتاح render اسمه reconState — هيتصادم مع متغيّر الشاشة');
+!str_contains($clSrc, 'closing.reconcile.') && !str_contains($clView, 'manual_total')
+    ? ok('مطابقة التقفيل اليدوية القديمة اتشالت بالكامل')
+    : bad('لسه فيه بقايا من مطابقة التقفيل اليدوية');
+str_contains($clSrc, 'function reviewSave') && str_contains($clView, "action=\"<?= url('closing/review-save')")
+    ? ok('مراجعة التقفيل ليها مسار حفظ كامل بلا جافاسكريبت')
+    : bad('مراجعة التقفيل مالهاش مسار بلا جافاسكريبت — الحفظ هيضيع لو JS اتعطّل');
+str_contains($clView, 'box.checked = !wanted')
+    ? ok('فشل حفظ العلامة بيرجّعها زي ما كانت (مفيش علامة كاذبة)')
+    : bad('فشل حفظ العلامة مش بيرجّعها — المالك هيفتكر إنه راجع بند وهو ما اتحفظش');
+str_contains($clView, '.cl-page.js-review .rv-manual{display:none}')
+    ? ok('زرار الحفظ الاحتياطي بيتخفى بالجافاسكريبت نفسه مش بشرط الخادم')
+    : bad('زرار الحفظ الاحتياطي متخفي بشرط الخادم — متصفح بلا JS هيفضل بلا طريقة حفظ');
 
 /* ══════════════ ١٣) كل نموذج بيحافظ على مُدخَله ══════════════ */
 sec('١٣) كل الوحدات بتحافظ على المُدخَل (المرحلة ٢ج)');
@@ -736,20 +731,32 @@ $stillReads > 0
 /* ══════════════ ١٨) شاشتا الإذن ══════════════ */
 sec('١٨) شاشتا الإذن: مصدر واحد للمشترك (المرحلة ٣)');
 
-$vSrc = (string) file_get_contents($root . '/app/Views/permits/view.php');
-$mSrc = (string) file_get_contents($root . '/app/Views/permits/manage.php');
+/* المرحلة ١٣: الشاشتان بقوا شاشة واحدة بوضعين — الغلاف `permits/show.php`
+   والجسمان `_body_view.php`/`_body_manage.php`. */
+$vSrc = (string) file_get_contents($root . '/app/Views/permits/_body_view.php');
+$mSrc = (string) file_get_contents($root . '/app/Views/permits/_body_manage.php');
 
 foreach (['_hero.php' => 'الهيرو', '_bar.php' => 'شريط الإجراءات'] as $part => $label) {
     is_file($root . '/app/Views/permits/' . $part)
         ? ok("جزء {$label} المشترك موجود")
         : bad("جزء {$label} المشترك مش موجود");
 }
-(str_contains($vSrc, "include __DIR__ . '/_hero.php'") && str_contains($mSrc, "include __DIR__ . '/_hero.php'"))
-    ? ok('الشاشتان بتستخدما نفس الهيرو (كان مكرَّرًا حرفيًا ٣٥ سطر × ٢)')
-    : bad('واحدة من الشاشتين لسه بتكرّر ماركب الهيرو');
-(str_contains($vSrc, "include __DIR__ . '/_bar.php'") && str_contains($mSrc, "include __DIR__ . '/_bar.php'"))
-    ? ok('الشاشتان بتستخدما نفس شريط الإجراءات')
-    : bad('واحدة من الشاشتين لسه بتكرّر الشريط');
+/* المرحلة ١٣: الغلاف الواحد بيضمّ الهيرو والشريط **مرة واحدة** للوضعين،
+   والجسمان مالهمش أي نسخة منهم — لو رجعت واحدة يبقى الفصل رجع. */
+$showSrc = (string) file_get_contents($root . '/app/Views/permits/show.php');
+(str_contains($showSrc, "include __DIR__ . '/_hero.php'")
+ && !str_contains($vSrc, "include __DIR__ . '/_hero.php'")
+ && !str_contains($mSrc, "include __DIR__ . '/_hero.php'"))
+    ? ok('الهيرو بيترسم مرة واحدة في الغلاف (كان مكرَّرًا حرفيًا ٣٥ سطر × ٢)')
+    : bad('الهيرو رجع يتكرّر في جسم من الجسمين');
+(str_contains($showSrc, "include __DIR__ . '/_bar.php'")
+ && !str_contains($vSrc, "include __DIR__ . '/_bar.php'")
+ && !str_contains($mSrc, "include __DIR__ . '/_bar.php'"))
+    ? ok('وشريط الإجراءات كمان مرة واحدة، وفيه مفتاح وضع بدل لينكين باسمين')
+    : bad('شريط الإجراءات رجع يتكرّر في جسم من الجسمين');
+(str_contains($showSrc, "include __DIR__ . '/_body_' . \$mode . '.php'"))
+    ? ok('والشاشة بقت واحدة بوضعين — الجسم بيتحدّد من `$mode`')
+    : bad('الغلاف مش بيضمّ جسم الوضع');
 
 /* ⚠️ ما ينفعش الماركب يرجع يتكرَّر: لو حد نسخ الهيرو في شاشة تاني هيرجع
    التفرّع اللي كان بيخلّي الشاشتين تختلفا من غير ما حد ياخد باله. */
@@ -928,6 +935,76 @@ foreach (office_views($root) as $path => $src) {
 }
 $backGlyphs ? bad('أزرار رجوع بسهم مش بيتقلب في RTL: ' . implode('، ', $backGlyphs))
             : ok('كل أزرار الرجوع بـ‹ (الحرف الوحيد اللي بيتقلب صح في RTL)');
+
+/* ══════════════ الرجوع لنفس المكان بعد الحفظ (2026-07-25) ══════════════
+   المشكلة اللي بتتحل: النظام بيشتغل POST → redirect → GET، والـGET بيبدأ من
+   أول الصفحة — فبعد كل حفظ المستخدم بيرجع فوق ويدوّر على البند اللي كان عليه.
+   الفحوصات دي بتحرس الثوابت اللي غيابها بيخلّي الميزة **تفشل أو تتصرف غلط
+   بالسكوت** (مش بتطلّع أي خطأ في الكونسول). */
+$resume = (string) file_get_contents($root . '/public/assets/js/resume-scroll.js');
+$officeLayout = (string) file_get_contents($root . '/app/Views/layout.php');
+$portalHead   = (string) file_get_contents($root . '/app/Views/m/_pwa.php');
+
+/* ⚠️ الوحدة في ملف مستقل عن app.js عن قصد: بوابة المندوب /m ما بتحمّلش app.js،
+   فلو رجعت جوّاه هتخدم نظام المكتب بس والمندوب يفضل يرجع لأول الصفحة. */
+(str_contains($officeLayout, 'assets/js/resume-scroll.js')
+ && str_contains($portalHead, 'assets/js/resume-scroll.js'))
+    ? ok('وحدة الرجوع محمَّلة في نظام المكتب وبوابة المندوب مع بعض')
+    : bad('الوحدة مش محمَّلة في النظامين — نص الشاشات هتفضل بترجع لأول الصفحة');
+
+(str_contains($officeLayout, 'defer src="<?= url(\'assets/js/resume-scroll.js\')')
+ && str_contains($portalHead, 'defer src="<?= url(\'assets/js/resume-scroll.js\')'))
+    ? ok('محمَّلة بـdefer (الـDOM بيبقى جاهز قبل ما تشتغل)')
+    : bad('لازم تتحمّل بـdefer وإلا بتشتغل والصفحة لسه فاضية');
+
+str_contains($resume, "almotawakel:resume-scroll")
+    ? ok('وحدة الرجوع لنفس المكان موجودة بمفتاح تخزين مُسمّى')
+    : bad('وحدة الرجوع لنفس المكان اتشالت — كل حفظ هيرجّع المستخدم لأول الصفحة');
+
+/* ⚠️ capture ضروري: فيه معالج تاني على submit بيمنع النقر المزدوج وممكن يوقف
+   الحدث، فمن غير capture المكان ما كانش هيتحفظ أصلاً. */
+preg_match('/addEventListener\(.submit.*?\}, true\)/s', $resume)
+    ? ok('حفظ المكان مسجَّل في مرحلة capture (قبل أي معالج تاني)')
+    : bad('حفظ المكان مش في مرحلة capture — معالج تاني ممكن يمنعه');
+
+/* ⚠️ e.submitter مش e.target: في الشاشات اللي بتربط الزرار بفورم مخفي بـform=""
+   (صندوق مراجعة بنود المناديب) الـtarget بيبقى الفورم المخفي في آخر الصفحة. */
+str_contains($resume, 'e.submitter || form')
+    ? ok('المرساة بتتحسب من الزرار المدوس مش من الفورم (يهم الفورمات المخفية)')
+    : bad('المرساة بتتحسب من الفورم — هتغلط في الشاشات اللي بتستخدم form=""');
+
+/* ⚠️ العنصر الـfixed (شريط الإجراءات) بُعده من أول الشاشة ثابت دايمًا،
+   فلو اتاخد كمرساة الحساب بيطلع غلط. */
+str_contains($resume, "getComputedStyle(el).position !== 'fixed'")
+    ? ok('العناصر الثابتة (fixed) مستبعَدة من المرساة')
+    : bad('عنصر fixed ممكن يتاخد كمرساة — المكان هيطلع غلط');
+
+(str_contains($resume, 'saved.p !== location.pathname + location.search')
+ && str_contains($resume, 'SCROLL_TTL'))
+    ? ok('الاسترجاع مشروط بنفس الصفحة وبمهلة زمنية')
+    : bad('الاسترجاع بلا شرط الصفحة/المهلة — ممكن يقفز بيك في صفحة تانية');
+
+/* ⚠️ المسح لازم يحصل **قبل** التطبيق: لو اتساب لآخر تطبيق، أول ريفريش عادي
+   بعد الحفظ كان هيرجّع المستخدم لمكان قديم مش هو طالبه. */
+preg_match('/const saved = scrollStore\(\);\s*scrollStore\(null\);/', $resume)
+    ? ok('المحفوظ بيتمسح فور قراءته (ريفريش بعدها ما بيقفزش)')
+    : bad('المحفوظ مش بيتمسح فور قراءته — ريفريش عادي هيقفز بيك');
+
+str_contains($resume, 'document.documentElement.scrollHeight - window.innerHeight')
+    ? ok('المكان محصور في ارتفاع الصفحة (البند المتشال ما بيكسرش الحساب)')
+    : bad('المكان مش محصور — لو الصفحة قصرت بعد الحفظ الحساب هيطلع برّه');
+
+str_contains($resume, "form.classList.contains('js-ajax')")
+    ? ok('فورمات الـAJAX مستثناة (مفيش إعادة تحميل أصلاً)')
+    : bad('فورمات الـAJAX مش مستثناة');
+
+preg_match('/applyResume\(true\);.*?addEventListener\(.load.*?applyResume\(false\)/s', $resume)
+    ? ok('الاسترجاع بيتطبّق مرتين (بعد الـDOM وبعد تحميل الصور)')
+    : bad('الاسترجاع مرة واحدة — الصور بتزيح المكان بعدها');
+
+str_contains($resume, "matchMedia('(prefers-reduced-motion: reduce)')")
+    ? ok('لمعة التوجيه بتحترم تقليل الحركة')
+    : bad('لمعة التوجيه ما بتحترمش تقليل الحركة');
 
 /* ══════════════ الخلاصة ══════════════ */
 echo "\n" . str_repeat('=', 62) . "\n";

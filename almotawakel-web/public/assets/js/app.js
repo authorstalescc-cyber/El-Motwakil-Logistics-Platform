@@ -56,10 +56,34 @@
       toastStack.className = 'toast-stack';
       toastStack.setAttribute('role', 'region');
       toastStack.setAttribute('aria-label', 'تنبيهات');
-      toastStack.setAttribute('aria-live', 'polite');
+      // ⚠️ من غير قصد ما نحطّش aria-live هنا — شوف التعليق في layout.php:
+      //    سياسة الأب بتغلب على role="alert" بتاع التنبيه، فالخطأ كان بيتعلن
+      //    «بأدب» بدل ما يقاطع. الإعلان بقى من المنطقتين المخصّصتين تحت.
       document.body.appendChild(toastStack);
     }
     return toastStack;
+  }
+
+  /**
+   * يعلن نص التنبيه لقارئ الشاشة في المنطقة اللي تخصّه:
+   * الخطأ في منطقة assertive (يقاطع فورًا)، والباقي في polite (يستنى دوره).
+   * المنطقتان في layout.php؛ ولو الصفحة مالهاش layout بنعملهم عند الحاجة.
+   */
+  function toastAnnounce(msg, kind) {
+    const id = kind === 'err' ? 'toastLiveAssertive' : 'toastLivePolite';
+    let region = document.getElementById(id);
+    if (!region) {
+      region = document.createElement('div');
+      region.id = id;
+      region.className = 'sr-only';
+      region.setAttribute('role', kind === 'err' ? 'alert' : 'status');
+      region.setAttribute('aria-live', kind === 'err' ? 'assertive' : 'polite');
+      document.body.appendChild(region);
+    }
+    // التفريغ ثم الكتابة في إطار تاني: نفس النص مرتين ورا بعض ما بيتعلنش
+    // من غير التغيير ده (المتصفح بيشوفه «ما اتغيّرش»).
+    region.textContent = '';
+    requestAnimationFrame(() => { region.textContent = msg; });
   }
 
   function toastClose(el) {
@@ -100,8 +124,10 @@
     const root = toastRoot();
     const el = document.createElement('div');
     el.className = 'toast-item ' + kind;
-    // الخطأ لازم يتعلن فورًا لقارئ الشاشة، والباقي بأدب
-    el.setAttribute('role', kind === 'err' ? 'alert' : 'status');
+    // الإعلان بيحصل في المنطقة المخصّصة (toastAnnounce) مش على العنصر ده، عشان
+    // ما يتقريش مرتين. العنصر نفسه يفضل موجود للماوس والكيبورد (زرار الإغلاق).
+    el.setAttribute('role', 'group');
+    toastAnnounce(msg, kind);
 
     const ic = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     ic.setAttribute('viewBox', '0 0 24 24'); ic.setAttribute('width', '19'); ic.setAttribute('height', '19');
@@ -186,6 +212,11 @@
     const seed = Array.isArray(window.__TOASTS) ? window.__TOASTS : [];
     seed.forEach((t) => { if (t && t.msg) toast(t.msg, t.kind, { action: t.action }); });
   });
+
+  /* ⚠️ التنبيه متاح للكود اللي برّه الـIIFE دي (تبديل السمة مثلاً). من غير
+     السطر ده أي `window.AppUI.toast(...)` بيبقى **خطّاف بلا تنفيذ** فيفشل
+     بالسكوت — نفس عائلة مصيدة `.table-mobile-scroll` الموثَّقة. */
+  window.AppUI = Object.assign(window.AppUI || {}, { toast });
 
   /* ───────── توحيد الأرقام: أي رقم عربي/فارسي يتحوّل فورًا لإنجليزي في أي خانة ─────────
      نعترض على مستوى beforeinput لأن <input type="number"> يرفض الأرقام العربية أصلًا
@@ -1361,6 +1392,15 @@
         }
         return String(input.value || '').trim();
       }
+      /* ⚠️ زر «المزيد» بتاع كروت الموبايل (المرحلة ٨) بيتحقن **جوّه أول خانة**،
+         و`textContent` بتاعها بيشمله — يعني كان هيتسرّب لـ**تصدير CSV**
+         ولـ**ترتيب العمود الأول** ولكشف نوع العمود، فيبوّظ التلاتة بالسكوت.
+         بنشيله من نسخة مؤقتة عشان ما نلمسش الـDOM الأصلي. */
+      if (cell.querySelector('.tm-more')) {
+        const clone = cell.cloneNode(true);
+        clone.querySelectorAll('.tm-more').forEach((n) => n.remove());
+        return clone.textContent.replace(/\s+/g, ' ').trim();
+      }
       return cell.textContent.replace(/\s+/g, ' ').trim();
     }
 
@@ -1636,8 +1676,50 @@
       Array.from(table.tBodies).forEach((body) => Array.from(body.rows).forEach((row) => {
         columns.forEach((col) => { const cell = cellAt(row, col.index); if (cell) cell.dataset.label = col.label; });
       }));
-      if (table.closest('.reports-page') || table.dataset.mobileCards === '1' || columns.length <= 6) table.classList.add('table-mobile-cards');
-      else table.classList.add('table-mobile-scroll');
+      /* ══════════════════════════════════════════════════════════════════
+         وضع الكروت على الموبايل — المرحلة ٨
+         ─────────────────────────────────────────────────────────────────
+         قبل كده: الجداول بـ٧ أعمدة أو أكتر (٢٤ جدول، أعرضهم ٢٩ عمود) كانت
+         بتاخد **تمرير أفقي** — يعني على الموبايل بتقرا عمودين وتسحب، ومستحيل
+         تقارن صفّين. دلوقتي **كل الجداول بقت كروت**، والأعمدة الزيادة بتتطوي
+         خلف زر «المزيد» جوّه كل كارت عشان الكارت ما يطولش.
+
+         ⚠️ الزرار بيتحطّ **جوّه أول خانة** مش كخانة جديدة — لأن أدوات الجداول
+            (الترتيب/الإخفاء/تغيير العرض) بتشتغل بفهرس الخانة، وخانة زيادة
+            كانت هتزحلق الفهارس وتبوّظهم.
+         الاستثناء: `data-mobile-scroll="1"` على الجدول بيرجّع التمرير الأفقي.
+         ══════════════════════════════════════════════════════════════════ */
+      const CARD_LEAD = 5;   // كام خانة تفضل ظاهرة قبل «المزيد»
+      if (table.dataset.mobileScroll === '1') {
+        table.classList.add('table-mobile-scroll');
+      } else {
+        table.classList.add('table-mobile-cards');
+        if (columns.length > CARD_LEAD + 1) {
+          Array.from(table.tBodies).forEach((body) => Array.from(body.rows).forEach((row) => {
+            if (row.querySelector('td[colspan]')) { return; }   // صف حالة الفراغ
+            let shown = 0, hiddenCount = 0, first = null;
+            columns.forEach((col) => {
+              const cell = cellAt(row, col.index);
+              if (!cell) { return; }
+              if (first === null) { first = cell; }
+              if (shown++ >= CARD_LEAD) { cell.classList.add('tm-extra'); hiddenCount++; }
+            });
+            if (!first || hiddenCount === 0) { return; }
+            const more = document.createElement('button');
+            more.type = 'button';
+            more.className = 'tm-more';
+            more.setAttribute('aria-expanded', 'false');
+            more.textContent = 'المزيد (' + hiddenCount + ') ▾';
+            more.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const open = row.classList.toggle('tm-open');
+              more.setAttribute('aria-expanded', open ? 'true' : 'false');
+              more.textContent = open ? 'أقل ▴' : 'المزيد (' + hiddenCount + ') ▾';
+            });
+            first.appendChild(more);
+          }));
+        }
+      }
       if (anchor.parentNode) {
         anchor.parentNode.insertBefore(tools, anchor);
         if (anchor.parentNode.classList && anchor.parentNode.classList.contains('card')) {
@@ -2049,4 +2131,156 @@
       if (document.hidden) { clearInterval(timer); } else { refresh(); start(); }
     });
   })();
+
+  /* ── نظام التفاصيل (drill-down) ────────────────────────────────────────────
+     ⚠️ قاعدة المالك الدائمة: **ممنوع رقم أصمّ.** أي رقم أو كارت معروض لازم
+        يُضغط ويفتح التفاصيل اللي اتحسب منها.
+
+     أي عنصر بـ`data-drill` بيفتح النافذة العامة الوحيدة (`#uiDrill` في
+     `layout.php`). وضعان:
+       • `data-drill="#id"`  → المحتوى **جاهز** في الصفحة (قوايم صغيرة رخيصة).
+       • `data-drill="/url"` → المحتوى **يتجاب وقت الضغط بس** — ده الافتراضي،
+         وهو اللي بيخلّي القاعدة قابلة للتعميم على مئات الأرقام بلا ما الصفحات
+         تتقل. (البوب-أب القديم كان بيرندر تفاصيل كل الأرقام مع كل فتحة للصفحة.)
+
+     ⚠️ الرد HTML مش JSON عن قصد: الخادم بيرندر نفس مكوّنات الصفوف، فالتفاصيل
+        شكلها زي القوايم بالظبط بلا مُصيِّر تاني في الجافاسكريبت يفترق عنه.
+     ⚠️ ممنوع مسار تفاصيل عام واحد ياخد اسم جدول — كل وحدة بتعرّض مسارها
+        وبيمرّ على `Access::enforce` زي أي مسار (الرفض هو الافتراضي). */
+  (function drillDown() {
+    const modal = document.getElementById('uiDrill');
+    if (!modal) return;
+    const body = document.getElementById('uiDrillBody');
+    const titleEl = document.getElementById('uiDrillTitle');
+    const cache = new Map();
+    let token = 0;
+    const icoAlert = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/>' +
+      '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
+
+    function close() {
+      if (modal.hidden) return;
+      modal.hidden = true;
+      body.innerHTML = '';
+      document.body.style.overflow = '';
+      deactivateDialog(modal);
+    }
+    // أي جدول بيتحقن هنا بياخد أدوات الجداول (ترتيب/إخفاء أعمدة/كروت الموبايل)
+    // **تلقائيًّا** من الـMutationObserver القائم — ما تنادّيش حاجة بإيدك.
+    function paint(html) { body.innerHTML = html; }
+    async function open(source, title) {
+      titleEl.textContent = title || 'التفاصيل';
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+      activateDialog(modal, modal.querySelector('.d-modal-x'));
+      const mine = ++token;
+
+      if (source.charAt(0) === '#') {                 // جاهز في الصفحة
+        const src = document.querySelector(source);
+        paint(src ? src.innerHTML : '');
+        if (!src) { paint('<div class="drill-err"><b>التفاصيل مش موجودة</b></div>'); }
+        return;
+      }
+      if (cache.has(source)) { paint(cache.get(source)); return; }
+
+      paint('<div class="drill-load"><span class="drill-spin"></span><span>بنجيب التفاصيل…</span></div>');
+      try {
+        const res = await fetch(source, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' });
+        if (!res.ok) throw new Error(String(res.status));
+        const html = await res.text();
+        if (mine !== token) return;                   // المستخدم فتح رقمًا تاني
+        cache.set(source, html);
+        paint(html);
+      } catch (e) {
+        if (mine !== token) return;
+        // ⚠️ الفشل بيبان — ما ينفعش النافذة تفضل بتلفّ للأبد والمالك مستني
+        paint('<div class="drill-err">' + icoAlert +
+              '<b>تعذّر جلب التفاصيل</b><span>راجع اتصالك وجرّب تاني.</span></div>');
+      }
+    }
+    document.addEventListener('click', (e) => {
+      const el = e.target.closest('[data-drill]');
+      if (!el) return;
+      // رابط جوّه كارت قابل للفتح بيفضل رابط عادي — مش كل ضغطة تفتح النافذة
+      if (e.target.closest('a[href]') && !el.matches('a[href]')) return;
+      e.preventDefault();
+      open(el.getAttribute('data-drill'), el.getAttribute('data-drill-title') || el.getAttribute('data-title'));
+    });
+    modal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', close));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.hidden) { e.stopPropagation(); close(); }
+    });
+  })();
+
+  /* ── إظهار/إخفاء الأرصدة الحسّاسة ──────────────────────────────────────────
+     ⚠️ ده كان **سكربتًا محليًّا في `office/index.php` وبس**، بينما `[data-secret]`
+        مستعملة في شاشات تانية (عهدة المناديب) — يعني الرصيد هناك كان بيفضل
+        `••••••` **للأبد بلا أي طريقة يتشاف بيها**. نفس عائلة باج
+        `.table-mobile-scroll` (خطّاف بيتحقن ومفيش له تنفيذ فيفشل بالسكوت).
+     القاعدة: أي شاشة تحطّ `[data-secret]` مع زر `.secret-toggle` تشتغل تلقائيًّا.
+     الحالة في `sessionStorage` عشان الانتقال بين التبويبات ما يخفيش الأرقام تاني. */
+  (function secretValues() {
+    const KEY = 'almotawakel:secret-shown';
+    const nodes = () => document.querySelectorAll('[data-secret]');
+    if (!nodes().length) return;
+    let shown = false;
+    try { shown = sessionStorage.getItem(KEY) === '1'; } catch (e) { /* وضع خاص */ }
+    nodes().forEach((el) => { if (!el.dataset.mask) el.dataset.mask = el.textContent; });
+    function apply() {
+      nodes().forEach((el) => {
+        el.textContent = shown ? (el.getAttribute('data-val') || '') : (el.dataset.mask || '••••••');
+      });
+      document.querySelectorAll('.secret-toggle').forEach((b) => {
+        b.textContent = shown ? '🙈 إخفاء الأرصدة' : '👁 إظهار الأرصدة';
+        b.setAttribute('aria-pressed', shown ? 'true' : 'false');
+      });
+    }
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.secret-toggle')) return;
+      shown = !shown;
+      try { sessionStorage.setItem(KEY, shown ? '1' : '0'); } catch (err) { /* وضع خاص */ }
+      apply();
+    });
+    apply();
+  })();
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   وضع العرض (فاتح / غامق / تلقائي) — المرحلة ١٥
+   ═══════════════════════════════════════════════════════════════════════
+   ⚠️ السمة نفسها بتتحط في `<head>` **قبل أول رسمة** (سكربت صغير في
+      `layout.php`) — الكود ده بيدير **التبديل** بس. لو نقلته لهنا لوحده
+      الصفحة هتلمع أبيض ثم تغمق في كل تحميل.
+   ⚠️ ثلاث حالات مقصودة: `auto` (مفيش سمة على `<html>`، فبيتبع الجهاز) ثم
+      `light` ثم `dark`. «تلقائي» مهم لأن أغلب الناس بيسيبوا الجهاز يقرّر.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function themeToggle() {
+  var KEY = 'almotawakel:theme';
+  var btn = document.getElementById('themeBtn');
+  if (!btn) return;
+  var root = document.documentElement;
+  var LABEL = { auto: 'تلقائي (زي الجهاز)', light: 'فاتح', dark: 'غامق' };
+
+  function current() {
+    var t = root.getAttribute('data-theme');
+    return (t === 'light' || t === 'dark') ? t : 'auto';
+  }
+  function paint() {
+    btn.title = 'وضع العرض: ' + LABEL[current()];
+    btn.setAttribute('aria-label', btn.title + ' — اضغط للتبديل');
+  }
+  function apply(mode) {
+    if (mode === 'auto') { root.removeAttribute('data-theme'); }
+    else { root.setAttribute('data-theme', mode); }
+    try { mode === 'auto' ? localStorage.removeItem(KEY) : localStorage.setItem(KEY, mode); } catch (e) {}
+    paint();
+  }
+  btn.addEventListener('click', function () {
+    var next = { auto: 'light', light: 'dark', dark: 'auto' }[current()];
+    apply(next);
+    if (window.AppUI && window.AppUI.toast) {
+      window.AppUI.toast('وضع العرض: ' + LABEL[next], 'info');
+    }
+  });
+  paint();
 })();

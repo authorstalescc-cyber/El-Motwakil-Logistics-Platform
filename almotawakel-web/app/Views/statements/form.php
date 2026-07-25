@@ -11,6 +11,7 @@ $pendingBills = array_values(array_filter($allBills, fn($b) => ($b['pay_status']
 $drillBack = 'statements/form?owner=' . urlencode($owner);
 $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? ''] ?? ($b['pay_status'] ?? '—');
 ?>
+<?php partial('owner_tabs', ['active' => 'statements']); ?>
 <div class="permit-bar">
   <a class="btn ghost sm" href="<?= url('settlements?owner=' . urlencode($owner)) ?>">‹ رجوع لصاحب البيان</a>
   <span class="pb-title">📑 إصدار كشف حساب — <b><?= e($owner) ?></b></span>

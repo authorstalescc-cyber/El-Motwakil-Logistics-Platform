@@ -116,6 +116,8 @@ class RepAuth
         $_SESSION['rep_user']  = $row['username'];
         $_SESSION['rep_seen']  = time();
         $_SESSION['rep_check'] = time();
+        // تاريخ العمل الافتراضي = النهاردة؛ المندوب بيسأله من `/m/work-date` عقب الدخول.
+        $_SESSION['rep_work_date'] = date('Y-m-d');
 
         Database::exec(
             "UPDATE rep_users SET failed_tries = 0, locked_until = NULL, last_login_at = NOW() WHERE id = ?",
@@ -256,6 +258,37 @@ class RepAuth
     public static function repName(): string
     {
         return (string) ($_SESSION['rep_name'] ?? '');
+    }
+
+    /**
+     * «تاريخ العمل» للمندوب — نفس فكرة `Auth::workDate()` بتاعة المكتب، بس
+     * على مفتاح جلسة مستقل `rep_work_date`. كل بند (إيصال/مصروف/نثرية) بيتسجّل
+     * افتراضيًا بالتاريخ ده. لو مش متضبوط أو صيغته غلط → النهاردة.
+     *
+     * ⚠️ مفتاح منفصل عن `work_date` بتاع المكتب عن قصد: جلسة المندوب ما فيهاش
+     *    `uid`، والخلط بين المفتاحين ممكن يخلط تاريخ عمل الاتنين لو حد فتح
+     *    النظامين على نفس الموبايل.
+     */
+    public static function workDate(): string
+    {
+        $d = (string) ($_SESSION['rep_work_date'] ?? '');
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) { return $d; }
+        return date('Y-m-d');
+    }
+
+    /** يحفظ تاريخ العمل بعد التحقق من الصيغة ومنع المستقبل (زي max=today في الفورم). */
+    public static function setWorkDate(string $date): bool
+    {
+        $date = trim($date);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) { return false; }
+        if ($date > date('Y-m-d')) { return false; }
+        $_SESSION['rep_work_date'] = $date;
+        return true;
+    }
+
+    public static function isWorkDateToday(): bool
+    {
+        return self::workDate() === date('Y-m-d');
     }
 
     /**

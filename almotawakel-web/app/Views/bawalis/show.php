@@ -84,7 +84,7 @@ $sum = fn($arr) => array_sum(array_map(fn($x)=>(float)$x['amount'], $arr));
       $agency  = ($movement['agency'] ?? '')      ?: ($permit['agency'] ?? '');
       $port    = ($movement['port'] ?? '')        ?: ($permit['port'] ?? '');
     ?>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+    <div class="grid-2 mb">
       <div><span style="color:var(--grey);font-weight:700">🚢 شركة الشحن:</span> <?= e($shipCo ?: '—') ?></div>
       <div><span style="color:var(--grey);font-weight:700">🧾 التوكيل:</span> <?= e($agency ?: '—') ?></div>
       <div><span style="color:var(--grey);font-weight:700">⚓ الميناء:</span> <?= e($port ?: '—') ?></div>

@@ -22,6 +22,22 @@ class Access
         'WorkDateController@save',
         'AssistantController@ask',
         'PermitController@invoicePreview',
+        // تفعيل/إقفال إشعارات الجهاز — حق لأي مستخدم مسجَّل مهما كان دوره،
+        // وبيخصّ جهازه هو بس (الكنترولر بياخد الهوية من الجلسة لا من الفورم).
+        'PushController@subscribe',
+        'PushController@unsubscribe',
+    ];
+
+    /**
+     * إرسال الإشعارات وشاشتها — **للمالك والمدير بس**.
+     * ⚠️ لازم تفضل هنا: الفحص ده بيجي **قبل** السماح العام لطلبات GET تحت،
+     *    فده المكان الوحيد اللي بيمنع باقي الأدوار من فتح `/push` وإرسال
+     *    إشعار لكل الشركة. `requireRole` في الكنترولر طبقة تانية.
+     */
+    private const OWNER_MANAGER_ONLY = [
+        'PushController@index',
+        'PushController@send',
+        'PushController@test',
     ];
 
     private const OWNER_ONLY = [
@@ -87,6 +103,7 @@ class Access
 
         if ($role === 'owner') { return true; }
         if (self::matchesAny($handler, self::OWNER_ONLY)) { return false; }
+        if (self::matchesAny($handler, self::OWNER_MANAGER_ONLY)) { return $role === 'manager'; }
 
         // الإعدادات غير السرية للمدير فقط، ولا تظهر لباقي الأدوار.
         if ($controller === 'SettingsController') {

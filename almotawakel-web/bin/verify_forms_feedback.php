@@ -76,7 +76,7 @@ try {
     $sources = [
         'المصروفات' => 'app/Views/expenses/form.php',
         'التحصيلات' => 'app/Views/payments/index.php',
-        'إدارة الإذن' => 'app/Views/permits/manage.php',
+        'إدارة الإذن' => 'app/Views/permits/_body_manage.php',   // اتقسم في المرحلة ١٣ (الغلاف permits/show.php)
     ];
     foreach ($sources as $label => $file) {
         $src = (string) file_get_contents(dirname(__DIR__) . '/' . $file);
@@ -117,7 +117,13 @@ try {
     }
 
     $v41 = (string) file_get_contents(dirname(__DIR__) . '/bin/verify_v41.php');
-    $repCard = (string) file_get_contents(dirname(__DIR__) . '/app/Views/rep_custody/card.php');
+    // ⚠️ كارت المندوب اتقسم لتبويبات (إعادة تصميم 2026-07-25): الغلاف `card.php`
+    //    + `_tab_*.php`. الفحص بيقرا **الشاشة كلها** مش الغلاف، وإلا بيفشل
+    //    بإنذار كاذب لمجرد إن النموذج اتنقل لملف تبويبه.
+    $repCard = '';
+    foreach (glob(dirname(__DIR__) . '/app/Views/rep_custody/{card,_tab_*}.php', GLOB_BRACE) ?: [] as $f) {
+        $repCard .= (string) file_get_contents($f);
+    }
     $repCustodyController = (string) file_get_contents(dirname(__DIR__) . '/app/Controllers/RepCustodyController.php');
     chk(str_contains($v41, 'RepCustody::balance($repId) === -10.0')
         && str_contains($repCard, 'هذا وضع عمل مسموح'),
@@ -127,11 +133,18 @@ try {
         && str_contains($repCustodyController, "formFailure('rep_custody.deposit.")
         && str_contains($repCustodyController, "formFailure('rep_custody.settle."),
         'تنزيل عهدة المندوب وتسويتها يحفظان القيم والأخطاء لكل نموذج');
-    chk(substr_count($repCustodyController, 'claimForm(\'rep-custody/\' . $repId') >= 4,
+    // مسارات الرجوع بقت بتتبني من `cardUrl()` عشان كل حفظ يرجّع لتبويبه — الفحص
+    // على **السلوك** (كل كتابة بتاخد رمز محاولة) مش على شكل السلسلة النصّية.
+    chk(substr_count($repCustodyController, 'claimForm(self::cardUrl($repId') >= 4,
         'كتابات كارت عهدة المندوب المالية محمية من تكرار الطلب');
     $repInbox = (string) file_get_contents(dirname(__DIR__) . '/app/Views/rep_custody/inbox.php');
+    // ⚠️ الفحص على **السلوك** مش على أسماء المتغيّرات: إعادة بناء الصندوق
+    //    (2026-07-25) شالت رمز اليوم `$dayToken` لأن الصفحة بقت فورمًا واحدًا،
+    //    والسلوك المطلوب زي ما هو — رمز إعادة المحاولة بيرجع للفورم المتعثر،
+    //    ولكل بند رمزه المستقل، ودرج التعديل بيتفتح على البند اللي فشل.
     chk(str_contains($repCustodyController, "FormState::consume('rep_custody.inbox'")
-        && str_contains($repInbox, 'formStateFields($dayToken')
+        && str_contains($repInbox, '$bulkFailed ? $inboxState[\'token\'] : FormState::token()')
+        && str_contains($repInbox, '$rowToken(')
         && str_contains($repInbox, '$editFailed ? \'\' : \'hidden\''),
         'صندوق المراجعة يعزل المحاولات ويعيد فتح تعديل البند المتعثر');
     chk(str_contains($repCustodyController, '$safeOld = [\'username\' => $username]')

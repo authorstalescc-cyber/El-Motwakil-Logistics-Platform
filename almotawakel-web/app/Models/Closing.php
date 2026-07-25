@@ -472,6 +472,8 @@ class Closing
              VALUES (?,?,?,?,?,?,1,?,NOW())",
             [$date, $opening, $t, $e, $d, $closing, $user]
         );
+        // إشعار للمكتب (v51) — بعد ما الصف اتكتب فعلاً، ومفيش transaction هنا.
+        PushNotify::dayClosed($date, $closing, $user);
         return ['ok' => true, 'msg' => 'تم إقفال يوم ' . dfmt($date) . ' على رصيد ' . number_format($closing, 2) . ' ج.'];
     }
 
