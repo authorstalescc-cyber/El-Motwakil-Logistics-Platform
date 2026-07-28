@@ -209,7 +209,7 @@ $old    = $old ?? [];
     <tbody>
     <?php foreach ($log as $m): ?>
       <tr>
-        <td style="white-space:nowrap"><?= e((string) $m['created_at']) ?></td>
+        <td style="white-space:nowrap"><?= e(dtfmt($m['created_at'], 'd/m/Y H:i:s')) ?></td>
         <td><b><?= e($m['title']) ?></b><br><span style="color:var(--grey);font-size:var(--fs-2)"><?= e($m['body']) ?></span></td>
         <td><?= e($m['audience']) ?></td>
         <td class="pos"><?= (int) $m['ok_count'] ?></td>

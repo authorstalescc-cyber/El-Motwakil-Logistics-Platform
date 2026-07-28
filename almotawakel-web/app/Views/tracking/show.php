@@ -108,8 +108,8 @@ if ($eta): ?>
           <?php foreach (array_reverse($pings) as $p): ?>
             <tr>
               <td style="white-space:nowrap">
-                <b><?= e(date('H:i', strtotime($p['created_at']))) ?></b><br>
-                <small style="color:var(--grey)"><?= e(date('d/m', strtotime($p['created_at']))) ?></small>
+                <b><?= e(dtfmt($p['created_at'], 'H:i')) ?></b><br>
+                <small style="color:var(--grey)"><?= e(dtfmt($p['created_at'], 'd/m')) ?></small>
               </td>
               <td>
                 <?= e($p['address'] ?: '—') ?><br>
@@ -181,7 +181,7 @@ if ($eta): ?>
         <?php if (!empty($t['expires_at'])): ?>
           الصلاحية: <b><?= e(date('d/m — H:i', strtotime($t['expires_at']))) ?></b><br>
         <?php endif; ?>
-        <?= empty($t['opened_at']) ? 'السائق لسه مفتحش الرابط.' : 'فتحه أول مرة ' . e(date('d/m — H:i', strtotime($t['opened_at']))) ?>
+        <?= empty($t['opened_at']) ? 'السائق لسه مفتحش الرابط.' : 'فتحه أول مرة ' . e(dtfmt($t['opened_at'], 'd/m — H:i')) ?>
       </div>
     </div>
 
@@ -323,8 +323,8 @@ if ($eta): ?>
         'lat'  => (float) $p['lat'],
         'lng'  => (float) $p['lng'],
         'addr' => $p['address'] ?: '',
-        'at'   => date('H:i', strtotime($p['created_at'])),
-        'date' => date('d/m', strtotime($p['created_at'])),
+        'at'   => dtfmt($p['created_at'], 'H:i'),
+        'date' => dtfmt($p['created_at'], 'd/m'),
       ], $pings)) ?>;
 
   draw(initial, true);

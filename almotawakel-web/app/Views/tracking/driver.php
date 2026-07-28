@@ -121,7 +121,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;back
 
   <?php if ($last): ?>
     <div class="hist" id="hist">
-      آخر موقع بعتّه: <b><?= e(date('d/m/Y — H:i', strtotime($last['created_at']))) ?></b>
+      آخر موقع بعتّه: <b><?= e(dtfmt($last['created_at'], 'd/m/Y — H:i')) ?></b>
       <?php if (!empty($last['address'])): ?><br><?= e($last['address']) ?><?php endif; ?>
     </div>
   <?php else: ?>

@@ -78,7 +78,7 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
   <thead><tr><th>وقت الإدخال</th><th>المستخدم</th><th>نوع الإدخال</th><th>البيان</th><th>تاريخ العمل</th><th>تاريخ المستند</th><th>المراجعة</th><th></th></tr></thead>
   <tbody><?php foreach ($logs as $log): $state=$entryState($log);$href=$entryHref($log); ?>
     <tr class="entry-row <?= $state==='mismatch'?'date-alert':'' ?>">
-      <td><bdi dir="ltr"><?= e($log['created_at']) ?></bdi></td>
+      <td><bdi dir="ltr"><?= e(dtfmt($log['created_at'], 'd/m/Y H:i:s')) ?></bdi></td>
       <td><?= e($log['user_name'] ?: 'النظام') ?></td>
       <td><span class="pill"><?= e($labels[$log['entity']] ?? $log['entity']) ?></span><small class="record-no">#<?= e($log['record_id'] ?: '—') ?></small></td>
       <td class="entry-desc"><?= e($log['description'] ?: 'إضافة سجل جديد') ?></td>
@@ -95,7 +95,7 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
   <thead><tr><th>الوقت</th><th>تاريخ العمل</th><th>المستخدم</th><th>العملية</th><th>القسم</th><th>السجل</th><th>البيان</th><th>قبل / بعد</th><th></th></tr></thead>
   <tbody><?php foreach ($logs as $log): $changes=$diffRows($log); ?>
     <tr>
-      <td><bdi dir="ltr"><?= e($log['created_at']) ?></bdi></td><td><?= ($log['work_date']??'')!==''?e(dfmt($log['work_date'])):'—' ?></td><td><?= e($log['user_name'] ?: 'النظام') ?></td>
+      <td><bdi dir="ltr"><?= e(dtfmt($log['created_at'], 'd/m/Y H:i:s')) ?></bdi></td><td><?= ($log['work_date']??'')!==''?e(dfmt($log['work_date'])):'—' ?></td><td><?= e($log['user_name'] ?: 'النظام') ?></td>
       <td><span class="pill"><?= e($actions[$log['action']] ?? $log['action']) ?></span></td>
       <td><?= e($labels[$log['entity']] ?? $log['entity']) ?></td><td><?= e($log['record_id'] ?: '—') ?></td>
       <td><?= e($log['description'] ?: '—') ?></td>
@@ -111,7 +111,7 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
 <div class="card"><div class="table-wrap"><table class="data">
   <thead><tr><th>وقت الحذف</th><th>المستخدم</th><th>القسم</th><th>السجل</th><th>البيان</th><th></th></tr></thead>
   <tbody><?php foreach ($trash as $item): ?>
-    <tr><td><bdi dir="ltr"><?= e($item['created_at']) ?></bdi></td><td><?= e($item['deleted_by_name'] ?: 'النظام') ?></td><td><?= e($labels[$item['entity']] ?? $item['entity']) ?></td><td><?= e($item['record_id'] ?: '—') ?></td><td><?= e($item['label'] ?: '—') ?></td>
+    <tr><td><bdi dir="ltr"><?= e(dtfmt($item['created_at'], 'd/m/Y H:i:s')) ?></bdi></td><td><?= e($item['deleted_by_name'] ?: 'النظام') ?></td><td><?= e($labels[$item['entity']] ?? $item['entity']) ?></td><td><?= e($item['record_id'] ?: '—') ?></td><td><?= e($item['label'] ?: '—') ?></td>
     <td><form method="post" action="<?= url('audit/trash/'.$item['id'].'/restore') ?>" data-confirm="استرجاع هذا السجل بكل بياناته؟"><?= csrfField() ?><button class="btn gold sm" type="submit">♻️ استرجاع</button></form></td></tr>
   <?php endforeach; ?><?php if (!$trash): ?><tr><td colspan="6"><div class="empty">سلة المحذوفات فارغة.</div></td></tr><?php endif; ?></tbody>
 </table></div></div>
