@@ -30,9 +30,7 @@ $wdToday = $wd === $today;
 
 <div class="hf-top">
   <header class="hf-bar">
-    <a href="<?= url('m?tab=entries') ?>" class="hf-back" aria-label="رجوع">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </a>
+    <?php $backTo = 'm?tab=entries'; require __DIR__ . '/_back.php'; ?>
     <span class="hf-title"><?= $editing ? 'تعديل بند' : 'تسجيل بند جديد' ?></span>
   </header>
 
@@ -41,7 +39,12 @@ $wdToday = $wd === $today;
     <b><?= e($permit['company'] ?: $permit['client'] ?: 'بدون شركة') ?></b>
     <span class="hf-no"><?= e($permit['no']) ?></span>
     <?php if ($permit['container_label'] !== ''): ?>
-      <span class="hf-box">📦 <bdi dir="ltr"><?= e($permit['container_label']) ?></bdi></span>
+      <span class="hf-box"><?= icon('package', 14) ?> <bdi dir="ltr"><?= e($permit['container_label']) ?></bdi></span>
+    <?php endif; ?>
+    <?php /* مستندات الأطراف (v56) — بتظهر بس لو فيه مستندات فعلاً */ ?>
+    <?php if (!empty($permit['has_docs'])): ?>
+      <a class="hf-docs" href="<?= url('m/permit/' . (int) $permit['id'] . '/docs') ?>">
+        <?= icon('folder', 14) ?> المستندات</a>
     <?php endif; ?>
   </div>
 </div>
@@ -77,9 +80,9 @@ $wdToday = $wd === $today;
       <legend>ده إيه؟</legend>
       <div class="pick" role="radiogroup" aria-describedby="err-kind">
         <input type="radio" name="kind" id="k_r" value="receipt" <?= $kind === 'receipt' ? 'checked' : '' ?>>
-        <label for="k_r">🧾 إيصال</label>
+        <label for="k_r"><?= icon('receipt', 14) ?> إيصال</label>
         <input type="radio" name="kind" id="k_e" value="expense" <?= $kind === 'expense' ? 'checked' : '' ?>>
-        <label for="k_e">💸 مصروف</label>
+        <label for="k_e"><?= icon('trending-down', 14) ?> مصروف</label>
       </div>
       <p class="field-error" id="err-kind" <?= $err('kind') ? '' : 'hidden' ?>><?= e($err('kind')) ?></p>
     </fieldset>
@@ -178,6 +181,9 @@ $wdToday = $wd === $today;
 
     <?php require __DIR__ . '/_visa_field.php'; ?>
 
+    <?php /* v57 — «غير مدفوع»: بند على الإذن بلا خصم من العهدة ولا الخزنة */ ?>
+    <?php require __DIR__ . '/_unpaid_field.php'; ?>
+
     <div class="field" id="field-photo" <?= $err('photo') ? 'data-error="1"' : '' ?>>
       <label>صورة الإيصال <span class="optional">اختيارية</span></label>
       <?php if ($editing && !empty($submission['photo'])): ?>
@@ -187,7 +193,7 @@ $wdToday = $wd === $today;
         </div>
       <?php endif; ?>
       <label class="shot" id="shotBtn">
-        <span id="shotTxt">📷 صوّر أو اختار صورة</span>
+        <span id="shotTxt"><?= icon('search', 14) ?> صوّر أو اختار صورة</span>
         <input type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" id="shot"
                aria-describedby="photoHint err-photo">
       </label>
@@ -348,8 +354,22 @@ $wdToday = $wd === $today;
   }
   if (visaChk) { visaChk.addEventListener('change', syncVisa); syncVisa(); }
 
+  // ── v57: «غير مدفوع» و«مدفوع بالفيزا» متنافيان — الخادم بيرفضهم مع بعض،
+  //    والشاشة بتمنعهم من الأول عشان المندوب ما يوصلش لرسالة خطأ أصلاً.
+  var unpaidChk = document.getElementById('unpaidChk');
+  function syncPay(src) {
+    if (!unpaidChk || !visaChk) { return; }
+    if (src === 'unpaid' && unpaidChk.checked && visaChk.checked) { visaChk.checked = false; syncVisa(); }
+    if (src === 'visa' && visaChk.checked && unpaidChk.checked) { unpaidChk.checked = false; }
+  }
+  if (unpaidChk) {
+    unpaidChk.addEventListener('change', function () { syncPay('unpaid'); });
+    if (visaChk) { visaChk.addEventListener('change', function () { syncPay('visa'); }); }
+    syncPay('unpaid');
+  }
+
   function clearErrors() {
-    ['kind','movement_id','note','unit_amount','qty','ref_no','entry_date','photo','visa_card_id'].forEach(clearFieldError);
+    ['kind','movement_id','note','unit_amount','qty','ref_no','entry_date','photo','visa_card_id','unpaid'].forEach(clearFieldError);
     document.getElementById('errorSummary').hidden = true;
     document.getElementById('errorList').innerHTML = '';
   }

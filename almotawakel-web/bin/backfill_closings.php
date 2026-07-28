@@ -22,6 +22,7 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 use App\Core\Database;
 use App\Models\Closing;
 use App\Models\Permit;
+use App\Models\RepBillCustody;
 use App\Models\RepMiscExpense;
 
 function say(string $s, string $c=''){ $x=['ok'=>"\033[32m",'hi'=>"\033[36m",'y'=>"\033[33m",'err'=>"\033[31m"];
@@ -50,9 +51,9 @@ $miscDatesSql = RepMiscExpense::available()
 $dates = Database::all(
     "SELECT d FROM (
         SELECT cust_date d FROM manual_custody
-        UNION SELECT s.entry_date FROM permit_stages s WHERE $expSql AND s.is_visa=0
+        UNION SELECT s.entry_date FROM permit_stages s WHERE $expSql AND " . Permit::cashOutSql('s') . "
         UNION SELECT exp_date FROM manual_expenses WHERE is_visa=0
-        UNION SELECT bill_date FROM bawalis WHERE custody>0
+        UNION SELECT bill_date FROM bawalis WHERE custody>0" . RepBillCustody::officeExcludeSql() . "
         $miscDatesSql
      ) t WHERE d IS NOT NULL AND d <= ? ORDER BY d",
     [$end]

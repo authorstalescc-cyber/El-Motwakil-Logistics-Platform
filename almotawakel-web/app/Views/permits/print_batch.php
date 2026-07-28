@@ -29,7 +29,7 @@ $stageTable = require __DIR__ . '/_print_stage_table.php';
 
 <div class="bar noprint">
   <span class="bar-count">📚 <?= intf(count($sheets)) ?> إذن — كل إذن في صفحة مستقلّة</span>
-  <button class="btn gold" onclick="window.print()">🖨️ طباعة الكل / حفظ PDF</button>
+  <button class="btn gold" onclick="window.print()"><?= icon('file-text', 14) ?> طباعة الكل / حفظ PDF</button>
   <a class="btn ghost" href="<?= url('permits?view=records') ?>">‹ رجوع للسجلّات</a>
 </div>
 

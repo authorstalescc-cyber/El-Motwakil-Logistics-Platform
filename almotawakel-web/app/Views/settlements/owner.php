@@ -19,8 +19,8 @@
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('settlements') ?>">‹ رجوع لأصحاب البيان</a>
   <span style="flex:1"></span>
-  <a class="btn gold" href="<?= url('statements/form?owner=' . urlencode($owner)) ?>">📑 إصدار كشف حساب</a>
-  <span class="pill st-<?= (int)$stats['due_bills']>0?'unpaid':'paid' ?>" style="font-size:.9rem;padding:6px 14px">
+  <a class="btn gold" href="<?= url('statements/form?owner=' . urlencode($owner)) ?>"><?= icon('layers', 14) ?> إصدار كشف حساب</a>
+  <span class="pill st-<?= (int)$stats['due_bills']>0?'unpaid':'paid' ?>" style="font-size:var(--fs-3);padding:6px 14px">
     <?= (int)$stats['due_bills']>0 ? intf($stats['due_bills']).' بوليصة غير مسدّدة' : 'كل البوالص مسدّدة' ?>
   </span>
 </div>
@@ -56,7 +56,7 @@
   <form method="get" action="<?= url('settlements') ?>" style="width:100%">
     <input type="hidden" name="owner" value="<?= e($owner) ?>">
     <div class="dir-search" style="max-width:none;width:100%">
-      <span class="ic">🔍</span>
+      <span class="ic"><?= icon('search', 14) ?></span>
       <input type="search" name="q" value="<?= e($f['q']) ?>" placeholder="بحث عن بوليصة…">
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;width:100%">
@@ -77,12 +77,12 @@
       <input list="dl_dest" name="destination" value="<?= e($f['destination']) ?>" placeholder="الجهة" autocomplete="off">
       <input list="dl_class" name="classification" value="<?= e($f['classification']) ?>" placeholder="التصنيف" autocomplete="off">
       <input list="dl_ctype" name="container_type" value="<?= e($f['container_type']) ?>" placeholder="تصنيف الحاويات" autocomplete="off">
-      <label style="color:var(--grey);font-weight:700">من</label>
+      <label style="color:var(--grey);font-weight:500">من</label>
       <input type="date" name="from" value="<?= e($f['from']) ?>">
-      <label style="color:var(--grey);font-weight:700">إلى</label>
+      <label style="color:var(--grey);font-weight:500">إلى</label>
       <input type="date" name="to" value="<?= e($f['to']) ?>">
       <button class="btn sm" type="submit">تصفية</button>
-      <?php if ($filtered): ?><a class="btn ghost sm" href="<?= url('settlements') ?>?owner=<?= urlencode($owner) ?>">✕ مسح الفلاتر</a><?php endif; ?>
+      <?php if ($filtered): ?><a class="btn ghost sm" href="<?= url('settlements') ?>?owner=<?= urlencode($owner) ?>"><?= icon('x', 14) ?> مسح الفلاتر</a><?php endif; ?>
     </div>
   </form>
   <datalist id="dl_company"><?php foreach ($companies as $c): ?><option value="<?= e($c) ?>"><?php endforeach; ?></datalist>
@@ -124,17 +124,16 @@ $stNewUrl   = url('statements/form?owner=' . urlencode($owner));
   <div class="card-head">
     <div class="card-head-txt">
       <div class="section-head"><?= icon('receipt', 17) ?> كشوف حساب <?= e($ownerLabel) ?></div>
-      <div class="card-head-sub"><?= intf(count($statements)) ?> كشف مُصدَر</div>
+      <span class="d-badge navy"><?= intf(count($statements)) ?></span>
     </div>
     <div class="card-head-tools">
-      <a class="btn gold sm" href="<?= e($stNewUrl) ?>">➕ إصدار كشف جديد</a>
+      <a class="btn gold sm" href="<?= e($stNewUrl) ?>"><?= icon('plus', 14) ?> إصدار كشف جديد</a>
     </div>
   </div>
   <?php if (!$statements): ?>
     <?php partial('empty', [
         'emoji'  => '📑',
         'title'  => 'مفيش كشوف حساب لصاحب البيان ده',
-        'note'   => 'الكشف بيتعمل من بوالصه المستلَمة والباقية، وبيتحفظ كلقطة ثابتة.',
         'action' => ['label' => '➕ إصدار كشف جديد', 'url' => $stNewUrl],
     ]); ?>
   <?php else: ?>
@@ -151,14 +150,14 @@ $stNewUrl   = url('statements/form?owner=' . urlencode($owner));
       <tbody>
         <?php foreach ($statements as $st): ?>
           <tr<?= (($st['status'] ?? 'issued') === 'void') ? ' style="opacity:.55"' : '' ?>>
-            <td style="font-weight:800"><?= e($st['doc_no'] ?: '#' . $st['id']) ?></td>
+            <td style="font-weight:600"><?= e($st['doc_no'] ?: '#' . $st['id']) ?></td>
             <td><?= dfmt($st['statement_date']) ?></td>
             <td><?= intf($st['paid_count']) ?></td>
             <td><?= intf($st['remaining_count']) ?></td>
             <td class="pos"><?= money($st['paid_sum'], false) ?></td>
-            <td style="font-weight:800;color:var(--navy)"><?= money($st['stat_remaining'], false) ?></td>
+            <td style="font-weight:600;color:var(--navy)"><?= money($st['stat_remaining'], false) ?></td>
             <td><div class="actions">
-              <a class="edit" href="<?= url('statements/' . $st['id']) ?>" target="_blank" title="طباعة الكشف">🖨️</a>
+              <a class="edit" href="<?= url('statements/' . $st['id']) ?>" target="_blank" title="طباعة الكشف"><?= icon('file-text', 14) ?></a>
               <?php if (($st['status'] ?? 'issued') === 'void'): ?>
                 <span class="pill st-unpaid">ملغى</span>
               <?php endif; ?>
@@ -171,12 +170,12 @@ $stNewUrl   = url('statements/form?owner=' . urlencode($owner));
 </div>
 
 <style>
-.set-hero{display:flex;align-items:center;gap:18px;padding:20px 24px;background:linear-gradient(135deg,var(--navy),var(--navy-mid));color:#fff;border-radius:18px;box-shadow:var(--shadow-lg);margin-bottom:16px;flex-wrap:wrap}
-.set-hero-av{width:60px;height:60px;border-radius:16px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.4rem;background:linear-gradient(135deg,var(--gold),#a5811a);color:var(--navy-dark);box-shadow:0 4px 12px rgba(201,162,39,.35)}
-.set-hero h2{font-size:1.4rem;font-weight:800;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.set-hero p{font-size:.82rem;color:rgba(255,255,255,.78);font-weight:600;margin-top:2px}
-.set-hero-rem{text-align:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:10px 20px}
-.set-hero-rem span{display:block;font-size:.74rem;color:rgba(255,255,255,.75);font-weight:700;margin-bottom:3px}
-.set-hero-rem b{font-size:1.5rem;font-weight:800}
+.set-hero{display:flex;align-items:center;gap:18px;padding:20px 24px;background:linear-gradient(135deg,var(--navy),var(--navy-mid));color:#fff;border-radius:var(--radius-3);box-shadow:var(--shadow-lg);margin-bottom:16px;flex-wrap:wrap}
+.set-hero-av{width:60px;height:60px;border-radius:var(--radius-3);flex:none;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:var(--fs-6);background:linear-gradient(135deg,var(--gold),#a5811a);color:var(--navy-dark);box-shadow:0 4px 12px rgba(201,162,39,.35)}
+.set-hero h2{font-size:var(--fs-6);font-weight:600;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.set-hero p{font-size:var(--fs-2);color:rgba(255,255,255,.78);font-weight:400;margin-top:2px}
+.set-hero-rem{text-align:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:var(--radius-2);padding:10px 20px}
+.set-hero-rem span{display:block;font-size:var(--fs-1);color:rgba(255,255,255,.75);font-weight:500;margin-bottom:3px}
+.set-hero-rem b{font-size:var(--fs-6);font-weight:600}
 .set-hero-rem b.neg{color:#ff9d9d} .set-hero-rem b.pos{color:#a7e9bf}
 </style>

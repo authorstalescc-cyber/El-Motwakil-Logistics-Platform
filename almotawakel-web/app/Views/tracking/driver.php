@@ -27,50 +27,50 @@ $car    = trim((string) ($t['car_no'] ?? ''));
 body{font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;background:#0f2340;color:#123;
      min-height:100dvh;display:flex;flex-direction:column;align-items:center;padding:16px;
      padding-bottom:calc(16px + env(safe-area-inset-bottom))}
-.card{background:#fff;border-radius:22px;width:100%;max-width:460px;padding:22px;
+.card{background:#fff;border-radius:var(--radius-4);width:100%;max-width:460px;padding:22px;
       box-shadow:0 18px 50px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:16px}
 .head{text-align:center;border-bottom:2px solid #eef1f6;padding-bottom:14px}
-.head .logo{width:52px;height:52px;border-radius:14px;background:#15355B;color:#C9A227;font-weight:900;
-            font-size:1.7rem;display:flex;align-items:center;justify-content:center;margin:0 auto 8px}
-.head h1{font-size:1.15rem;color:#15355B;font-weight:900}
-.head p{font-size:.85rem;color:#6b7a90;margin-top:3px}
-.hi{font-size:1.05rem;font-weight:800;color:#15355B;text-align:center}
-.info{background:#f6f8fb;border:1px solid #e4e9f1;border-radius:14px;padding:12px 14px;display:grid;gap:8px}
-.info .row{display:flex;justify-content:space-between;gap:10px;font-size:.9rem}
-.info .row b{color:#15355B;font-weight:800;text-align:end;word-break:break-word}
+.head .logo{width:52px;height:52px;border-radius:var(--radius-2);background:#15355B;color:#C9A227;font-weight:700;
+            font-size:var(--fs-7);display:flex;align-items:center;justify-content:center;margin:0 auto 8px}
+.head h1{font-size:var(--fs-5);color:#15355B;font-weight:700}
+.head p{font-size:var(--fs-2);color:#6b7a90;margin-top:3px}
+.hi{font-size:var(--fs-4);font-weight:600;color:#15355B;text-align:center}
+.info{background:#f6f8fb;border:1px solid #e4e9f1;border-radius:var(--radius-2);padding:12px 14px;display:grid;gap:8px}
+.info .row{display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-3)}
+.info .row b{color:#15355B;font-weight:600;text-align:end;word-break:break-word}
 .info .row span{color:#6b7a90;flex-shrink:0}
-.btn-main{border:0;border-radius:18px;background:linear-gradient(160deg,#1e9e5a,#127a45);
-   color:#fff;font-size:1.35rem;font-weight:900;padding:26px 16px;width:100%;cursor:pointer;
+.btn-main{border:0;border-radius:var(--radius-3);background:linear-gradient(160deg,#1e9e5a,#127a45);
+   color:#fff;font-size:var(--fs-6);font-weight:700;padding:26px 16px;width:100%;cursor:pointer;
    box-shadow:0 10px 26px rgba(18,122,69,.4);transition:transform .1s,filter .15s;
    display:flex;flex-direction:column;align-items:center;gap:6px;font-family:inherit}
 .btn-main:active{transform:scale(.97)}
 .btn-main:disabled{filter:grayscale(.7);opacity:.65;cursor:default;box-shadow:none}
-.btn-main .pin{font-size:2rem;line-height:1}
-.btn-main small{font-size:.78rem;font-weight:700;opacity:.9}
-.live{border:2px solid #e4e9f1;border-radius:16px;padding:14px;display:flex;align-items:center;
+.btn-main .pin{font-size:var(--fs-8);line-height:1}
+.btn-main small{font-size:var(--fs-1);font-weight:500;opacity:.9}
+.live{border:2px solid #e4e9f1;border-radius:var(--radius-3);padding:14px;display:flex;align-items:center;
       justify-content:space-between;gap:12px;background:#fbfcfe}
 .live.on{border-color:#1e9e5a;background:#f0fbf5}
-.live .lt{font-size:.92rem;font-weight:800;color:#15355B}
-.live .ls{font-size:.75rem;color:#6b7a90;margin-top:3px;line-height:1.5}
+.live .lt{font-size:var(--fs-3);font-weight:600;color:#15355B}
+.live .ls{font-size:var(--fs-1);color:#6b7a90;margin-top:3px;line-height:1.5}
 .sw{position:relative;width:56px;height:32px;flex-shrink:0;border:0;border-radius:99px;background:#c9d2df;
     cursor:pointer;transition:background .2s;padding:0}
 .sw::after{content:"";position:absolute;top:3px;right:3px;width:26px;height:26px;border-radius:50%;
     background:#fff;transition:transform .2s;box-shadow:0 2px 5px rgba(0,0,0,.2)}
 .sw.on{background:#1e9e5a}
 .sw.on::after{transform:translateX(-24px)}
-.msg{border-radius:14px;padding:14px;font-size:.92rem;font-weight:700;line-height:1.6;display:none}
+.msg{border-radius:var(--radius-2);padding:14px;font-size:var(--fs-3);font-weight:500;line-height:1.6;display:none}
 .msg.show{display:block}
 .msg.ok{background:#eaf9f0;color:#0f6b3d;border:1px solid #b6e7cb}
 .msg.err{background:#fdeeee;color:#a12525;border:1px solid #f3c4c4}
 .msg.wait{background:#fff8e6;color:#8a6100;border:1px solid #f2dfa8}
-.msg .addr{display:block;font-weight:600;font-size:.82rem;margin-top:6px;opacity:.85}
-.hist{font-size:.8rem;color:#6b7a90;text-align:center;line-height:1.7}
+.msg .addr{display:block;font-weight:400;font-size:var(--fs-2);margin-top:6px;opacity:.85}
+.hist{font-size:var(--fs-2);color:#6b7a90;text-align:center;line-height:1.7}
 .hist b{color:#15355B}
-.foot{text-align:center;font-size:.72rem;color:#8fa0b6;line-height:1.7}
+.foot{text-align:center;font-size:var(--fs-1);color:#8fa0b6;line-height:1.7}
 .pulse{display:inline-block;width:9px;height:9px;border-radius:50%;background:#1e9e5a;margin-inline-end:6px;
        animation:pl 1.4s infinite}
 @keyframes pl{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
-@media(max-width:380px){.card{padding:16px}.btn-main{font-size:1.2rem;padding:22px 12px}}
+@media(max-width:380px){.card{padding:16px}.btn-main{font-size:var(--fs-5);padding:22px 12px}}
 </style>
 </head>
 <body>
@@ -104,7 +104,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;back
   </div>
 
   <button type="button" class="btn-main" id="send">
-    <span class="pin">📍</span>
+    <span class="pin"><?= icon('map-pin', 14) ?></span>
     ابعت موقعي
     <small>اضغط الزرار ووافق على طلب الموقع</small>
   </button>
@@ -180,17 +180,17 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;back
     .then(function(r){ return r.json(); })
     .then(function(j){
       if (j.ok) {
-        show('ok', '✅ ' + j.msg + ' الساعة ' + j.time, j.address || '');
+        show('ok', '✓ ' + j.msg + ' الساعة ' + j.time, j.address || '');
         if (hist) hist.textContent = 'آخر موقع بعتّه: ' + j.time;
         return true;
       }
       // التتبع المباشر بيتجاهل رفض «استنى ثواني» بصمت — مش خطأ حقيقي
       if (source === 'live') return false;
-      show('err', '⚠️ ' + (j.msg || 'حاول تاني.'));
+      show('err', '⚠ ' + (j.msg || 'حاول تاني.'));
       return false;
     })
     .catch(function(){
-      show('err', '⚠️ النت ضعيف — الموقع مابعتش. حاول تاني.');
+      show('err', '⚠ النت ضعيف — الموقع مابعتش. حاول تاني.');
       return false;
     })
     .finally(function(){ busy = false; });

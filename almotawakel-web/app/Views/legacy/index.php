@@ -25,49 +25,49 @@ $cols = [
 
 <div class="kpi-grid mb five">
   <div class="card" style="padding:14px 16px">
-    <div style="font-size:.78rem;color:var(--grey);font-weight:700">إجمالي البوالص<?= $active ? ' <span style="color:#8a6d10">(حسب الفلتر)</span>' : '' ?></div>
-    <div style="font-size:1.5rem;font-weight:800;color:var(--navy)"><?= intf($stats['n']) ?></div>
+    <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">إجمالي البوالص<?= $active ? ' <span style="color:#8a6d10">(حسب الفلتر)</span>' : '' ?></div>
+    <div style="font-size:var(--fs-6);font-weight:600;color:var(--navy)"><?= intf($stats['n']) ?></div>
   </div>
   <div class="card" style="padding:14px 16px">
-    <div style="font-size:.78rem;color:var(--grey);font-weight:700">الفترة</div>
-    <div style="font-size:1rem;font-weight:800;color:var(--navy)"><?= dfmt($stats['min_d']) ?> — <?= dfmt($stats['max_d']) ?></div>
+    <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">الفترة</div>
+    <div style="font-size:var(--fs-4);font-weight:600;color:var(--navy)"><?= dfmt($stats['min_d']) ?> — <?= dfmt($stats['max_d']) ?></div>
   </div>
   <div class="card" style="padding:14px 16px">
-    <div style="font-size:.78rem;color:var(--grey);font-weight:700">إجمالي النولون</div>
-    <div style="font-size:1.3rem;font-weight:800;color:var(--navy)"><?= money0($stats['freight']) ?></div>
+    <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">إجمالي النولون</div>
+    <div style="font-size:var(--fs-6);font-weight:600;color:var(--navy)"><?= money0($stats['freight']) ?></div>
   </div>
   <div class="card" style="padding:14px 16px">
-    <div style="font-size:.78rem;color:var(--grey);font-weight:700">إجمالي العهدة</div>
-    <div style="font-size:1.3rem;font-weight:800;color:var(--navy)"><?= money0($stats['custody']) ?></div>
+    <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">إجمالي العهدة</div>
+    <div style="font-size:var(--fs-6);font-weight:600;color:var(--navy)"><?= money0($stats['custody']) ?></div>
   </div>
   <div class="card" style="padding:14px 16px">
-    <div style="font-size:.78rem;color:var(--grey);font-weight:700">إجمالي الباقي</div>
-    <div style="font-size:1.3rem;font-weight:800;color:var(--navy)"><?= money0($stats['remaining'] ?? 0) ?></div>
+    <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">إجمالي الباقي</div>
+    <div style="font-size:var(--fs-6);font-weight:600;color:var(--navy)"><?= money0($stats['remaining'] ?? 0) ?></div>
   </div>
 </div>
 
 <!-- كشف حساب صاحب البيان (أرشيفي) — اقتراح أسماء يتحمّل الأخطاء الإملائية -->
 <div class="card" style="padding:14px 16px;margin-bottom:14px;border-inline-start:4px solid var(--gold)">
-  <div style="font-weight:800;color:var(--navy);margin-bottom:8px">📑 كشف حساب صاحب البيان (من الأرشيف)</div>
+  <div style="font-weight:600;color:var(--navy);margin-bottom:8px"><?= icon('layers', 14) ?> كشف حساب صاحب البيان (من الأرشيف)</div>
   <form method="get" action="<?= url('legacy/statement') ?>" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
     <div style="position:relative;flex:1;min-width:280px;max-width:420px">
       <input type="text" name="owner" id="lgOwner" autocomplete="off" required
-             placeholder="اكتب اسم صاحب البيان… (الاقتراحات تشمل الأسماء المتشابهة إملائيًّا)"
+             placeholder="اسم صاحب البيان…"
              style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px">
       <div id="lgSug" class="lg-sug" hidden></div>
     </div>
-    <button class="btn gold sm" type="submit">👁️ معاينة الكشف</button>
-    <button class="btn sm" type="submit" formtarget="_blank">🖨️ فتح للطباعة</button>
-    <span style="font-size:.78rem;color:var(--grey)">يعرض المدفوع والباقي لكل بوليصة — معاينة فقط، لا يُحفَظ ولا يمسّ أي حساب.</span>
+    <button class="btn gold sm" type="submit"><?= icon('search', 14) ?> معاينة الكشف</button>
+    <button class="btn sm" type="submit" formtarget="_blank"><?= icon('file-text', 14) ?> فتح للطباعة</button>
+    <span style="font-size:var(--fs-1);color:var(--grey)">يعرض المدفوع والباقي لكل بوليصة — معاينة فقط، لا يُحفَظ ولا يمسّ أي حساب.</span>
   </form>
 </div>
 
 <div class="toolbar">
   <form method="get" action="<?= url('legacy') ?>">
-    <input type="search" name="q" value="<?= e($f['q']) ?>" placeholder="بحث برقم البوليصة / صاحب البيان / الشركة / السائق / الحاوية / السيارة…" style="min-width:340px">
-    <label style="color:var(--grey);font-weight:700">من</label>
+    <input type="search" name="q" value="<?= e($f['q']) ?>" placeholder="بحث" style="min-width:340px">
+    <label style="color:var(--grey);font-weight:500">من</label>
     <input type="date" name="from" value="<?= e($f['from']) ?>">
-    <label style="color:var(--grey);font-weight:700">إلى</label>
+    <label style="color:var(--grey);font-weight:500">إلى</label>
     <input type="date" name="to" value="<?= e($f['to']) ?>">
     <button class="btn sm" type="submit"><?= icon('search',15) ?> تصفية</button>
     <?php if ($active): ?><a class="btn ghost sm" href="<?= url('legacy') ?>">إلغاء</a><?php endif; ?>
@@ -91,7 +91,7 @@ $cols = [
       <tbody>
         <?php if (!$rows): ?>
           <tr><td colspan="<?= count($cols)+2 ?>">
-            <div class="empty" style="padding:40px"><div class="ic">📭</div>
+            <div class="empty" style="padding:40px"><div class="ic"><?= icon('inbox', 14) ?></div>
               <?= $active ? 'لا نتائج مطابقة للبحث.' : 'لا بيانات في الأرشيف.' ?></div>
           </td></tr>
         <?php else: $i = ($page-1)*$per; foreach ($rows as $row): $i++; ?>
@@ -105,7 +105,7 @@ $cols = [
             ?>
               <td class="<?= $m ? signClass($v) : '' ?>"><?= $k==='bill_number' ? '<b>'.$txt.'</b>' : ($txt !== '' ? $txt : '—') ?></td>
             <?php endforeach; ?>
-            <td><a href="<?= url('legacy/'.$row['id']) ?>" title="تفاصيل">👁️</a></td>
+            <td><a href="<?= url('legacy/'.$row['id']) ?>" title="تفاصيل"><?= icon('search', 14) ?></a></td>
           </tr>
         <?php endforeach; endif; ?>
       </tbody>
@@ -133,16 +133,16 @@ $cols = [
 <style>
 tr.rowlink{cursor:pointer}tr.rowlink:hover{background:var(--gold-light)!important}
 .lg-sug{position:absolute;top:calc(100% + 4px);inset-inline:0;z-index:50;background:#fff;
-  border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(21,53,91,.15);
+  border:1px solid var(--line);border-radius:var(--radius-2);box-shadow:0 8px 24px rgba(21,53,91,.15);
   max-height:320px;overflow:auto}
 .lg-sug .it{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
 .lg-sug .it:last-child{border-bottom:none}
 .lg-sug .it:hover,.lg-sug .it.on{background:var(--gold-light)}
-.lg-sug .nm{font-weight:800;color:var(--navy);flex:1}
-.lg-sug .ct{font-size:.75rem;color:var(--grey)}
-.lg-sug .sim{font-size:.7rem;font-weight:800;color:#8a6d10;background:var(--gold-light);
-  border:1px solid var(--gold);border-radius:6px;padding:1px 7px}
-.lg-sug .none{padding:12px;color:var(--grey);text-align:center;font-size:.85rem}
+.lg-sug .nm{font-weight:600;color:var(--navy);flex:1}
+.lg-sug .ct{font-size:var(--fs-1);color:var(--grey)}
+.lg-sug .sim{font-size:var(--fs-1);font-weight:600;color:#8a6d10;background:var(--gold-light);
+  border:1px solid var(--gold);border-radius:var(--radius-1);padding:1px 7px}
+.lg-sug .none{padding:12px;color:var(--grey);text-align:center;font-size:var(--fs-2)}
 </style>
 <script>
 document.querySelectorAll('tr.rowlink').forEach(function(tr){

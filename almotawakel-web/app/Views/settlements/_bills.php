@@ -40,7 +40,7 @@ $payOld = $payState['old'];
         </tr></thead>
         <tbody>
           <?php if (!$bills): ?>
-            <tr><td colspan="<?= $cols ?>"><div class="empty"><div class="ic">🔎</div>لا بوالص مطابقة.</div></td></tr>
+            <tr><td colspan="<?= $cols ?>"><div class="empty"><div class="ic"><?= icon('search', 14) ?></div>لا بوالص مطابقة.</div></td></tr>
           <?php else: foreach ($bills as $b):
             $rem  = (float)$b['remaining'];
             $due  = $b['pay_status'] !== 'paid' && $rem > 0.005;
@@ -54,7 +54,7 @@ $payOld = $payState['old'];
                 data-freight="<?= e(number_format((float)($b['freight'] ?? 0),2,'.','')) ?>" data-legacy="<?= (int)($b['is_legacy'] ?? 0) ?>" title="تحديد البوليصة"></td>
               <td><?= dfmt($b['bill_date']) ?></td>
               <td><span class="pill pill-<?= e($b['bill_type']) ?>"><?= $typeLabel($b['bill_type']) ?></span></td>
-              <td style="font-weight:700"><?= e($b['bill_number'] ?: '—') ?><?php if ((int)($b['is_legacy'] ?? 0) === 1): ?> <span class="legacy-settle">قديم</span><?php endif; ?></td>
+              <td style="font-weight:500"><?= e($b['bill_number'] ?: '—') ?><?php if ((int)($b['is_legacy'] ?? 0) === 1): ?> <span class="legacy-settle">قديم</span><?php endif; ?></td>
               <td><?= e($ref ?: '—') ?></td>
               <?php if ($showOwner): ?>
                 <td style="text-align:right;max-width:150px;overflow:hidden;text-overflow:ellipsis">
@@ -73,12 +73,12 @@ $payOld = $payState['old'];
                 <?php if ($due): ?>
                   <input type="number" step="0.01" min="0" max="<?= e(number_format($rem, 2, '.', '')) ?>"
                          name="amount[<?= $b['id'] ?>]" value="<?= e($payOld['amount'][$b['id']] ?? '') ?>" class="pay-amt" placeholder="0"
-                         style="width:118px;border:1px solid var(--line2);border-radius:8px;padding:6px 8px;text-align:center"<?= fieldErrorAttrs('amount.'.(int)$b['id'], $payState['errors']) ?>>
+                         style="width:118px;border:1px solid var(--line2);border-radius:var(--radius-1);padding:6px 8px;text-align:center"<?= fieldErrorAttrs('amount.'.(int)$b['id'], $payState['errors']) ?>>
                   <?= fieldError('amount.'.(int)$b['id'], $payState['errors']) ?>
                 <?php elseif ($b['pay_status'] === Bill::STATUS_PAID): ?>
-                  <span style="color:var(--green)">✓ مكتمل</span>
+                  <span style="color:var(--green)"><?= icon('check', 14) ?> مكتمل</span>
                 <?php elseif ($b['pay_status'] === Bill::STATUS_PENDING): ?>
-                  <span style="color:var(--grey)" title="لم يُدخَل النولون بعد — ليست ديناً">⏳ بانتظار النولون</span>
+                  <span style="color:var(--grey)" title="لم يُدخَل النولون بعد — ليست ديناً"><?= icon('hourglass', 14) ?> بانتظار النولون</span>
                 <?php else: ?>
                   <span style="color:var(--grey)">—</span>
                 <?php endif; ?>
@@ -99,10 +99,10 @@ $payOld = $payState['old'];
       <span style="flex:1"></span>
       <button type="button" class="btn ghost sm" id="btnAllDue">تحديد كل غير المسدّد</button>
       <button type="button" class="btn ghost sm" id="btnFillRem">دفع كامل المتبقّي للمحدّد</button>
-      <label style="font-weight:700;color:var(--grey)">تاريخ الدفع</label>
-      <span class="field" style="margin:0"><input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>" style="border:1px solid var(--line2);border-radius:9px;padding:8px 10px"<?= fieldErrorAttrs('pay_date', $payState['errors']) ?>><?= fieldError('pay_date', $payState['errors']) ?></span>
-      <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)" style="border:1px solid var(--line2);border-radius:9px;padding:8px 10px;width:150px">
-      <button class="btn gold" type="submit" id="btnPay" data-primary-submit disabled>💾 دفع المحدّد</button>
+      <label style="font-weight:500;color:var(--grey)">تاريخ الدفع</label>
+      <span class="field" style="margin:0"><input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>" style="border:1px solid var(--line2);border-radius:var(--radius-1);padding:8px 10px"<?= fieldErrorAttrs('pay_date', $payState['errors']) ?>><?= fieldError('pay_date', $payState['errors']) ?></span>
+      <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)" style="border:1px solid var(--line2);border-radius:var(--radius-1);padding:8px 10px;width:150px">
+      <button class="btn gold" type="submit" id="btnPay" data-primary-submit disabled><?= icon('download', 14) ?> دفع المحدّد</button>
     </div>
   </div>
 </form>
@@ -110,10 +110,10 @@ $payOld = $payState['old'];
 <style>
 table.data tr.bill-row.on{background:var(--gold-light)!important}
 table.data tr.bill-row.on td{border-color:#e6d9a8}
-.legacy-settle{display:inline-block;background:#7a5f0e;color:#fff;border-radius:999px;padding:1px 7px;font-size:.65rem;font-weight:800}
+.legacy-settle{display:inline-block;background:#7a5f0e;color:#fff;border-radius:999px;padding:1px 7px;font-size:var(--fs-1);font-weight:600}
 .pay-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-top:2px solid var(--line2);background:var(--zebra);position:sticky;bottom:0;z-index:5}
-.pay-bar-info{display:flex;gap:18px;font-weight:700;color:var(--navy)}
-.pay-bar-info b{font-size:1.05rem}
+.pay-bar-info{display:flex;gap:18px;font-weight:500;color:var(--navy)}
+.pay-bar-info b{font-size:var(--fs-4)}
 .pay-bar .btn[disabled]{opacity:.5;cursor:not-allowed}
 </style>
 

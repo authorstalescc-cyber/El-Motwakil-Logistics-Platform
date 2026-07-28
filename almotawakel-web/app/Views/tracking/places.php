@@ -36,7 +36,7 @@ $e = $edit ?: null;
       </label>
 
       <label class="fld">
-        <span>أسماء بديلة <small>(الاختصارات اللي بتكتبها في البوالص — افصلها بفاصلة)</small></span>
+        <span>أسماء بديلة <small>افصلها بفاصلة</small></span>
         <input type="text" name="aliases" maxlength="400"
                value="<?= e($pOld['aliases'] ?? str_replace('|', '، ', (string) ($e['aliases'] ?? ''))) ?>"
                placeholder="مثلاً: السادات، م السادات">
@@ -89,7 +89,7 @@ $e = $edit ?: null;
 <?php endif; ?>
 
 <h3 class="pl-h"><?= icon('truck', 17) ?> الوجهات اللي في بوالصك</h3>
-<p class="pl-sub">الأكثر استخدامًا الأول. اللي عليها ⚠️ لسه مش متحدّدة، فالشحنات الرايحة لها مش هتوريك مسافة.</p>
+<p class="pl-sub">الأكثر استخدامًا الأول. اللي عليها <?= icon('alert', 14) ?> لسه مش متحدّدة، فالشحنات الرايحة لها مش هتوريك مسافة.</p>
 
 <div class="card" style="padding:0;overflow-x:auto;margin-bottom:16px">
   <table class="data">
@@ -103,9 +103,9 @@ $e = $edit ?: null;
         <td><?= intf($c['count']) ?></td>
         <td>
           <?php if ($c['point']): ?>
-            <span class="pl-ok">✓ <?= e($c['point']['name']) ?></span>
+            <span class="pl-ok"><?= icon('check', 14) ?> <?= e($c['point']['name']) ?></span>
           <?php else: ?>
-            <span class="pl-no">⚠️ مش متحدّدة</span>
+            <span class="pl-no"><?= icon('alert', 14) ?> مش متحدّدة</span>
           <?php endif; ?>
         </td>
         <td><?= $c['match'] ? '<span class="pl-m ' . e($c['match']) . '">' . e($mlbl[$c['match']]) . '</span>' : '—' ?></td>
@@ -117,7 +117,7 @@ $e = $edit ?: null;
               <?= csrfField() ?>
               <input type="hidden" name="name" value="<?= e($c['name']) ?>">
               <button class="btn sm primary" type="submit" title="النظام يدوّر عليها في الخرائط لوحده">
-                ✨ حدّدها تلقائيًا
+                <?= icon('sparkles', 14) ?> حدّدها تلقائيًا
               </button>
             </form>
             <a class="btn sm ghost" href="<?= url('tracking/places?name=' . urlencode($c['name'])) ?>">بإيدي</a>
@@ -139,12 +139,12 @@ $e = $edit ?: null;
         <td>
           <b><?= e($p['name']) ?></b>
           <?php if ((int) ($p['is_auto'] ?? 0) === 1): ?>
-            <span class="pl-auto" title="النظام حدّدها لوحده — راجعها">✨ تلقائي</span>
+            <span class="pl-auto" title="النظام حدّدها لوحده — راجعها"><?= icon('sparkles', 14) ?> تلقائي</span>
           <?php endif; ?>
           <?= $p['note'] ? '<br><small style="color:var(--grey)">' . e($p['note']) . '</small>' : '' ?>
         </td>
-        <td style="font-size:.78rem;color:var(--grey)"><?= e(str_replace('|', '، ', (string) $p['aliases'])) ?: '—' ?></td>
-        <td style="font-size:.75rem;direction:ltr;text-align:left;font-family:ui-monospace,monospace">
+        <td style="font-size:var(--fs-1);color:var(--grey)"><?= e(str_replace('|', '، ', (string) $p['aliases'])) ?: '—' ?></td>
+        <td style="font-size:var(--fs-1);direction:ltr;text-align:left;font-family:ui-monospace,monospace">
           <a href="https://www.google.com/maps?q=<?= e($p['lat']) ?>,<?= e($p['lng']) ?>" target="_blank" rel="noopener">
             <?= e(number_format((float) $p['lat'], 4)) ?>, <?= e(number_format((float) $p['lng'], 4)) ?>
           </a>
@@ -166,23 +166,23 @@ $e = $edit ?: null;
 <style>
 .pl-cols{display:grid;grid-template-columns:340px 1fr;gap:12px;margin-bottom:16px;align-items:start}
 .fld{display:block;margin-bottom:9px}
-.fld > span{display:block;font-size:.78rem;font-weight:800;color:var(--navy);margin-bottom:4px}
-.fld > span small{font-weight:600;color:var(--grey);font-size:.72rem}
+.fld > span{display:block;font-size:var(--fs-1);font-weight:600;color:var(--navy);margin-bottom:4px}
+.fld > span small{font-weight:400;color:var(--grey);font-size:var(--fs-1)}
 .fld input{width:100%}
 .fld-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.pl-hint{font-size:.75rem;color:var(--grey);background:var(--bg);border:1px dashed var(--line);
-  border-radius:8px;padding:7px 9px;margin-top:4px;line-height:1.6}
-.pl-h{color:var(--navy);font-size:1rem;margin:0 0 3px}
-.pl-sub{font-size:.8rem;color:var(--grey);margin-bottom:8px}
-.pl-ok{color:#0f7a42;font-weight:800;font-size:.82rem}
-.pl-no{color:#8a6100;font-weight:800;font-size:.82rem}
+.pl-hint{font-size:var(--fs-1);color:var(--grey);background:var(--bg);border:1px dashed var(--line);
+  border-radius:var(--radius-1);padding:7px 9px;margin-top:4px;line-height:1.6}
+.pl-h{color:var(--navy);font-size:var(--fs-4);margin:0 0 3px}
+.pl-sub{font-size:var(--fs-2);color:var(--grey);margin-bottom:8px}
+.pl-ok{color:#0f7a42;font-weight:600;font-size:var(--fs-2)}
+.pl-no{color:#8a6100;font-weight:600;font-size:var(--fs-2)}
 .pl-missing{background:#fffbf0}
-.pl-m{font-size:.7rem;font-weight:800;padding:2px 8px;border-radius:99px}
+.pl-m{font-size:var(--fs-1);font-weight:600;padding:2px 8px;border-radius:99px}
 .pl-m.exact{background:#e8f8ee;color:#0f7a42}
 .pl-m.alias{background:#eef4fd;color:#1f5fa8}
 .pl-m.partial{background:#fff6e5;color:#8a6100}
 .pl-m.fuzzy{background:#fdeeee;color:#a12525}
-.pl-auto{background:#eef4fd;color:#1f5fa8;font-size:.66rem;font-weight:800;padding:2px 7px;
+.pl-auto{background:#eef4fd;color:#1f5fa8;font-size:var(--fs-1);font-weight:600;padding:2px 7px;
   border-radius:99px;margin-inline-start:5px;white-space:nowrap;cursor:help}
 .leaflet-container{font-family:inherit}
 @media(max-width:900px){.pl-cols{grid-template-columns:1fr}}
@@ -236,7 +236,7 @@ $e = $edit ?: null;
     var q = nameI.value.trim();
     if (!q) { window.AppUI.notice('اكتب اسم الوجهة الأول.'); nameI.focus(); return; }
     btn.disabled = true; btn.textContent = '⏳ بندوّر…';
-    // ⚠️ البحث بيمرّ على السيرفر مش من المتصفح مباشرة. سببين: الـCSP بتمنع أي
+    // ⚠ البحث بيمرّ على السيرفر مش من المتصفح مباشرة. سببين: الـCSP بتمنع أي
     //    اتصال خارجي من الصفحة (`connect-src 'self'`)، والأهم إن السيرفر عنده
     //    فلترة `Track::geocodePlace` اللي بتمنع فخ «أول نتيجة» (البحث الخام عن
     //    «العاشر» بيرجّع مقبرة في الأقصر). ما ترجّعش الاتصال المباشر.

@@ -2,6 +2,7 @@
 namespace App\Models;
 
 use App\Core\Database;
+use App\Models\PartyDoc;
 use RuntimeException;
 
 /**
@@ -47,34 +48,34 @@ class RepPortal
      * الأذونات اللي المندوب يقدر يشتغل عليها + حركاتها + وصف حاوياتها.
      *
      * ⚠️ v43 — **كل الأذونات المفتوحة بتظهر لكل المناديب** (قرار المالك):
-     * التنزيل بقى ترتيب وشارة بس (`mine`) مش شرط رؤية، والمقفول هو الوحيد
-     * اللي بيختفي. لو رجّعت شرط التنزيل هنا لازم ترجّعه في `assertAssigned`
-     * كمان، وإلا المندوب هيبقى يقدر يكتب على إذن مش شايفه.
+     * التنزيل مش شرط رؤية ولا شرط كتابة، والمقفول هو الوحيد اللي بيختفي. لو
+     * رجّعت شرط التنزيل هنا لازم ترجّعه في `assertAssigned` كمان، وإلا المندوب
+     * هيبقى يقدر يكتب على إذن مش شايفه.
+     *
+     * ⚠️ **2026-07-28 — التنزيل اتشال خالص من شاشة المندوب** (قرار المالك:
+     * «مش هننزّل إذن لمندوب معيّن»): مكانش فاضل منه غير **شارة وترتيب**،
+     * وده كان بيوهم المندوب إن فيه أذونات «بتاعته» وأذونات «تانية» وهو
+     * الحقيقة بيشتغل على أي إذن مفتوح. القايمة بقت **واحدة مرتّبة بالتاريخ**،
+     * والاستعلام اتخفّف من استعلامين فرعيين مترابطين على كل صف.
+     * الجدول `permit_assignments` **ما اتلمسش** — لسه سجل مكتب في كارت
+     * المندوب، بس مالوش أي أثر على اللي بيشوفه المندوب.
      */
     public static function myPermits(int $repId): array
     {
-        // خطوة أولى: نحدّد أذونات الشاشة ونرتّبها (المنزّل ليه فوق) قبل ما نجيب
-        // الحركات، عشان الـLIMIT يبقى على الأذونات مش على صفوف الحركات.
+        // خطوة أولى: نحدّد أذونات الشاشة ونرتّبها قبل ما نجيب الحركات، عشان
+        // الـLIMIT يبقى على الأذونات مش على صفوف الحركات.
         $picked = Database::all(
-            "SELECT p.id, p.created_at,
-                    (SELECT a.assigned_at FROM permit_assignments a
-                      WHERE a.permit_id = p.id AND a.rep_id = ? AND a.status = 'active' LIMIT 1) AS assigned_at,
-                    EXISTS(SELECT 1 FROM permit_assignments a
-                            WHERE a.permit_id = p.id AND a.rep_id = ? AND a.status = 'active') AS mine
+            "SELECT p.id, p.created_at
              FROM permits p
              WHERE p.status = 'open'
-             ORDER BY mine DESC, p.permit_date DESC, p.id DESC
-             LIMIT " . self::PERMIT_LIMIT, [$repId, $repId]);
+             ORDER BY p.permit_date DESC, p.id DESC
+             LIMIT " . self::PERMIT_LIMIT);
         if (!$picked) { return []; }
 
-        // خرائط مساعدة: منزّل ليه؟ + توقيت الإنشاء/التنزيل (لكشف «الجديد» على الشاشة)
-        $mine = $meta = [];
-        foreach ($picked as $r) {
-            $pid = (int) $r['id'];
-            $mine[$pid] = ((int) $r['mine']) === 1;
-            $meta[$pid] = ['created_at' => $r['created_at'], 'assigned_at' => $r['assigned_at']];
-        }
-        $ids = implode(',', array_map('intval', array_keys($mine)));
+        // توقيت الإنشاء — الشاشة بتقارنه بآخر زيارة محفوظة في المتصفح لكشف «الجديد»
+        $meta = [];
+        foreach ($picked as $r) { $meta[(int) $r['id']] = $r['created_at']; }
+        $ids = implode(',', array_map('intval', array_keys($meta)));
 
         $rows = Database::all(
             "SELECT p.id permit_id, p.permit_type, p.permit_no, p.permit_date, p.company, p.client,
@@ -106,9 +107,7 @@ class RepPortal
                     'container_type' => trim((string) ($row['permit_container_type'] ?? '')),
                     'container_label' => '',
                     'container_parts' => [],   // ['8×20 قدم', '2×40 مبرّد'] — كل واحد شارة لوحده
-                    'mine'       => $mine[$pid] ?? false,   // منزّل ليه فعلاً (شارة وترتيب بس)
-                    'created_at' => $meta[$pid]['created_at'] ?? null,   // لكشف «إذن جديد» على الشاشة
-                    'assigned_at'=> $meta[$pid]['assigned_at'] ?? null,
+                    'created_at' => $meta[$pid] ?? null,   // لكشف «إذن جديد» على الشاشة
                     'bills'      => 0,          // عدد البوالص (يتملّى تحت)
                     'drivers'    => [],         // أسماء السائقين
                     'cars'       => 0,          // عدد العربيات المختلفة
@@ -183,9 +182,21 @@ class RepPortal
             }
         }
 
-        // نرجّع بترتيب الاختيار (المنزّل ليه فوق) مش بترتيب الـid.
+        // هل الإذن ليه مستندات ظاهرة للمندوب؟ (v56 — وصفي بحت، **استعلامان
+        // للشاشة كلها** لا استعلامين لكل إذن. تفاصيل السبب في PartyDoc::keySet.)
+        $docKeys = PartyDoc::keySet(true);
+        foreach ($out as &$pd) {
+            $pd['has_docs'] = $docKeys
+                ? PartyDoc::permitHasDocs($docKeys, $pd['company'], $pd['client'])
+                : false;
+        }
+        unset($pd);
+
+        // ⚠️ نرجّع بترتيب الاستعلام الأول (التاريخ) مش بترتيب الـid — الاستعلام
+        //    التاني بيرتّب بـ`p.id` عشان تجميع الحركات، فالترتيب المعروض لازم
+        //    يترجع من `$meta` اللي متولّدة من الترتيب الصح.
         $ordered = [];
-        foreach (array_keys($mine) as $pid) {
+        foreach (array_keys($meta) as $pid) {
             if (isset($out[$pid])) { $ordered[] = $out[$pid]; }
         }
         return $ordered;
@@ -305,6 +316,7 @@ class RepPortal
             'ref_no'      => (string) ($s['ref_no'] ?? ''),
             'is_visa'     => !empty($s['is_visa']) ? '1' : '',
             'visa_card_id'=> (string) ($s['visa_card_id'] ?? ''),
+            'unpaid'      => !empty($s['unpaid']) ? '1' : '',   // v57
         ];
     }
 
@@ -499,12 +511,13 @@ class RepPortal
             Database::exec(
                 "INSERT INTO rep_submissions
                     (rep_id, client_token, permit_id, movement_id, kind, note, qty,
-                     unit_amount, amount, entry_date, ref_no, photo, is_visa, visa_card_id, status)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending')",
+                     unit_amount, amount, entry_date, ref_no, photo, is_visa, visa_card_id,
+                     unpaid, status)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending')",
                 [$repId, $token, $n['permit_id'], $n['movement_id'], $n['kind'], $n['note'],
                  $n['qty'], $n['unit_amount'], $n['amount'], $n['entry_date'], $n['ref_no'],
                  ($d['photo'] ?? '') !== '' ? $d['photo'] : null,
-                 $n['is_visa'], $n['visa_card_id']]);
+                 $n['is_visa'], $n['visa_card_id'], $n['unpaid']]);
         } catch (\Throwable $e) {
             // خط دفاع للطلبين المتزامنين بنفس الرمز؛ لا نخفي أي خطأ آخر.
             $existing = Database::scalar(
@@ -538,11 +551,11 @@ class RepPortal
         $affected = Database::exec(
             "UPDATE rep_submissions
              SET movement_id=?, kind=?, note=?, qty=?, unit_amount=?, amount=?, entry_date=?,
-                 ref_no=?, photo=?, is_visa=?, visa_card_id=?, updated_at=NOW()
+                 ref_no=?, photo=?, is_visa=?, visa_card_id=?, unpaid=?, updated_at=NOW()
              WHERE id=? AND rep_id=? AND status='pending' AND review_started_at IS NULL",
             [$n['movement_id'], $n['kind'], $n['note'], $n['qty'], $n['unit_amount'],
              $n['amount'], $n['entry_date'], $n['ref_no'], $photo !== '' ? $photo : null,
-             $n['is_visa'], $n['visa_card_id'], $subId, $repId]);
+             $n['is_visa'], $n['visa_card_id'], $n['unpaid'], $subId, $repId]);
 
         if ($affected !== 1) {
             // MySQL قد يرجع 0 لو المستخدم حفظ نفس القيم في نفس الثانية.
@@ -647,6 +660,17 @@ class RepPortal
             $errors['visa_card_id'] = 'الكارت ده مش موجود أو متوقف — اختر كارت تاني.';
         }
 
+        // ── «غير مدفوع» (v57): البند اتحاسب من برّه عهدة المندوب وبرّه الخزنة
+        // كمان (قرار المالك). بيتسجّل على الإذن وبيتفوتر للعميل عادي، لكن
+        // **ما بيخصمش ولا مليم من أي محفظة**.
+        // ⚠️ بنود الأذونات بس — النثرية دايمًا بتتدفع من عهدته فعلاً (قرار المالك).
+        // ⚠️ ومتنافي مع الفيزا: يا إما اتدفع بكارت المكتب يا إما ما اتدفعش منّنا خالص.
+        $unpaid = !$misc && !empty($d['unpaid']);
+        if ($unpaid && $isVisa) {
+            $errors['unpaid'] = 'اختار واحدة بس: يا «مدفوع بالفيزا» يا «غير مدفوع».';
+        }
+        if ($unpaid) { $isVisa = false; $cardId = null; }
+
         $amount = round($unit * $qty, 2);
         if ($amount > 999999999999.99) { $errors['unit_amount'] = 'إجمالي المبلغ أكبر من الحد المسموح.'; }
 
@@ -658,6 +682,7 @@ class RepPortal
             'note' => $note, 'qty' => $qty, 'unit_amount' => $unit, 'amount' => $amount,
             'entry_date' => $date, 'ref_no' => $ref !== '' ? $ref : null,
             'is_visa' => $isVisa ? 1 : 0, 'visa_card_id' => $cardId,
+            'unpaid' => $unpaid ? 1 : 0,
         ];
     }
 
@@ -827,10 +852,16 @@ class RepPortal
         if (($names['company'] ?? '') === '') { $errors['company'] = 'اكتب الشركة اللي لصالحها الإذن.'; }
         if (($names['client'] ?? '') === '')  { $errors['client']  = 'اكتب العميل (الوكيل).'; }
 
+        // ⚠️ القوائم المقفولة (`Lookup::STRICT`): المندوب بيختار من المعتمد وبس.
+        //    الفورم بيعرض `<select>` لكنه **مش مصدر ثقة** — الفحص هنا هو الحد الحقيقي.
+        //    مفيش استثناء «قيمة قديمة» لأن ده إنشاء إذن جديد مش تعديل سجل قايم.
         $short = [];
         foreach (['shipping_co' => 'التوكيل الملاحي', 'agency' => 'التوكيل', 'port' => 'الميناء'] as $field => $label) {
             $v = preg_replace('/\s+/u', ' ', trim((string) ($d[$field] ?? '')));
             if (mb_strlen($v) > 120) { $errors[$field] = $label . ' لازم يكون 120 حرف أو أقل.'; }
+            elseif ($v !== '' && ($fixed = self::strictValue($field, $v)) === null) {
+                $errors[$field] = $label . ' لازم يكون من القائمة — اختار من الموجود واطلب من المكتب يضيف الناقص.';
+            } elseif ($v !== '') { $v = $fixed; }
             $short[$field] = $v;
         }
 
@@ -840,6 +871,9 @@ class RepPortal
         // container_norm هي المصدر الوحيد لتوحيد التصنيف (v30) — ممنوع تحويل موازٍ.
         $ctype = container_norm((string) ($d['container_type'] ?? ''));
         if (mb_strlen($ctype) > 120) { $errors['container_type'] = 'التصنيف لازم يكون 120 حرف أو أقل.'; }
+        elseif ($ctype !== '' && ($fixedCt = self::strictValue('container_type', $ctype)) === null) {
+            $errors['container_type'] = 'التصنيف لازم يكون من القائمة — اختار من الموجود.';
+        } elseif ($ctype !== '') { $ctype = $fixedCt; }
 
         $note = preg_replace('/\s+/u', ' ', trim((string) ($d['note'] ?? '')));
         if (mb_strlen($note) > 500) { $errors['note'] = 'الملاحظة لازم تكون 500 حرف أو أقل.'; }
@@ -859,6 +893,349 @@ class RepPortal
             'container_type' => $ctype !== '' ? $ctype : null,
             'note'        => $note !== '' ? $note : null,
         ];
+    }
+
+    /**
+     * قيمة من قائمة مقفولة: بترجّع التهجئة المعتمدة، أو `null` لو مش من القائمة.
+     * ⚠️ نسخة البوابة من `Controller::strictListError` — الاتنين لازم يفضلوا
+     *    بنفس القاعدة (مطابقة `normkey` على `Lookup::ofType`)، وإلا المندوب
+     *    يقدر يدخّل قيمة المكتب بيرفضها أو العكس.
+     */
+    private static function strictValue(string $type, string $value): ?string
+    {
+        $key = Maintenance::normkey($value);
+        foreach (Lookup::ofType($type) as $v) {
+            if (Maintenance::normkey((string) $v) === $key) { return (string) $v; }
+        }
+        return null;
+    }
+
+    // ─────────────────────────────────────────── إضافة بوليصة من الموبايل (v60)
+
+    /** حقول البوليصة اللي بتعدّي على حارس الأسماء: حقل الفورم ⇒ نوع الاقتراح. */
+    private const BILL_NAME_FIELDS = ['driver' => 'driver', 'car_owner' => 'car_owner'];
+
+    /** أقصى عهدة في بوليصة واحدة — حاجز غلط إدخال مش سياسة. */
+    private const BILL_MAX_CUSTODY = 999999999.99;
+
+    /**
+     * المندوب بيضيف بوليصة على إذن مفتوح من موبايله (v60).
+     *
+     * قرار المالك: **بتدخل النظام على طول بلا اعتماد** — زي فتح الإذن (v43)
+     * وبعكس بنود الإيصالات اللي بتقعد في صندوق المراجعة. المندوب مسؤول عن اللي
+     * بيسجّله، والمكتب بيراجعه ويعدّله من صفحة الإذن.
+     *
+     * ⚠️ **الفلوس اللي بتخصّ العميل ما بتوصلش الشاشة دي** (قاعدة v35): النولون
+     *    والتحويلة والبياتة **بتتساب صفر** والمكتب هو اللي بيحطّها. الرقم الوحيد
+     *    اللي المندوب بيدخّله هو **عهدة السائق** — وهي فلوس هو دفعها من محفظته.
+     *
+     * ⚠️⚠️ **عهدة السائق هنا بتتخصم من عهدة المندوب مش من خزنة المكتب** — البوليصة
+     *    بتتوسم بـ`custody_rep_id` والوسم ده بيستثنيها من الخزنة ويضيفها لصرفه.
+     *    المصدر الوحيد للاتجاهين `App\Models\RepBillCustody`.
+     *
+     * ⚠️ **صاحب البيان بيتساب NULL دايمًا** (طلب المالك الحرفي): المندوب مش
+     *    بيشوف الخانة ولا بيقدر يبعتها، والمكتب بيحطّها بعدين. لو ضفتها للفورم
+     *    هتبقى مصدر تلوّث أسماء (تحذير 3) من غير مراجعة.
+     *
+     * ⚠️ **التاريخ = يوم العمل إجباريًّا** — بيتاخد من الجلسة في الكنترولر
+     *    وبيتفرض هنا، والفورم مالوش خانة تاريخ خالص (قاعدة v49).
+     *
+     * بيرجع ['id' => .., 'label' => ..].
+     */
+    public static function createBill(int $repId, array $d): array
+    {
+        $n = self::normaliseBill($repId, $d);
+
+        $data = [
+            'permit_id'         => $n['permit_id'],
+            'movement_id'       => $n['movement_id'],
+            'bill_type'         => $n['bill_type'],
+            'bill_date'         => $n['bill_date'],
+            'bill_number'       => $n['bill_number'],
+            'permit_no'         => $n['bill_type'] === 'sader' ? $n['permit_no'] : null,
+            'cert_number'       => $n['bill_type'] === 'warid' ? $n['permit_no'] : null,
+            // ⚠️ صاحب البيان شغل المكتب — المندوب ما بيدخّلوش (طلب المالك).
+            'declaration_owner'    => null,
+            'declaration_owner_id' => null,
+            'company'           => $n['company'],
+            'company_id'        => $n['company_id'],
+            'destination'       => $n['destination'],
+            'container_no'      => $n['container_no'],
+            'container_type'    => $n['container_type'],
+            'container_count'   => $n['container_count'],
+            'car_no'            => $n['car_no'],
+            'driver'            => $n['driver'],
+            'car_owner'         => $n['car_owner'],
+            // ⚠️ أرقام العميل شغل المكتب (v35) — الخصم بياخد الافتراضي من Schema
+            //    زي شاشة المكتب بالظبط عشان ما يبقاش فيه تعريفان للقيمة.
+            'freight'              => 0,
+            'custody'              => $n['custody'],
+            'transfer'             => 0,
+            'discount'             => $n['discount'],
+            'overnight_collection' => 0,
+        ];
+        $data['debt'] = \App\Calc::bawala($data)['debt'];
+        // الوسم بيتحط بس لو فيه فلوس اتدفعت فعلاً — بوليصة بعهدة صفر ما خرجش
+        // منها ولا مليم من محفظة حد، فتفضل بلا وسم زي أي بوليصة مكتب.
+        if ($n['custody'] > 0 && RepBillCustody::ready()) {
+            $data['custody_rep_id'] = $repId;
+        }
+
+        $pdo = Database::conn();
+        $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            // صف المندوب هو mutex كل مصادر عهدته — نفس القفل اللي بيستخدمه
+            // RepInbox::approve وRepDriverHandover::create.
+            Database::row('SELECT id FROM reps WHERE id = ? FOR UPDATE', [$repId]);
+
+            $cols = array_keys($data);
+            Database::exec(
+                "INSERT INTO bawalis (`" . implode('`,`', $cols) . "`) VALUES ("
+                . implode(',', array_map(fn($c) => ":$c", $cols)) . ")",
+                array_combine(array_map(fn($c) => ":$c", $cols), array_values($data))
+            );
+            $billId = Database::lastId();
+            Bill::recalc($billId);
+            Movement::ensureForBill($billId);   // نفس مسار شاشة المكتب بالحرف
+
+            if ($own) { $pdo->commit(); }
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $e;
+        }
+
+        // تعلّم القوائم المنسدلة — نفس سلوك شاشة المكتب.
+        if ($n['driver'] !== null)    { Lookup::add('driver', $n['driver']); }
+        if ($n['car_owner'] !== null) { Lookup::add('car_owner', $n['car_owner']); }
+
+        $label = $n['bill_number'] !== null ? ('بوليصة ' . $n['bill_number']) : ('بوليصة #' . $billId);
+        $saved = Database::row('SELECT * FROM bawalis WHERE id = ?', [$billId]);
+        Audit::log('create', 'bawalis', $billId, null, $saved,
+            'إضافة ' . $label . ' — من موبايل المندوب'
+            . ($n['custody'] > 0 ? ' (عهدة السائق من محفظته)' : ''),
+            ['permit_id' => $n['permit_id'], 'permit_no' => $n['permit_no'],
+             'movement_id' => $n['movement_id'], 'record_date' => $n['bill_date'],
+             'rep_id' => $repId, 'source' => 'rep_portal']);
+
+        return ['id' => $billId, 'label' => $label, 'permit_id' => $n['permit_id']];
+    }
+
+    /**
+     * تحقق بوليصة المندوب — **الخادم هو مصدر الحقيقة**، الفورم مش موثوق.
+     * بيرجع القيم النظيفة أو بيرمي RepSubmissionValidationException برسايل عربية.
+     */
+    private static function normaliseBill(int $repId, array $d): array
+    {
+        $errors = [];
+
+        // ① الإذن — لازم مفتوح وظاهر للمندوب (قاعدة v43). ده الحد الأمني الحقيقي.
+        $permitId = (int) ($d['permit_id'] ?? 0);
+        $permit = null;
+        if ($permitId <= 0) {
+            $errors['permit_id'] = 'اختار الإذن الأول.';
+        } else {
+            try { self::assertAssigned($repId, $permitId); }
+            catch (\Throwable $e) { $errors['permit_id'] = $e->getMessage(); }
+            $permit = Database::row(
+                'SELECT id, permit_type, permit_no, company, company_id, destination, container_type
+                   FROM permits WHERE id = ?', [$permitId]);
+            if (!$permit) { $errors['permit_id'] = 'الإذن ده مش موجود.'; }
+        }
+
+        // ② الحركة — لازم تتبع نفس الإذن (مستحيل تتسجّل على إذن تاني لو الفورم اتزوّر)
+        $movementId = (int) ($d['movement_id'] ?? 0) ?: null;
+        if ($permit && $movementId !== null) {
+            $owns = Database::scalar(
+                'SELECT id FROM permit_movements WHERE id = ? AND permit_id = ?', [$movementId, $permitId]);
+            if (!$owns) { $errors['movement_id'] = 'الحركة دي مش من الإذن ده — اقفل الصفحة وافتحها تاني.'; }
+        }
+        if ($permit && $movementId === null
+            && Database::scalar('SELECT COUNT(*) FROM permit_movements WHERE permit_id = ?', [$permitId])) {
+            $errors['movement_id'] = 'اختار الحركة (النقلة) اللي البوليصة دي عليها.';
+        }
+
+        // ③ رقم البوليصة — إجباري ومستحيل يتكرر
+        $billNo = preg_replace('/\s+/u', ' ', trim((string) ($d['bill_number'] ?? '')));
+        if ($billNo === '') {
+            $errors['bill_number'] = 'اكتب رقم البوليصة زي ما هو في الورقة.';
+        } elseif (mb_strlen($billNo) > 80) {
+            $errors['bill_number'] = 'رقم البوليصة لازم يكون 80 حرف أو أقل.';
+        } elseif (Bill::numberExists($billNo)) {
+            $errors['bill_number'] = 'رقم البوليصة «' . $billNo . '» متسجّل قبل كده. '
+                                   . 'راجع الرقم — لو البوليصة دي اتسجّلت خلاص مش محتاج تعيدها.';
+        }
+
+        // ④ عدد الحاويات — لازم يلتزم بسعة الحركة الظاهرة (وإلا الإذن يتعدّى)
+        // ⚠️ الحد الأدنى **حاوية واحدة** (طلب المالك): رقم الحاوية بقى إجباري،
+        //    فبوليصة بصفر حاويات مالهاش رقم تتكتب فيه أصلاً.
+        $count = (int) ($d['container_count'] ?? 0);
+        if ($count < 1) {
+            $errors['container_count'] = 'عدد الحاويات لازم يكون حاوية واحدة على الأقل.';
+        } elseif ($count > 10000) {
+            $errors['container_count'] = 'عدد الحاويات لازم يكون من 1 لـ10000.';
+        } elseif ($permit && !isset($errors['movement_id'])) {
+            $cap = Permit::billContainerCapacity($permitId, $movementId);
+            if ($cap['total'] > 0 && $cap['allocated'] + $count > $cap['total']) {
+                $where = $cap['scope'] === 'movement' ? 'الحركة' : 'الإذن';
+                $errors['container_count'] = 'العدد ده أكتر من الفاضل في ' . $where
+                    . ' (فاضل ' . $cap['left'] . ' من ' . $cap['total'] . ').';
+            }
+        }
+
+        // ⑤ تصنيف الحاويات — قائمة مقفولة (v58)؛ الفورم `select` لكنه مش مصدر ثقة.
+        $ctype = container_norm((string) ($d['container_type'] ?? ''));
+        if ($ctype === '') {
+            $errors['container_type'] = 'اختار تصنيف الحاويات.';
+        } elseif (($fixedCt = self::strictValue('container_type', $ctype)) === null) {
+            $errors['container_type'] = 'التصنيف لازم يكون من القائمة — اختار من الموجود.';
+        } else {
+            $ctype = $fixedCt;
+        }
+
+        /* ⑥ أرقام الحاويات — **إجبارية، رقم لكل حاوية** (طلب المالك).
+           ⚠️ bootstrap بيلمّ `container_no[]` في نصّ واحد **وبيتجاهل الفاضي**
+              (`container_nos_join`)، فعدد الأجزاء بعد التفكيك = عدد الخانات
+              اللي المندوب ملاها فعلاً. مقارنته بعدد الحاويات هي اللي بتمسك
+              «كتب رقم واحد وسايب التاني فاضي». */
+        $containerNo = preg_replace('/\s+/u', ' ', trim((string) ($d['container_no'] ?? '')));
+        $nos = array_values(array_filter(
+            array_map('trim', container_nos_split($containerNo, 0)),
+            static fn ($x) => $x !== ''));
+        if (!$nos) {
+            $errors['container_no'] = 'اكتب رقم الحاوية.';
+        } elseif ($count >= 1 && count($nos) < $count) {
+            $missing = $count - count($nos);
+            $errors['container_no'] = 'ناقص ' . $missing . ' رقم حاوية — لازم رقم لكل حاوية ('
+                                    . $count . ').';
+        } elseif (mb_strlen($containerNo) > 120) {
+            $errors['container_no'] = 'أرقام الحاويات أطول من المسموح — راجعها.';
+        } else {
+            foreach ($nos as $one) {
+                if (mb_strlen($one) > 40) { $errors['container_no'] = 'رقم الحاوية أطول من 40 حرف.'; break; }
+            }
+        }
+
+        // ⑦ السائق وصاحب العربية — بيعدّوا على حارس الأسماء (تحذير 3)
+        $names = [];
+        foreach (self::BILL_NAME_FIELDS as $field => $suggestType) {
+            $raw = preg_replace('/\s+/u', ' ', trim((string) ($d[$field] ?? '')));
+            if ($raw === '') { $names[$field] = ''; continue; }
+            if (mb_strlen($raw) > 150) { $errors[$field] = 'الاسم لازم يكون 150 حرف أو أقل.'; }
+            $g = NameSuggestion::resolve($suggestType, $raw);
+            if ($g['conflict'] !== null && empty($d['newname_' . $field])) {
+                $errors[$field] = 'الاسم «' . $raw . '» قريب جدًا من «' . $g['conflict'] . '» المسجّل عندنا. '
+                                . 'اختار الاسم الموجود، أو أكّد إنه اسم جديد فعلاً.';
+            }
+            $names[$field] = (string) $g['value'];
+        }
+        if (($names['driver'] ?? '') === '')    { $errors['driver'] = 'اكتب اسم السائق.'; }
+        // ⚠️ صاحب العربية **إجباري** (طلب المالك) — كان اختياريًّا.
+        if (($names['car_owner'] ?? '') === '') { $errors['car_owner'] = 'اكتب صاحب العربية.'; }
+
+        /* ⑦ب رقم العربية = **٣ حروف + ٤ أرقام**، كل حرف في خانته لوحده.
+           ليه مقفول كده: قياس على البيانات الحقيقية لقى **1792 لوحة من 1819**
+           بالشكل ده بالظبط (98.5%)، والباقي حالات نادرة قديمة. تقييد شاشة
+           المندوب بالشكل ده بيمنع الإدخال الغلط تمامًا، وشاشة المكتب بتفضل
+           حرّة للحالات النادرة.
+           ⚠️ الناتج المخزَّن `«ح ح ح 1234»` — نفس صيغة `PermitController::
+              composeCarNo` بالحرف، وإلا نفس العربية تتقري لوحتين مختلفتين في
+              وحدة سيارات المكتب (`OfficeCar::plateKey`). */
+        $letters = [];
+        foreach (['car_l1', 'car_l2', 'car_l3'] as $k) {
+            $c = trim((string) ($d[$k] ?? ''));
+            if ($c === '') {
+                $errors['car_no'] = 'اكتب حروف العربية التلاتة.';
+            } elseif (!preg_match('/^[\x{0621}-\x{064A}]$/u', $c)) {
+                $errors['car_no'] = 'كل خانة فيها حرف عربي واحد بس.';
+            }
+            $letters[] = $c;
+        }
+        $carDigits = preg_replace('/\D+/', '', ar2en_digits(trim((string) ($d['car_digits'] ?? ''))));
+        if ($carDigits === '') {
+            $errors['car_no'] = 'اكتب أرقام العربية الأربعة.';
+        } elseif (strlen($carDigits) !== 4) {
+            $errors['car_no'] = 'أرقام العربية لازم تكون ٤ أرقام بالظبط.';
+        }
+        $carNo = trim(implode(' ', array_filter($letters)) . ' ' . $carDigits);
+
+        // ⑧ عهدة السائق — الرقم الوحيد اللي المندوب بيدخّله، وبيطلع من محفظته هو
+        $rawAmt = strtr(ar2en_digits(trim((string) ($d['custody'] ?? ''))), [
+            ',' => '', '٬' => '', ' ' => '', '٫' => '.',
+        ]);
+        $custody = round((float) $rawAmt, 2);
+        if ($rawAmt === '') {
+            $errors['custody'] = 'اكتب العهدة اللي سلّمتها للسائق (اكتب 0 لو مسلّمتش حاجة).';
+        } elseif ($custody < 0) {
+            $errors['custody'] = 'العهدة ما ينفعش تكون بالسالب.';
+        } elseif ($custody > self::BILL_MAX_CUSTODY) {
+            $errors['custody'] = 'المبلغ أكبر من الحد المسموح.';
+        }
+
+        // ⑨ التاريخ = يوم العمل إجباريًّا (v49) — مش من الفورم خالص
+        $date = trim((string) ($d['bill_date'] ?? ''));
+        if (!self::validDate($date)) {
+            $errors['bill_date'] = 'يوم العمل مش مظبوط — افتح الشاشة تاني.';
+        } elseif ($custody > 0 && ($lock = RepCustody::dayLockReason($date)) !== null) {
+            // العهدة بتتخصم من عهدة يومها، فاليوم المتقفل مرفوض زي أي بند (v49).
+            $errors['bill_date'] = $lock;
+        }
+
+        if ($errors) { throw new RepSubmissionValidationException($errors); }
+
+        // الخصم الافتراضي من Schema — نفس مصدر شاشة المكتب بالحرف.
+        $discField = array_column(\App\Schema::get('bawalis')['fields'], null, 'key')['discount'] ?? [];
+
+        return [
+            'permit_id'       => $permitId,
+            'permit_no'       => $permit['permit_no'] ?: null,
+            'movement_id'     => $movementId,
+            'bill_type'       => ($permit['permit_type'] ?? 'sader') === 'warid' ? 'warid' : 'sader',
+            'bill_date'       => $date,
+            'bill_number'     => $billNo,
+            'company'         => $permit['company'] ?: null,
+            'company_id'      => $permit['company_id'] ?? null,
+            'destination'     => $permit['destination'] ?: null,
+            'container_no'    => $containerNo !== '' ? $containerNo : null,
+            'container_type'  => $ctype !== '' ? $ctype : ($permit['container_type'] ?? null),
+            'container_count' => $count,
+            'car_no'          => $carNo,
+            'driver'          => $names['driver'],
+            'car_owner'       => $names['car_owner'],
+            'custody'         => $custody,
+            'discount'        => (float) ($discField['default'] ?? 0),
+        ];
+    }
+
+    /**
+     * حذف بوليصة المندوب من موبايله — **بوليصته هو في يوم العمل بس**.
+     * غير كده شغل المكتب (البوليصة ممكن يكون اتعمل عليها فاتورة أو سداد).
+     */
+    public static function deleteMyBill(int $repId, int $billId, string $day): void
+    {
+        $bill = RepBillCustody::findMine($repId, $billId);
+        if (!$bill) {
+            throw new RuntimeException('البوليصة دي مش بتاعتك أو المكتب عدّلها — كلّم المكتب.');
+        }
+        if ((string) $bill['bill_date'] !== $day) {
+            throw new RuntimeException('تقدر تمسح بوالص يوم شغلك الحالي بس.');
+        }
+        if (($lock = RepCustody::dayLockReason($day)) !== null) { throw new RuntimeException($lock); }
+        if ((float) ($bill['paid'] ?? 0) > 0) {
+            throw new RuntimeException('البوليصة دي عليها سداد — كلّم المكتب.');
+        }
+        Database::exec('DELETE FROM movements WHERE bill_id = ?', [$billId]);
+        Database::exec('DELETE FROM bawalis WHERE id = ?', [$billId]);
+        Audit::log('delete', 'bawalis', $billId, $bill, null,
+            'حذف بوليصة ' . ($bill['bill_number'] ?: '#' . $billId) . ' — من موبايل المندوب',
+            ['permit_id' => $bill['permit_id'] !== null ? (int) $bill['permit_id'] : null,
+             'record_date' => $bill['bill_date'], 'rep_id' => $repId]);
+    }
+
+    /** بوالص المندوب في يوم العمل — للعرض تحت الفورم. */
+    public static function myBills(int $repId, string $day): array
+    {
+        return RepBillCustody::forRep($repId, 20, $day);
     }
 
     private static function validDate(string $v): bool

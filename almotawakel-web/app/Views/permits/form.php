@@ -28,18 +28,18 @@
     <div class="field"><label>الوكيل (العميل)</label><input list="dl_client" data-smart-name="client" id="permit_client" name="client" value="<?= e($p['client']) ?>" autocomplete="off"></div>
     <div class="field"><label>لصالح شركة</label><input list="dl_company" data-smart-name="company" id="permit_company" name="company" value="<?= e($p['company']) ?>" autocomplete="off"></div>
     <div class="field"><label>الجهة</label><input list="dl_dest" data-smart-name="destination" name="destination" value="<?= e($p['destination']) ?>" autocomplete="off"></div>
-    <div class="field"><label>🚢 شركة الشحن</label><input list="dl_shipping" name="shipping_co" value="<?= e($p['shipping_co'] ?? '') ?>" autocomplete="off"></div>
-    <div class="field"><label>🧾 التوكيل</label><input list="dl_agency" name="agency" value="<?= e($p['agency'] ?? '') ?>" autocomplete="off"></div>
-    <div class="field"><label>⚓ الميناء</label><input list="dl_port" name="port" value="<?= e($p['port'] ?? '') ?>" autocomplete="off"></div>
+    <div class="field"><label>🚢 شركة الشحن</label><?php partial('lookup_select', ['name'=>'shipping_co','type'=>'shipping_co','value'=>$p['shipping_co'] ?? '']); ?></div>
+    <div class="field"><label><?= icon('receipt', 14) ?> التوكيل</label><?php partial('lookup_select', ['name'=>'agency','type'=>'agency','value'=>$p['agency'] ?? '']); ?></div>
+    <div class="field"><label><?= icon('anchor', 14) ?> الميناء</label><?php partial('lookup_select', ['name'=>'port','type'=>'port','value'=>$p['port'] ?? '']); ?></div>
     <div class="field"><label>عدد الحاويات</label><input type="number" min="0" name="containers" value="<?= e($p['containers'] ?? 0) ?>" placeholder="0"></div>
-    <div class="field"><label>تصنيف الحاويات</label><input list="dl_ctype" name="container_type" value="<?= e($p['container_type'] ?? '') ?>" placeholder="مثال: 40 قدم / 20 قدم" autocomplete="off"></div>
-    <div class="field"><label>سعر الكشف لكل حاوية <span style="color:var(--grey);font-weight:600">(لهذا الإذن)</span></label><input type="number" step="0.01" min="0" name="inspection_rate" value="<?= e($p['inspection_rate'] ?? '') ?>" placeholder="يُدخَل يدوياً"></div>
-    <div class="field"><label>سعر الضمان لكل حاوية <span style="color:var(--grey);font-weight:600">(لهذا الإذن)</span></label><input type="number" step="0.01" min="0" name="guarantee_rate" value="<?= e($p['guarantee_rate'] ?? '') ?>" placeholder="يُدخَل يدوياً"></div>
+    <div class="field"><label>تصنيف الحاويات</label><?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','value'=>$p['container_type'] ?? '']); ?></div>
+    <div class="field"><label>سعر الكشف لكل حاوية <span style="color:var(--grey);font-weight:400">(لهذا الإذن)</span></label><input type="number" step="0.01" min="0" name="inspection_rate" value="<?= e($p['inspection_rate'] ?? '') ?>" placeholder="يُدخَل يدوياً"></div>
+    <div class="field"><label>سعر الضمان لكل حاوية <span style="color:var(--grey);font-weight:400">(لهذا الإذن)</span></label><input type="number" step="0.01" min="0" name="guarantee_rate" value="<?= e($p['guarantee_rate'] ?? '') ?>" placeholder="يُدخَل يدوياً"></div>
     <div class="field"><label>ملاحظة</label><input name="note" value="<?= e($p['note']) ?>"></div>
   </div>
 
   <div class="form-actions">
-    <button class="btn gold" type="submit" data-primary-submit>💾 <?= $isEdit?'حفظ التعديلات':'إنشاء الإصدار وفتح التايم لاين' ?></button>
+    <button class="btn gold" type="submit" data-primary-submit><?= icon('download', 14) ?> <?= $isEdit?'حفظ التعديلات':'إنشاء الإصدار وفتح التايم لاين' ?></button>
     <a class="btn ghost" href="<?= url($back ?? 'permits') ?>">إلغاء</a>
   </div>
 </form>

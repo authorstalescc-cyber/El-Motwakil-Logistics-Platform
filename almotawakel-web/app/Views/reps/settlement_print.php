@@ -27,7 +27,7 @@ $payDate = $s['pay_date'] ?: substr($s['settled_at'], 0, 10);
 <?php partial('print_base'); ?>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{background:var(--bg);color:var(--ink);font-family:'Segoe UI',Tahoma,'Cairo',sans-serif;
+  html,body{background:var(--bg);color:var(--ink);font-family:var(--font);
     direction:rtl;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;position:relative;
     box-shadow:0 10px 40px rgba(21,53,91,.15);overflow:hidden}
@@ -37,44 +37,44 @@ $payDate = $s['pay_date'] ?: substr($s['settled_at'], 0, 10);
     padding-bottom:16px;border-bottom:2px solid var(--line)}
   .brand{display:flex;flex-direction:column;align-items:center;gap:6px}
   .brandlogo{height:78px;width:auto;max-width:230px;object-fit:contain}
-  .brand .logo{width:78px;height:78px;border-radius:16px;background:var(--navy);color:var(--gold);
-    display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:800}
-  .brand .cap{color:var(--navy);font-size:15px;font-weight:800}
+  .brand .logo{width:78px;height:78px;border-radius:var(--radius-3);background:var(--navy);color:var(--gold);
+    display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:600}
+  .brand .cap{color:var(--navy);font-size:15px;font-weight:600}
   .inv-tag{text-align:left;min-width:200px}
-  .inv-tag .word{display:inline-block;background:var(--gold);color:var(--navy);font-size:20px;font-weight:800;
-    padding:9px 20px;border-radius:10px}
+  .inv-tag .word{display:inline-block;background:var(--gold);color:var(--navy);font-size:20px;font-weight:600;
+    padding:9px 20px;border-radius:var(--radius-2)}
   .inv-tag .meta{margin-top:12px;font-size:12.5px;color:var(--muted);line-height:2}
   .inv-tag .meta b{color:var(--navy);font-size:14px}
-  .rep-card{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:13px 16px;background:#fcfdfe;
+  .rep-card{margin-top:16px;border:1px solid var(--line);border-radius:var(--radius-2);padding:13px 16px;background:#fcfdfe;
     display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
-  .rep-card .t{font-size:11px;color:var(--gold);font-weight:800;margin-bottom:5px}
-  .rep-card .name{font-size:19px;font-weight:800;color:var(--navy)}
+  .rep-card .t{font-size:11px;color:var(--gold);font-weight:600;margin-bottom:5px}
+  .rep-card .name{font-size:19px;font-weight:600;color:var(--navy)}
   .rep-card .sub{font-size:12px;color:var(--muted);margin-top:3px}
   .sec{margin-top:18px}
-  .sec-t{background:var(--navy);color:#fff;padding:8px 14px;border-radius:9px 9px 0 0;font-size:13.5px;font-weight:800}
+  .sec-t{background:var(--navy);color:#fff;padding:8px 14px;border-radius:9px 9px 0 0;font-size:13.5px;font-weight:600}
   table.bills{width:100%;border-collapse:collapse;font-size:11.5px;border:1px solid var(--line);border-top:none}
-  table.bills thead th{background:#eef2f7;color:var(--navy);padding:7px 6px;font-weight:800;text-align:center;border-bottom:1px solid var(--line)}
+  table.bills thead th{background:#eef2f7;color:var(--navy);padding:7px 6px;font-weight:600;text-align:center;border-bottom:1px solid var(--line)}
   table.bills tbody td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:center}
   table.bills td.r{text-align:right} table.bills td.num{font-variant-numeric:tabular-nums}
   table.bills tbody tr:nth-child(even){background:#f8fafc}
-  table.bills .pos{color:var(--green);font-weight:700} table.bills .neg{color:var(--red);font-weight:800}
+  table.bills .pos{color:var(--green);font-weight:500} table.bills .neg{color:var(--red);font-weight:600}
   .totals{margin-top:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-  .tc{border:1px solid var(--line);border-radius:11px;padding:11px 12px;text-align:center;background:#fcfdfe}
-  .tc .l{font-size:10.5px;color:var(--muted);font-weight:700;margin-bottom:4px}
-  .tc .v{font-size:16px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+  .tc{border:1px solid var(--line);border-radius:var(--radius-2);padding:11px 12px;text-align:center;background:#fcfdfe}
+  .tc .l{font-size:10.5px;color:var(--muted);font-weight:500;margin-bottom:4px}
+  .tc .v{font-size:16px;font-weight:600;color:var(--navy);font-variant-numeric:tabular-nums}
   .tc.net{background:var(--navy)} .tc.net .l{color:#dfe8f2} .tc.net .v{color:var(--gold);font-size:19px}
-  .words{margin-top:16px;border:1px dashed var(--gold);background:var(--gold-l);border-radius:12px;padding:12px 16px}
-  .words .t{font-size:11px;color:#8a6d10;font-weight:800;margin-bottom:5px}
-  .words .v{font-size:14px;font-weight:700;color:var(--navy);line-height:1.8}
+  .words{margin-top:16px;border:1px dashed var(--gold);background:var(--gold-l);border-radius:var(--radius-2);padding:12px 16px}
+  .words .t{font-size:11px;color:#8a6d10;font-weight:600;margin-bottom:5px}
+  .words .v{font-size:14px;font-weight:500;color:var(--navy);line-height:1.8}
   .foot{margin-top:26px;padding-top:16px;border-top:2px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:40px}
   .sign{text-align:center}
-  .sign .line{margin-top:30px;border-top:1.5px dashed var(--muted);padding-top:6px;color:var(--muted);font-size:12.5px;font-weight:700}
+  .sign .line{margin-top:30px;border-top:1.5px dashed var(--muted);padding-top:6px;color:var(--muted);font-size:12.5px;font-weight:500}
   .pagefoot{text-align:center;color:var(--muted);font-size:10.5px;padding:10px 0 16px}
   .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-size:340px;font-weight:900;color:rgba(21,53,91,.035);pointer-events:none;z-index:0}
+    font-size:340px;font-weight:700;color:rgba(21,53,91,.035);pointer-events:none;z-index:0}
   .pad>*{position:relative;z-index:1}
   .bar{max-width:210mm;margin:0 auto;display:flex;gap:10px;justify-content:center;padding:6px}
-  .btn{padding:10px 22px;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;
+  .btn{padding:10px 22px;border:none;border-radius:var(--radius-2);font-weight:600;font-size:14px;cursor:pointer;
     font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
   .btn.gold{background:var(--gold);color:var(--navy)} .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
   @media print{ @page{size:A4;margin:0} html,body{background:#fff} .noprint{display:none!important}
@@ -84,7 +84,7 @@ $payDate = $s['pay_date'] ?: substr($s['settled_at'], 0, 10);
 <body>
 
 <div class="bar noprint">
-  <button class="btn gold" onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+  <button class="btn gold" onclick="window.print()"><?= icon('file-text', 14) ?> طباعة / حفظ PDF</button>
   <a class="btn ghost" href="<?= url('reps/'.$rep['id']) ?>">‹ رجوع لكارت المندوب</a>
 </div>
 

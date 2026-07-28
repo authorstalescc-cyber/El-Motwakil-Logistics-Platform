@@ -18,11 +18,11 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
       <div class="section-head" style="margin:0 0 10px"><?= icon('check-circle', 17) ?> بيانات الدخول جاهزة — ابعتهاله دلوقتي</div>
 
       <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-        <div><div style="font-size:var(--fs-1);color:var(--grey);font-weight:700">اسم الدخول</div>
-          <code style="font-size:var(--fs-4);font-weight:800"><?= e($cred['username']) ?></code></div>
-        <div><div style="font-size:var(--fs-1);color:var(--grey);font-weight:700">الرقم السري</div>
-          <code style="font-size:var(--fs-6);font-weight:900;letter-spacing:.15em"><?= e($cred['pin']) ?></code></div>
-        <div><div style="font-size:var(--fs-1);color:var(--grey);font-weight:700">الرابط</div>
+        <div><div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">اسم الدخول</div>
+          <code style="font-size:var(--fs-4);font-weight:600"><?= e($cred['username']) ?></code></div>
+        <div><div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">الرقم السري</div>
+          <code style="font-size:var(--fs-6);font-weight:700;letter-spacing:.15em"><?= e($cred['pin']) ?></code></div>
+        <div><div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">الرابط</div>
           <code style="font-size:var(--fs-2)"><?= e($cred['link']) ?></code></div>
       </div>
 
@@ -34,22 +34,22 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
           <span class="pill st-late">مفيش رقم موبايل صح للمندوب —
             <a href="<?= url('reps/' . $repId . '/edit') ?>">ضيفه الأول</a></span>
         <?php endif; ?>
-        <button type="button" class="btn ghost" id="copyCred">📋 انسخ الرسالة</button>
+        <button type="button" class="btn ghost" id="copyCred"><?= icon('clipboard', 14) ?> انسخ الرسالة</button>
       </div>
 
       <details style="margin-top:12px">
-        <summary style="cursor:pointer;font-size:var(--fs-2);font-weight:700">شوف نص الرسالة</summary>
+        <summary style="cursor:pointer;font-size:var(--fs-2);font-weight:500">شوف نص الرسالة</summary>
         <pre id="credMsg" style="white-space:pre-wrap;background:var(--card);border:1px solid var(--line);
              border-radius:var(--radius-2);padding:12px;margin-top:8px;font-family:inherit;font-size:var(--fs-2);line-height:1.7"><?= e($cred['message']) ?></pre>
       </details>
 
-      <div style="margin-top:12px;font-size:var(--fs-2);color:var(--red);font-weight:700">
-        ⚠️ الرقم السري ده مش هتقدر تشوفه تاني بعد ما تسيب الصفحة — متشفّر في القاعدة.
+      <div style="margin-top:12px;font-size:var(--fs-2);color:var(--red);font-weight:500">
+        <?= icon('alert', 14) ?> الرقم السري ده مش هتقدر تشوفه تاني بعد ما تسيب الصفحة — متشفّر في القاعدة.
         لو ضاع منه، دوس «رقم سري جديد» واعمل واحد تاني.
       </div>
       <?php if (!$cred['public']): ?>
-        <div style="margin-top:8px;font-size:var(--fs-2);color:var(--sader);font-weight:700">
-          ⚠️ الرابط ده محلي — المندوب مش هيقدر يفتحه من برّه المكتب.
+        <div style="margin-top:8px;font-size:var(--fs-2);color:var(--sader);font-weight:500">
+          <?= icon('alert', 14) ?> الرابط ده محلي — المندوب مش هيقدر يفتحه من برّه المكتب.
           شغّل «تشغيل-عام-على-النت» الأول عشان الرابط يبقى عام، وبعدين ابعت.
         </div>
       <?php endif; ?>
@@ -76,7 +76,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
         <?= csrfField() ?>
         <?= formStateFields($resetState['token'], $resetState['back']) ?>
         <button class="btn gold" type="submit" style="width:100%" data-primary-submit>
-          🎲 <?= $account ? 'رقم سري جديد وابعتهوله' : 'اعمل الحساب وابعتهوله واتساب' ?>
+          <?= icon('zap', 14) ?> <?= $account ? 'رقم سري جديد وابعتهوله' : 'اعمل الحساب وابعتهوله واتساب' ?>
         </button>
       </form>
       <div style="font-size:var(--fs-1);color:var(--grey);margin-top:6px;text-align:center">
@@ -87,7 +87,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
     <div style="padding:14px 18px 16px" id="account-form">
       <div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px">
         <hr style="flex:1;border:0;border-top:1px solid var(--line)">
-        <span style="font-size:var(--fs-1);color:var(--grey);font-weight:700">أو اكتبها بنفسك</span>
+        <span style="font-size:var(--fs-1);color:var(--grey);font-weight:500">أو اكتبها بنفسك</span>
         <hr style="flex:1;border:0;border-top:1px solid var(--line)">
       </div>
 
@@ -123,8 +123,8 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
       <?php /* v48: الرقم السري ده اتعمل أيام قاعدة الـ4 أرقام. مش بنقفل الحساب
                 عشان الشغل الميداني ما يقفش — بننبّه المالك يجدّده بضغطة. */ ?>
       <div style="margin:0 18px 14px;padding:11px 13px;border:1px solid #e5c86e;border-radius:var(--radius-3);background:#fff8dc;font-size:var(--fs-2);line-height:1.6">
-        <strong style="color:#8a3b22">⚠️ الرقم السري بتاعه قديم وضعيف (4 أرقام).</strong>
-        دوس <strong>«🎲 رقم سري جديد وابعتهوله»</strong> فوق — هيتولّد رقم من <?= \App\Core\RepAuth::PIN_MIN ?> أرقام
+        <strong style="color:#8a3b22"><?= icon('alert', 14) ?> الرقم السري بتاعه قديم وضعيف (4 أرقام).</strong>
+        دوس <strong>«<?= icon('zap', 14) ?> رقم سري جديد وابعتهوله»</strong> فوق — هيتولّد رقم من <?= \App\Core\RepAuth::PIN_MIN ?> أرقام
         ويتبعتله على الواتساب على طول.
       </div>
     <?php endif; ?>
@@ -157,7 +157,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
     <div style="padding:14px 18px 16px" id="permit-perm">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:180px">
-          <div style="font-weight:800">📄 يفتح إذن من موبايله؟</div>
+          <div style="font-weight:600"><?= icon('file-text', 14) ?> يفتح إذن من موبايله؟</div>
           <div style="font-size:var(--fs-1);color:var(--grey);margin-top:3px">
             <?php if (!$permPermReady): ?>
               شغّل <code>php bin/migrate_v44.php</code> الأول عشان تتحكّم في الصلاحية دي.
@@ -186,7 +186,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
       <hr style="border:0;border-top:1px solid var(--line);margin:0 0 12px">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:180px">
-          <div style="font-weight:800">👀 يتابع باقي المناديب من موبايله؟</div>
+          <div style="font-weight:600"><?= icon('search', 14) ?> يتابع باقي المناديب من موبايله؟</div>
           <div style="font-size:var(--fs-1);color:var(--grey);margin-top:3px">
             <?php if (!$watchPermReady): ?>
               شغّل <code>php bin/migrate_v47.php</code> الأول عشان تتحكّم في الصلاحية دي.

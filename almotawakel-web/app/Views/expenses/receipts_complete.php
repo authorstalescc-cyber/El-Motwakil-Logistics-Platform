@@ -8,18 +8,18 @@ $oldIds = array_map('intval', (array) ($formState['old']['id'] ?? []));
 ?>
 <style>
 .rc-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px}
-.rc-head .rc-day{background:var(--navy);color:#fff;border-radius:12px;padding:10px 16px;font-weight:700}
+.rc-head .rc-day{background:var(--navy);color:#fff;border-radius:var(--radius-2);padding:10px 16px;font-weight:500}
 .rc-head .rc-day b{color:var(--gold)}
-.rc-note{background:#fdf3e0;border:1px solid #f0dca6;color:#7a5e12;border-radius:12px;padding:10px 14px;font-size:.9rem;flex:1 1 320px}
+.rc-note{background:#fdf3e0;border:1px solid #f0dca6;color:#7a5e12;border-radius:var(--radius-2);padding:10px 14px;font-size:var(--fs-3);flex:1 1 320px}
 .rc-tbl input{width:100%;max-width:160px}
 .rc-tbl .permit-cell b{display:block}
-.rc-tbl .permit-cell small{color:var(--grey);display:block;font-size:.78rem}
-.rc-cash{font-weight:700;white-space:nowrap}
-.rc-visa{font-size:.72rem;color:#5b2f8f;background:#efe7fb;border-radius:999px;padding:1px 7px;margin-inline-start:6px}
+.rc-tbl .permit-cell small{color:var(--grey);display:block;font-size:var(--fs-1)}
+.rc-cash{font-weight:500;white-space:nowrap}
+.rc-visa{font-size:var(--fs-1);color:#5b2f8f;background:#efe7fb;border-radius:999px;padding:1px 7px;margin-inline-start:6px}
 .rc-actionbar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);
   padding:12px 4px;display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:4px}
 .rc-empty{text-align:center;padding:48px 16px;color:var(--grey)}
-.rc-empty .em{font-size:2.4rem;display:block;margin-bottom:8px}
+.rc-empty .em{font-size:var(--fs-8);display:block;margin-bottom:8px}
 </style>
 
 <div class="rc-head">
@@ -35,7 +35,7 @@ $oldIds = array_map('intval', (array) ($formState['old']['id'] ?? []));
 <?php if ($count === 0): ?>
   <div class="card">
     <div class="rc-empty">
-      <span class="em">✅</span>
+      <span class="em"><?= icon('check', 14) ?></span>
       مفيش إيصالات ناقصة في يوم العمل ده (<?= e($day) ?>).<br>
       كل الإيصالات ليها سعر فعلي ورقم — أو غيّر يوم العمل من الأعلى لو عايز يوم تاني.
     </div>
@@ -99,8 +99,8 @@ $oldIds = array_map('intval', (array) ($formState['old']['id'] ?? []));
         </table>
       </div>
       <div class="rc-actionbar">
-        <span style="color:var(--grey);font-size:.85rem">اكتب اللي ناقص بس — الخانات الفاضية هتفضل زي ما هي.</span>
-        <button type="submit" class="btn gold" data-primary-submit>💾 حفظ الاستكمال</button>
+        <span style="color:var(--grey);font-size:var(--fs-2)">اكتب اللي ناقص بس — الخانات الفاضية هتفضل زي ما هي.</span>
+        <button type="submit" class="btn gold" data-primary-submit><?= icon('download', 14) ?> حفظ الاستكمال</button>
       </div>
     </div>
   </form>

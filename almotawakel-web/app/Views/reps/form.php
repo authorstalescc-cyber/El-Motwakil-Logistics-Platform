@@ -43,7 +43,7 @@ $val = fn($k) => $row[$k] ?? '';
   </div>
 
   <div class="form-actions">
-    <button class="btn gold" type="submit">💾 <?= $isEdit?'حفظ التعديلات':'حفظ المندوب' ?></button>
+    <button class="btn gold" type="submit"><?= icon('download', 14) ?> <?= $isEdit?'حفظ التعديلات':'حفظ المندوب' ?></button>
     <a class="btn ghost" href="<?= url('reps') ?>">إلغاء</a>
   </div>
 </form>

@@ -13,12 +13,12 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
 ?>
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('office') ?>">‹ رجوع لرصيد المكتب</a>
-  <a class="btn gold" href="<?= url('office/'.$card['id'].'/statement') ?>" target="_blank">🧾 كشف حساب</a>
-  <a class="btn ghost" href="<?= url('office/'.$card['id'].'/edit') ?>">✏️ تعديل الكارت</a>
+  <a class="btn gold" href="<?= url('office/'.$card['id'].'/statement') ?>" target="_blank"><?= icon('receipt', 14) ?> كشف حساب</a>
+  <a class="btn ghost" href="<?= url('office/'.$card['id'].'/edit') ?>"><?= icon('edit', 14) ?> تعديل الكارت</a>
   <form method="post" action="<?= url('office/'.$card['id'].'/delete') ?>" class="confirm-delete" data-confirm="حذف الكارت؟ سيُلغى ربط عملياته بالفيزا (لا تُحذف العمليات)." style="display:inline">
     <?= csrfField() ?>
     <?= formStateFields(FormState::token(), 'office') ?>
-    <button class="btn ghost" type="submit" style="color:var(--red)">🗑️ حذف</button>
+    <button class="btn ghost" type="submit" style="color:var(--red)"><?= icon('trash', 14) ?> حذف</button>
   </form>
 </div>
 
@@ -26,37 +26,37 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
 <div class="two-col mb">
   <div class="kpi <?= $balance<0?'red':'gold' ?>" style="display:flex;flex-direction:column;justify-content:center;align-items:center;padding:22px">
     <div class="lbl">الرصيد المتاح في الكارت</div>
-    <div class="val" style="font-size:2rem" data-secret data-val="<?= e(intf($balance)) ?>">••••••</div>
-    <button type="button" class="btn ghost sm secret-toggle" style="margin-top:8px">👁 إظهار الرصيد</button>
-    <div style="opacity:.85;font-size:.82rem;margin-top:8px">
-      💳 <?= e($card['name']) ?><?= $card['owner']?' — '.e($card['owner']):'' ?><?= $card['bank']?' — '.e($card['bank']):'' ?>
+    <div class="val" style="font-size:var(--fs-8)" data-secret data-val="<?= e(intf($balance)) ?>">••••••</div>
+    <button type="button" class="btn ghost sm secret-toggle" style="margin-top:8px"><?= icon('search', 14) ?> إظهار الرصيد</button>
+    <div style="opacity:.85;font-size:var(--fs-2);margin-top:8px">
+      <?= icon('credit-card', 14) ?> <?= e($card['name']) ?><?= $card['owner']?' — '.e($card['owner']):'' ?><?= $card['bank']?' — '.e($card['bank']):'' ?>
     </div>
   </div>
 
   <div class="card" style="padding:16px 18px">
     <div class="section-head" style="margin:0 0 10px"><?= icon('info', 17) ?> نظرة سريعة</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-      <div style="flex:1;min-width:140px;background:var(--bg);border-radius:10px;padding:10px 12px">
-        <div style="color:var(--grey);font-size:.78rem">آخر رصيد مضاف</div>
+      <div style="flex:1;min-width:140px;background:var(--bg);border-radius:var(--radius-2);padding:10px 12px">
+        <div style="color:var(--grey);font-size:var(--fs-1)">آخر رصيد مضاف</div>
         <?php if($lastDep): ?>
-          <div class="pos" style="font-weight:800;font-size:1.05rem">+<?= money($lastDep['amount'],false) ?></div>
-          <div style="color:var(--grey);font-size:.78rem"><?= e(dfmt($lastDep['dep_date'])) ?><?= $lastDep['note']?' — '.e($lastDep['note']):'' ?></div>
+          <div class="pos" style="font-weight:600;font-size:var(--fs-4)">+<?= money($lastDep['amount'],false) ?></div>
+          <div style="color:var(--grey);font-size:var(--fs-1)"><?= e(dfmt($lastDep['dep_date'])) ?><?= $lastDep['note']?' — '.e($lastDep['note']):'' ?></div>
         <?php else: ?><div style="color:var(--grey)">لا شحنات بعد</div><?php endif; ?>
       </div>
-      <div style="flex:1;min-width:140px;background:var(--bg);border-radius:10px;padding:10px 12px">
-        <div style="color:var(--grey);font-size:.78rem">إجمالي المصروف بالفيزا</div>
-        <div class="neg" style="font-weight:800;font-size:1.05rem"><?= money($payTotal,false) ?></div>
-        <div style="color:var(--grey);font-size:.78rem"><?= intf($stats['count']) ?> عملية</div>
+      <div style="flex:1;min-width:140px;background:var(--bg);border-radius:var(--radius-2);padding:10px 12px">
+        <div style="color:var(--grey);font-size:var(--fs-1)">إجمالي المصروف بالفيزا</div>
+        <div class="neg" style="font-weight:600;font-size:var(--fs-4)"><?= money($payTotal,false) ?></div>
+        <div style="color:var(--grey);font-size:var(--fs-1)"><?= intf($stats['count']) ?> عملية</div>
       </div>
     </div>
-    <div style="color:var(--grey);font-size:.8rem;font-weight:700;margin-bottom:6px">آخر المعاملات</div>
+    <div style="color:var(--grey);font-size:var(--fs-2);font-weight:500;margin-bottom:6px">آخر المعاملات</div>
     <?php if($recent): foreach($recent as $r): ?>
       <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line)">
-        <span style="font-size:.78rem;color:var(--grey);min-width:74px"><?= $r['d']?e(dfmt($r['d'])):'—' ?><?= $fmtTime($r['ts']??null)?' '.e($fmtTime($r['ts'])):'' ?></span>
-        <span style="flex:1;font-size:.85rem"><?= e(mb_strimwidth($r['label'],0,28,'…')) ?></span>
-        <span class="<?= $r['amount']>=0?'pos':'neg' ?>" style="font-weight:700;font-size:.85rem"><?= $r['amount']>=0?'+':'' ?><?= money($r['amount'],false) ?></span>
+        <span style="font-size:var(--fs-1);color:var(--grey);min-width:74px"><?= $r['d']?e(dfmt($r['d'])):'—' ?><?= $fmtTime($r['ts']??null)?' '.e($fmtTime($r['ts'])):'' ?></span>
+        <span style="flex:1;font-size:var(--fs-2)"><?= e(mb_strimwidth($r['label'],0,28,'…')) ?></span>
+        <span class="<?= $r['amount']>=0?'pos':'neg' ?>" style="font-weight:500;font-size:var(--fs-2)"><?= $r['amount']>=0?'+':'' ?><?= money($r['amount'],false) ?></span>
       </div>
-    <?php endforeach; else: ?><div style="color:var(--grey);font-size:.82rem">لا معاملات بعد</div><?php endif; ?>
+    <?php endforeach; else: ?><div style="color:var(--grey);font-size:var(--fs-2)">لا معاملات بعد</div><?php endif; ?>
   </div>
 </div>
 
@@ -64,10 +64,10 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
 <div class="card mb" style="padding:16px 18px">
   <div class="section-head" style="margin:0 0 12px"><?= icon('bar-chart', 17) ?> أداء الكارت</div>
   <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-    <div style="flex:1;min-width:130px"><div style="color:var(--grey);font-size:.78rem">عدد العمليات</div><div style="font-weight:800;font-size:1.2rem"><?= intf($stats['count']) ?></div></div>
-    <div style="flex:1;min-width:130px"><div style="color:var(--grey);font-size:.78rem">إجمالي المصروف</div><div class="neg" style="font-weight:800;font-size:1.2rem"><?= money($stats['total'],false) ?></div></div>
-    <div style="flex:1;min-width:130px"><div style="color:var(--grey);font-size:.78rem">أكبر عملية</div><div style="font-weight:800;font-size:1.2rem"><?= money($stats['max'],false) ?></div></div>
-    <div style="flex:1;min-width:130px"><div style="color:var(--grey);font-size:.78rem">آخر نشاط</div><div style="font-weight:800;font-size:1.05rem"><?= $stats['last']?e(dfmt(substr((string)$stats['last'],0,10))):'—' ?></div></div>
+    <div style="flex:1;min-width:130px"><div style="color:var(--grey);font-size:var(--fs-1)">عدد العمليات</div><div style="font-weight:600;font-size:var(--fs-5)"><?= intf($stats['count']) ?></div></div>
+    <div style="flex:1;min-width:130px"><div style="color:var(--grey);font-size:var(--fs-1)">إجمالي المصروف</div><div class="neg" style="font-weight:600;font-size:var(--fs-5)"><?= money($stats['total'],false) ?></div></div>
+    <div style="flex:1;min-width:130px"><div style="color:var(--grey);font-size:var(--fs-1)">أكبر عملية</div><div style="font-weight:600;font-size:var(--fs-5)"><?= money($stats['max'],false) ?></div></div>
+    <div style="flex:1;min-width:130px"><div style="color:var(--grey);font-size:var(--fs-1)">آخر نشاط</div><div style="font-weight:600;font-size:var(--fs-4)"><?= $stats['last']?e(dfmt(substr((string)$stats['last'],0,10))):'—' ?></div></div>
   </div>
   <div class="table-wrap"><table class="data">
     <thead><tr><th class="g-identity">المصدر</th><th class="g-identity">عدد العمليات</th><th class="g-expense">إجمالي المصروف</th><th class="g-identity">النسبة</th></tr></thead>
@@ -75,18 +75,18 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
       <?php $any=false; foreach($stats['by_source'] as $k=>$v): if(!$v['count']) continue; $any=true;
         $pct = $stats['total']>0 ? round($v['total']/$stats['total']*100) : 0; ?>
         <tr>
-          <td style="text-align:right;font-weight:700"><?= e($v['label']) ?></td>
+          <td style="text-align:right;font-weight:500"><?= e($v['label']) ?></td>
           <td><?= intf($v['count']) ?></td>
           <td class="neg"><?= money($v['total'],false) ?></td>
           <td>
             <div style="display:flex;align-items:center;gap:8px">
               <div style="flex:1;height:8px;background:var(--bg);border-radius:99px;overflow:hidden"><div style="height:100%;width:<?= $pct ?>%;background:var(--gold)"></div></div>
-              <span style="font-size:.8rem;color:var(--grey);min-width:34px"><?= $pct ?>%</span>
+              <span style="font-size:var(--fs-2);color:var(--grey);min-width:34px"><?= $pct ?>%</span>
             </div>
           </td>
         </tr>
       <?php endforeach; if(!$any): ?>
-        <tr><td colspan="4"><div class="empty" style="padding:18px"><div class="ic">📊</div>لا مصروفات بالفيزا على هذا الكارت بعد.</div></td></tr>
+        <tr><td colspan="4"><div class="empty" style="padding:18px"><div class="ic"><?= icon('bar-chart', 14) ?></div>لا مصروفات بالفيزا على هذا الكارت بعد.</div></td></tr>
       <?php endif; ?>
     </tbody>
   </table></div>
@@ -98,11 +98,11 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
     <div class="section-head" style="margin:0 0 10px"><?= icon('bar-chart', 17) ?> من إيه اتكوّن الرصيد</div>
     <table class="data">
       <?php if((float)$card['opening_balance'] != 0): ?>
-      <tr><td style="background:var(--bg);font-weight:700;text-align:right">رصيد افتتاحي</td><td><?= money($card['opening_balance']) ?></td></tr>
+      <tr><td style="background:var(--bg);font-weight:500;text-align:right">رصيد افتتاحي</td><td><?= money($card['opening_balance']) ?></td></tr>
       <?php endif; ?>
-      <tr><td style="background:var(--bg);font-weight:700;text-align:right">+ الشحنات</td><td class="pos"><?= money($depTotal) ?></td></tr>
-      <tr><td style="background:var(--bg);font-weight:700;text-align:right">− المدفوع بالفيزا</td><td class="neg"><?= money($payTotal) ?></td></tr>
-      <tr><td style="background:var(--gold-light);font-weight:800;text-align:right">= الرصيد المتاح</td><td style="font-weight:800;background:var(--gold-light)" data-secret data-val="<?= e(money($balance)) ?>">••••••</td></tr>
+      <tr><td style="background:var(--bg);font-weight:500;text-align:right">+ الشحنات</td><td class="pos"><?= money($depTotal) ?></td></tr>
+      <tr><td style="background:var(--bg);font-weight:500;text-align:right">− المدفوع بالفيزا</td><td class="neg"><?= money($payTotal) ?></td></tr>
+      <tr><td style="background:var(--gold-light);font-weight:600;text-align:right">= الرصيد المتاح</td><td style="font-weight:600;background:var(--gold-light)" data-secret data-val="<?= e(money($balance)) ?>">••••••</td></tr>
     </table>
   </div>
   <div class="card" id="deposit" style="padding:16px 18px">
@@ -121,7 +121,7 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
 
 <!-- السجل الكامل بالوقت -->
 <div class="card">
-  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('layers', 17) ?> سجل حركات الكارت <span style="color:var(--grey);font-weight:400;font-size:.85rem">(بتوقيت الإدخال)</span></div>
+  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('layers', 17) ?> سجل حركات الكارت <span style="color:var(--grey);font-weight:400;font-size:var(--fs-2)">(بتوقيت الإدخال)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">التاريخ / الوقت</th>
@@ -137,7 +137,7 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
         <tr>
           <td style="white-space:nowrap">
             <?= $r['d'] ? e(dfmt($r['d'])) : '—' ?>
-            <?php if($fmtTime($r['ts']??null)): ?><div style="color:var(--grey);font-size:.78rem">🕒 <?= e($fmtTime($r['ts'])) ?></div><?php endif; ?>
+            <?php if($fmtTime($r['ts']??null)): ?><div style="color:var(--grey);font-size:var(--fs-1)">🕒 <?= e($fmtTime($r['ts'])) ?></div><?php endif; ?>
           </td>
           <td>
             <?php if($r['kind']==='opening'): ?>
@@ -150,20 +150,20 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
             <?php endif; ?>
           </td>
           <td style="text-align:right"><?= e($r['party'] ?: '—') ?>
-            <?php if($r['kind']==='payment' && !empty($r['note'])): ?><div style="color:var(--grey);font-size:.82rem"><?= e($r['note']) ?></div><?php endif; ?>
+            <?php if($r['kind']==='payment' && !empty($r['note'])): ?><div style="color:var(--grey);font-size:var(--fs-2)"><?= e($r['note']) ?></div><?php endif; ?>
           </td>
           <td class="<?= $r['amount']>0 && $r['kind']!=='opening'?'pos':'' ?>"><?= $r['amount']>0 && $r['kind']!=='opening' ? money($r['amount'],false) : '—' ?></td>
           <td class="<?= $r['amount']<0?'neg':'' ?>"><?= $r['amount']<0 ? money(-$r['amount'],false) : '—' ?></td>
-          <td style="font-weight:700" data-secret data-val="<?= e(money($r['running'],false)) ?>">••••</td>
+          <td style="font-weight:500" data-secret data-val="<?= e(money($r['running'],false)) ?>">••••</td>
           <td style="white-space:nowrap">
             <?php if($r['kind']==='deposit'): ?>
               <form method="post" action="<?= url('office/deposit/'.$r['id'].'/delete') ?>" class="confirm-delete" data-confirm="حذف هذا الشحن؟" style="display:inline">
                 <?= csrfField() ?>
                 <?= formStateFields(FormState::token(), $returnPath) ?>
-                <button class="edit" type="submit" title="حذف" style="background:none;border:0;cursor:pointer">🗑️</button>
+                <button class="edit" type="submit" title="حذف" style="background:none;border:0;cursor:pointer"><?= icon('trash', 14) ?></button>
               </form>
             <?php elseif($r['kind']==='payment' && !empty($r['url'])): ?>
-              <a class="edit" href="<?= e($r['url']) ?>" title="فتح العملية">🔎</a>
+              <a class="edit" href="<?= e($r['url']) ?>" title="فتح العملية"><?= icon('search', 14) ?></a>
             <?php endif; ?>
           </td>
         </tr>
@@ -181,7 +181,7 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
       el.textContent = shown ? (el.getAttribute('data-val') || '') : (el.dataset.mask || '••••••');
     });
     document.querySelectorAll('.secret-toggle').forEach(function(b){
-      b.textContent = shown ? '🙈 إخفاء الرصيد' : '👁 إظهار الرصيد';
+      b.textContent = shown ? '🙈 إخفاء الرصيد' : '🔍 إظهار الرصيد';
     });
   }
   document.querySelectorAll('[data-secret]').forEach(function(el){ el.dataset.mask = el.textContent; });

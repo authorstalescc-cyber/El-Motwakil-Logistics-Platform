@@ -13,13 +13,13 @@
  *
  * المتغيّرات:
  *   title    string
- *   sub      ?string          سطر وصف واحد
+ * ⚠️ **مفيش `sub` — اتشال (قانون التصميم، بند ١: صفر جملة تعليمية).**
+ *    العنوان بيقول إيه ده؛ الجملة اللي تحته كانت بتشرح ليه/إزاي.
  *   actions  ?string|callable إجراءات ثانوية (HTML جاهز)
  *   primary  ?array           ['label'=>, 'url'=>, 'class'=>'btn gold']
  *   back     ?array           ['label'=>, 'url'=>] — زر رجوع بالحرف `‹`
  */
 $title   = $title   ?? '';
-$sub     = $sub     ?? null;
 $actions = $actions ?? null;
 $primary = $primary ?? null;
 $back    = $back    ?? null;
@@ -32,7 +32,6 @@ $back    = $back    ?? null;
       <a class="page-back" href="<?= e($back['url']) ?>"><span aria-hidden="true">‹</span> <?= e($back['label'] ?? 'رجوع') ?></a>
     <?php endif; ?>
     <h1 class="page-h1"><?= e($title) ?></h1>
-    <?php if ($sub !== null && $sub !== ''): ?><p class="page-sub"><?= e($sub) ?></p><?php endif; ?>
   </div>
   <div class="page-head-actions">
     <?php if ($actions !== null) { partial_body($actions); } ?>

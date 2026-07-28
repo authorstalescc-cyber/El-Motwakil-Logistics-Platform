@@ -153,6 +153,179 @@ try {
             skip('مفيش مندوب عليه حركة للتفصيل');
         }
 
+        // ═══ 3ب) ⚠️ «باقي العهدة» = عهدة اليوم بعد المستنّي — مش تراكمي
+        sec('3ب) ⚠️ الرقم الكبير = عهدة اليوم بعد المستنّي (بلا ترحيل ولا انتظار اعتماد)');
+
+        $lockedThrough = Closing::lastClosedDate();
+        $wDay = date('Y-m-d');
+        for ($i = 0; $i < 400 && $lockedThrough !== null && $wDay <= $lockedThrough; $i++) {
+            $wDay = date('Y-m-d', strtotime("+$i day"));
+        }
+        $wPrev = date('Y-m-d', strtotime($wDay . ' -1 day'));
+
+        $tag = '__v47_' . bin2hex(random_bytes(3));
+        Database::exec("INSERT INTO reps(name,status) VALUES(?,'active')", [$tag]);
+        $subject = Database::lastId();
+        Database::exec(
+            "INSERT INTO permits(permit_no,permit_date,status,company,client) VALUES(?,?,'open',?,?)",
+            [$tag, $wDay, $tag . ' شركة', $tag . ' وكيل']);
+        $wPermit = Database::lastId();
+        Database::exec("INSERT INTO permit_movements(permit_id,seq) VALUES(?,1)", [$wPermit]);
+        $wMov = Database::lastId();
+
+        // إمبارح: نزل 5000 وصرف 3000  →  فاضل 2000 **ما بيترحّلش**
+        // النهاردة: نزل 2000 وصرف معتمد 500 ودفع 300 لسه مستني اعتماد
+        //           →  «فاضل معاه» = 2000 − 500 − 300 = 1200
+        Database::exec("INSERT INTO rep_custody_deposits(rep_id,dep_date,amount) VALUES(?,?,?)",
+            [$subject, $wPrev, 5000]);
+        Database::exec("INSERT INTO rep_custody_deposits(rep_id,dep_date,amount) VALUES(?,?,?)",
+            [$subject, $wDay, 2000]);
+        $wStage = static function (string $d, float $amt) use ($wPermit, $wMov, $subject, $tag): void {
+            Database::exec(
+                "INSERT INTO permit_stages
+                    (permit_id, movement_id, stage_key, direction, note, qty, amount, entry_date,
+                     is_visa, paid_by_rep_id)
+                 VALUES (?,?,'receipts','expense',?,1,?,?,0,?)",
+                [$wPermit, $wMov, $tag . ' إيصال', $amt, $d, $subject]);
+        };
+        $wStage($wPrev, 3000);
+        $wStage($wDay, 500);
+        Database::exec(
+            "INSERT INTO rep_submissions
+                (rep_id, permit_id, movement_id, kind, note, qty, unit_amount, amount,
+                 entry_date, status, is_visa)
+             VALUES (?,?,?,'receipt',?,1,300,300,?, 'pending',0)",
+            [$subject, $wPermit, $wMov, $tag . ' مستني', $wDay]);
+
+        // ⚠️ إعادة ضبط أساس فحص «قراءة فقط» (قسم 5) **بعد** ما الفاحص نفسه زرع
+        //    fixtures بتخصم من الخزنة (البند المعتمد بيتخصم يوم صرفه — قاعدة v42)
+        //    وبتضيف بندًا مستنيًّا. المقصود من القسم إن **RepWatch** مالوش أثر،
+        //    مش إن الفاحص ما كتبش — والكتابة كلها جوّه transaction وبترجع.
+        $treasuryBefore = Closing::currentBalance();
+        $subsBefore = (int) Database::scalar("SELECT COUNT(*) FROM rep_submissions");
+
+        Rep::setCanWatchReps($watcher, true);
+        $_SESSION['rep_work_date'] = $wDay;
+        $team2 = RepWatch::team($watcher);
+        $row = null;
+        foreach ($team2['reps'] as $r) { if ((int) $r['id'] === $subject) { $row = $r; } }
+
+        if ($row === null) {
+            bad('المندوب المزروع مش ظاهر في شاشة المتابعة');
+        } else {
+            is('عهدة اليوم النازلة = 2,000 (عهدة إمبارح ما اترحّلتش)', (float) $row['day_deposits'], 2000.0);
+            is('★ «فاضل من عهدة اليوم» = 1,200 (2000 − 500 معتمد − 300 مستني)',
+                (float) $row['day_pocket'], 1200.0);
+            is('والمستنّي بيتخصم فعلاً (فرقه عن الرصيد المحاسبي 300)',
+                round((float) $row['day_balance'] - (float) $row['day_pocket'], 2), 300.0);
+            // ⚠️ الحارس الأهم: الرقم المعروض **مش** التراكمي (5000−3000+2000−500 = 3500)
+            is('★★ والرقم مش التراكمي (3,500) — عهدة كل يوم مستقلة',
+                abs((float) $row['day_pocket'] - 3500) > 0.005, true);
+            is('التراكمي لسه موجود في الحزمة كحقيقة مالية بتسمية منفصلة',
+                (float) $row['balance'], RepCustody::balance($subject));
+        }
+
+        $dSub = RepWatch::rep($watcher, $subject);
+        if ($dSub === null) {
+            bad('تفصيل المندوب المزروع رجع null');
+        } else {
+            is('★ تفصيل المندوب: «الفاضل معاه» = 1,200',
+                (float) $dSub['day_pocket']['pocket'], 1200.0);
+            is('و`pocket` التراكمي فضل زي ما هو (مستخدم في التسوية)',
+                (float) $dSub['pocket'],
+                round(RepCustody::balance($subject) - RepPortal::pendingAmount($subject), 2));
+        }
+
+        // ═══ 3ج) الشاشتان بترندروا فعليًّا وبيعرضوا الرقم الصح
+        sec('3ج) رندر فعلي لشاشتي المشرف');
+        $render = static function (array $vars, string $view): string {
+            ob_start();
+            try {
+                extract($vars, EXTR_SKIP);
+                require \App\Core\App::basePath('app/Views/' . $view . '.php');
+                return (string) ob_get_clean();
+            } catch (\Throwable $e) {
+                ob_end_clean();
+                bad('استثناء وقت رندر ' . $view . ': ' . $e->getMessage());
+                return '';
+            }
+        };
+        $noPhpError = static function (string $h, string $where): void {
+            preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key|Undefined index/', $h, $m)
+                ? bad("خطأ PHP في $where: " . ($m[0] ?? ''))
+                : ok("$where بيرندر بلا أخطاء PHP");
+        };
+        $_SESSION['rep_id'] = $watcher;
+        $_SESSION['rep_name'] = '__v47_watcher';
+        $htmlTeam = $render(['reps' => $team2['reps'], 'totals' => $team2['totals']], 'm/team');
+        if ($htmlTeam === '') {
+            bad('/m/team ما رندرش');
+        } else {
+            $noPhpError($htmlTeam, '/m/team');
+            is('الشاشة بتقول «فاضل من عهدة اليوم» (مش رصيد تراكمي)',
+                str_contains($htmlTeam, 'فاضل من عهدة اليوم')
+                || str_contains($htmlTeam, 'الفاضل من عهدة'), true);
+            // ⚠️ قرار المالك 2026-07-26: **ولا رقم تراكمي على الشاشة** — كان فيها
+            //    سطر «برّه معاه (كل الأيام)» و«مستني كله» فبقت مشتِّتة.
+            is('★ مفيش أي رقم «كل الأيام» على شاشة المتابعة',
+                str_contains($htmlTeam, 'كل الأيام'), false);
+            is('★ ولا «مستني كله» (عدّاد تراكمي)',
+                str_contains($htmlTeam, 'مستني كله'), false);
+            is('وفيه شريط يوضّح اليوم وطريق لتغييره',
+                str_contains($htmlTeam, 'بتشوف بيانات يوم') && str_contains($htmlTeam, 'm/work-date'), true);
+        }
+        if ($dSub !== null) {
+            $htmlRep = $render(['d' => $dSub, 'tab' => 'spend'], 'm/team_rep');
+            if ($htmlRep === '') { bad('/m/team/{rid} ما رندرش'); } else {
+                $noPhpError($htmlRep, '/m/team/{rid}');
+                is('★ تفصيل المندوب مفيهوش أي رقم تراكمي',
+                    str_contains($htmlRep, 'كل الأيام') || str_contains($htmlRep, 'صرف كله')
+                    || str_contains($htmlRep, 'نزل له كله'), false);
+                is('وفيه شريط اليوم وطريق لتغييره',
+                    str_contains($htmlRep, 'بتشوف بيانات يوم') && str_contains($htmlRep, 'm/work-date'), true);
+            }
+        }
+
+        // ═══ 3د) ★★ الحارس الأهم: ولا بند من يوم تاني بيتسرّب للشاشة
+        sec('3د) ★★ الشاشة يوم واحد بس — ولا بند من يوم تاني');
+        // بند إمبارح بعلامة مميزة: لازم **ما يظهرش** في أي تبويب من تبويبات اليوم
+        $mark = $tag . '_بند_يوم_قديم';
+        Database::exec(
+            "INSERT INTO rep_submissions
+                (rep_id, permit_id, movement_id, kind, note, qty, unit_amount, amount,
+                 entry_date, status, is_visa)
+             VALUES (?,?,?,'receipt',?,1,777,777,?, 'approved',0)",
+            [$subject, $wPermit, $wMov, $mark, $wPrev]);
+        Database::exec("INSERT INTO rep_custody_deposits(rep_id,dep_date,amount,note) VALUES(?,?,?,?)",
+            [$subject, $wPrev, 4321, $mark . '_تنزيل']);
+
+        // إعادة ضبط أساس فحص «قراءة فقط» بعد آخر كتابة يعملها الفاحص نفسه
+        // (كل ده جوّه transaction وبيترجع في الآخر).
+        $treasuryBefore = Closing::currentBalance();
+        $subsBefore = (int) Database::scalar("SELECT COUNT(*) FROM rep_submissions");
+
+        $dSub2 = RepWatch::rep($watcher, $subject);
+        is('spending فيه بنود اليوم بس', count($dSub2['spending']), 1);
+        $leak = false;
+        foreach ($dSub2['spending'] as $row) { if ((string) $row['d'] !== $wDay) { $leak = true; } }
+        is('ولا حركة بتاريخ تاني في كشف الصرف', $leak, false);
+        $subLeak = false;
+        foreach ($dSub2['submissions'] as $row) { if ((string) $row['entry_date'] !== $wDay) { $subLeak = true; } }
+        is('★ ولا إدخال من يوم تاني في «إدخالاته»', $subLeak, false);
+        $depLeak = false;
+        foreach ($dSub2['deposits'] as $row) { if ((string) $row['dep_date'] !== $wDay) { $depLeak = true; } }
+        is('★ ولا تنزيل عهدة من يوم تاني', $depLeak, false);
+
+        foreach (['spend', 'entries', 'in'] as $t) {
+            $h = $render(['d' => $dSub2, 'tab' => $t], 'm/team_rep');
+            // ⚠️ `{$t}` إلزامية: بايتات «» بتتحسب جزءًا من اسم المتغيّر (مصيدة v38)
+            is("تبويب «{$t}» مفيهوش بند اليوم القديم", $h !== '' && str_contains($h, $mark), false);
+        }
+        // والدليل المضاد: بند النهاردة **موجود** فعلاً (عشان الفحص ما ينجحش على صفحة فاضية)
+        $hToday = $render(['d' => $dSub2, 'tab' => 'entries'], 'm/team_rep');
+        is('وبند النهاردة ظاهر فعلاً (الفحص مش بينجح على صفحة فاضية)',
+            str_contains($hToday, $tag . ' مستني'), true);
+
         // ═══ 4) السحب بيشتغل فورًا
         sec('4) سحب الصلاحية بيشتغل فورًا');
         Rep::setCanWatchReps($watcher, false);

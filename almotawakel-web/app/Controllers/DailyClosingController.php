@@ -252,7 +252,7 @@ class DailyClosingController extends Controller
                     p.destination, p.shipping_co, p.agency, p.port
              FROM permit_stages s
              JOIN permits p ON p.id = s.permit_id
-             WHERE $expSql AND s.is_visa = 0 AND s.amount <> 0 AND s.entry_date = ?
+             WHERE $expSql AND " . \App\Models\Permit::cashOutSql('s') . " AND s.amount <> 0 AND s.entry_date = ?
              ORDER BY p.permit_no, s.id", [$date]
         );
         foreach ($expenses as &$ex) { $ex['stage_label'] = Permit::label($ex['stage_key']); }
@@ -319,7 +319,8 @@ class DailyClosingController extends Controller
         $custodyRows = Database::all(
             "SELECT b.id, b.bill_number, b.driver, b.company, b.custody, b.car_no, p.permit_no
              FROM bawalis b LEFT JOIN permits p ON p.id = b.permit_id
-             WHERE b.is_legacy = 0 AND b.bill_date = ? AND b.custody > 0 ORDER BY b.id", [$date]
+             WHERE b.is_legacy = 0 AND b.bill_date = ? AND b.custody > 0"
+             . \App\Models\RepBillCustody::officeExcludeSql('b') . " ORDER BY b.id", [$date]
         );
         foreach ($custodyRows as &$c) {
             $c['deduction'] = Custody::billDeduction((float) $c['custody'], $c['car_no'] ?? null);

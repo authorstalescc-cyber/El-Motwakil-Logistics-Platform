@@ -14,13 +14,40 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
 <?php partial('owner_tabs', ['active' => 'statements']); ?>
 <div class="permit-bar">
   <a class="btn ghost sm" href="<?= url('settlements?owner=' . urlencode($owner)) ?>">‹ رجوع لصاحب البيان</a>
-  <span class="pb-title">📑 إصدار كشف حساب — <b><?= e($owner) ?></b></span>
+  <span class="pb-title"><?= icon('layers', 14) ?> إصدار كشف حساب — <b><?= e($owner) ?></b></span>
   <a class="btn ghost sm" href="<?= url('statements/form?owner=' . urlencode($owner)) ?>" title="تحديث الأرقام بعد تعديل بوليصة">↻ تحديث البيانات</a>
   <a class="btn ghost sm" href="<?= url('statements') ?>">سجل الكشوف</a>
 </div>
 
+<?php
+/* ⚠️ تنبيه «صدر كشف بالفعل» — لازم يفضل **فوق** الفورم.
+   نفس منطق `permits/invoice_form.php`: جدول «كشوف صادرة سابقاً» في آخر الصفحة
+   ما بيتشافش قبل الضغط على «إصدار»، وأخطر مسار بيوصّل هنا هو رجوع المتصفح
+   بعد الحفظ. verify_navigation §٦ بيفشل لو التنبيه اتنقل تحت الفورم. */
+$issuedStatements = array_values(array_filter(
+    $previous ?? [], fn($pv) => ($pv['status'] ?? 'issued') !== 'void'
+));
+?>
+<?php if ($issuedStatements): ?>
+  <div class="issued-warn js-issued-warn" role="status">
+    <span class="iw-ic" aria-hidden="true"><?= icon('alert', 14) ?></span>
+    <div class="iw-body">
+      <div class="iw-t">صدر لـ<?= e($owner) ?> <?= intf(count($issuedStatements)) ?> كشف بالفعل</div>
+      <div>لو كنت راجع من صفحة الكشف، مش محتاج تصدر تاني — افتحه من هنا.
+        الإصدار من الشاشة دي بيعمل كشفاً <b>إضافياً</b> برقم جديد.</div>
+      <div class="iw-list">
+        <?php foreach (array_slice($issuedStatements, 0, 6) as $pv): ?>
+          <a class="iw-doc" href="<?= url('statements/'.(int)$pv['id']) ?>">
+            <?= icon('layers', 14) ?> <?= e($pv['doc_no'] ?: '#'.$pv['id']) ?> · <?= e(dfmt($pv['statement_date'])) ?>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  </div>
+<?php endif; ?>
+
 <!-- ملخّص صاحب البيان (استلم كام / فاضل كام) -->
-<div class="sec-head"><span>📋 ملخّص صاحب البيان</span></div>
+<div class="sec-head"><span><?= icon('clipboard', 14) ?> ملخّص صاحب البيان</span></div>
 <div class="card mb" style="padding:0;overflow:hidden">
   <div class="st-tiles">
     <button type="button" class="stile" data-st-pop="all" data-st-title="كل بوالص <?= e($owner) ?>"><b><?= intf($stats['bills']) ?></b><span>إجمالي البوالص</span><small>اضغط للتفاصيل</small></button>
@@ -31,7 +58,7 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
     <button type="button" class="st-range" data-st-pop="all" data-st-title="كل البوالص خلال الفترة">بوالص من <b><?= dfmt($stats['first_date']) ?></b> إلى <b><?= dfmt($stats['last_date']) ?></b> <small>— اضغط للعرض</small></button>
   <?php endif; ?>
   <?php if ((int)($stats['pending_bills'] ?? 0) > 0): ?>
-    <button type="button" class="st-pending-note" data-st-pop="pending" data-st-title="بوالص بانتظار إدخال النولون">⏳ <b><?= intf($stats['pending_bills']) ?></b> بوليصة بانتظار إدخال النولون. <small>اضغط للعرض والإضافة السريعة</small></button>
+    <button type="button" class="st-pending-note" data-st-pop="pending" data-st-title="بوالص بانتظار إدخال النولون"><?= icon('hourglass', 14) ?> <b><?= intf($stats['pending_bills']) ?></b> بوليصة بانتظار إدخال النولون. </button>
   <?php endif; ?>
 </div>
 
@@ -39,7 +66,7 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
 <div class="d-modal" id="stDrillModal" hidden>
   <div class="d-modal-back" data-st-close></div>
   <div class="d-modal-card st-drill-card" role="dialog" aria-modal="true" aria-labelledby="stDrillTitle">
-    <div class="d-modal-head"><h3 id="stDrillTitle"></h3><button type="button" class="d-modal-x" data-st-close aria-label="إغلاق">✕</button></div>
+    <div class="d-modal-head"><h3 id="stDrillTitle"></h3><button type="button" class="d-modal-x" data-st-close aria-label="إغلاق"><?= icon('x', 14) ?></button></div>
     <div class="d-modal-body" id="stDrillBody"></div>
   </div>
 </div>
@@ -56,10 +83,10 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
     <div class="table-wrap"><table class="data st-drill-table"><thead><tr>
       <th>الرقم</th><th>التاريخ</th><th>الشركة</th><th>الجهة</th><th>التصنيف</th><th>نولون</th><th>عهدة</th><th>استلم</th><th>الباقي</th><th>الحالة</th><th>تعديل</th>
     </tr></thead><tbody><?php foreach ($popRows as $b): ?><tr>
-      <td><a href="<?= url('bawalis/'.(int)$b['id']) ?>" style="font-weight:800"><?= e($billNo($b)) ?></a></td>
+      <td><a href="<?= url('bawalis/'.(int)$b['id']) ?>" style="font-weight:600"><?= e($billNo($b)) ?></a></td>
       <td><?= dfmt($b['bill_date']) ?></td><td><?= e($b['company'] ?: '—') ?></td><td><?= e($b['destination'] ?: '—') ?></td><td><?= e($b['classification'] ?: '—') ?></td>
       <td><?= money($b['freight'],false) ?></td><td><?= money($b['custody'],false) ?></td><td class="pos"><?= money($b['paid'],false) ?></td><td class="<?= (float)$b['remaining']>0.005?'neg':'' ?>"><?= money($b['remaining'],false) ?></td><td><?= e($statusLabel($b)) ?></td>
-      <td><a class="btn ghost sm" href="<?= url('bawalis/'.(int)$b['id'].'/edit') ?>" target="_blank" rel="noopener" title="تعديل البوليصة ثم تحديث بيانات الكشف">✏️ تعديل</a></td>
+      <td><a class="btn ghost sm" href="<?= url('bawalis/'.(int)$b['id'].'/edit') ?>" target="_blank" rel="noopener" title="تعديل البوليصة ثم تحديث بيانات الكشف"><?= icon('edit', 14) ?> تعديل</a></td>
     </tr><?php endforeach; ?></tbody></table></div>
     <?php endif; ?>
   </div>
@@ -71,14 +98,14 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
     <div class="table-wrap"><table class="data st-drill-table pending"><thead><tr>
       <th>الرقم</th><th>التاريخ</th><th>الشركة</th><th>الجهة</th><th>التصنيف</th><th>الحاوية</th><th>عهدة</th><th>الخصم</th><th>النولون</th><th></th><th>تعديل</th>
     </tr></thead><tbody><?php foreach ($pendingBills as $b): ?><tr>
-      <td><a href="<?= url('bawalis/'.(int)$b['id']) ?>" style="font-weight:800"><?= e($billNo($b)) ?></a></td>
+      <td><a href="<?= url('bawalis/'.(int)$b['id']) ?>" style="font-weight:600"><?= e($billNo($b)) ?></a></td>
       <td><?= dfmt($b['bill_date']) ?></td><td><?= e($b['company'] ?: '—') ?></td><td><?= e($b['destination'] ?: '—') ?></td><td><?= e($b['classification'] ?: '—') ?></td><td><?= e($b['container_no'] ?: '—') ?></td><td><?= money($b['custody'],false) ?></td><td><?= money($b['discount'],false) ?></td>
       <td colspan="2"><form method="post" action="<?= url('bawalis/bulk-freight') ?>" class="st-quick-freight">
         <?= csrfField() ?><input type="hidden" name="back" value="<?= e($drillBack) ?>">
         <input type="number" name="freight[<?= (int)$b['id'] ?>]" min="0.01" step="0.01" required placeholder="النولون">
         <button type="submit" class="btn gold sm">حفظ النولون</button>
       </form></td>
-      <td><a class="btn ghost sm" href="<?= url('bawalis/'.(int)$b['id'].'/edit') ?>" target="_blank" rel="noopener">✏️ تعديل</a></td>
+      <td><a class="btn ghost sm" href="<?= url('bawalis/'.(int)$b['id'].'/edit') ?>" target="_blank" rel="noopener"><?= icon('edit', 14) ?> تعديل</a></td>
     </tr><?php endforeach; ?></tbody></table></div>
     <?php endif; ?>
   </div>
@@ -86,6 +113,12 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
 
 <form method="post" action="<?= url('statements') ?>" id="stForm">
   <?= csrfField() ?>
+  <?php /* ⚠️ رمز النموذج (_form_token) لازم يتبعت هنا عشان `claimForm` في
+           `OwnerStatementController::store` تقدر تستهلكه مرة واحدة. الكنترولر
+           كان بيولّد الرمز في `FormState::consume` من قبل، لكن الفورم ما كانش
+           بيبعته — فكان الإرسال مرتين بينشئ **كشفًا مكررًا فعلاً**.
+           ⚠️ `FormState::claim(null)` بترجّع false، فشيل السطر ده = رفض كل حفظ. */ ?>
+  <?= formStateFields($formState['token'], $formState['back']) ?>
   <?php
   /* اختيار البوالص كان بيضيع كله عند الرفض؛ دلوقتي بيرجع زي ما المستخدم سابه. */
   $fsOld  = $formState['old'] ?? [];
@@ -126,7 +159,7 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
   </div>
   <div class="card mb" style="padding:0;overflow:hidden">
     <?php if (!$remaining): ?>
-      <div class="empty" style="padding:24px">لا توجد بوالص باقية — كل مستحقاته مسدّدة ✓</div>
+      <div class="empty" style="padding:24px">لا توجد بوالص باقية — كل مستحقاته مسدّدة <?= icon('check', 14) ?></div>
     <?php else: ?>
       <div class="table-wrap"><table class="data st-list" data-scope="rem">
         <thead><tr>
@@ -140,7 +173,7 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
         <?php foreach ($remaining as $b): ?>
           <tr>
             <td><input type="checkbox" name="remaining_ids[]" value="<?= (int)$b['id'] ?>" class="pick" data-remaining="<?= e($b['remaining']) ?>" <?= $isPicked((int)$b['id'], $remPicked) ? 'checked' : '' ?>></td>
-            <td style="font-weight:700"><?= e($billNo($b)) ?></td>
+            <td style="font-weight:500"><?= e($billNo($b)) ?></td>
             <td><?= dfmt($b['bill_date']) ?></td>
             <td><?= e($b['company'] ?: '—') ?></td>
             <td><?= e($b['container_no'] ?: '—') ?><?php if($b['container_type']??''): ?> <span class="ct-chip"><?= e($b['container_type']) ?></span><?php endif; ?></td>
@@ -153,8 +186,8 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
             <td><?= money($b['discount'],false) ?></td>
             <td><?= money($b['overnight_collection'],false) ?></td>
             <td class="pos"><?= money($b['paid'],false) ?></td>
-            <td class="neg" style="font-weight:800"><?= money($b['remaining'],false) ?></td>
-            <td><a class="btn ghost sm" href="<?= url('bawalis/'.(int)$b['id'].'/edit') ?>" target="_blank" rel="noopener" title="تعديل البوليصة ثم اضغط تحديث البيانات">✏️ تعديل</a></td>
+            <td class="neg" style="font-weight:600"><?= money($b['remaining'],false) ?></td>
+            <td><a class="btn ghost sm" href="<?= url('bawalis/'.(int)$b['id'].'/edit') ?>" target="_blank" rel="noopener" title="تعديل البوليصة ثم اضغط تحديث البيانات"><?= icon('edit', 14) ?> تعديل</a></td>
           </tr>
         <?php endforeach; ?>
         </tbody>
@@ -167,14 +200,14 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
   <div class="card mb" style="padding:16px">
     <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:end">
       <div>
-        <label style="font-size:.8rem;font-weight:700;color:var(--grey)">تاريخ الكشف</label>
+        <label style="font-size:var(--fs-2);font-weight:500;color:var(--grey)">تاريخ الكشف</label>
         <input type="date" name="statement_date" value="<?= e($fsOld['statement_date'] ?? work_date()) ?>"
                style="display:block;margin-top:5px;padding:9px 12px;border:1px solid var(--line);border-radius:9px">
       </div>
       <div style="flex:1;min-width:240px">
-        <label style="font-size:.8rem;font-weight:700;color:var(--grey)">ملاحظة على الكشف (اختياري)</label>
+        <label style="font-size:var(--fs-2);font-weight:500;color:var(--grey)">ملاحظة على الكشف (اختياري)</label>
         <textarea name="note" rows="2"
-                  style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;font-family:inherit"><?= e($fsOld['note'] ?? '') ?></textarea>
+                  style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line);border-radius:var(--radius-1);font-family:inherit"><?= e($fsOld['note'] ?? '') ?></textarea>
       </div>
     </div>
 
@@ -186,7 +219,7 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
     </div>
 
     <div style="margin-top:16px;display:flex;gap:10px">
-      <button type="submit" class="btn gold">📑 إصدار وحفظ ثم طباعة</button>
+      <button type="submit" class="btn gold"><?= icon('layers', 14) ?> إصدار وحفظ ثم طباعة</button>
       <a class="btn ghost" href="<?= url('settlements?owner=' . urlencode($owner)) ?>">إلغاء</a>
     </div>
   </div>
@@ -194,7 +227,7 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
 
 <!-- كشوف سابقة لصاحب البيان -->
 <?php if ($previous): ?>
-  <div class="sec-head"><span>🗂️ كشوف صادرة سابقاً (<?= intf(count($previous)) ?>)</span></div>
+  <div class="sec-head"><span><?= icon('folder', 14) ?> كشوف صادرة سابقاً (<?= intf(count($previous)) ?>)</span></div>
   <div class="card mb" style="padding:0;overflow:hidden">
     <div class="table-wrap"><table class="data">
       <thead><tr>
@@ -205,16 +238,16 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
       <tbody>
       <?php foreach ($previous as $pv): ?>
         <tr>
-          <td style="font-weight:700"><?= e($pv['doc_no'] ?: '#'.$pv['id']) ?></td>
+          <td style="font-weight:500"><?= e($pv['doc_no'] ?: '#'.$pv['id']) ?></td>
           <td><?= dfmt($pv['statement_date']) ?></td>
           <td><?= intf($pv['paid_count']) ?></td>
           <td><?= intf($pv['remaining_count']) ?></td>
-          <td style="font-weight:800;color:var(--navy)"><?= money($pv['stat_remaining'],false) ?></td>
+          <td style="font-weight:600;color:var(--navy)"><?= money($pv['stat_remaining'],false) ?></td>
           <td><div class="actions">
-            <a class="edit" href="<?= url('statements/'.$pv['id']) ?>" target="_blank" title="طباعة">🖨️</a>
+            <a class="edit" href="<?= url('statements/'.$pv['id']) ?>" target="_blank" title="طباعة"><?= icon('file-text', 14) ?></a>
             <?php if(($pv['status']??'issued')!=='void'): ?><form method="post" action="<?= url('statements/'.$pv['id'].'/delete') ?>" style="display:inline"
                   data-danger="1" data-confirm="إلغاء الكشف مع الاحتفاظ برقمه؟">
-              <?= csrfField() ?><input type="hidden" name="lock_version" value="<?= (int)($pv['lock_version']??1) ?>"><input name="reason" required placeholder="سبب الإلغاء" style="width:100px"><button class="del" title="إلغاء">⛔</button>
+              <?= csrfField() ?><input type="hidden" name="lock_version" value="<?= (int)($pv['lock_version']??1) ?>"><input name="reason" required placeholder="سبب الإلغاء" style="width:100px"><button class="del" title="إلغاء"><?= icon('x', 14) ?></button>
             </form><?php endif; ?>
           </div></td>
         </tr>
@@ -229,35 +262,35 @@ $statusLabel = fn($b) => \App\Models\Bill::STATUS_LABELS[$b['pay_status'] ?? '']
   .stile{padding:16px;text-align:center;border:0;border-inline-start:1px solid var(--line);background:#fff;font-family:inherit;cursor:pointer;transition:.16s}
   .stile:first-child{border-inline-start:none}
   .stile:hover{background:#f8fbff;box-shadow:inset 0 -3px var(--gold,#C9A227)}
-  .stile b{display:block;font-size:1.15rem;color:var(--navy)}.stile span{font-size:.74rem;color:var(--grey)}
-  .stile small{display:block;margin-top:5px;color:#8a6d10;font-size:.67rem;font-weight:700}
+  .stile b{display:block;font-size:var(--fs-5);color:var(--navy)}.stile span{font-size:var(--fs-1);color:var(--grey)}
+  .stile small{display:block;margin-top:5px;color:#8a6d10;font-size:var(--fs-1);font-weight:500}
   .stile b.pos{color:var(--green,#1f7a52)}.stile b.neg{color:var(--red,#B4383E)}
-  .st-range{display:block;width:100%;padding:10px 16px;border:0;border-top:1px solid var(--line);background:#fff;text-align:right;font-family:inherit;font-size:.85rem;color:var(--grey);cursor:pointer}
+  .st-range{display:block;width:100%;padding:10px 16px;border:0;border-top:1px solid var(--line);background:#fff;text-align:right;font-family:inherit;font-size:var(--fs-2);color:var(--grey);cursor:pointer}
   .st-range:hover{background:#f8fbff}
   .st-range b{color:var(--navy)}
-  .st-pending-note{display:block;width:100%;padding:10px 16px;border:0;border-top:1px solid var(--line);text-align:right;font-family:inherit;font-size:.85rem;color:#5A6472;background:#f7f8fb;cursor:pointer}
+  .st-pending-note{display:block;width:100%;padding:10px 16px;border:0;border-top:1px solid var(--line);text-align:right;font-family:inherit;font-size:var(--fs-2);color:#5A6472;background:#f7f8fb;cursor:pointer}
   .st-pending-note:hover{background:#fff8df}
   .st-pending-note b{color:var(--navy)}
   .st-drill-card{width:min(1180px,96vw);max-height:90vh;overflow:hidden}
   .st-drill-card .d-modal-body{max-height:calc(90vh - 62px)}
   .st-drill-table th,.st-drill-table td{white-space:nowrap;vertical-align:middle}
   .st-quick-freight{display:flex;align-items:center;gap:7px;min-width:270px;margin:0}
-  .st-quick-freight input{width:125px;padding:8px 9px;border:1px solid var(--line);border-radius:8px;font-family:inherit}
+  .st-quick-freight input{width:125px;padding:8px 9px;border:1px solid var(--line);border-radius:var(--radius-1);font-family:inherit}
   .sec-head{display:flex;justify-content:space-between;align-items:center}
-  .chk-all{font-size:.8rem;font-weight:700;color:var(--navy);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .chk-all{font-size:var(--fs-2);font-weight:500;color:var(--navy);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
   .st-list td,.st-list th{white-space:nowrap}
   .st-list .pick{width:17px;height:17px;accent-color:var(--gold,#C9A227);cursor:pointer}
   .paid-summary-pick{display:grid;grid-template-columns:auto repeat(2,1fr) 1.5fr;gap:16px;align-items:center;padding:18px;cursor:pointer;background:#fffdf6}
   .paid-summary-pick>input{width:19px;height:19px;accent-color:var(--gold,#C9A227)}
-  .paid-summary-pick span{text-align:center}.paid-summary-pick span b{display:block;color:var(--navy);font-size:1.05rem}.paid-summary-pick span small{color:var(--grey);font-weight:700}
-  .paid-summary-pick em{font-style:normal;color:#7a5f0e;font-size:.8rem;line-height:1.7}
-  .ct-chip{display:inline-block;background:#eef4ff;color:#2a5aa5;border-radius:6px;padding:1px 8px;font-size:.72rem;font-weight:700}
-  .st-summary{margin-top:16px;max-width:400px;margin-inline-start:auto;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  .st-summary .r{display:flex;justify-content:space-between;padding:10px 16px;font-size:.95rem;border-bottom:1px solid var(--line)}
-  .st-summary .r b{font-variant-numeric:tabular-nums;font-weight:700}
-  .st-summary .r.grand{background:var(--navy);color:#fff;border:none;font-size:1.1rem}
-  .st-summary .r.grand b{color:var(--gold,#C9A227);font-weight:800}
-  .del{background:none;border:none;cursor:pointer;font-size:1rem}
+  .paid-summary-pick span{text-align:center}.paid-summary-pick span b{display:block;color:var(--navy);font-size:var(--fs-4)}.paid-summary-pick span small{color:var(--grey);font-weight:500}
+  .paid-summary-pick em{font-style:normal;color:#7a5f0e;font-size:var(--fs-2);line-height:1.7}
+  .ct-chip{display:inline-block;background:#eef4ff;color:#2a5aa5;border-radius:var(--radius-1);padding:1px 8px;font-size:var(--fs-1);font-weight:500}
+  .st-summary{margin-top:16px;max-width:400px;margin-inline-start:auto;border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden}
+  .st-summary .r{display:flex;justify-content:space-between;padding:10px 16px;font-size:var(--fs-3);border-bottom:1px solid var(--line)}
+  .st-summary .r b{font-variant-numeric:tabular-nums;font-weight:500}
+  .st-summary .r.grand{background:var(--navy);color:#fff;border:none;font-size:var(--fs-5)}
+  .st-summary .r.grand b{color:var(--gold,#C9A227);font-weight:600}
+  .del{background:none;border:none;cursor:pointer;font-size:var(--fs-4)}
   @media(max-width:760px){.paid-summary-pick{grid-template-columns:auto 1fr}.paid-summary-pick em{grid-column:1/-1}.st-tiles{grid-template-columns:1fr}.stile{border-inline-start:0;border-top:1px solid var(--line)}.stile:first-child{border-top:0}.st-drill-card{width:98vw}}
 </style>
 

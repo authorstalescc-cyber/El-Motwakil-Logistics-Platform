@@ -6,39 +6,59 @@ $s   = $profile['summary'];
 $initial = mb_substr($profile['name'], 0, 1);
 ?>
 <div class="reports-page">
-<div class="page-actions">
-  <a class="btn ghost" href="<?= url('reports') ?>">‹ رجوع للتقارير</a>
-  <a class="btn ghost" href="<?= url('settlements') ?>">💵 سداد البوالص</a>
-  <span style="flex:1"></span>
-  <a class="btn gold" href="#" onclick="window.print();return false">🖨️ طباعة البروفايل</a>
+<div class="toolbar">
+  <?php partial('back_link', ['to' => 'reports', 'label' => 'التقارير']); ?>
+  <div class="spacer"></div>
+  <a class="btn ghost sm" href="<?= url('settlements') ?>"><?= icon('banknote', 14) ?> سداد البوالص</a>
+  <a class="btn gold sm" href="#" onclick="window.print();return false"><?= icon('file-text', 14) ?> طباعة</a>
 </div>
 
-<div class="card mb" style="padding:22px">
-  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-    <div class="cust-av"><?= e($initial) ?></div>
-    <div>
-      <div style="font-size:1.5rem;font-weight:800;color:var(--navy)"><?= e($profile['name']) ?></div>
-      <div style="color:var(--grey);font-weight:600">عميل — <?= intf($s['trips']) ?> حركة مسجّلة</div>
-    </div>
-    <span style="flex:1"></span>
-    <div style="text-align:center;background:var(--navy);color:#fff;border-radius:14px;padding:14px 26px">
-      <div style="font-size:.8rem;opacity:.85;font-weight:700">إجمالي المستحق للعميل</div>
-      <div style="font-size:1.8rem;font-weight:800;color:var(--gold)"><?= money($s['remaining']) ?></div>
-    </div>
+<div class="card mb cprof-hero">
+  <div class="cust-av"><?= e($initial) ?></div>
+  <div class="cprof-id">
+    <b><?= e($profile['name']) ?></b>
+    <span><?= intf($s['trips']) ?> حركة مسجّلة</span>
+  </div>
+  <div class="cprof-due">
+    <em>إجمالي المستحق للعميل</em>
+    <b><?= money($s['remaining']) ?></b>
   </div>
 </div>
 
-<div class="kpi-grid mb">
-  <div class="kpi navy"><div class="lbl">إجمالي النولون</div><div class="val"><?= intf($s['freight']) ?><span class="cur"><?= e($cur) ?></span></div></div>
-  <div class="kpi gold"><div class="lbl">إجمالي العهد</div><div class="val"><?= intf($s['custody']) ?><span class="cur"><?= e($cur) ?></span></div></div>
-  <div class="kpi red"><div class="lbl">إجمالي المصروفات</div><div class="val"><?= intf($s['expense']) ?><span class="cur"><?= e($cur) ?></span></div></div>
-  <div class="kpi teal"><div class="lbl">إجمالي المدفوع للعميل</div><div class="val"><?= intf($s['paid']) ?><span class="cur"><?= e($cur) ?></span></div></div>
-  <div class="kpi purple"><div class="lbl">المتبقي للعميل</div><div class="val"><?= intf($s['remaining']) ?><span class="cur"><?= e($cur) ?></span></div></div>
-</div>
+<?php /* ⚠️ الخمسة دول كانوا `.kpi` **أرقام صمّاء بلا أي طريق للتفاصيل**.
+         كلهم بيفتحوا دلوقتي **بوالص العميل** — وهي المصدر اللي اتحسبوا منه. */ ?>
+<?php
+/* ⚠️ `stat_grid` بياخد **عدد الأعمدة** رقمًا و`body` مُصيِّرًا (شوف reports/index). */
+$cpStats = [
+  ['label' => 'إجمالي النولون',  'value' => intf($s['freight']),  'unit' => $cur, 'icon' => 'banknote',
+   'tone' => 'navy',   'drill' => '#cpBills', 'title' => 'بوالص ' . $profile['name']],
+  ['label' => 'إجمالي العهد',    'value' => intf($s['custody']),  'unit' => $cur, 'icon' => 'wallet',
+   'tone' => 'gold',   'drill' => '#cpBills', 'title' => 'بوالص ' . $profile['name']],
+  ['label' => 'إجمالي المصروفات','value' => intf($s['expense']),  'unit' => $cur, 'icon' => 'trending-down',
+   'tone' => 'red',    'drill' => '#cpBills', 'title' => 'بوالص ' . $profile['name']],
+  ['label' => 'المدفوع للعميل',  'value' => intf($s['paid']),     'unit' => $cur, 'icon' => 'coins',
+   'tone' => 'teal',   'drill' => '#cpPays',  'title' => 'دفعات ' . $profile['name']],
+  ['label' => 'المتبقي للعميل',  'value' => intf($s['remaining']),'unit' => $cur, 'icon' => 'credit-card',
+   'tone' => 'purple', 'drill' => '#cpBills', 'title' => 'بوالص ' . $profile['name']],
+];
+partial('stat_grid', ['items' => count($cpStats), 'class' => 'mb', 'body' => function () use ($cpStats) {
+    foreach ($cpStats as $st) { partial('stat', $st); }
+}]);
+?>
 
-<div class="chart-card full mb"><h3>التعامل الشهري (النولون مقابل المدفوعات)</h3><div class="chart-box"><canvas id="chCust"></canvas></div></div>
+<?php
+/* Chart.js (٢٠٠KB) اتشالت — الرسم بقى SVG/CSS على الخادم وكل عمود بيقول قيمته. */
+$cpBars = [];
+foreach ($monthNames as $i => $mn) {
+    $mm = $profile['monthly'][$i + 1];
+    $cpBars[] = ['label' => mb_substr($mn, 0, 3), 'value' => (float) $mm['freight'], 'display' => '',
+                 'title' => $mn . ' — نولون ' . money0($mm['freight']) . ' · مدفوعات ' . money0($mm['collected'])];
+}
+partial('panel', ['title' => 'النولون شهريًا', 'icon' => 'trending-up', 'class' => 'mb',
+  'body' => function () use ($cpBars) { partial('mini_bars', ['bars' => $cpBars, 'tone' => 'navy', 'height' => 104]); }]);
+?>
 
-<div class="card mb" style="padding:18px">
+<div class="card mb pad">
   <div class="section-head">سجل الحركات — البوالص (<?= count($profile['bills']) ?>)</div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
@@ -51,7 +71,7 @@ $initial = mb_substr($profile['name'], 0, 1);
       <?php foreach ($profile['bills'] as $b): ?>
         <tr>
           <td><?= dfmt($b['bill_date']) ?></td>
-          <td style="font-weight:700"><?= e($b['bill_number']) ?></td>
+          <td class="strong"><?= e($b['bill_number']) ?></td>
           <td><span class="pill pill-<?= e($b['bill_type']) ?>"><?= e(Bill::TYPE_LABELS[$b['bill_type']] ?? '') ?></span></td>
           <td><?= e($b['destination']) ?></td>
           <td><?= e($b['car_no']) ?></td>
@@ -64,7 +84,7 @@ $initial = mb_substr($profile['name'], 0, 1);
           <td><span class="pill st-<?= e($b['pay_status']) ?>"><?= e(Bill::STATUS_LABELS[$b['pay_status']] ?? '') ?></span></td>
         </tr>
       <?php endforeach; ?>
-      <?php if(!$profile['bills']): ?><tr><td colspan="12"><div class="empty">لا بوالص</div></td></tr><?php endif; ?>
+      <?php if(!$profile['bills']): ?><tr><td colspan="12"><?php partial('empty', ['icon' => 'truck', 'title' => 'مفيش بوالص']); ?></td></tr><?php endif; ?>
     </tbody>
     <?php if($profile['bills']): ?>
     <tfoot><tr><td colspan="6">الإجمالي</td>
@@ -75,14 +95,14 @@ $initial = mb_substr($profile['name'], 0, 1);
 </div>
 
 <?php if (!empty($profile['shamil'])): ?>
-<div class="card mb" style="padding:18px">
+<div class="card mb pad">
   <div class="section-head">فواتير «شامل» (<?= count($profile['shamil']) ?>)</div>
   <div class="table-wrap"><table class="data">
     <thead><tr><th class="g-identity">التاريخ</th><th class="g-identity">رقم الفاتورة</th><th class="g-vehicle">الجهة</th>
       <th class="g-revenue">إجمالي الفاتورة</th><th class="g-revenue">المدفوع</th><th class="g-expense">المتبقي</th></tr></thead>
     <tbody>
       <?php foreach ($profile['shamil'] as $sh): ?>
-        <tr><td><?= dfmt($sh['invoice_date']) ?></td><td style="font-weight:700"><?= e($sh['invoice_no']) ?></td>
+        <tr><td><?= dfmt($sh['invoice_date']) ?></td><td class="strong"><?= e($sh['invoice_no']) ?></td>
           <td><?= e($sh['destination']) ?></td><td><?= money($sh['invoice_total'],false) ?></td>
           <td class="pos"><?= money($sh['payments'],false) ?></td>
           <td class="<?= $sh['account_total']>0?'neg':'' ?>"><?= money($sh['account_total'],false) ?></td></tr>
@@ -92,7 +112,7 @@ $initial = mb_substr($profile['name'], 0, 1);
 </div>
 <?php endif; ?>
 
-<div class="card mb" style="padding:18px">
+<div class="card mb pad">
   <div class="section-head">سجل الدفعات (<?= count($profile['payments']) ?>)</div>
   <div class="table-wrap"><table class="data">
     <thead><tr><th class="g-identity">التاريخ</th><th class="g-identity">رقم البوليصة</th><th class="g-revenue">المبلغ</th><th class="g-identity">ملاحظة</th></tr></thead>
@@ -101,27 +121,51 @@ $initial = mb_substr($profile['name'], 0, 1);
         <tr><td><?= dfmt($p['pay_date']) ?></td><td><?= e($p['bill_number']) ?></td>
           <td class="pos"><?= money($p['amount'],false) ?></td><td><?= e($p['note']) ?></td></tr>
       <?php endforeach; ?>
-      <?php if(!$profile['payments']): ?><tr><td colspan="4"><div class="empty">لا دفعات مسجّلة بعد</div></td></tr><?php endif; ?>
+      <?php if(!$profile['payments']): ?><tr><td colspan="4"><?php partial('empty', ['icon' => 'banknote', 'title' => 'مفيش دفعات']); ?></td></tr><?php endif; ?>
     </tbody>
     <?php if($profile['payments']): ?><tfoot><tr><td colspan="2">إجمالي المدفوع</td><td><?= money($pt,false) ?></td><td></td></tr></tfoot><?php endif; ?>
   </table></div>
 </div>
 
+
+<?php /* ⚠️ محتوى نافذتَي التفاصيل — **جاهز في الصفحة** (`inline`) لأن البيانات
+         محمّلة أصلاً للجداول فوق، فمفيش داعي لطلب تاني للخادم. */ ?>
+<div id="cpBills" hidden>
+  <?php partial('drill', [
+    'how'   => 'كل بوالص ' . $profile['name'] . ' — ومنها اتحسبت أرقام النولون والعهد والمصروف والمتبقّي.',
+    'total' => ['label' => 'المتبقّي', 'value' => money0($s['remaining'], false) . ' ' . $cur],
+    'count' => count($profile['bills']),
+    'empty' => ['title' => 'مفيش بوالص للعميل ده'],
+    'body'  => function () use ($profile) {
+      foreach (array_slice($profile['bills'], 0, 40) as $b) {
+        partial('row_item', [
+          'title'  => 'بوليصة ' . ($b['bill_number'] ?: '—'),
+          'icon'   => 'truck',
+          'tone'   => $b['bill_type'] === 'warid' ? 'warid' : 'sader',
+          'url'    => url('bawalis/' . (int) $b['id']),
+          'meta'   => array_values(array_filter([dfmt($b['bill_date']), $b['destination'] ?: null, $b['driver'] ?: null])),
+          'amount' => money0($b['freight'], false), 'sub' => 'نولون',
+        ]);
+      }
+    },
+  ]); ?>
 </div>
-<script src="<?= url('assets/js/chart.umd.js') ?>"></script>
-<script>
-const CP = <?= js_json([
-  'labels'    => $monthNames,
-  'freight'   => array_map(fn($m)=>round($profile['monthly'][$m]['freight'],2), range(1,12)),
-  'collected' => array_map(fn($m)=>round($profile['monthly'][$m]['collected'],2), range(1,12)),
-]) ?>;
-Chart.defaults.font.family = "'Segoe UI','Tahoma',sans-serif";
-Chart.defaults.plugins.legend.rtl = true;
-Chart.defaults.plugins.tooltip.rtl = true;
-const fmt = (v)=> new Intl.NumberFormat('en-US').format(Math.round(v));
-new Chart(document.getElementById('chCust'),{type:'bar',
-  data:{labels:CP.labels,datasets:[
-    {label:'النولون',data:CP.freight,backgroundColor:'#15355B',borderRadius:5},
-    {label:'المدفوعات',data:CP.collected,backgroundColor:'#14746F',borderRadius:5}]},
-  options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:fmt}}},plugins:{legend:{position:'top'}}}});
-</script>
+<div id="cpPays" hidden>
+  <?php partial('drill', [
+    'how'   => 'الدفعات اللي اتصرفت لـ' . $profile['name'] . '.',
+    'total' => ['label' => 'إجمالي المدفوع', 'value' => money0($s['paid'], false) . ' ' . $cur],
+    'count' => count($profile['payments']),
+    'empty' => ['title' => 'مفيش دفعات مسجّلة'],
+    'body'  => function () use ($profile) {
+      foreach (array_slice($profile['payments'], 0, 40) as $p) {
+        partial('row_item', [
+          'title'  => $p['bill_number'] !== '' ? 'بوليصة ' . $p['bill_number'] : 'دفعة',
+          'icon'   => 'banknote',
+          'meta'   => array_values(array_filter([dfmt($p['pay_date']), $p['note'] ?: null])),
+          'amount' => money0($p['amount'], false), 'amount_tone' => 'pos',
+        ]);
+      }
+    },
+  ]); ?>
+</div>
+</div>

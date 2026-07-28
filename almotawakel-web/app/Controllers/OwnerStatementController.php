@@ -169,6 +169,11 @@ class OwnerStatementController extends Controller
             $this->statementFailure($owner, 'اختار بوليصة واحدة على الأقل تدخل في الكشف.');
         }
 
+        // ⚠️ بعد نجاح التحقّق وقبل الكتابة: يستهلك رمز النموذج مرة واحدة فقط،
+        //    فإرسال نفس الشاشة مرتين (رجوع المتصفح ← إعادة إرسال، أو ضغطتان
+        //    متتاليتان) يُرفض بدل أن يُنشئ كشفًا مكررًا بأرقام صاحب البيان نفسها.
+        $this->claimForm('statements/form?owner=' . urlencode($owner));
+
         $id = OwnerStatement::create([
             'owner'          => $owner,
             'statement_date' => $_POST['statement_date'] ?? work_date(),

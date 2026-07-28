@@ -33,7 +33,6 @@ $rendered = trim(is_callable($body) ? (string) (function ($b) { ob_start(); $b()
   <?php partial('empty', [
       'emoji' => '📭',
       'title' => (string) (($emptyState['title'] ?? null) ?: 'مفيش بنود'),
-      'note'  => $emptyState['note'] ?? null,
   ]); ?>
 <?php else: ?>
   <div class="d-list flat"><?= $rendered ?></div>

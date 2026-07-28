@@ -15,18 +15,18 @@ $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','takhl
 ?>
 <style>
 .exp-cards{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px}
-.exp-grand{flex:1 1 220px;background:var(--navy);color:#fff;border-radius:14px;padding:16px 20px}
-.exp-grand .lbl{font-size:.85rem;opacity:.85}
-.exp-grand .val{font-size:1.7rem;font-weight:800;color:var(--gold);margin-top:4px}
-.exp-grand .sub{font-size:.8rem;opacity:.8;margin-top:4px}
-.exp-src{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px;
+.exp-grand{flex:1 1 220px;background:var(--navy);color:#fff;border-radius:var(--radius-2);padding:16px 20px}
+.exp-grand .lbl{font-size:var(--fs-2);opacity:.85}
+.exp-grand .val{font-size:var(--fs-7);font-weight:600;color:var(--gold);margin-top:4px}
+.exp-grand .sub{font-size:var(--fs-2);opacity:.8;margin-top:4px}
+.exp-src{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);padding:12px 16px;
   display:block;color:inherit;text-decoration:none;transition:border-color var(--dur-fast) var(--ease),transform var(--dur-fast) var(--ease)}
 .exp-src:hover{border-color:var(--gold);transform:translateY(-1px)}
 .exp-src.on{border-color:var(--gold);background:var(--gold-light)}
-.exp-src .lbl{font-size:.85rem;color:var(--grey);display:flex;align-items:center;gap:6px}
-.exp-src .val{font-size:1.15rem;font-weight:700;margin-top:4px}
-.exp-src .cnt{font-size:.75rem;color:var(--grey)}
-.src-pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.8rem;font-weight:600;white-space:nowrap}
+.exp-src .lbl{font-size:var(--fs-2);color:var(--grey);display:flex;align-items:center;gap:6px}
+.exp-src .val{font-size:var(--fs-5);font-weight:500;margin-top:4px}
+.exp-src .cnt{font-size:var(--fs-1);color:var(--grey)}
+.src-pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:var(--fs-2);font-weight:400;white-space:nowrap}
 .src-manual{background:#e7f0fb;color:#15355B}
 .src-permits{background:#efe7fb;color:#5b2f8f}
 .src-bawalis{background:#fbe7ec;color:#8f2f45}
@@ -68,7 +68,7 @@ tr.norec:hover{background:transparent!important}
       <?php endforeach; ?>
     </select>
     <select name="visa">
-      <option value="">💳 الكل (نقدي + فيزا)</option>
+      <option value=""><?= icon('credit-card', 14) ?> الكل (نقدي + فيزا)</option>
       <option value="only" <?= ($f['visa']??'')==='only'?'selected':'' ?>>فيزا فقط</option>
       <option value="cash" <?= ($f['visa']??'')==='cash'?'selected':'' ?>>نقدي فقط</option>
     </select>
@@ -78,9 +78,9 @@ tr.norec:hover{background:transparent!important}
         <option value="<?= e($y) ?>" <?= (string)$year===(string)$y?'selected':'' ?>><?= e($y) ?></option>
       <?php endforeach; ?>
     </select>
-    <label style="font-size:.85rem;color:var(--grey)">من</label>
+    <label style="font-size:var(--fs-2);color:var(--grey)">من</label>
     <input type="date" name="from" value="<?= e($f['from']) ?>">
-    <label style="font-size:.85rem;color:var(--grey)">إلى</label>
+    <label style="font-size:var(--fs-2);color:var(--grey)">إلى</label>
     <input type="date" name="to" value="<?= e($f['to']) ?>">
     <button class="btn sm" type="submit">تصفية</button>
     <?php if ($hasFilter): ?><a class="btn ghost sm" href="<?= url('expenses') ?>">إلغاء</a><?php endif; ?>
@@ -112,7 +112,6 @@ tr.norec:hover{background:transparent!important}
             <?php partial('empty', [
                 'emoji'  => '📭',
                 'title'  => 'مفيش مصروفات مطابقة',
-                'note'   => 'جرّب تغيّر الفلاتر، أو سجّل مصروف جديد.',
                 'action' => ['label' => '➕ إضافة مصروف يدوي', 'url' => url('expenses/new')],
             ]); ?>
           </td></tr>
@@ -125,18 +124,18 @@ tr.norec:hover{background:transparent!important}
             <td><?= intf($i) ?></td>
             <td><?= dfmt($r['d']) ?></td>
             <td><span class="src-pill src-<?= $srcClass[$src]??'manual' ?>"><?= e($sources[$src] ?? $src) ?></span></td>
-            <td><?= e($r['category']) ?><?php if(!empty($r['is_visa'])): ?> <span class="tl-visa-badge">💳 فيزا</span><?php endif; ?></td>
+            <td><?= e($r['category']) ?><?php if(!empty($r['is_visa'])): ?> <span class="tl-visa-badge"><?= icon('credit-card', 14) ?> فيزا</span><?php endif; ?><?php if(!empty($r['unpaid'])): ?> <span class="tl-unpaid-badge" title="غير مدفوع — اتحاسب من برّه الخزنة وبرّه عهدة المندوب، فما اتخصمش من رصيد الخزنة"><?= icon('info', 14) ?> غير مدفوع</span><?php endif; ?></td>
             <td><?= e($r['party']) ?></td>
             <td><?= e($r['note']) ?></td>
             <td class="neg"><?= money($r['amount'], false) ?></td>
             <td>
               <div class="actions">
                 <?php if ($isManual): ?>
-                  <a class="edit" href="<?= url('expenses/'.$r['ref_id'].'/edit?back=' . rawurlencode($returnPath)) ?>" title="تعديل">✏️</a>
+                  <a class="edit" href="<?= url('expenses/'.$r['ref_id'].'/edit?back=' . rawurlencode($returnPath)) ?>" title="تعديل"><?= icon('edit', 14) ?></a>
                   <form class="confirm-delete" method="post" action="<?= url('expenses/'.$r['ref_id'].'/delete') ?>" style="margin:0">
                     <?= csrfField() ?>
                     <?= formStateFields(FormState::token(), $returnPath) ?>
-                    <button class="del" type="submit" title="حذف">🗑️</button>
+                    <button class="del" type="submit" title="حذف"><?= icon('trash', 14) ?></button>
                   </form>
                 <?php elseif ($originUrl): ?>
                   <a href="<?= e($originUrl) ?>" title="فتح البند الأصلي">↗️</a>
@@ -151,8 +150,8 @@ tr.norec:hover{background:transparent!important}
       <?php if ($rows): ?>
       <tfoot>
         <tr>
-          <td colspan="6" style="text-align:left;font-weight:700"><?= $isDebtFilter ? 'إجمالي سداد المديونيات' : 'إجمالي المصاريف (بدون سداد المديونيات)' ?><?= $hasFilter?' (بالفلتر الحالي)':'' ?></td>
-          <td class="neg" style="font-weight:800"><?= money($isDebtFilter ? $debtTotal : $totals['grand'], false) ?></td>
+          <td colspan="6" style="text-align:left;font-weight:500"><?= $isDebtFilter ? 'إجمالي سداد المديونيات' : 'إجمالي المصاريف (بدون سداد المديونيات)' ?><?= $hasFilter?' (بالفلتر الحالي)':'' ?></td>
+          <td class="neg" style="font-weight:600"><?= money($isDebtFilter ? $debtTotal : $totals['grand'], false) ?></td>
           <td></td>
         </tr>
       </tfoot>

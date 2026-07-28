@@ -127,8 +127,17 @@ class Metrics
     }
 
     /** قائمة الجاهز + إجمالي كل الجاهز في الاستعلام نفسه (قبل LIMIT). */
-    public static function readyToInvoiceDashboard(int $limit = 8): array
+    /**
+     * ⚠️ **`$upto` — احترام يوم العمل (بلاغ المالك 2026-07-28).**
+     *    الشاشة كلها بتشتغل بيوم عمل مختار، فلمّا المالك يبصّ على يوم ٢٦ ما
+     *    ينفعش يشوف إذنًا تاريخه ٢٨ — ده إذن **من مستقبل** سياق شغله.
+     *    (متحقَّق: ٥ من ١٠ أذونات مفتوحة كانوا تاريخهم بعد يوم العمل.)
+     *    القائمة تفضل **متأخرات** (اللي قبل اليوم بيفضل ظاهر) — الحد على
+     *    الأمام بس. `null` = بلا حد (السلوك القديم لأي مستدعٍ تاني).
+     */
+    public static function readyToInvoiceDashboard(int $limit = 8, ?string $upto = null): array
     {
+        $uptoSql = $upto !== null ? ' AND (p.permit_date IS NULL OR p.permit_date <= ?)' : '';
         $rows = Database::all(
             "SELECT p.id, p.permit_no, p.permit_type, p.permit_date,
                     p.company, p.client, p.destination, p.containers, p.container_type,
@@ -157,8 +166,10 @@ class Metrics
              ) ct ON ct.permit_id=p.id
              WHERE p.status = 'closed'
                AND NOT EXISTS (SELECT 1 FROM permit_invoices i WHERE i.permit_id = p.id)
+               $uptoSql
              ORDER BY p.permit_date DESC, p.id DESC
-             LIMIT $limit"
+             LIMIT $limit",
+            $upto !== null ? [$upto] : []
         );
         $first = $rows[0] ?? [];
         $summary = [
@@ -177,8 +188,17 @@ class Metrics
      * الأذونات المفتوحة مرتّبة بأحدث نشاط (آخر إذن تم إضافة بيانات له).
      * لكل صف: رقم الإذن + الجهة + تصنيف الحاويات وعددها + عدد البوالص والمراحل + تاريخ آخر نشاط.
      */
-    public static function openPermitsList(int $limit = 8): array
+    /**
+     * ⚠️ **`$upto` — احترام يوم العمل (بلاغ المالك 2026-07-28).**
+     *    الشاشة كلها بتشتغل بيوم عمل مختار، فلمّا المالك يبصّ على يوم ٢٦ ما
+     *    ينفعش يشوف إذنًا تاريخه ٢٨ — ده إذن **من مستقبل** سياق شغله.
+     *    (متحقَّق: ٥ من ١٠ أذونات مفتوحة كانوا تاريخهم بعد يوم العمل.)
+     *    القائمة تفضل **متأخرات** (اللي قبل اليوم بيفضل ظاهر) — الحد على
+     *    الأمام بس. `null` = بلا حد (السلوك القديم لأي مستدعٍ تاني).
+     */
+    public static function openPermitsList(int $limit = 8, ?string $upto = null): array
     {
+        $uptoSql = $upto !== null ? ' AND (p.permit_date IS NULL OR p.permit_date <= ?)' : '';
         $rows = Database::all(
             "SELECT p.id, p.permit_no, p.permit_type, p.permit_date,
                     p.container_type, p.containers,
@@ -205,8 +225,10 @@ class Metrics
                 ) z GROUP BY z.permit_id
              ) ct ON ct.permit_id=p.id
              WHERE p.status = 'open'
+               $uptoSql
              ORDER BY last_activity DESC, p.id DESC
-             LIMIT $limit"
+             LIMIT $limit",
+            $upto !== null ? [$upto] : []
         );
         return $rows;
     }
@@ -257,12 +279,107 @@ class Metrics
     }
 
     /**
+     * سياق كروت الأرقام — «الرقم لوحده مش بيقول كتير» (المرحلة ج).
+     *
+     * كل كارت بياخد: **مقارنة باليوم اللي قبله** + **رسم صغير لآخر ١٤ يوم**.
+     * قبل كده الكارت كان بيقول «مصروفات اليوم 12,450» وخلاص — والمالك مالوش
+     * طريقة يعرف إن ده كتير ولا قليل غير إنه يفتح التفاصيل ويقارن بدماغه.
+     *
+     * ⚠️ **مفيش تعريف تاني لأي رقم:** السلسلة من `Expense::dashboardSeries`
+     *    (نفس اتحاد `dashboardDay` بالحرف) وسلسلة الخزنة من الأرصدة المثبَّتة
+     *    في `daily_closings`. الفاحص بيقارن آخر نقطة برقم الكارت بالمليم.
+     *
+     * ⚠️ **اتجاه اللون مش تلقائي.** في نظام إحنا فيه **مدينين للعملاء**
+     *    (تحذير ١)، «زيادة» مش معناها «تحسّن»: مصروفات ↑ = وحش، خزنة ↑ =
+     *    كويس. عشان كده كل مؤشّر بيحدّد `tone` بنفسه، والدالة دي ما بتخمّنش.
+     *
+     * @return array{expenses:array,receipts:array,custody:array}
+     */
+    public static function dashContext(string $date, float $custodyNow, int $days = 14): array
+    {
+        $series = Expense::dashboardSeries($date, $days);
+        $last   = static fn(array $v): float => (float) (end($v) ?: 0);
+        $prev   = static function (array $v): ?float {
+            $n = count($v);
+            return $n >= 2 ? (float) $v[$n - 2] : null;
+        };
+
+        /**
+         * فرق مقروء بين رقم النهاردة ورقم اليوم اللي قبله.
+         *
+         * ⚠️ **الفرق المطلق هو الأساس والنسبة إضافة** — مش العكس. المالك بيهمّه
+         *    «زيادة ١٬٢٥٠ جنيه» أكتر من «+12٪». وكمان النسبة بتبقى مضلِّلة لما
+         *    الأساس صغير: رصيد امبارح ٥٠ والنهاردة ٢٤٥٬٠٥٠ بيدّي «+490,000٪»
+         *    (اتصادف فعليًا وأنا بجرّب) — رقم صحيح حسابيًا وبلا أي فايدة.
+         *    فالنسبة بتتعرض بس لما تكون في نطاق معقول (< ٢٠٠٪).
+         */
+        $delta = static function (float $now, ?float $before, string $upTone, callable $fmt, string $when): ?array {
+            if ($before === null) { return null; }
+            $diff = round($now - $before, 2);
+            if (abs($diff) < 0.005) { return ['dir' => 'flat', 'text' => 'زي ' . $when, 'tone' => 'mute']; }
+            $dir  = $diff > 0 ? 'up' : 'down';
+            $text = ($diff > 0 ? '+' : '−') . $fmt(abs($diff));
+            if (abs($before) >= 0.005) {
+                $pct = abs($diff) / abs($before) * 100;
+                if ($pct < 200) { $text .= ' (' . number_format($pct, $pct < 10 ? 1 : 0) . '٪)'; }
+            }
+            return [
+                'dir'  => $dir,
+                'text' => $text . ' عن ' . $when,
+                'tone' => $dir === 'up' ? $upTone : ($upTone === 'bad' ? 'good' : 'bad'),
+            ];
+        };
+        $money = static fn(float $v): string => money0($v, false);
+        $count = static fn(float $v): string => intf($v);
+
+        $balSeries = Closing::balanceSeries($days);
+        $balValues = array_column($balSeries, 'v');
+        // الرصيد الحالي هو آخر نقطة دايمًا (الأيام المفتوحة مالهاش صف مثبَّت)
+        $balValues[] = round($custodyNow, 2);
+        $balPrev = count($balValues) >= 2 ? (float) $balValues[count($balValues) - 2] : null;
+
+        return [
+            // فلوس طالعة: الزيادة **وحشة**
+            'expenses' => [
+                'spark' => $series['expenses'],
+                'delta' => $delta($last($series['expenses']), $prev($series['expenses']), 'bad', $money, 'امبارح'),
+            ],
+            // عدد الإيصالات = حجم شغل: الزيادة **كويسة**
+            'receipts' => [
+                'spark' => array_map('floatval', $series['receipts']),
+                'delta' => $delta($last($series['receipts']), $prev($series['receipts']), 'good', $count, 'امبارح'),
+            ],
+            // رصيد الخزنة: الزيادة **كويسة**، والمقارنة مع آخر يوم متقفل
+            'custody' => [
+                'spark' => $balValues,
+                'delta' => $delta(round($custodyNow, 2), $balPrev, 'good', $money, 'آخر إقفال'),
+            ],
+        ];
+    }
+
+    /**
      * تدفّق آخر المصروفات والإيصالات المُضافة حتى تاريخ العمل (للشريط المتحرك والسجل).
      * كل صف يحمل مرجعه: بند الإذن يظهر جنبه رقم الإذن، بند البوليصة رقمها،
      * المصروف اليدوي المستفيد. لكل صف: kind (expense|receipt), label, owner, ref, ref_kind, amount, note, d.
      */
-    public static function expenseReceiptFeed(string $date, int $limit = 14): array
+    /**
+     * ⚠️⚠️ **`$exactDay` — بلاغ المالك (2026-07-28): «جدول فلوس ٢٧ بيعرض بنود من ٢٦».**
+     *
+     * الدالة دي أصلها **سجل تراكمي** (`entry_date <= ?`) بيرجّع آخر N بند
+     * **لحد** التاريخ ده — عشان لوح «آخر ما اتسجّل». لكن لوح «فلوس اليوم» في
+     * الداشبورد كان بياخد مخرجها **بلا فلترة**، فكان بيعرض بنود أيام فاتت
+     * على إنها بتاعة اليوم.
+     *
+     * التلات مستهلكين التانيين (`dayExpenses` · `dayReceipts` · نافذة
+     * الداشبورد) كانوا بيفلتروا `d === $date` **بالإيد بعد الاستعلام** — تلات
+     * نسخ من نفس الشرط، واللوح الرابع نسي يعمله. دلوقتي الفلترة **جوّه
+     * الاستعلام** ومعامل واحد بيحكمها، فمستحيل مستهلك جديد ينساها.
+     *
+     * @param bool $exactDay true = اليوم ده بالظبط · false = تراكمي لحد اليوم
+     */
+    public static function expenseReceiptFeed(string $date, int $limit = 14, bool $exactDay = false): array
     {
+        $cmp = $exactDay ? '=' : '<=';
         $expSql = \App\Models\Permit::expenseSql('s');
         $stageCase = "CASE s.stage_key";
         foreach (\App\Models\Permit::expenseKeys() as $k) {
@@ -279,19 +396,19 @@ class Metrics
                        s.amount AS amount, COALESCE(NULLIF(s.note,''), s.ref_no) AS note,
                        s.entry_date AS d, s.id AS sid, s.created_at AS ts
                 FROM permit_stages s JOIN permits p ON p.id = s.permit_id
-                WHERE $expSql AND s.amount <> 0 AND s.entry_date <= ?
+                WHERE $expSql AND s.amount <> 0 AND s.entry_date $cmp ?
                 UNION ALL
                 SELECT 'expense', COALESCE(NULLIF(me.category,''),'مصروف يدوي'),
                        COALESCE(NULLIF(me.beneficiary,''),''), NULL, 'manual',
                        me.amount, me.note, me.exp_date, me.id, me.created_at
-                FROM manual_expenses me WHERE me.amount <> 0 AND me.exp_date <= ?
+                FROM manual_expenses me WHERE me.amount <> 0 AND me.exp_date $cmp ?
                 UNION ALL
                 SELECT 'expense', COALESCE(NULLIF(mi.category,''),'مصروف'),
                        COALESCE(NULLIF(b.company,''), NULLIF(b.declaration_owner,''),''),
                        b.bill_number, 'bill', mi.amount, mi.note, m.movement_date, mi.id, m.updated_at
                 FROM movement_items mi JOIN movements m ON m.id = mi.movement_id
                      LEFT JOIN bawalis b ON b.id = m.bill_id
-                WHERE mi.item_type='expense' AND mi.amount <> 0 AND m.movement_date <= ?
+                WHERE mi.item_type='expense' AND mi.amount <> 0 AND m.movement_date $cmp ?
             ) t
             ORDER BY (t.d IS NULL), t.d DESC, t.ts DESC
             LIMIT $limit",
@@ -305,8 +422,8 @@ class Metrics
     public static function dayExpenses(string $date): array
     {
         return array_values(array_filter(
-            self::expenseReceiptFeed($date, 300),
-            fn($r) => $r['d'] === $date && !$r['is_receipt']
+            self::expenseReceiptFeed($date, 300, true),
+            static fn ($r) => !$r['is_receipt']
         ));
     }
 
@@ -314,8 +431,8 @@ class Metrics
     public static function dayReceipts(string $date): array
     {
         return array_values(array_filter(
-            self::expenseReceiptFeed($date, 300),
-            fn($r) => $r['d'] === $date && $r['is_receipt']
+            self::expenseReceiptFeed($date, 300, true),
+            static fn ($r) => (bool) $r['is_receipt']
         ));
     }
 
@@ -887,5 +1004,116 @@ class Metrics
             if (isset($map[$r['d']])) $map[$r['d']] += (int)$r['c'];
         }
         return ['labels' => $labels, 'data' => array_values($map)];
+    }
+
+    /**
+     * ⚠️ **أذونات اتحرّك عليها فلوس في يوم واحد — معتمد ومستنّي مع بعض.**
+     *
+     * طلب المالك بالحرف: «محتاج أفهم اليوم ده الأذونات اللي اتضاف لها إيصالات
+     * أو مصروفات، من النظام أو المندوب، **حتى لو لم يتم اعتمادها**».
+     *
+     * عشان كده الاستعلام **اتحادان**:
+     *   ① `permit_stages` — اللي اتسجّل فعلاً (مكتب أو مندوب معتمَد).
+     *   ② `rep_submissions` بحالة `pending` — لسه في صندوق المراجعة.
+     * البند المعتمَد بيختفي من ② ويظهر في ① تلقائيًّا، فمفيش عدّ مزدوج.
+     *
+     * ⚠️ **التاريخ `entry_date` مش `created_at`** — البند بيتحسب على **يوم
+     *    صرفه** لا يوم تسجيله (قاعدة v29)، والمندوب بيسجّل بند إمبارح النهاردة.
+     *
+     * ⚠️ **مفيش أي تراكمي** (قرار المالك): كل رقم هنا عن اليوم ده وبس.
+     *
+     * @return array<int,array> صف لكل إذن، مرتّب بالأكتر حركة.
+     */
+    public static function permitsTouched(string $day): array
+    {
+        if ($day === '') { return []; }
+
+        $repsReady = Database::scalar(
+            "SELECT COUNT(*) FROM information_schema.tables
+              WHERE table_schema = DATABASE() AND table_name = 'rep_submissions'"
+        );
+
+        /* الجزء ①: البنود المسجَّلة. الإيصال `stage_key='receipts'` والمصروف
+           `direction='expense'` — نفس تعريف باقي النظام. */
+        $parts = ["
+            SELECT s.permit_id,
+                   SUM(CASE WHEN s.stage_key = 'receipts' THEN 1 ELSE 0 END)        AS rc_cnt,
+                   SUM(CASE WHEN s.stage_key = 'receipts' THEN s.amount ELSE 0 END) AS rc_val,
+                   SUM(CASE WHEN s.direction = 'expense'  THEN 1 ELSE 0 END)        AS ex_cnt,
+                   SUM(CASE WHEN s.direction = 'expense'  THEN s.amount ELSE 0 END) AS ex_val,
+                   0 AS pend_cnt, 0 AS pend_val,
+                   SUM(CASE WHEN s.paid_by_rep_id IS NOT NULL THEN 1 ELSE 0 END)    AS by_rep
+              FROM permit_stages s
+             WHERE s.entry_date = ? AND s.permit_id IS NOT NULL
+             GROUP BY s.permit_id"];
+        $params = [$day];
+
+        if ((int) $repsReady > 0) {
+            $parts[] = "
+            SELECT b.permit_id, 0, 0, 0, 0,
+                   COUNT(*) AS pend_cnt, COALESCE(SUM(b.amount), 0) AS pend_val, 0
+              FROM rep_submissions b
+             WHERE b.entry_date = ? AND b.status = 'pending' AND b.permit_id IS NOT NULL
+             GROUP BY b.permit_id";
+            $params[] = $day;
+        }
+
+        $union = implode(' UNION ALL ', $parts);
+        $rows = Database::all(
+            "SELECT p.id, p.permit_no, p.permit_type, p.company, p.client, p.status,
+                    SUM(t.rc_cnt) rc_cnt, SUM(t.rc_val) rc_val,
+                    SUM(t.ex_cnt) ex_cnt, SUM(t.ex_val) ex_val,
+                    SUM(t.pend_cnt) pend_cnt, SUM(t.pend_val) pend_val,
+                    SUM(t.by_rep) by_rep
+               FROM ($union) t
+               JOIN permits p ON p.id = t.permit_id
+              GROUP BY p.id, p.permit_no, p.permit_type, p.company, p.client, p.status
+              ORDER BY (SUM(t.rc_cnt) + SUM(t.ex_cnt) + SUM(t.pend_cnt)) DESC, p.id DESC",
+            $params
+        );
+
+        foreach ($rows as &$r) {
+            $r['id']       = (int) $r['id'];
+            $r['rc_cnt']   = (int) $r['rc_cnt'];
+            $r['ex_cnt']   = (int) $r['ex_cnt'];
+            $r['pend_cnt'] = (int) $r['pend_cnt'];
+            $r['by_rep']   = (int) $r['by_rep'];
+            $r['rc_val']   = (float) $r['rc_val'];
+            $r['ex_val']   = (float) $r['ex_val'];
+            $r['pend_val'] = (float) $r['pend_val'];
+            $r['items']    = $r['rc_cnt'] + $r['ex_cnt'] + $r['pend_cnt'];
+        }
+        unset($r);
+        return $rows;
+    }
+
+    /**
+     * ⚠️ **الأذونات اللي اتفتحت في يوم العمل ده.**
+     *
+     * المصدر `audit_logs.work_date` **مش `permits.created_at`** — لسببين
+     * متحقَّقين في البيانات:
+     *   ① `created_at` **طابع زمني بتوقيت السيرفر (UTC)** والنظام بيشتغل على
+     *      `Africa/Cairo` بفرق ٣ ساعات (قاعدة v48)، فأي إذن اتفتح بعد ٩ مساءً
+     *      بيتحسب على اليوم اللي بعده.
+     *   ② المالك ممكن يفتح إذنًا وهو شغّال على **يوم عمل قديم** — و`work_date`
+     *      هي اللي بتحترم ده (قاعدة v29). متحقَّق: فيه أذونات `work_date=18/07`
+     *      و`created_at=19/07`.
+     */
+    public static function permitsOpened(string $day): array
+    {
+        if ($day === '') { return []; }
+        return Database::all(
+            /* ⚠️ `MAX(a.id)` مش `a.id` في الترتيب — `only_full_group_by` مفعّلة
+               وبترفض عمود غير مجمَّع في ORDER BY (اتصادف فعليًا). والتجميع
+               لازم لأن الإذن ممكن يكون له أكتر من سطر تسجيل. */
+            "SELECT p.id, p.permit_no, p.permit_type, p.company, p.client, p.status,
+                    p.permit_date, MAX(a.user_name) AS user_name, MAX(a.id) AS log_id
+               FROM audit_logs a
+               JOIN permits p ON p.id = a.record_id
+              WHERE a.entity = 'permits' AND a.action = 'create' AND a.work_date = ?
+              GROUP BY p.id, p.permit_no, p.permit_type, p.company, p.client, p.status, p.permit_date
+              ORDER BY log_id DESC",
+            [$day]
+        );
     }
 }

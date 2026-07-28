@@ -15,7 +15,7 @@ $errors = $errors ?? [];
   <?php if (empty($isEdit)): ?>
   <!-- تخصيص المصروف لمندوب (اختياري) — يتسجّل في حساب المندوب مباشرةً -->
   <div class="field expense-rep-panel">
-    <div class="expense-rep-title">🧑‍💼 مصروف / سُلفة لمندوب؟ (اختياري)</div>
+    <div class="expense-rep-title"><?= icon('user', 14) ?>‍<?= icon('briefcase', 14) ?> مصروف / سُلفة لمندوب؟ (اختياري)</div>
     <div class="expense-rep-fields">
       <div class="field expense-rep-field">
         <label for="repSel">المندوب</label>
@@ -70,17 +70,17 @@ $errors = $errors ?? [];
     <div class="field field-full">
       <label class="visa-toggle expense-visa-toggle" for="expense-is-visa">
         <input id="expense-is-visa" type="checkbox" name="is_visa" value="1" <?= !empty($val('is_visa'))?'checked':'' ?>>
-        💳 مدفوع بالفيزا — لا يُحتسب ضمن مصروفات التقفيل اليومي (يظل في سجل المصروفات)
+        <?= icon('credit-card', 14) ?> مدفوع بالفيزا — لا يُحتسب ضمن مصروفات التقفيل اليومي (يظل في سجل المصروفات)
       </label>
     </div>
     <div class="field expense-only field-full">
-      <label for="expense-visa-card">💳 الكارت المستخدَم (لو مدفوع بالفيزا — رصيد المكتب)</label>
+      <label for="expense-visa-card"><?= icon('credit-card', 14) ?> الكارت المستخدَم (لو مدفوع بالفيزا — رصيد المكتب)</label>
       <?= visa_card_select($val('visa_card_id'), 'visa_card_id', '', 'expense-visa-card') ?>
     </div>
   </div>
 
   <div class="form-actions">
-    <button class="btn gold" type="submit" id="expSubmit" data-primary-submit>💾 <?= $isEdit?'حفظ التعديلات':'حفظ المصروف' ?></button>
+    <button class="btn gold" type="submit" id="expSubmit" data-primary-submit><?= icon('download', 14) ?> <?= $isEdit?'حفظ التعديلات':'حفظ المصروف' ?></button>
     <?php if (!$isEdit): ?><button class="btn ghost" type="submit" name="save_and_new" value="1">حفظ وإضافة آخر</button><?php endif; ?>
     <a class="btn ghost" href="<?= url($back ?? 'expenses') ?>">إلغاء</a>
   </div>

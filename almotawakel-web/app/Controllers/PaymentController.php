@@ -112,6 +112,9 @@ class PaymentController extends Controller
                 'visa_card_id' => $card,
                 'auto_allocate'=> !empty($_POST['auto_allocate']),
             ]);
+            // ⚠️ الإشعار **بعد** نجاح الحفظ وخارج أي transaction (docs/15 §٨.٢)
+            \App\Models\PushNotify::clientPaid($name, $amount, $route, $date,
+                                               (string) (\App\Core\Auth::user() ?? 'المكتب'));
             flash('success', 'تم تسجيل التحصيل' . (!empty($_POST['auto_allocate']) ? ' وتخصيصه على أقدم الفواتير المستحقة.' : '.'));
         } catch (\Throwable $e) {
             $this->formFailure('payments.pay', $back, $_POST, ['_form'=>$e->getMessage()], 'payments');

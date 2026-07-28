@@ -31,7 +31,7 @@ $old    = $old ?? [];
 <?php if ((int) $counts['office'] === 0): ?>
   <div class="card mb" style="border-inline-start:4px solid var(--gold)">
     <div style="padding:16px 18px">
-      <b>⚠️ مفيش ولا جهاز مكتب مفعّل الإشعارات.</b>
+      <b><?= icon('alert', 14) ?> مفيش ولا جهاز مكتب مفعّل الإشعارات.</b>
       <p style="margin:6px 0 0;color:var(--grey)">
         يعني إشعارات <b>الإذن الجديد والتقفيل والبند المستنّي مراجعة والبوليصة الجديدة</b> مش هتوصل لحد.
         <?php if ((int) $counts['rep'] > 0): ?>
@@ -39,7 +39,7 @@ $old    = $old ?? [];
           (نفس الموبايل ممكن يكون عليه التطبيقين). عشان تاخد إشعارات المكتب على موبايلك:
           افتح النظام على الموبايل، ثبّته من «⬇ ثبّت التطبيق»، وبعدين افتح الصفحة دي من جوّه التطبيق ودوس «فعّل الإشعارات».
         <?php else: ?>
-          دوس «🔔 فعّل الإشعارات على الجهاز ده» تحت.
+          دوس «<?= icon('bell', 14) ?> فعّل الإشعارات على الجهاز ده» تحت.
         <?php endif; ?>
       </p>
     </div>
@@ -52,14 +52,14 @@ $old    = $old ?? [];
   <div style="padding:14px 18px 18px">
     <p id="pushState" style="margin:0 0 12px;color:var(--grey)">بنشوف حالة الإشعارات على الجهاز ده…</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button type="button" class="btn gold" id="pushEnable" hidden>🔔 فعّل الإشعارات على الجهاز ده</button>
+      <button type="button" class="btn gold" id="pushEnable" hidden><?= icon('bell', 14) ?> فعّل الإشعارات على الجهاز ده</button>
       <button type="button" class="btn ghost" id="pushDisable" hidden>🔕 اقفل الإشعارات على الجهاز ده</button>
       <form method="post" action="<?= url('push/test') ?>" class="no-confirm" style="margin:0">
         <?= csrfField() ?>
-        <button type="submit" class="btn ghost">📨 ابعت إشعار تجربة لكل الأجهزة</button>
+        <button type="submit" class="btn ghost"><?= icon('inbox', 14) ?> ابعت إشعار تجربة لكل الأجهزة</button>
       </form>
     </div>
-    <p style="margin:12px 0 0;font-size:.85rem;color:var(--grey)">
+    <p style="margin:12px 0 0;font-size:var(--fs-2);color:var(--grey)">
       كل واحد لازم يفعّلها من موبايله هو — مفيش طريقة نفعّلها له من هنا (ده شرط المتصفح مش نقص في النظام).
       وعلى الآيفون لازم يكون <b>ثبّت التطبيق على الشاشة الرئيسية</b> الأول.
     </p>
@@ -94,7 +94,7 @@ $old    = $old ?? [];
     <label class="field">
       <span>النص</span>
       <textarea name="body" rows="2" maxlength="160" required
-                placeholder="اكتب الرسالة زي ما هتوصلهم بالظبط"><?= e($old['body'] ?? '') ?></textarea>
+                placeholder="نص الرسالة"><?= e($old['body'] ?? '') ?></textarea>
     </label>
     <label class="field">
       <span>يفتح على صفحة (اختياري)</span>
@@ -102,17 +102,82 @@ $old    = $old ?? [];
              placeholder="مثال: permits  أو  closing — سيبها فاضية عشان يفتح الرئيسية">
     </label>
     <div style="margin-top:12px">
-      <button type="submit" class="btn gold">📤 ابعت الإشعار</button>
+      <button type="submit" class="btn gold"><?= icon('send', 14) ?> ابعت الإشعار</button>
     </div>
   </form>
+</div>
+
+<!-- ②ب صحة الإشعارات (المرحلة ٥) + تحليلات القراءة (المرحلة ٧) --------------
+     ⚠ **قراءة فقط بالكامل** — مفيش هنا ولا فورم ولا زرار بيكتب.
+     ⚠ **«اتقرا فعلاً» أهم رقم في الصفحة:** السجل القديم كان بيقول «وصل ٣ فشل ٠»
+        وبس — يعني الرسالة وصلت الجهاز، مش إن حد شافها. -->
+<div class="card mb">
+  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('bar-chart', 17) ?> صحة الإشعارات — آخر <?= intf($health['days']) ?> أيام</div>
+  <?php if (!$health['ready']): ?>
+    <?php partial('empty', ['emoji' => '🧾', 'title' => 'سجل الإشعارات لسه ما اتفعّلش',]); ?>
+  <?php else: ?>
+  <div style="padding:14px 18px 18px">
+    <div class="nh-grid">
+      <div class="nh-box <?= $health['delivery_rate'] >= 95 ? 'good' : ($health['delivery_rate'] > 0 ? 'bad' : '') ?>">
+        <b><?= e((string) $health['delivery_rate']) ?>%</b>
+        <span>نسبة الوصول (<?= intf($health['sent']) ?> من <?= intf($health['sent'] + $health['failed']) ?>)</span>
+        <div class="nh-bar <?= $health['delivery_rate'] < 95 ? 'low' : '' ?>"><i style="width:<?= (float) $health['delivery_rate'] ?>%"></i></div>
+      </div>
+      <div class="nh-box">
+        <b><?= e((string) $health['read_rate']) ?>%</b>
+        <span>اتقرا فعلاً (<?= intf($health['read']) ?> من <?= intf($health['total']) ?>)</span>
+        <div class="nh-bar"><i style="width:<?= (float) $health['read_rate'] ?>%"></i></div>
+      </div>
+      <div class="nh-box"><b><?= intf($health['devices']) ?></b><span>جهاز شغّال<?= $health['dead'] > 0 ? ' · ' . intf($health['dead']) . ' متوقف' : '' ?></span></div>
+      <div class="nh-box <?= $health['retrying'] > 0 ? 'bad' : '' ?>"><b><?= intf($health['retrying']) ?></b><span>في طابور إعادة المحاولة</span></div>
+      <div class="nh-box <?= $health['gave_up'] > 0 ? 'bad' : '' ?>"><b><?= intf($health['gave_up']) ?></b><span>وقفنا نحاول فيهم (<?= intf(\App\Models\PushNotify::MAX_ATTEMPTS) ?> محاولات)</span></div>
+      <div class="nh-box"><b><?= intf($health['burst']) ?></b><span>اتكتموا بحارس الانفجار<br></span></div>
+      <div class="nh-box"><b><?= intf($health['muted']) ?></b><span>مقفولين بتفضيل شخصي</span></div>
+      <div class="nh-box <?= $health['last_run'] ? 'good' : 'bad' ?>">
+        <b style="font-size:var(--fs-3)"><?= $health['last_run'] ? e((string) $health['last_run']) : 'مفيش' ?></b>
+        <span>آخر تشغيل للعامل (الكرون)</span>
+      </div>
+    </div>
+
+    <?php if ($health['errors']): ?>
+      <div class="section-head" style="margin:0 0 8px"><?= icon('alert', 15) ?> آخر أسباب الفشل</div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>السبب</th><th>عدد</th></tr></thead>
+        <tbody>
+        <?php foreach ($health['errors'] as $er): ?>
+          <tr><td style="font-size:var(--fs-2)"><?= e((string) $er['err']) ?></td><td><?= intf((int) $er['c']) ?></td></tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table></div>
+    <?php endif; ?>
+
+    <?php if ($readStats): ?>
+      <?php /* ⚠️ الفايدة الحقيقية: النوع اللي نسبة قراءته صفر معناه إشعار مالوش
+               لازمة — يتقفل من «إعداداتي» بدل ما يفضل يزنّ. */ ?>
+      <div class="section-head" style="margin:14px 0 8px"><?= icon('bar-chart', 15) ?> أنهي إشعارات بتتقرا فعلاً (٣٠ يوم)</div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>النوع</th><th>اتبعت</th><th>اتقرا</th><th>النسبة</th></tr></thead>
+        <tbody>
+        <?php foreach ($readStats as $s): ?>
+          <tr>
+            <td><?= e($s['label']) ?></td>
+            <td><?= intf($s['total']) ?></td>
+            <td><?= intf($s['read']) ?></td>
+            <td><?= e((string) $s['rate']) ?>%</td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table></div>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
 </div>
 
 <!-- ③ الأجهزة المفعّلة ---------------------------------------------------- -->
 <div class="card mb">
   <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('send', 17) ?> الأجهزة المفعّلة</div>
   <?php if (!$devices): ?>
-    <?php partial('empty', ['emoji' => '📭', 'title' => 'مفيش أي جهاز فعّل الإشعارات لسه',
-                            'note'  => 'كل واحد يفتح التطبيق ويدوس «فعّل الإشعارات».']); ?>
+    <?php partial('empty', ['emoji' => '📭', 'title' => 'مفيش أي جهاز فعّل الإشعارات لسه',]); ?>
   <?php else: ?>
   <div class="table-wrap"><table class="data">
     <thead><tr>
@@ -123,7 +188,7 @@ $old    = $old ?? [];
       <tr>
         <td><?= e($d['rep_name'] ?? $d['user_name'] ?? '—') ?></td>
         <td><?= $d['audience'] === 'rep' ? 'مندوب' : 'مكتب' ?></td>
-        <td style="font-size:.82rem;color:var(--grey)"><?= e(mb_substr((string) $d['user_agent'], 0, 60)) ?></td>
+        <td style="font-size:var(--fs-2);color:var(--grey)"><?= e(mb_substr((string) $d['user_agent'], 0, 60)) ?></td>
         <td><?= $d['last_ok_at'] ? e((string) $d['last_ok_at']) : '—' ?></td>
         <td><?= (int) $d['is_active'] ? '<span class="pill ok">شغّال</span>' : '<span class="pill off">متوقف</span>' ?></td>
       </tr>
@@ -145,7 +210,7 @@ $old    = $old ?? [];
     <?php foreach ($log as $m): ?>
       <tr>
         <td style="white-space:nowrap"><?= e((string) $m['created_at']) ?></td>
-        <td><b><?= e($m['title']) ?></b><br><span style="color:var(--grey);font-size:.85rem"><?= e($m['body']) ?></span></td>
+        <td><b><?= e($m['title']) ?></b><br><span style="color:var(--grey);font-size:var(--fs-2)"><?= e($m['body']) ?></span></td>
         <td><?= e($m['audience']) ?></td>
         <td class="pos"><?= (int) $m['ok_count'] ?></td>
         <td class="<?= (int) $m['fail_count'] ? 'neg' : '' ?>"><?= (int) $m['fail_count'] ?></td>

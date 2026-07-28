@@ -34,6 +34,25 @@ class Lookup
      */
     private const NOTE_TYPES = ['mv_receipt', 'mv_expense', 'mv_misc'];
 
+    /**
+     * **القوائم المقفولة (قرار المالك):** مفرداتها محدودة ومعروفة — الموظف بيختار
+     * منها وبس، والكتابة الحرة ممنوعة. إضافة مفردة جديدة قرار متعمَّد من `/settings`.
+     *
+     * ⚠️ ليه دي بالذات: مصر فيها ٧ موانئ ومقاسات الحاويات ٨ — مفيش سبب تسيب
+     *    الخانة مفتوحة. الحقول المفتوحة (سائق/صاحب سيارة/صاحب بيان/جهة) **لازم
+     *    تفضل مفتوحة** لأن مفرداتها بتكبر كل يوم، وحارس الأسماء هو اللي بيحميها.
+     *
+     * ⚠️ **قيمة قديمة مش في القائمة بتفضل مقبولة على السجل بتاعها** (`$existing`
+     *    في `Controller::nameGuardError`) — من غير كده تعديل تاريخ إذن قديم كان
+     *    هيغيّر ميناءه بالسكوت، وده أسوأ من الإدخال الرديء نفسه.
+     */
+    public const STRICT = ['port', 'container_type', 'agency', 'shipping_co'];
+
+    public static function isStrict(string $type): bool
+    {
+        return in_array($type, self::STRICT, true);
+    }
+
     /** كل القوائم مجمّعة حسب النوع */
     public static function allGrouped(): array
     {
@@ -72,7 +91,25 @@ class Lookup
     }
 
     /** إضافة قيمة إن لم تكن موجودة */
-    public static function add(string $type, string $value): void
+    /**
+     * إضافة قيمة للقائمة المنسدلة.
+     *
+     * ⚠️⚠️ **القائمة مش سجلّ لكل ما كُتِب — هي المفردات المعتمدة.** قبل التحصين ده كانت
+     * `INSERT IGNORE` على النص الحرفي، يعني أول ما حد يكتب «40» بدل «40 قدم» أو
+     * «الإسكندرية» بدل «ميناء الإسكندرية» بتدخل القائمة وتبقى **اختيارًا شرعيًّا لكل
+     * الموظفين بعد كده** — فالغلطة ما بتفضلش غلطة، بتتحوّل لخيار. ده كان **مضخّم**
+     * التلوّث الأساسي في النظام.
+     *
+     * القاعدة دلوقتي — لا تُضاف القيمة لو:
+     *   (أ) فيه قيمة في نفس القائمة بنفس `normkey` (تهجئة تانية لنفس الشيء)، أو
+     *   (ب) حارس الأسماء شايفها متعارضة مع اسم معروف (ميناء X ≡ X · «40» ⊂ «40 قدم» · غلط مطبعي).
+     *
+     * `$force = true` للإضافة المتعمَّدة من شاشة الإعدادات فقط (قرار المالك يغلب الحارس).
+     * ⚠️ الرفض هنا **ما بيمنعش الحفظ** — القيمة بتتخزَّن في السجل عادي، اللي بيتمنع
+     *    هو تلويث قائمة الاقتراحات بس. والاقتراحات بتتقرا من البيانات الحيّة كمان
+     *    (`NameSuggestion::SOURCES`) فمفيش اسم مشروع بيختفي من الاقتراح.
+     */
+    public static function add(string $type, string $value, bool $force = false): void
     {
         $value = trim($value);
         if ($value === '' || !isset(self::TYPES[$type])) {
@@ -82,15 +119,31 @@ class Lookup
         if (in_array($type, self::NOTE_TYPES, true) && preg_match('/[0-9]/', ar2en_digits($value))) {
             return;
         }
+
+        if (!$force) {
+            // القائمة المقفولة ما بتتغذّاش من الإدخال اليومي إطلاقًا — الإضافة
+            // قرار متعمَّد من `/settings` (اللي بينادي بـ`$force = true`).
+            if (self::isStrict($type)) { return; }
+            // (أ) نفس المفتاح موجود ⇒ القائمة فيها الشيء ده أصلاً بتهجئة تانية
+            $key = Maintenance::normkey($value);
+            foreach (self::ofType($type) as $existing) {
+                if (Maintenance::normkey($existing) === $key) { return; }
+            }
+            // (ب) الحارس شايف تعارضًا مع اسم معروف
+            if (NameSuggestion::resolve($type, $value)['conflict'] !== null) { return; }
+        }
+
         Database::exec(
             'INSERT IGNORE INTO lookups (list_type, value) VALUES (?, ?)',
             [$type, $value]
         );
+        NameSuggestion::clearNamesCache();   // القائمة اتغيّرت — كاش الأسماء بقى قديمًا
     }
 
     public static function delete(int $id): void
     {
         Database::exec('DELETE FROM lookups WHERE id = ?', [$id]);
+        NameSuggestion::clearNamesCache();
     }
 
     public static function withIds(): array

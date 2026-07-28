@@ -34,11 +34,13 @@ $selectedPermits = array_map('intval', (array) ($assignOld['permit_ids'] ?? []))
 $tabUrl = static fn (string $t): string => url('rep-custody/' . $repId . '?tab=' . $t);
 $dayLabel = dfmt($day);
 $isToday  = $day === date('Y-m-d');
-$pendingDaySum = 0.0;
-foreach ($pendingAll as $p) {
-    if ((string) $p['entry_date'] === $day && empty($p['is_visa'])) { $pendingDaySum += (float) $p['amount']; }
-}
-$pendingDaySum = round($pendingDaySum, 2);
+// ⚠️ مبلغ المستنّي جاي من الكنترولر (`RepPortal::pendingAmount`) — كان بيتجمّع
+//    هنا بالإيد من `$pendingAll` وده بقى تعريفًا تانيًا ممكن يفترق عن باقي
+//    الشاشات. ممنوع ترجع تجمعه في العرض.
+$pendingDaySum = round((float) ($dayPendingSum ?? 0), 2);
+// «فاضل معاه» = رصيد اليوم بعد خصم المستنّي كمان — نفس تعريف شاشة المندوب
+// (`RepPortal::dayPocket`) وشاشة كل المناديب (`dayTotalsByRep`).
+$dayLeft = round((float) $dayB['balance'] - $pendingDaySum, 2);
 ?>
 <div class="toolbar">
   <div class="section-head" style="margin:0"><?= icon('user', 18) ?> <?= e($rep['name']) ?></div>
@@ -47,7 +49,7 @@ $pendingDaySum = round($pendingDaySum, 2);
   <?php endif; ?>
   <div class="spacer"></div>
   <?php /* الأرصدة مقنّعة افتراضيًّا — المعالج عام في app.js (مش سكربت محلي) */ ?>
-  <button type="button" class="btn ghost secret-toggle" aria-pressed="false">👁 إظهار الأرصدة</button>
+  <button type="button" class="btn ghost secret-toggle" aria-pressed="false"><?= icon('search', 14) ?> إظهار الأرصدة</button>
   <a class="btn ghost" href="<?= url('reps/' . $repId) ?>">كشف المرتبات</a>
   <a class="btn ghost" href="<?= url('rep-custody') ?>">‹ كل المناديب</a>
 </div>
@@ -57,7 +59,6 @@ $pendingDaySum = round($pendingDaySum, 2);
 <?php partial('day_bar', [
   'day'    => $day,
   'locked' => $dayLocked,
-  'note'   => 'عهدة اليوم مستقلة تمامًا — الفاضل من إمبارح ما بيترحّلش عليها.',
   'facts'  => [[
     'label' => 'برّه معاه (كل الأيام)',
     'value' => intf($b['balance']),
@@ -69,7 +70,7 @@ $pendingDaySum = round($pendingDaySum, 2);
 <?php /* ⚠️ **ممنوع رقم أصمّ**: كل رقم بيفتح بنوده من
          `GET /rep-custody/drill/{what}?rep={id}` — بيتجابوا عند الضغط بس. */ ?>
 <?php $rd = static fn (string $what): string => url('rep-custody/drill/' . $what . '?rep=' . $repId); ?>
-<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($dayB, $pendingDaySum, $rd, $dayLabel) { ?>
+<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($dayB, $pendingDaySum, $dayLeft, $rd, $dayLabel) { ?>
   <?php partial('stat', [
     'label' => 'نزل له اليوم', 'value' => intf($dayB['deposits']),
     'icon' => 'wallet', 'tone' => 'green',
@@ -80,8 +81,12 @@ $pendingDaySum = round($pendingDaySum, 2);
     'icon' => 'trending-down', 'tone' => 'red',
     'drill' => $rd('rep_spent'), 'title' => 'اللي صرفه في ' . $dayLabel,
   ]); ?>
+  <?php /* ⚠️ الرقم ده `dayLeft` (= رصيد اليوم − المستنّي) مش `dayB['balance']`:
+           البند اللي المندوب دفعه ولسه في صندوق المراجعة فلوسه خرجت من إيده،
+           فلو ما اتخصمش الشاشة بتقول إن معاه فلوس هو أصلاً صرفها. */ ?>
   <?php partial('stat', [
-    'label' => 'فاضل من عهدة اليوم', 'value' => intf($dayB['balance']),
+    'label' => $pendingDaySum > 0 ? 'فاضل معاه (بعد المستني)' : 'فاضل من عهدة اليوم',
+    'value' => intf($dayLeft),
     'icon' => 'briefcase', 'tone' => 'gold', 'secret' => true,
     'drill' => $rd('rep_spent'), 'title' => 'الفاضل من عهدة ' . $dayLabel,
   ]); ?>
@@ -127,8 +132,8 @@ switch ($tab) {
 .rc-perf{display:flex;gap:10px;flex-wrap:wrap;padding:14px 18px}
 .rc-chip{display:flex;flex-direction:column;gap:2px;min-width:120px;flex:1 1 120px;
   border:1px solid var(--line);border-radius:var(--radius-2);padding:10px 12px;background:var(--bg)}
-.rc-chip .k{font-size:var(--fs-1);color:var(--grey);font-weight:700}
-.rc-chip .v{font-size:var(--fs-4);font-weight:900;color:var(--navy);line-height:1.2}
+.rc-chip .k{font-size:var(--fs-1);color:var(--grey);font-weight:500}
+.rc-chip .v{font-size:var(--fs-4);font-weight:700;color:var(--navy);line-height:1.2}
 .rc-chip .n{font-size:var(--fs-1);color:var(--grey)}
 .rc-chip.on{border-color:var(--gold);background:var(--gold-light)}
 
@@ -137,10 +142,13 @@ switch ($tab) {
   font-size:var(--fs-2);color:var(--navy)}
 .rc-eq-part{display:flex;flex-direction:column;align-items:center;gap:1px;
   padding:6px 12px;border:1px solid var(--line);border-radius:var(--radius-2);background:var(--bg);min-width:88px}
-.rc-eq-part .k{font-size:var(--fs-1);color:var(--grey);font-weight:700;white-space:nowrap}
-.rc-eq-part .v{font-weight:900}
+.rc-eq-part .k{font-size:var(--fs-1);color:var(--grey);font-weight:500;white-space:nowrap}
+.rc-eq-part .v{font-weight:700}
 .rc-eq-part.res{background:var(--gold-light);border-color:var(--gold)}
-.rc-eq-op{font-weight:900;color:var(--grey)}
+/* الخطوة «دفعه ومستني اعتمادك» — فلوس خرجت من إيده والبند لسه في المراجعة */
+.rc-eq-part.wait{background:var(--sader-lt);border-color:#e6cfae}
+.rc-eq-part.wait .v{color:var(--sader-dk)}
+.rc-eq-op{font-weight:700;color:var(--grey)}
 
 @media (max-width:640px){
   .rc-eq{gap:6px;font-size:var(--fs-1)}

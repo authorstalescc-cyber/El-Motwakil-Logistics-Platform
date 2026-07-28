@@ -207,8 +207,10 @@ $pendingSql = code_only((string) file_get_contents($root . '/app/Models/PushNoti
 str_contains($pendingSql, 'DATE_SUB(NOW()')
     ? ok('مقارنة الوقت جوّه SQL (قاعدة v48 — فرق ٣ ساعات بين القاعدة وPHP)')
     : bad('⚠️ مقارنة وقت برّه SQL — هتفشل بسبب فرق التوقيت');
-str_contains($pendingSql, "push_attempts < 3")
-    ? ok('إعادة المحاولة محدودة بـ٣ (مفيش لفّ للأبد)')
+// ⚠️ الفحص على **السلوك** مش على الرقم الحرفي: v53 حوّلت `3` لثابت
+//    `MAX_ATTEMPTS`، والفحص القديم على النص فشل بإنذار كاذب.
+(str_contains($pendingSql, 'push_attempts <') && PushNotify::MAX_ATTEMPTS > 0 && PushNotify::MAX_ATTEMPTS <= 5)
+    ? ok('إعادة المحاولة محدودة بـ' . PushNotify::MAX_ATTEMPTS . ' (مفيش لفّ للأبد)')
     : bad('مفيش حد لإعادة المحاولة');
 
 // تشغيل فعلي — لازم يخرج بهدوء وهو فاضي
@@ -225,9 +227,11 @@ if (function_exists('exec')) {
 /* ══════════════ 5) صفر تغيير مرئي ══════════════ */
 sec('5) عقد المرحلة ١ — صفر تغيير مرئي');
 
-// واجهة الأحداث القديمة لازم تفضل موجودة بنفس الأسماء، وإلا الكنترولرات تقع
+// واجهة الأحداث لازم تفضل موجودة بنفس الأسماء، وإلا الكنترولرات تقع
+// ⚠️ `submissionsDecidedBulk` **اتشالت في المرحلة ٣** عن قصد (بند لكل حدث) —
+//    فحصها اتنقل تحت لقسم المرحلة ٣.
 foreach (['permitCreated', 'dayClosed', 'submissionNew', 'submissionDecided',
-          'submissionsDecidedBulk', 'billCreated', 'custom', 'sendNow'] as $m) {
+          'billCreated', 'custom', 'sendNow'] as $m) {
     method_exists(PushNotify::class, $m)
         ? ok("`PushNotify::$m()` لسه موجودة (الكنترولرات ما اتلمستش)")
         : bad("`PushNotify::$m()` اتشالت — الكنترولرات هتقع");
@@ -245,6 +249,70 @@ foreach (['daily_closings', 'Custody::', 'Closing::'] as $needle) {
         ? bad("`Notify` بيلمس حساب مالي ($needle)") : null;
 }
 !str_contains($notifyModelSrc, 'Custody::') ? ok('`Notify` مالوش أي علاقة بالخزنة ولا التقفيل') : null;
+
+/* ══════════════ 6) المرحلة ٣ — بند لكل حدث + حارس الانفجار ══════════════ */
+sec('6) المرحلة ٣ — بند لكل حدث');
+
+// ⑥أ التجميع اتشال من مصدر الأحداث
+!method_exists(PushNotify::class, 'submissionsDecidedBulk')
+    ? ok('`submissionsDecidedBulk` اتشالت — مفيش تجميع في مصدر الأحداث')
+    : bad('⚠️ التجميع لسه موجود — اعتماد ٧ بنود هيبقى حدثًا واحدًا مضلِّلًا');
+
+$repCtrl = code_only((string) file_get_contents($root . '/app/Controllers/RepCustodyController.php'));
+(str_contains($repCtrl, 'repRows(') && !str_contains($repCtrl, 'repCounts('))
+    ? ok('القرار الجماعي بيقرا **صفوف** البنود مش عددها (عشان يبعت حدثًا لكل واحد)')
+    : bad('القرار الجماعي لسه بيقرا عددًا — النص هيبقى «اتعمدوا N بند» بلا تفاصيل');
+
+// ⑥ب حارس الانفجار في القناة بس
+$push = code_only((string) file_get_contents($root . '/app/Models/PushNotify.php'));
+str_contains($push, 'BURST_MAX')
+    ? ok('حارس الانفجار موجود في القناة') : bad('مفيش حارس انفجار — ٢٠٠ رنّة في دقيقة');
+str_contains($push, 'deliverMany')
+    ? ok('التوصيل بيشتغل على **دفعة** (عشان يعرف N بالظبط ويقول «و N كمان»)')
+    : bad('التوصيل لسه حدثًا حدثًا — مستحيل يعرف كام فاضل');
+(str_contains($push, "party_type . '|'") || str_contains($push, "\$r['party_type'] . '|'"))
+    ? ok('التجميع **بالشخص** — الحدث الواحد ممكن يروح ١٢ مستلمًا ولكلٍّ سقفه')
+    : bad('التجميع مش بالشخص — السقف هيتحسب غلط');
+// ⚠️ الحارس بيلمس `push_state` بس — ممنوع يمسح أو يدمج صفوف السجل
+!preg_match('~DELETE\s+FROM\s+notification~i', $push)
+    ? ok('⚠️ الحارس ما بيمسحش أي صف من السجل — البند بيفضل موجود والرنّة بس اللي بتتلغى')
+    : bad('⚠️ فيه DELETE على جدول الإشعارات — السجل المفترض يفضل كامل');
+
+// ⑥ج الأنواع التمانية الجديدة موصولة
+foreach (['invoice.new', 'client.payment', 'rep.settlement', 'rep.deposit',
+          'bill.linked', 'permit.closed', 'driver.handover', 'rep.transfer'] as $k) {
+    isset(Notify::ROUTES[$k]) && isset(Notify::KINDS[$k])
+        ? ok("النوع `$k` موجود في التوجيه والوصف")
+        : bad("النوع `$k` ناقص من التوجيه أو الوصف");
+}
+foreach (['invoiceIssued', 'clientPaid', 'repSettled', 'repDeposit',
+          'billLinked', 'permitClosed', 'driverHandover', 'repTransfer'] as $m) {
+    method_exists(PushNotify::class, $m) ? ok("`PushNotify::$m()` موجودة") : bad("`PushNotify::$m()` ناقصة");
+}
+
+// ⑥د الهوكات في الكنترولرات فعلاً — مش دوال معلَّقة بلا مستدعي
+$hooks = [
+    'app/Controllers/PermitController.php'     => ['invoiceIssued', 'permitClosed', 'billLinked'],
+    'app/Controllers/PaymentController.php'    => ['clientPaid'],
+    'app/Controllers/RepCustodyController.php' => ['repDeposit', 'repSettled'],
+    // ⚠️ v60: `driverHandover` بقى **بلا مُطلِق حيّ** — شاشة تسليم السائق اتشالت
+    //    ومكانها «بوليصة جديدة» اللي بتطلق `billLinked`. النوع والدالة **بيفضلوا**
+    //    لأن الإشعارات القديمة في السجل بتشاور عليهم (شيلهم = سجل بلا وصف).
+    'app/Controllers/RepPortalController.php'  => ['billLinked', 'repTransfer'],
+];
+foreach ($hooks as $file => $ms) {
+    $src = code_only((string) file_get_contents($root . '/' . $file));
+    foreach ($ms as $m) {
+        str_contains($src, $m . '(')
+            ? ok("`$m` متنادية فعلاً من " . basename($file))
+            : bad("`$m` مش متنادية من " . basename($file) . " — النوع هيفضل ميتًا");
+    }
+}
+
+// ⚠️ قاعدة v35 لسه سارية على النصوص الأغنى
+!preg_match('~actual_amount|actual_unit~', $push)
+    ? ok('⚠️ ممنوع سعر العميل في أي إشعار (قاعدة v35) — لسه محفوظة')
+    : bad('⚠️ سعر العميل ظهر في مصدر الإشعارات');
 
 $after = Closing::currentBalance();
 abs($after - $balanceBefore) < 0.005

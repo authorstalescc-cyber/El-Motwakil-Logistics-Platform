@@ -28,8 +28,18 @@ $r->get('/dashboard/quick-options','DashboardController@quickOptions');
 // تفاصيل أي رقم في الداشبورد (قاعدة «ممنوع رقم أصمّ») — نوع محصور في قائمة بيضا
 $r->get('/dashboard/drill/{what}', 'DashboardController@drill');
 $r->post('/dashboard/quick-entries','DashboardController@quickEntries');
-// مركز الإشعارات — قراءة فقط، بلا جدول. مسار حرفي (مفيش /notifications/{id} أصلاً)
-$r->get('/notifications/ping', 'NotificationController@ping');
+// مركز الإشعارات (v52 + المرحلة ٢) — الجرس وصفحة السجل.
+// ⚠️ المسارات الحرفية **قبل** أي مسار جشع (تحذير ٤). الكتابة الوحيدة هنا هي
+//    «مقروء» وبتخصّ صاحب الجلسة نفسه (الهوية من الجلسة لا من الفورم).
+$r->get('/notifications/ping',        'NotificationController@ping');
+// بصمة النسخة للتحديث الإجباري — بلا حارس جلسة عن قصد (ختم وبس، بلا أي بيانات)
+$r->get('/build',                     'NotificationController@build');
+$r->get('/notifications/prefs',       'NotificationController@prefs');
+$r->post('/notifications/prefs',      'NotificationController@prefsSave');
+$r->post('/notifications/read-all',   'NotificationController@readAll');
+$r->post('/notifications/read/{id}',  'NotificationController@read');
+$r->post('/notifications/snooze/{id}','NotificationController@snooze');
+$r->get('/notifications',             'NotificationController@index');
 
 // إشعارات التطبيق (Web Push) — v51.
 // ⚠️ `subscribe`/`unsubscribe` بيخدموا **جلسة المكتب وجلسة المندوب** مع بعض
@@ -151,14 +161,28 @@ $r->post('/m/work-date', 'RepPortalController@workDateSave');
 // متابعة المناديب للمشرف (v47) — قراءة فقط، حرفي قبل الجشع
 $r->get('/m/team',       'RepPortalController@team');
 $r->get('/m/team/{rid}', 'RepPortalController@teamRep');
+// جرس المندوب (المرحلة ٦) — **حرفية قبل الجشع `/m/permit/{id}`** (تحذير ٤).
+// نفس الكنترولر بتاع المكتب: بياخد الهوية من الجلسة عبر `Notify::me()`،
+// وحارسه `requireAnySession` بيقبل الجلستين.
+$r->get('/m/notifications',        'RepPortalController@notifications');
+$r->get('/m/notifications/prefs',  'NotificationController@prefs');
+$r->post('/m/notifications/prefs', 'NotificationController@prefsSave');
+// تصفية العهدة مع المكتب — حرفي قبل الجشع
+$r->get('/m/settle',  'RepPortalController@settleForm');
+$r->post('/m/settle', 'RepPortalController@settleStore');
 // تحويل عهدة لمندوب (v46) — حرفي قبل الجشع
 $r->get('/m/transfer',  'RepPortalController@transferForm');
 $r->post('/m/transfer', 'RepPortalController@transferStore');
 $r->post('/m/transfer/{tid}/delete', 'RepPortalController@transferDelete');
-// تسليم عهدة لسائق (v45) — حرفي قبل الجشع `/m/permit/{id}` وقبل `/m/entry/{sid}`
-$r->get('/m/handover',  'RepPortalController@handoverForm');
-$r->post('/m/handover', 'RepPortalController@handoverStore');
-$r->post('/m/handover/{hid}/delete', 'RepPortalController@handoverDelete');
+// إضافة بوليصة من الموبايل (v60) — **بديل شاشة «تسليم عهدة لسائق» (v45)**.
+// ⚠️ مسارات `/m/handover` اتشالت بقرار المالك: المندوب بقى يضيف البوليصة نفسها
+//    ويكتب عهدة السائق جوّاها، والعهدة بتتخصم من محفظته زي التسليم بالظبط.
+//    جدول `rep_driver_handovers` وسجلاته **ما اتلمسوش** — لسه بيتخصموا من
+//    عهدة المناديب وبيبانوا في كارت المندوب بالمكتب (شيلهم = تغيير أرصدة).
+// حرفية قبل الجشع `/m/permit/{id}` وقبل `/m/entry/{sid}` (تحذير 4).
+$r->get('/m/bill/new',  'RepPortalController@billForm');
+$r->post('/m/bill/new', 'RepPortalController@billStore');
+$r->post('/m/bill/{bid}/delete', 'RepPortalController@billDelete');
 $r->get('/m/misc',    'RepPortalController@miscForm');   // نثرية عامة بلا إذن (v39)
 $r->post('/m/misc',   'RepPortalController@miscStore');
 // فتح إذن من الموبايل (v43) — **حرفي قبل الجشع `/m/permit/{id}`** (تحذير 4).
@@ -167,6 +191,7 @@ $r->post('/m/permit/new', 'RepPortalController@permitStore');
 $r->get('/m/entry/{sid}/edit', 'RepPortalController@entryEditForm');
 $r->post('/m/entry/{sid}/delete', 'RepPortalController@entryDelete');
 $r->post('/m/entry/{sid}', 'RepPortalController@entryUpdate');
+$r->get('/m/permit/{id}/docs', 'RepPortalController@permitDocs');   // مستندات الأطراف (v56) — قبل الجشع
 $r->get('/m/permit/{id}',  'RepPortalController@entryForm');
 $r->post('/m/permit/{id}', 'RepPortalController@entryStore');
 $r->get('/m', 'RepPortalController@home');
@@ -214,6 +239,23 @@ $r->get('/office/{id}/statement',         'OfficeController@statement');  // ك�
 $r->post('/office/{id}',                  'OfficeController@update');   // بعد كل مسارات /office/{id}/*
 $r->get('/office/{id}',                   'OfficeController@card');     // الجشع أخيرًا
 
+// سيارات المكتب (v54) — المسارات الأخصّ قبل الجشعة /{id} (تحذير ٤)
+$r->get('/cars',                          'OfficeCarController@index');
+$r->get('/cars/new',                      'OfficeCarController@create');
+// تفاصيل الأرقام (ممنوع رقم أصمّ) — حرفي قبل الجشع /cars/{id}
+$r->get('/cars/drill/{what}',             'OfficeCarController@drill');
+$r->post('/cars',                         'OfficeCarController@store');
+// حذف مصروف + إخفاء لوحة «مش بتاعتنا» — حرفية قبل الجشع /cars/{id}
+$r->post('/cars/expense/{eid}/delete',    'OfficeCarController@deleteExpense');
+$r->post('/cars/ignore',                  'OfficeCarController@ignorePlate');
+$r->post('/cars/unignore',                'OfficeCarController@unignorePlate');
+$r->get('/cars/{id}/edit',                'OfficeCarController@edit');
+$r->get('/cars/{id}/report',              'OfficeCarController@report');   // تقرير A4 (قبل الجشع)
+$r->post('/cars/{id}/expense',            'OfficeCarController@storeExpense');
+$r->post('/cars/{id}/delete',             'OfficeCarController@destroy');
+$r->post('/cars/{id}',                    'OfficeCarController@update');   // بعد كل مسارات /cars/{id}/*
+$r->get('/cars/{id}',                     'OfficeCarController@card');     // الجشع أخيرًا
+
 // المناديب (كارت + كشف حساب بطرفين + تقفيل دوري) — المسارات الأخصّ قبل الجشعة /{id}
 $r->get('/reps',                             'RepController@index');
 $r->get('/reps/new',                         'RepController@create');
@@ -252,6 +294,7 @@ $r->post('/rep-custody/{id}/account/reset',        'RepCustodyController@resetPi
 $r->post('/rep-custody/{id}/account',              'RepCustodyController@saveAccount');
 $r->post('/rep-custody/{id}/assign',               'RepCustodyController@assign');
 $r->post('/rep-custody/{id}/deposit',              'RepCustodyController@storeDeposit');
+$r->post('/rep-custody/{id}/settle-all',           'RepCustodyController@settleAll');   // تصفية بضغطة
 $r->post('/rep-custody/{id}/settle',               'RepCustodyController@settle');
 $r->get('/rep-custody/{id}',                       'RepCustodyController@card');   // الجشع أخيرًا
 
@@ -300,6 +343,11 @@ $r->post('/directory/master/{type}',                  'DirectoryController@creat
 $r->post('/directory/master/{type}/{id}',             'DirectoryController@updateParty');
 $r->post('/directory/master/{type}/{id}/alias',       'DirectoryController@addAlias');
 $r->post('/directory/master/{type}/{id}/merge',       'DirectoryController@mergeParty');
+// مستندات الأطراف (v56). ⚠️ «add» مقطع حرفي عشان `/doc/{type}/{id}` ما
+// يبلعش `/doc/{docId}/delete` — الاتنين مقطعان والراوتر first-match-wins.
+$r->post('/directory/doc/add/{type}/{id}', 'DirectoryController@addDoc');
+$r->post('/directory/doc/{docId}/delete',  'DirectoryController@deleteDoc');
+$r->post('/directory/doc/{docId}/update',  'DirectoryController@updateDoc');
 $r->post('/directory/agent/{id}/pay',                  'DirectoryController@addPayment');
 $r->post('/directory/agent/{id}/payment/{pid}/delete', 'DirectoryController@deletePayment');
 $r->get('/directory/agent/{id}',     'DirectoryController@agent');
@@ -309,12 +357,26 @@ $r->get('/directory/company/{id}',   'DirectoryController@company');
 $r->get('/reports',        'ReportsController@index');
 $r->get('/reports/print',  'ReportsController@printable');
 $r->get('/reports/client', 'ReportsController@client');
+$r->get('/reports/drill/{what}', 'ReportsController@drill');   // تفاصيل رقم — قائمة بيضا في الكنترولر
+
+// تقارير التشغيل (حاويات/موانئ/شركات/عهد — يومي أو أسبوعي أو شهري أو مخصّص)
+// ⚠️ الوحدة **قراءة فقط**: كل مساراتها GET ومفيش فيها ولا POST واحد.
+$r->get('/ops',             'OpsReportController@index');
+$r->get('/ops/print',       'OpsReportController@printable');   // حرفي قبل الجشع
+$r->get('/ops/drill/{what}','OpsReportController@drill');
 
 // الإعدادات والقوائم
 $r->get('/security',                      'SecurityController@index');   // للمالك بس (Access::OWNER_ONLY)
 $r->get('/audit',                         'AuditController@index');
 $r->post('/audit/{id}/undo',              'AuditController@undo');
 $r->post('/audit/trash/{id}/restore',     'AuditController@restore');
+// تنظيف البيانات — للمالك والمدير بس (Access::OWNER_MANAGER_ONLY)
+// ⚠️ المسارات الحرفية قبل الجشع /quality/{key} (تحذير ٤)
+$r->get('/quality',                     'QualityController@index');
+$r->post('/quality/{key}/merge',        'QualityController@merge');
+$r->post('/quality/{key}/drop',         'QualityController@drop');
+$r->get('/quality/{key}',               'QualityController@field');
+
 $r->get('/settings',                    'SettingsController@index');
 $r->post('/settings/general',           'SettingsController@saveGeneral');
 $r->post('/settings/permits',           'SettingsController@savePermits');
@@ -341,6 +403,9 @@ $r->post('/backup', 'BackupController@download');
 $r->get('/attachments/stage/{id}',      'FileController@stage');
 $r->get('/attachments/submission/{id}', 'FileController@submission');
 $r->get('/attachments/misc/{id}',       'FileController@misc');
+// مستندات الأطراف (v56) — «print» حرفي قبل الجشع {id} (تحذير ٤).
+$r->get('/attachments/party-doc/{id}/print', 'FileController@partyDocPrint');
+$r->get('/attachments/party-doc/{id}',       'FileController@partyDoc');
 
 $r->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
 Performance::finish();

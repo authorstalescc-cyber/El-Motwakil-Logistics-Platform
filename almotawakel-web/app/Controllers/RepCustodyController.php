@@ -1,6 +1,7 @@
 <?php
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\FormState;
 use App\Core\RepAuth;
@@ -42,9 +43,9 @@ class RepCustodyController extends Controller
         $day = work_date();
         $dayMap = RepCustody::dayTotalsByRep($day);
 
-        $sum = ['deposits' => 0.0, 'spent' => 0.0, 'returned' => 0.0, 'balance' => 0.0];
+        $sum = ['deposits' => 0.0, 'spent' => 0.0, 'returned' => 0.0, 'balance' => 0.0, 'carry' => 0.0];
         $dsum = ['deposits' => 0.0, 'spent' => 0.0, 'returned' => 0.0,
-                 'balance' => 0.0, 'pending' => 0.0, 'reps' => 0];
+                 'balance' => 0.0, 'pending' => 0.0, 'pocket' => 0.0, 'reps' => 0];
         foreach ($cards as &$c) {
             $sum['deposits'] += $c['deposits'];
             $sum['spent']    += $c['spent'];
@@ -57,18 +58,33 @@ class RepCustodyController extends Controller
             $c['day_returned'] = round((float) ($d['returned'] ?? 0), 2);
             $c['day_pending']  = round((float) ($d['pending'] ?? 0), 2);
             $c['day_balance']  = round((float) ($d['balance'] ?? 0), 2);
+            // ⚠️ **الرقم المعروض كـ«فاضل» = `pocket` مش `balance`.** `balance`
+            //    بيخصم المعتمد بس، فالبند اللي المندوب دفعه ولسه في صندوق
+            //    المراجعة بيخلّي الشاشة تقول إن معاه فلوس هو أصلاً صرفها.
+            //    `pocket` = balance − المستنّي (كاش بس)، وجاي من
+            //    `dayTotalsByRep` نفسها فمفيش تعريف تاني ينفع يختلف.
+            $c['day_pocket']   = round((float) ($d['pocket'] ?? 0), 2);
             $c['day_active']   = ($c['day_deposits'] > 0 || $c['day_spent'] > 0
                                || $c['day_returned'] > 0 || $c['day_pending'] > 0);
+            // ⚠️ **«مفتوح من أيام سابقة»** بدل التراكمي الأصمّ (2026-07-27).
+            //    الرقم ده = الرصيد كله − عهدة اليوم، يعني «اللي لسه مفتوح من
+            //    أيام تانية ومحتاج تصفية». مجموع أرصدة الأيام = التراكمي بالظبط
+            //    (شوف `RepCustody::openDays`) فالطرح ده سليم رياضيًّا، ومفيهوش
+            //    أي استعلام زيادة — الرقمين محسوبين فوق أصلاً.
+            $c['carry'] = round((float) $c['balance'] - $c['day_balance'], 2);
 
             $dsum['deposits'] += $c['day_deposits'];
             $dsum['spent']    += $c['day_spent'];
             $dsum['returned'] += $c['day_returned'];
             $dsum['balance']  += $c['day_balance'];
             $dsum['pending']  += $c['day_pending'];
+            $dsum['pocket']   += $c['day_pocket'];
+            $sum['carry'] += $c['carry'];
             if ($c['day_active']) { $dsum['reps']++; }
         }
         unset($c);
-        foreach (['deposits', 'spent', 'returned', 'balance', 'pending'] as $k) {
+        $sum['carry'] = round($sum['carry'], 2);
+        foreach (['deposits', 'spent', 'returned', 'balance', 'pending', 'pocket'] as $k) {
             $dsum[$k] = round($dsum[$k], 2);
         }
 
@@ -106,7 +122,7 @@ class RepCustodyController extends Controller
     private const DRILL_ALL = ['deposits', 'spent', 'pending', 'balance'];
     private const DRILL_REP = [
         'rep_deposits', 'rep_spent', 'rep_pending', 'rep_receipts',
-        'rep_expenses', 'rep_misc', 'rep_handover', 'rep_transfer', 'rep_visa',
+        'rep_expenses', 'rep_misc', 'rep_handover', 'rep_bill', 'rep_transfer', 'rep_visa',
     ];
     /** تفاصيل أرقام صندوق المراجعة — على **كل الأيام** مش على يوم العمل. */
     private const DRILL_INBOX = ['inbox_pending', 'inbox_locked', 'inbox_reps'];
@@ -186,9 +202,11 @@ class RepCustodyController extends Controller
                 'id' => (int) $c['id'], 'name' => (string) $c['name'],
                 'deposits' => $d['deposits'], 'spent' => $d['spent'],
                 'pending' => $d['pending'], 'balance' => $d['balance'],
+                // `pocket` = الفاضل بعد المستنّي — هو الرقم اللي الشاشة بتعرضه
+                'pocket'   => $d['pocket'],
             ];
         }
-        usort($out, static fn ($a, $b) => $b['balance'] <=> $a['balance']);
+        usort($out, static fn ($a, $b) => $b['pocket'] <=> $a['pocket']);
         return $out;
     }
 
@@ -210,6 +228,7 @@ class RepCustodyController extends Controller
                 'rep_expenses' => $src === 'permit' && !$isReceipt,
                 'rep_misc'     => $src === 'misc',
                 'rep_handover' => $src === 'handover',
+                'rep_bill'     => $src === 'bill',
                 'rep_transfer' => $src === 'transfer',
                 'rep_visa'     => !empty($r['is_visa']),
                 default        => true,          // rep_spent — كل اللي صرفه
@@ -273,6 +292,17 @@ class RepCustodyController extends Controller
             'b'           => RepCustody::breakdown($repId),
             // عهدة يوم العمل لوحدها — بلا أي ترحيل من اليوم اللي قبله (v49)
             'dayB'        => RepCustody::breakdown($repId, $day),
+            // ⚠️ اللي دفعه اليوم ولسه مستني اعتماد — **كاش بس** (الفيزا ما
+            //    بتتخصمش من العهدة). بيتخصم من «فاضل معاه» في كل الشاشات لأن
+            //    فلوسه خرجت من إيده فعلاً والاعتماد إجراء مكتبي بيتأخّر.
+            //    المصدر `RepPortal::pendingAmount` نفسها اللي بتغذّي شاشة
+            //    المندوب و`dayTotalsByRep` — ممنوع تجمعه بإيدك من قايمة البنود.
+            'dayPendingSum' => \App\Models\RepPortal::pendingAmount($repId, $day),
+            // لقطة زرار «تصفية العهدة» — المصدر الوحيد لمبلغ التصفية في الشاشتين
+            // ⚠️ لقطتان: اليوم المعروض (اللي الزرار بيقفله) وكل الأيام المفتوحة
+            //    (اللي بيصفّر التراكمي). الشاشة بتعرض الاتنين صريحين.
+            'clear'       => RepCustody::clearSnapshot($repId, $day),
+            'clearAll'    => RepCustody::clearSnapshot($repId),
             'pendingAll'  => $pendingAll,
             'assignCount' => count($assigns),
             'account'     => RepAuth::accountFor($repId),
@@ -397,7 +427,7 @@ class RepCustodyController extends Controller
                 ['ids' => 'علّم بندًا واحدًا على الأقل.'], $group);
         }
         $this->claimForm($this->inboxBack());
-        $before = $this->repCounts($ids);
+        $before = $this->repRows($ids);
         try {
             $n = RepInbox::approveMany($ids);
             $this->notifyBulk($before, true);
@@ -447,7 +477,7 @@ class RepCustodyController extends Controller
                 $errors, $group);
         }
         $this->claimForm($this->inboxBack());
-        $before = $this->repCounts($ids);
+        $before = $this->repRows($ids);
         try {
             $n = RepInbox::rejectMany($ids, $reason);
             $this->notifyBulk($before, false, $reason);
@@ -480,6 +510,9 @@ class RepCustodyController extends Controller
             // v45 — وسم الفيزا والكارت؛ RepInbox::update بيتحقق إن الكارت شغّال
             'is_visa' => !empty($_POST['is_visa']) ? '1' : '',
             'visa_card_id' => (string) ($_POST['visa_card_id'] ?? ''),
+            // v57 — «غير مدفوع»: البند بيتسجّل على الإذن بلا خصم من عهدة المندوب
+            // ولا من الخزنة. RepInbox::update بيرفضه على النثرية ومع الفيزا.
+            'unpaid' => !empty($_POST['unpaid']) ? '1' : '',
             'approve_now' => !empty($_POST['approve_now']) ? '1' : '',
         ];
         $errors = [];
@@ -507,11 +540,19 @@ class RepCustodyController extends Controller
                 'entry_date'  => $old['entry_date'],
                 'ref_no'      => $old['ref_no'],
                 'movement_id' => $old['movement_id'],
+                // ⚠️ الوسوم دي كانت **مجمَّعة في $old ومش بتتبعت للموديل خالص**،
+                //    يعني خانة «مدفوع بالفيزا» في درج التعديل كانت بتتحفظ من غير
+                //    ما تغيّر حاجة (فشل صامت). دلوقتي الثلاثة بيوصلوا.
+                'is_visa'      => $old['is_visa'] !== '',
+                'visa_card_id' => $old['visa_card_id'],
+                'unpaid'       => $old['unpaid'] !== '',
             ]);
             // اعتماد فوري بعد التعديل لو المالك طلب كده
             if (!empty($_POST['approve_now'])) {
                 RepInbox::approve($id);
-                flash('success', 'اتعدّل واتعتمد — البند اتحط على الإذن واتخصم من عهدة المندوب.');
+                flash('success', $old['unpaid'] !== ''
+                    ? 'اتعدّل واتعتمد — البند اتحط على الإذن، ومااتخصمش من عهدة المندوب (غير مدفوع).'
+                    : 'اتعدّل واتعتمد — البند اتحط على الإذن واتخصم من عهدة المندوب.');
             } else {
                 flash('success', 'اتحفظ التعديل. البند لسه مستني اعتمادك.');
             }
@@ -856,6 +897,9 @@ class RepCustodyController extends Controller
         // ملحوظة: مفيش Closing::guard هنا عن قصد — تنزيل العهدة ما بيمسّش الخزنة إطلاقًا.
         $this->claimForm(self::cardUrl($repId, self::TAB_DAY, 'deposit-form'));
         RepCustody::createDeposit($repId, $amount, $date, $note);
+        // ⚠️ الإشعار **بعد** نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
+        PushNotify::repDeposit($repId, (string) (Rep::find($repId)['name'] ?? 'مندوب'),
+                               $amount, $date, (string) (\App\Core\Auth::user() ?? 'المكتب'));
         flash('success', 'تم تنزيل عهدة ' . money($amount, false) . ' للمندوب.');
         redirect(self::cardUrl($repId, self::TAB_DAY));
     }
@@ -906,8 +950,57 @@ class RepCustodyController extends Controller
         // (الفلوس اللي رجعت ماخرجتش من الخزنة أصلاً — الخصم بيحصل وقت الصرف.)
         $this->claimForm(self::cardUrl($repId, self::TAB_ACCOUNT, 'settle-form'));
         RepCustody::settle($repId, $returned, $date, false, $note);
+        // ⚠️ الإشعار **بعد** نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
+        PushNotify::repSettled($repId, (string) ($rep['name'] ?? 'مندوب'), $returned, $date,
+                               (string) (\App\Core\Auth::user() ?? 'المكتب'));
         flash('success', 'تمت التسوية وخلص حساب العهدة مع المندوب.');
         redirect(self::cardUrl($repId, self::TAB_ACCOUNT));
+    }
+
+    /**
+     * **تصفية العهدة بضغطة واحدة** — كل يوم مفتوح بيتقفل على تاريخه هو.
+     *
+     * ⚠️ **`scope=day`** بيقفل اليوم المعروض بس، و**`scope=all`** بيقفل كل
+     *    الأيام المفتوحة (وساعتها التراكمي بيقع صفر كمان — شوف `openDays`).
+     * ⚠️ المبلغ من `clearSnapshot()` **مش من الفورم**: الفورم مش مصدر ثقة، ولو
+     *    المالك فتح الصفحة والمندوب سجّل بند بعدها، الرقم في الشاشة بيبقى قديم.
+     */
+    public function settleAll(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $repId = (int) $id;
+        $rep = Rep::find($repId);
+        if (!$rep) { $this->notFound('المندوب غير موجود.'); }
+
+        $back = safe_back(self::cardUrl($repId, self::TAB_DAY), $_POST['_back'] ?? null);
+        // اليوم المستهدف: الافتراضي يوم العمل؛ و«كل الأيام» بتبعت scope=all.
+        $scope = (string) ($_POST['scope'] ?? 'day');
+        $date  = trim((string) ($_POST['settle_date'] ?? '')) ?: work_date();
+        if (!self::validDate($date)) { $date = work_date(); }
+        $day = $scope === 'all' ? null : $date;
+        $this->claimForm($back);
+        try {
+            $res = RepCustody::settleZero($repId, $day, '', Auth::user());
+        } catch (\Throwable $e) {
+            $this->fail($e->getMessage(), $back);
+        }
+        PushNotify::repSettled($repId, (string) $rep['name'], $res['amount'], $date, (string) Auth::user());
+        $this->done(self::settleMessage($res, (string) $rep['name']), $back);
+    }
+
+    /** رسالة نتيجة التصفية — نفس الصيغة للمكتب وللمندوب. */
+    public static function settleMessage(array $res, string $repName): string
+    {
+        $amt  = (float) $res['amount'];
+        $days = (int) ($res['days'] ?? 1);
+        $what = $days > 1 ? $days . ' أيام' : 'اليوم';
+        $msg = $amt >= 0
+            ? 'اتصفّت عهدة ' . $repName . ' ✓ — استلمنا منه ' . money($amt, false)
+              . ' عن ' . $what . '، والرصيد بقى صفر.'
+            : 'اتصفّت عهدة ' . $repName . ' ✓ — المكتب دفع له ' . money(abs($amt), false)
+              . ' عن ' . $what . '، والرصيد بقى صفر.';
+        return $msg;
     }
 
     public function deleteSettlement(string $sid): void
@@ -947,26 +1040,35 @@ class RepCustodyController extends Controller
     {
         if (!$sub) { return; }
         PushNotify::submissionDecided((int) $sub['rep_id'], $approved,
-            (string) $sub['note'], (float) $sub['amount'], $reason);
+            (string) $sub['note'], (float) $sub['amount'], $reason,
+            (string) ($sub['permit_no'] ?? ''), (string) ($sub['entry_date'] ?? ''));
     }
 
-    /** إشعار واحد لكل مندوب في القرار الجماعي — مش رنّة لكل بند. */
-    private function notifyBulk(array $countsByRep, bool $approved, string $reason = ''): void
+    /**
+     * القرار الجماعي — **بند لكل حدث** (المرحلة ٣، قرار المالك).
+     *
+     * ⚠️ كان بيبعت **رسالة واحدة مجمَّعة** لكل مندوب («اتعمدوا ٧ بنود») —
+     *    وده مضلِّل: المندوب مش عارف **أنهي** بنود ولا بكام. دلوقتي كل بند
+     *    بياخد حدثه باسمه ومبلغه، والتقليل بيحصل في **قناة الموبايل بس**
+     *    (`PushNotify::deliverMany` → حارس الانفجار) فالسجل يفضل مفصَّلًا.
+     */
+    private function notifyBulk(array $rows, bool $approved, string $reason = ''): void
     {
-        foreach ($countsByRep as $repId => $count) {
-            PushNotify::submissionsDecidedBulk((int) $repId, $approved, (int) $count, $reason);
+        foreach ($rows as $row) {
+            $this->notifyDecision($row, $approved, $reason);
         }
     }
 
-    /** عدد البنود لكل مندوب في قايمة معلَّمة — بتتقرا **قبل** تنفيذ القرار. */
-    private function repCounts(array $ids): array
+    /**
+     * صفوف البنود المعلَّمة — بتتقرا **قبل** تنفيذ القرار.
+     * (بعد الاعتماد/الرفض بيتغيّر البند، ومحتاجين بيانه ومبلغه للإشعار.)
+     */
+    private function repRows(array $ids): array
     {
         $out = [];
         foreach ($ids as $id) {
             $row = RepInbox::find((int) $id);
-            if (!$row) { continue; }
-            $rid = (int) $row['rep_id'];
-            $out[$rid] = ($out[$rid] ?? 0) + 1;
+            if ($row) { $out[] = $row; }
         }
         return $out;
     }

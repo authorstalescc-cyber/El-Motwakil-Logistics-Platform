@@ -40,11 +40,11 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
 ?>
 
 <div class="audit-tabs">
-  <a class="audit-tab <?= !$isEntries?'active':'' ?>" href="<?= url('audit') ?>">🧾 سجل العمليات</a>
+  <a class="audit-tab <?= !$isEntries?'active':'' ?>" href="<?= url('audit') ?>"><?= icon('receipt', 14) ?> سجل العمليات</a>
   <a class="audit-tab <?= $isEntries?'active':'' ?>" href="<?= url('audit?mode=entries') ?>">✍️ سجل الإدخالات</a>
   <?php /* للمالك بس — والمنع الحقيقي في Access::OWNER_ONLY مش في الإخفاء ده */ ?>
   <?php if (App\Core\Auth::isOwner()): ?>
-    <a class="audit-tab" href="<?= url('security') ?>">🛡️ المراقبة الأمنية</a>
+    <a class="audit-tab" href="<?= url('security') ?>"><?= icon('alert', 14) ?> المراقبة الأمنية</a>
   <?php endif; ?>
 </div>
 
@@ -52,7 +52,7 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
 <div class="entry-intro">
   <div><strong>مراجعة الإدخالات الجديدة</strong><span>قارن تاريخ العمل وقت الإدخال بتاريخ المستند المحفوظ، وافتح السجل الأصلي مباشرةً عند الحاجة.</span></div>
   <div class="entry-counts">
-    <span class="entry-count ok">✓ مطابق <b><?= intf($matched) ?></b></span>
+    <span class="entry-count ok"><?= icon('check', 14) ?> مطابق <b><?= intf($matched) ?></b></span>
     <span class="entry-count bad">! مختلف <b><?= intf($mismatch) ?></b></span>
     <?php if($unknown): ?><span class="entry-count muted">— بلا تاريخ <b><?= intf($unknown) ?></b></span><?php endif; ?>
   </div>
@@ -69,7 +69,7 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
     <button class="btn sm" type="submit">تصفية</button>
     <?php if($entity!==''||($from??'')!==''||($to??'')!==''||(!$isEntries&&$action!=='')): ?><a class="btn ghost sm" href="<?= url($isEntries?'audit?mode=entries':'audit') ?>">مسح</a><?php endif; ?>
   </form>
-  <?php if(!$isEntries): ?><div class="spacer"></div><a class="btn ghost sm" href="#trash">🗑️ سلة المحذوفات (<?= intf(count($trash)) ?>)</a><?php endif; ?>
+  <?php if(!$isEntries): ?><div class="spacer"></div><a class="btn ghost sm" href="#trash"><?= icon('trash', 14) ?> سلة المحذوفات (<?= intf(count($trash)) ?>)</a><?php endif; ?>
 </div>
 
 <?php if($isEntries): ?>
@@ -84,7 +84,7 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
       <td class="entry-desc"><?= e($log['description'] ?: 'إضافة سجل جديد') ?></td>
       <td class="audit-date"><bdi dir="ltr"><?= ($log['work_date']??'')!=='' ? e(dfmt($log['work_date'])) : '—' ?></bdi></td>
       <td class="audit-date"><bdi dir="ltr"><?= ($log['record_date']??'')!=='' ? e(dfmt($log['record_date'])) : '—' ?></bdi></td>
-      <td><?php if($state==='matched'): ?><span class="date-state ok">✓ مطابق</span><?php elseif($state==='mismatch'): ?><span class="date-state bad">⚠ تاريخ مختلف</span><?php else: ?><span class="date-state muted">غير متاح</span><?php endif; ?></td>
+      <td><?php if($state==='matched'): ?><span class="date-state ok"><?= icon('check', 14) ?> مطابق</span><?php elseif($state==='mismatch'): ?><span class="date-state bad"><?= icon('alert', 14) ?> تاريخ مختلف</span><?php else: ?><span class="date-state muted">غير متاح</span><?php endif; ?></td>
       <td><?php if($href): ?><a class="btn ghost sm" href="<?= e($href) ?>">فتح</a><?php endif; ?></td>
     </tr>
   <?php endforeach; ?><?php if (!$logs): ?><tr><td colspan="8"><div class="empty">لا توجد إدخالات مطابقة للفلاتر.</div></td></tr><?php endif; ?></tbody>
@@ -118,8 +118,8 @@ if($isEntries){foreach($logs as $log){$state=$entryState($log);if($state==='matc
 <?php endif; ?>
 
 <style>
-.audit-tabs{display:flex;gap:8px;margin-bottom:14px}.audit-tab{padding:10px 16px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-weight:800;color:var(--muted)}.audit-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
-.entry-intro{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:16px 18px;margin-bottom:14px;border:1px solid #cdd9e8;border-radius:14px;background:linear-gradient(135deg,#f8fbff,#eef5fc)}.entry-intro>div:first-child{display:grid;gap:4px}.entry-intro strong{font-size:1rem;color:var(--navy)}.entry-intro span{font-size:.78rem}.entry-counts{display:flex;gap:8px;flex-wrap:wrap}.entry-count{padding:7px 10px;border-radius:9px;font-weight:800;white-space:nowrap}.entry-count.ok,.date-state.ok{background:#e7f6ee;color:#147142}.entry-count.bad,.date-state.bad{background:#fff0ed;color:#b43525}.entry-count.muted,.date-state.muted{background:#f0f2f5;color:#6c7580}
-.audit-filter{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.audit-filter label{display:grid;gap:3px;font-size:.68rem;font-weight:800;color:var(--muted)}.audit-filter input{min-width:145px}.entry-row.date-alert td{background:#fff9f7}.entry-row.date-alert td:first-child{border-right:4px solid #d34b38}.entry-desc{min-width:270px;font-weight:700}.audit-date{font-weight:800;white-space:nowrap}.date-state{display:inline-block;padding:6px 9px;border-radius:8px;font-size:.72rem;font-weight:900;white-space:nowrap}.record-no{display:block;margin-top:4px;color:var(--muted);direction:ltr;text-align:right}.audit-diff{position:relative}.audit-diff summary{cursor:pointer;color:var(--navy);font-weight:800}.audit-diff>div{min-width:300px;max-width:440px;padding:8px}.audit-diff p{display:grid;grid-template-columns:110px 1fr;gap:8px;margin:0;padding:5px;border-bottom:1px solid var(--line);font-size:.72rem;text-align:right}.audit-diff span{direction:rtl;overflow-wrap:anywhere}
+.audit-tabs{display:flex;gap:8px;margin-bottom:14px}.audit-tab{padding:10px 16px;border:1px solid var(--line);border-radius:var(--radius-2);background:var(--card);font-weight:600;color:var(--muted)}.audit-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.entry-intro{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:16px 18px;margin-bottom:14px;border:1px solid #cdd9e8;border-radius:var(--radius-2);background:linear-gradient(135deg,#f8fbff,#eef5fc)}.entry-intro>div:first-child{display:grid;gap:4px}.entry-intro strong{font-size:var(--fs-4);color:var(--navy)}.entry-intro span{font-size:var(--fs-1)}.entry-counts{display:flex;gap:8px;flex-wrap:wrap}.entry-count{padding:7px 10px;border-radius:var(--radius-1);font-weight:600;white-space:nowrap}.entry-count.ok,.date-state.ok{background:#e7f6ee;color:#147142}.entry-count.bad,.date-state.bad{background:#fff0ed;color:#b43525}.entry-count.muted,.date-state.muted{background:#f0f2f5;color:#6c7580}
+.audit-filter{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.audit-filter label{display:grid;gap:3px;font-size:var(--fs-1);font-weight:600;color:var(--muted)}.audit-filter input{min-width:145px}.entry-row.date-alert td{background:#fff9f7}.entry-row.date-alert td:first-child{border-right:4px solid #d34b38}.entry-desc{min-width:270px;font-weight:500}.audit-date{font-weight:600;white-space:nowrap}.date-state{display:inline-block;padding:6px 9px;border-radius:var(--radius-1);font-size:var(--fs-1);font-weight:700;white-space:nowrap}.record-no{display:block;margin-top:4px;color:var(--muted);direction:ltr;text-align:right}.audit-diff{position:relative}.audit-diff summary{cursor:pointer;color:var(--navy);font-weight:600}.audit-diff>div{min-width:300px;max-width:440px;padding:8px}.audit-diff p{display:grid;grid-template-columns:110px 1fr;gap:8px;margin:0;padding:5px;border-bottom:1px solid var(--line);font-size:var(--fs-1);text-align:right}.audit-diff span{direction:rtl;overflow-wrap:anywhere}
 @media(max-width:800px){.entry-intro{align-items:flex-start;flex-direction:column}.audit-tabs{overflow:auto}.audit-tab{white-space:nowrap}}
 </style>

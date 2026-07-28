@@ -37,7 +37,7 @@ $anyFuzzy = false; foreach (($results ?? []) as $g) { if (!empty($g['fuzzy'])) {
 <div class="search-hero">
   <form method="get" action="<?= url('search') ?>" class="search-field" role="search">
     <span class="sf-ico"><?= icon('search',20) ?></span>
-    <input type="search" name="q" value="<?= e($q) ?>" placeholder="ابحث عن رقم بوليصة، إذن، شهادة، حاوية، سيارة، سائق، عميل، جهة…" autofocus>
+    <input type="search" name="q" value="<?= e($q) ?>" placeholder="ابحث في النظام…" autofocus>
     <input type="hidden" name="from" value="<?= e($from) ?>">
     <input type="hidden" name="to" value="<?= e($to) ?>">
     <input type="hidden" name="type" value="<?= e($typeStr) ?>">

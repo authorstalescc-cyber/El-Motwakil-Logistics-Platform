@@ -26,6 +26,13 @@ class Access
         // وبيخصّ جهازه هو بس (الكنترولر بياخد الهوية من الجلسة لا من الفورم).
         'PushController@subscribe',
         'PushController@unsubscribe',
+        // تعليم إشعارات **نفسه** كمقروء — حق لأي مستخدم مسجَّل مهما كان دوره،
+        // والكنترولر بياخد الهوية من الجلسة لا من الفورم فمستحيل يعلّم لغيره.
+        'NotificationController@read',
+        'NotificationController@readAll',
+        // تأجيل بند وتفضيلات الإشعارات — كلها بتخصّ **إشعارات نفسه** (v53).
+        'NotificationController@snooze',
+        'NotificationController@prefsSave',
     ];
 
     /**
@@ -35,6 +42,9 @@ class Access
      *    إشعار لكل الشركة. `requireRole` في الكنترولر طبقة تانية.
      */
     private const OWNER_MANAGER_ONLY = [
+        // تنظيف البيانات: الدمج بيعدّل مئات الصفوف دفعة واحدة — مش إجراء يومي.
+        // ⚠️ لازم تفضل هنا — القايمة دي بتتفحص **قبل** السماح العام لطلبات GET.
+        'QualityController@*',
         'PushController@index',
         'PushController@send',
         'PushController@test',
@@ -57,6 +67,7 @@ class Access
     private const FINANCIAL_CONTROLLERS = [
         'BawalisController', 'PaymentController', 'SettlementController',
         'DebtController', 'CustodyController', 'OfficeController',
+        'OfficeCarController',
         'DailyClosingController', 'OwnerStatementController',
         'InvoiceController', 'ExpenseController', 'RepController',
         'RepCustodyController', 'StatementsController',

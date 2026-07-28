@@ -7,8 +7,8 @@ $bulkAllowOwner   = $bulkAllowOwner ?? true;
 ?>
 <div class="bill-bulk-bar" id="billBulkBar">
   <span>المحدّد: <b id="bulkSelectedCount">0</b> بوليصة</span>
-  <?php if ($bulkAllowFreight): ?><button type="button" class="btn gold sm" id="openFreightBulk" disabled>➕ إضافة نولون</button><?php endif; ?>
-  <?php if ($bulkAllowOwner): ?><button type="button" class="btn ghost sm" id="openOwnerBulk" disabled>👤 تغيير صاحب البيان</button><?php endif; ?>
+  <?php if ($bulkAllowFreight): ?><button type="button" class="btn gold sm" id="openFreightBulk" disabled><?= icon('plus', 14) ?> إضافة نولون</button><?php endif; ?>
+  <?php if ($bulkAllowOwner): ?><button type="button" class="btn ghost sm" id="openOwnerBulk" disabled><?= icon('user', 14) ?> تغيير صاحب البيان</button><?php endif; ?>
   <button type="button" class="btn ghost sm" id="clearBillBulk" disabled>إلغاء التحديد</button>
 </div>
 
@@ -20,12 +20,12 @@ $bulkAllowOwner   = $bulkAllowOwner ?? true;
       <?= csrfField() ?><input type="hidden" name="back" value="<?= e($bulkBack) ?>">
       <div class="bulk-unified">
         <label>قيمة موحّدة (اختياري)</label>
-        <input type="number" min="0" step="0.01" id="bulkUnifiedFreight" placeholder="اكتب قيمة ثم طبّقها على الكل">
+        <input type="number" min="0" step="0.01" id="bulkUnifiedFreight" placeholder="قيمة">
         <button type="button" class="btn ghost sm" id="applyUnifiedFreight">تطبيق على الكل</button>
       </div>
       <p class="bulk-hint">يمكنك تعديل نولون كل بوليصة منفردًا. القيمة تستبدل النولون الحالي وتعيد حساب المديونية؛ البوالص القديمة تظل معزولة عن العهدة والتقفيل.</p>
       <div class="bulk-lines" id="freightBulkLines"></div>
-      <div class="bulk-modal-actions"><button class="btn gold" type="submit">💾 حفظ النولون للمحدّد</button><button class="btn ghost bulk-close" type="button">إلغاء</button></div>
+      <div class="bulk-modal-actions"><button class="btn gold" type="submit"><?= icon('download', 14) ?> حفظ النولون للمحدّد</button><button class="btn ghost bulk-close" type="button">إلغاء</button></div>
     </form>
   </div>
 </div>
@@ -39,23 +39,23 @@ $bulkAllowOwner   = $bulkAllowOwner ?? true;
       <?= csrfField() ?><input type="hidden" name="back" value="<?= e($bulkBack) ?>">
       <div id="ownerBulkIds"></div>
       <label class="bulk-owner-label">صاحب البيان الجديد</label>
-      <input type="text" name="owner" list="bulkOwnerOptions" maxlength="150" required autocomplete="off" data-smart-name="owner" placeholder="اكتب أو اختر الاسم المخزّن">
+      <input type="text" name="owner" list="bulkOwnerOptions" maxlength="150" required autocomplete="off" data-smart-name="owner" placeholder="الاسم">
       <datalist id="bulkOwnerOptions"><?php foreach ($ownerOptions as $name): ?><option value="<?= e($name) ?>"><?php endforeach; ?></datalist>
       <p class="bulk-hint">سيُطبّق الاسم على كل البوالص المحدّدة دون تغيير أي مبلغ أو إذن أو حركة.</p>
-      <div class="bulk-modal-actions"><button class="btn gold" type="submit">💾 تغيير صاحب البيان</button><button class="btn ghost bulk-close" type="button">إلغاء</button></div>
+      <div class="bulk-modal-actions"><button class="btn gold" type="submit"><?= icon('download', 14) ?> تغيير صاحب البيان</button><button class="btn ghost bulk-close" type="button">إلغاء</button></div>
     </form>
   </div>
 </div>
 <?php endif; ?>
 
 <style>
-.bill-bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border:1px solid #dfd4a8;border-radius:12px;background:#fff9e8;position:sticky;top:8px;z-index:12;box-shadow:0 4px 14px rgba(21,53,91,.07)}
-.bill-bulk-bar span{font-weight:800;color:var(--navy)}.bill-bulk-bar button[disabled]{opacity:.45;cursor:not-allowed}
+.bill-bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border:1px solid #dfd4a8;border-radius:var(--radius-2);background:#fff9e8;position:sticky;top:8px;z-index:12;box-shadow:0 4px 14px rgba(21,53,91,.07)}
+.bill-bulk-bar span{font-weight:600;color:var(--navy)}.bill-bulk-bar button[disabled]{opacity:.45;cursor:not-allowed}
 .bulk-modal[hidden]{display:none}.bulk-modal{position:fixed;inset:0;z-index:1000;background:rgba(13,29,49,.58);display:flex;align-items:center;justify-content:center;padding:20px}
-.bulk-modal-card{width:min(820px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.28)}.bulk-modal-card.small{width:min(560px,96vw)}
-.bulk-modal-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:15px 18px;background:var(--navy);color:#fff}.bulk-modal-head b{font-size:1.05rem}.bulk-close{border:0;background:transparent;color:inherit;font-size:1.7rem;cursor:pointer;line-height:1}
-.bulk-modal form{padding:18px}.bulk-unified{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.bulk-unified label,.bulk-owner-label{display:block;font-weight:800;color:var(--navy);font-size:.82rem}.bulk-unified input,.bulk-modal input[type=text],.bulk-modal input[type=number]{border:1px solid var(--line2);border-radius:9px;padding:9px 11px;font-family:inherit}.bulk-modal input[type=text]{display:block;width:100%;margin-top:6px}
-.bulk-hint{font-size:.78rem;color:var(--grey);line-height:1.7;margin:11px 0}.bulk-lines{border:1px solid var(--line);border-radius:10px;overflow:hidden}.bulk-line{display:grid;grid-template-columns:1.4fr .8fr .9fr;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);font-size:.83rem}.bulk-line:last-child{border-bottom:0}.bulk-line:nth-child(even){background:#f8fafc}.bulk-line .ref{font-weight:800;color:var(--navy)}.bulk-line small{color:var(--grey)}.bulk-line input{width:100%;text-align:center}
+.bulk-modal-card{width:min(820px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:var(--radius-3);box-shadow:0 24px 70px rgba(0,0,0,.28)}.bulk-modal-card.small{width:min(560px,96vw)}
+.bulk-modal-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:15px 18px;background:var(--navy);color:#fff}.bulk-modal-head b{font-size:var(--fs-4)}.bulk-close{border:0;background:transparent;color:inherit;font-size:var(--fs-7);cursor:pointer;line-height:1}
+.bulk-modal form{padding:18px}.bulk-unified{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.bulk-unified label,.bulk-owner-label{display:block;font-weight:600;color:var(--navy);font-size:var(--fs-2)}.bulk-unified input,.bulk-modal input[type=text],.bulk-modal input[type=number]{border:1px solid var(--line2);border-radius:var(--radius-1);padding:9px 11px;font-family:inherit}.bulk-modal input[type=text]{display:block;width:100%;margin-top:6px}
+.bulk-hint{font-size:var(--fs-1);color:var(--grey);line-height:1.7;margin:11px 0}.bulk-lines{border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden}.bulk-line{display:grid;grid-template-columns:1.4fr .8fr .9fr;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);font-size:var(--fs-2)}.bulk-line:last-child{border-bottom:0}.bulk-line:nth-child(even){background:#f8fafc}.bulk-line .ref{font-weight:600;color:var(--navy)}.bulk-line small{color:var(--grey)}.bulk-line input{width:100%;text-align:center}
 .bulk-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
 .bill-pick{width:18px;height:18px;accent-color:var(--gold,#C9A227);cursor:pointer}
 @media(max-width:700px){.bulk-line{grid-template-columns:1fr}.paid-summary-pick{grid-template-columns:auto 1fr}.bill-bulk-bar{position:static}}

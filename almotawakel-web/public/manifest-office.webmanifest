@@ -14,31 +14,31 @@
   "theme_color": "#FFFFFF",
   "categories": ["business", "productivity"],
   "icons": [
-    { "src": "/assets/img/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/assets/img/pwa/icon-256.png", "sizes": "256x256", "type": "image/png", "purpose": "any" },
-    { "src": "/assets/img/pwa/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
-    { "src": "/assets/img/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/assets/img/pwa/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/assets/img/pwa/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/assets/img/pwa/office/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/pwa/office/icon-256.png", "sizes": "256x256", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/pwa/office/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/pwa/office/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/pwa/office/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/img/pwa/office/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
     {
       "name": "الأذونات والشهادات",
       "short_name": "الأذونات",
       "url": "/permits",
-      "icons": [{ "src": "/assets/img/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "/assets/img/pwa/office/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "التقفيل اليومي",
       "short_name": "التقفيل",
       "url": "/closing",
-      "icons": [{ "src": "/assets/img/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "/assets/img/pwa/office/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "مراجعة بنود المناديب",
       "short_name": "بنود المناديب",
       "url": "/rep-custody/inbox",
-      "icons": [{ "src": "/assets/img/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [{ "src": "/assets/img/pwa/office/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

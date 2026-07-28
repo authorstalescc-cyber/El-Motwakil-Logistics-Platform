@@ -12,11 +12,16 @@
 $rep   = $d['rep'];
 $b     = $d['b'];
 $num   = fn($v) => number_format((float) $v, 0);
-$owed  = $d['pocket'] < 0;
-$shown = abs((float) $d['pocket']);
-$dep   = max((float) $b['deposits'], 0.01);
-$usedPct = min(100, max(0, ((float) $b['spent'] / $dep) * 100));
-$waitPct = min(100 - $usedPct, max(0, ((float) $d['pending'] / $dep) * 100));
+// ⚠️ الرقم الكبير = **عهدة يوم العمل بعد المستنّي** (`day_pocket`)، مش التراكمي.
+//    عهدة المناديب يومية بلا ترحيل (v49)، والمستنّي فلوس خرجت من إيده فعلاً —
+//    فده الرقم الصادق: «فاضل معاه من عهدة اليوم كام». التراكمي جوّه التفاصيل
+//    بتسمية «برّه معاه (كل الأيام)» لأنه أساس التسوية مش باقي عهدة اليوم.
+$dp    = $d['day_pocket'];
+$owed  = (float) $dp['pocket'] < 0;
+$shown = abs((float) $dp['pocket']);
+$dep   = max((float) $dp['deposits'], 0.01);
+$usedPct = min(100, max(0, ((float) $dp['spent'] / $dep) * 100));
+$waitPct = min(100 - $usedPct, max(0, ((float) $dp['pending'] / $dep) * 100));
 $initial = mb_substr(trim((string) $rep['name']) !== '' ? trim((string) $rep['name']) : '؟', 0, 1);
 $wa = wa_phone((string) ($rep['phone'] ?? ''));
 
@@ -27,6 +32,10 @@ $spendRow = function (array $s) use ($num) {
         $icon = '🧷'; $head = $s['category'] ?: 'نثرية'; $sub = 'مصروف عام بلا إذن';
     } elseif ($src === 'handover') {
         $icon = '🚚'; $head = 'تسليم لسائق';
+        $sub = trim((string) ($s['driver_name'] ?? '')) !== '' ? (string) $s['driver_name'] : '—';
+        if (!empty($s['bill_number'])) { $sub .= ' · بوليصة ' . $s['bill_number']; }
+    } elseif ($src === 'bill') {
+        $icon = '🚚'; $head = 'عهدة بوليصة';
         $sub = trim((string) ($s['driver_name'] ?? '')) !== '' ? (string) $s['driver_name'] : '—';
         if (!empty($s['bill_number'])) { $sub .= ' · بوليصة ' . $s['bill_number']; }
     } elseif ($src === 'transfer') {
@@ -54,7 +63,7 @@ $spendRow = function (array $s) use ($num) {
       <div class="hm-slip-end">
         <span class="hm-slip-amt"><?= $num($s['amount']) ?></span>
         <?php if ($visa): ?>
-          <span class="hm-st is-pending" title="اتخصم من كارت المكتب مش من العهدة">💳 فيزا</span>
+          <span class="hm-st is-pending" title="اتخصم من كارت المكتب مش من العهدة"><?= icon('credit-card', 14) ?> فيزا</span>
         <?php endif; ?>
       </div>
     </article>
@@ -76,10 +85,7 @@ $spendRow = function (array $s) use ($num) {
 
 <div class="hm-top">
   <header class="hm-bar">
-    <a class="hf-back" href="<?= url('m/team') ?>" aria-label="رجوع">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none"
-           stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </a>
+    <?php $backTo = 'm/team'; require __DIR__ . '/_back.php'; ?>
     <span class="hm-avatar" aria-hidden="true"><?= e($initial) ?></span>
     <span class="hm-hi">
       <small><?= ($rep['status'] ?? 'active') === 'active' ? 'مندوب' : 'متوقف' ?></small>
@@ -92,36 +98,53 @@ $spendRow = function (array $s) use ($num) {
 
   <section class="hm-balance <?= $owed ? 'is-owed' : '' ?>">
     <div class="hm-balance-head">
-      <span><?= $owed ? 'دفع من جيبه — ليه عندنا' : 'الفاضل معاه دلوقتي' ?></span>
+      <span><?= $owed ? 'دفع أكتر من عهدة اليوم — ليه عندنا' : 'الفاضل من عهدة ' . e(dfmt((string) $d['day'])) ?></span>
     </div>
     <p class="hm-amt"><i>ج</i><b><?= $num($shown) ?></b></p>
 
     <div class="hm-more-box">
       <div class="hm-track" role="img"
-           aria-label="صرف <?= $num($b['spent']) ?> من <?= $num($b['deposits']) ?>">
+           aria-label="صرف <?= $num($dp['spent']) ?> من <?= $num($dp['deposits']) ?> النازل اليوم">
         <i class="used" style="width:<?= round($usedPct, 1) ?>%"></i>
         <i class="wait" style="width:<?= round($waitPct, 1) ?>%"></i>
       </div>
+      <?php /* ⚠️ **كل رقم هنا عن يوم العمل بس** (قرار المالك 2026-07-26). الأرقام
+               التراكمية («برّه معاه كل الأيام» · «نزل له كله» · «صرف كله» ·
+               «مستني كله») اتشالت — كانت بتخلط أيامًا تانية على شاشة المفروض
+               توصف اليوم. التراكمي شغل المكتب (`/rep-custody`). */ ?>
       <dl class="hm-dl">
-        <?php /* v49 — عهدة يوم العمل جوّه التراكمي عشان الفرق يبان بوضوح */ ?>
-        <div><dt>عهدة <?= e(dfmt((string) $d['day'])) ?></dt><dd><?= $num($d['day_b']['balance']) ?></dd></div>
-        <div><dt>نزل له</dt><dd><?= $num($b['deposits']) ?></dd></div>
-        <div><dt>صرف</dt><dd><?= $num($b['spent']) ?></dd></div>
-        <?php if ($d['pending'] > 0): ?>
-          <div><dt>مستني مراجعة</dt><dd><?= $num($d['pending']) ?></dd></div>
+        <div><dt>نزل له</dt><dd><?= $num($dp['deposits']) ?></dd></div>
+        <div><dt>صرف</dt><dd><?= $num($dp['spent']) ?></dd></div>
+        <?php if ((float) $dp['pending'] > 0): ?>
+          <div><dt>مستني مراجعة</dt><dd><?= $num($dp['pending']) ?></dd></div>
         <?php endif; ?>
-        <?php if ((float) $b['returned'] > 0): ?>
-          <div><dt>رجّع</dt><dd><?= $num($b['returned']) ?></dd></div>
+        <?php if ((float) ($dp['transfer_in'] ?? 0) > 0): ?>
+          <div><dt>وصله من زميل</dt><dd><?= $num($dp['transfer_in']) ?></dd></div>
         <?php endif; ?>
-        <?php if ((float) ($b['transfer_in'] ?? 0) > 0): ?>
-          <div><dt>وصله من زملاء</dt><dd><?= $num($b['transfer_in']) ?></dd></div>
+        <?php if ((float) ($dp['transfer_out'] ?? 0) > 0): ?>
+          <div><dt>حوّل لزميل</dt><dd><?= $num($dp['transfer_out']) ?></dd></div>
         <?php endif; ?>
-        <?php if ((float) ($b['transfer_out'] ?? 0) > 0): ?>
-          <div><dt>حوّل لزملاء</dt><dd><?= $num($b['transfer_out']) ?></dd></div>
+        <?php /* سالب = تصفية رصيد سالب (المكتب دفع له) */ ?>
+        <?php if ((float) $dp['returned'] > 0.005): ?>
+          <div><dt>رجّع</dt><dd><?= $num($dp['returned']) ?></dd></div>
+        <?php elseif ((float) $dp['returned'] < -0.005): ?>
+          <div><dt>المكتب دفعله</dt><dd><?= $num(abs((float) $dp['returned'])) ?></dd></div>
         <?php endif; ?>
       </dl>
+      <p class="tw-hint">كل الأرقام والبنود في الشاشة دي عن <b>يوم <?= e(dfmt((string) $d['day'])) ?></b> بس. و«الفاضل» بيخصم اللي دفعه <b>حتى لو لسه مستني اعتماد</b>.</p>
     </div>
   </section>
+
+  <?php /* شريط اليوم — إلزامي بعد ما الشاشة بقت يوم واحد، وإلا القوايم تبان
+           فاضية والمشرف مايعرفش إن السبب إنه شغّال على يوم تاني. */ ?>
+  <a class="hm-wd <?= $d['day'] === date('Y-m-d') ? '' : 'is-past' ?>" href="<?= url('m/work-date') ?>">
+    <span class="hm-wd-ic"><?= icon('calendar', 16) ?></span>
+    <span class="hm-wd-txt">
+      <small>بتشوف بيانات يوم</small>
+      <b><?= e(dfmt((string) $d['day'])) ?><?= $d['day'] === date('Y-m-d') ? ' (النهاردة)' : ' — مش النهاردة' ?></b>
+    </span>
+    <span class="hm-wd-go">غيّر</span>
+  </a>
 </div>
 
 <main class="hm-sheet">
@@ -131,10 +154,11 @@ $spendRow = function (array $s) use ($num) {
 
   <div class="hm-filters" aria-label="أقسام المندوب">
     <?php
+      // العدّادات كلها عن يوم العمل بس — نفس نطاق القوايم تحتها بالظبط
       $tabs = [
         'spend'   => 'صرف من العهدة (' . count($d['spending']) . ')',
         'entries' => 'إدخالاته (' . count($d['submissions']) . ')',
-        'in'      => 'اللي نزل له',
+        'in'      => 'اللي نزل له (' . count($d['deposits']) . ')',
       ];
       foreach ($tabs as $k => $label): ?>
       <a href="<?= url('m/team/' . (int) $rep['id'] . '?tab=' . $k) ?>"
@@ -144,17 +168,23 @@ $spendRow = function (array $s) use ($num) {
 
   <?php if ($tab === 'spend'): ?>
     <?php if (!$d['spending']): ?>
-      <div class="hm-empty"><span class="ic">🧾</span><b>لسه ما صرفش حاجة من عهدته</b></div>
+      <div class="hm-empty"><span class="ic"><?= icon('receipt', 14) ?></span>
+        <b>ما صرفش حاجة في يوم <?= e(dfmt((string) $d['day'])) ?></b>
+        <p>الشاشة بتعرض اليوم ده بس — لو بتدوّر على بند يوم تاني غيّر اليوم من فوق.</p>
+      </div>
     <?php else: ?>
       <?php foreach ($d['spending'] as $s) { $spendRow($s); } ?>
       <p class="tw-note">
-        💳 البند المدفوع بالفيزا بيظهر هنا للعلم بس — بيتخصم من كارت المكتب مش من عهدته.
+        <?= icon('credit-card', 14) ?> البند المدفوع بالفيزا بيظهر هنا للعلم بس — بيتخصم من كارت المكتب مش من عهدته.
       </p>
     <?php endif; ?>
 
   <?php elseif ($tab === 'entries'): ?>
     <?php if (!$d['submissions']): ?>
-      <div class="hm-empty"><span class="ic">📝</span><b>مفيش إدخالات</b></div>
+      <div class="hm-empty"><span class="ic"><?= icon('edit', 14) ?></span>
+        <b>مفيش إدخالات في يوم <?= e(dfmt((string) $d['day'])) ?></b>
+        <p>غيّر اليوم من فوق لو بتدوّر على إدخالات يوم تاني.</p>
+      </div>
     <?php else: foreach ($d['submissions'] as $s): ?>
       <?php $isMisc = \App\Models\RepPortal::isMisc((string) $s['kind']); ?>
       <article class="hm-slip is-<?= e($s['status']) ?>">
@@ -165,8 +195,8 @@ $spendRow = function (array $s) use ($num) {
             <span><?= e(dfmt($s['entry_date'])) ?></span>
             <span>· <?= $isMisc ? 'نثرية' : e($s['permit_no'] ?: '#' . (int) $s['permit_id']) ?></span>
             <?php if ((int) $s['qty'] > 1): ?><span>· <?= (int) $s['qty'] ?>×<?= $num($s['unit_amount']) ?></span><?php endif; ?>
-            <?php if (!empty($s['is_visa'])): ?><span>· 💳</span><?php endif; ?>
-            <?php if (!empty($s['has_photo'])): ?><span>· 📷</span><?php endif; ?>
+            <?php if (!empty($s['is_visa'])): ?><span>· <?= icon('credit-card', 14) ?></span><?php endif; ?>
+            <?php if (!empty($s['has_photo'])): ?><span>· <?= icon('search', 14) ?></span><?php endif; ?>
           </div>
         </div>
         <div class="hm-slip-end">
@@ -186,12 +216,15 @@ $spendRow = function (array $s) use ($num) {
     <?php endforeach; endif; ?>
 
   <?php else: ?>
-    <div class="hm-sheet-head"><h2>تنزيلات العهدة</h2></div>
+    <div class="hm-sheet-head"><h2>تنزيلات عهدة يوم <?= e(dfmt((string) $d['day'])) ?></h2></div>
     <?php if (!$d['deposits']): ?>
-      <div class="hm-empty"><span class="ic">💰</span><b>مفيش تنزيلات</b></div>
+      <div class="hm-empty"><span class="ic"><?= icon('coins', 14) ?></span>
+        <b>ماحدش نزّل له عهدة في اليوم ده</b>
+        <p>التنزيل بيتعمل من المكتب — والشاشة دي عرض بس.</p>
+      </div>
     <?php else: foreach ($d['deposits'] as $dep2): ?>
       <article class="hm-slip">
-        <span class="hm-slip-ic" aria-hidden="true">💰</span>
+        <span class="hm-slip-ic" aria-hidden="true"><?= icon('coins', 14) ?></span>
         <div class="hm-slip-mid">
           <b><?= e($dep2['note'] ?: 'تنزيل عهدة') ?></b>
           <div class="hm-slip-meta"><span><?= e(dfmt($dep2['dep_date'])) ?></span></div>
@@ -204,7 +237,7 @@ $spendRow = function (array $s) use ($num) {
       <div class="hm-sheet-head"><h2>تحويلات وصلته من زملاء</h2></div>
       <?php foreach ($d['transfers_in'] as $t): ?>
         <article class="hm-slip">
-          <span class="hm-slip-ic" aria-hidden="true">🔁</span>
+          <span class="hm-slip-ic" aria-hidden="true"><?= icon('shuffle', 14) ?></span>
           <div class="hm-slip-mid">
             <b>من <?= e($t['other_name'] ?? '—') ?></b>
             <div class="hm-slip-meta">
@@ -221,21 +254,21 @@ $spendRow = function (array $s) use ($num) {
       <div class="hm-sheet-head"><h2>التسويات</h2></div>
       <?php foreach ($d['settlements'] as $st): ?>
         <article class="hm-slip">
-          <span class="hm-slip-ic" aria-hidden="true">✅</span>
+          <span class="hm-slip-ic" aria-hidden="true"><?= icon('check', 14) ?></span>
           <div class="hm-slip-mid">
-            <b>رجّع <?= $num($st['returned']) ?></b>
+            <b><?= (float) $st['returned'] < 0 ? 'المكتب دفعله ' : 'رجّع ' ?><?= $num(abs((float) $st['returned'])) ?></b>
             <div class="hm-slip-meta">
               <span><?= e(dfmt($st['settle_date'])) ?></span>
               <?php if (!empty($st['note'])): ?><span>· <?= e($st['note']) ?></span><?php endif; ?>
             </div>
           </div>
-          <div class="hm-slip-end"><span class="hm-slip-amt"><?= $num($st['returned']) ?></span></div>
+          <div class="hm-slip-end"><span class="hm-slip-amt"><?= $num(abs((float) $st['returned'])) ?></span></div>
         </article>
       <?php endforeach; ?>
     <?php endif; ?>
   <?php endif; ?>
 
-  <p class="tw-note">👀 متابعة بس — الاعتماد والرفض وتنزيل العهدة من المكتب.</p>
+  <p class="tw-note"><?= icon('search', 14) ?> متابعة بس — الاعتماد والرفض وتنزيل العهدة من المكتب.</p>
 </main>
 
 </body>

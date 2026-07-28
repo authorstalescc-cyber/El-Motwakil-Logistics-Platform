@@ -9,7 +9,7 @@
  * وبيسجّل الـService Worker، وبيمسك حدث التثبيت، وبيرسم **شاشة البدء** عند فتح
  * التطبيق المثبَّت.
  *
- * ⚠️ ثلاث نقاط لو اتكسرت واحدة فيهم الميزة بتفشل بالسكوت:
+ * ⚠ ثلاث نقاط لو اتكسرت واحدة فيهم الميزة بتفشل بالسكوت:
  *  ١) لازم يتضمّن جوّه <head> **قبل** أي CSS تقيل — شاشة البدء بتترسم من سكربت
  *     في الرأس عشان تظهر من أول رسمة، ولو اتأخّرت المستخدم هيشوف ومضة بيضا.
  *  ٢) السكربت بيلزق العنصر في `documentElement` مش `body` — لأن `body` لسه
@@ -28,6 +28,19 @@ $__pwa_theme = $__pwa_app === 'rep' ? '#0F151E' : '#FFFFFF';
 $__pwa_bar   = $__pwa_app === 'rep' ? 'black-translucent' : 'default';
 $__pwa_title = 'المتوكل';
 
+/* ⚠️ **أيقونتان مختلفتان — والفرق مقصود** (قرار المالك 2026-07-27):
+   المالك بيثبّت التطبيقين على نفس الموبايل، فلو ليهم نفس الأيقونة بيبقى
+   مستحيل يفرّق بينهم من شاشة الهاتف.
+
+     • المكتب  (`/`)  → `pwa/office/` — خلفية **زرقاء** + علامة الشاحنة البيضا
+     • المندوب (`/m`) → `pwa/`        — لوجو الشركة على كارت فاتح
+
+   لازم يتزامن مع `icons` في الـmanifest المقابل — الرابط هنا للآيفون
+   (`apple-touch-icon`) وللمتصفح، والـmanifest لأندرويد. لو اتغيّر واحد
+   بس، الأيقونة تختلف بين الجهازين **بلا أي خطأ ظاهر**.
+   المولّد: `python3 bin/make_pwa_assets.py`. */
+$__pwa_ico = $__pwa_app === 'rep' ? 'assets/img/pwa/' : 'assets/img/pwa/office/';
+
 /* مقاسات شاشة البدء للآيفون/الآيباد: [عرض CSS, ارتفاع CSS, كثافة البكسل].
    اسم الصورة بيتحسب من الضرب، فمستحيل يختلف عن اللي بيولّده السكربت.
    الجهاز اللي مالوش مقاس مطابق بيقع على `background_color` وبعدها شاشة الـHTML. */
@@ -38,10 +51,22 @@ $__pwa_splash = [
     [1024, 1366, 2], [834, 1194, 2], [834, 1112, 2], [820, 1180, 2], [810, 1080, 2], [768, 1024, 2],
 ];
 ?>
+<?php
+/* ⚠️ **بصمة النسخة لازم تترسم في الصفحة نفسها** — هي الأساس اللي التحديث
+   الإجباري بيقارن عليه. لو الأساس اتاخد من أول رد ping، اللي فتح الصفحة
+   **قبل** الرفع وأول نداء له جه **بعده** كان هياخد النسخة الجديدة أساسًا
+   ويفضل شغّال على صفحة قديمة للأبد. والملف بيتحمّل من هنا عشان يوصل التلات
+   مداخل بسطر واحد: تخطيط المكتب · شاشة الدخول · بوابة المناديب (اللي **ما
+   بتحمّلش `app.js`** — نفس مصيدة `resume-scroll.js`). */
+$__updJs = \App\Core\App::basePath('public/assets/js/app-update.js');
+?>
+<script>window.__almBuild=<?= js_json(\App\Core\App::buildId()) ?>;window.__almBuildUrl=<?= js_json(url('build')) ?>;</script>
+<script defer src="<?= url('assets/js/app-update.js') ?>?v=<?= is_file($__updJs) ? filemtime($__updJs) : 1 ?>"></script>
 <link rel="manifest" href="<?= url($__pwa_man) ?>">
 <meta name="theme-color" content="<?= $__pwa_theme ?>">
-<link rel="apple-touch-icon" sizes="180x180" href="<?= url('assets/img/pwa/apple-touch-icon.png') ?>">
-<link rel="icon" type="image/png" sizes="192x192" href="<?= url('assets/img/pwa/icon-192.png') ?>">
+<link rel="apple-touch-icon" sizes="180x180" href="<?= url($__pwa_ico . 'apple-touch-icon.png') ?>">
+<link rel="icon" type="image/png" sizes="192x192" href="<?= url($__pwa_ico . 'icon-192.png') ?>">
+<link rel="icon" type="image/png" sizes="512x512" href="<?= url($__pwa_ico . 'icon-512.png') ?>">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="<?= $__pwa_bar ?>">
@@ -53,7 +78,7 @@ $__pwa_splash = [
       href="<?= url('assets/img/pwa/splash/apple-splash-' . ($__w * $__d) . 'x' . ($__h * $__d) . '.png') ?>">
 <?php endforeach; ?>
 <style>
-/* ⚠️ الشاشة دي بتترسم قبل أي CSS للنظام (وعلى `/m` بيشتغل ملف تنسيق تاني
+/* ⚠ الشاشة دي بتترسم قبل أي CSS للنظام (وعلى `/m` بيشتغل ملف تنسيق تاني
    خالص)، فلازم تكون مكتفية بنفسها — من غير السطر ده الكارت بياخد عرضه
    + الحشو فيطلع أعرض من الشاشة وينزاح على جنب. */
 #pwaSplash, #pwaSplash *{box-sizing:border-box}
@@ -75,7 +100,7 @@ $__pwa_splash = [
 #pwaSplash.is-out{opacity:0; pointer-events:none}
 #pwaSplash.is-out .pwa-stage{transform:scale(1.1) translateY(-6px)}
 
-/* ⚠️ الحركة متقسّمة على عنصرين عن قصد: `.pwa-stage` مسؤول عن **الخروج**،
+/* ⚠ الحركة متقسّمة على عنصرين عن قصد: `.pwa-stage` مسؤول عن **الخروج**،
    و`.pwa-card` عن **الدخول والطفو**. لو الاتنين على عنصر واحد، الـtransition
    بتاع الخروج بيتصارع مع الـanimation المستمرة وبيبوظ الاتنين. */
 #pwaSplash .pwa-stage{
@@ -143,9 +168,11 @@ $__pwa_splash = [
 #pwaSplash .pwa-truck .sp{animation:pwaSpeed .5s linear infinite}
 #pwaSplash .pwa-truck .sp2{animation-delay:.16s}
 #pwaSplash .pwa-sub{
-  margin-top:min(4vmin,18px); color:rgba(243,233,198,.82); font-size:.82rem; font-weight:700;
+  margin-top:min(4vmin,18px); color:rgba(243,233,198,.82); font-size:var(--fs-2); font-weight:500;
   letter-spacing:.2px; text-align:center;
-  font-family:'Segoe UI','Tahoma',system-ui,-apple-system,Arial,sans-serif;
+  /* ⚠️ مكتوب صراحةً مش `var(--font)`: شاشة البدء بتترسم من سكربت في `<head>`
+     على `documentElement` **قبل** ما ورقة الأنماط تتطبّق، فالتوكن لسه فاضي. */
+  font-family:'Cairo',system-ui,-apple-system,Tahoma,Arial,sans-serif;
   animation:pwaRise .7s .46s cubic-bezier(.2,.8,.3,1) both;
 }
 @keyframes pwaPop{from{opacity:0; transform:translateY(22px) scale(.88)} to{opacity:1; transform:none}}
@@ -186,7 +213,7 @@ $__pwa_splash = [
   var APP = <?= js_json($__pwa_app) ?>;
 
   /* ١) الـService Worker — بيخلّي التطبيق يفتح أسرع وبصفحة «مفيش نت» لطيفة.
-        ⚠️ ممنوع يكاش أي HTML (تفاصيل القاعدة في public/sw.js). */
+        ⚠ ممنوع يكاش أي HTML (تفاصيل القاعدة في public/sw.js). */
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
       navigator.serviceWorker.register(<?= js_json(url('sw.js')) ?>, { scope: '/' }).catch(function () {});
@@ -199,9 +226,9 @@ $__pwa_splash = [
      `window.almPush.state()/enable()/disable()` — الشاشات بتناديها وبس،
      فمنطق الاشتراك مكتوب مرّة واحدة هنا مش في كل شاشة.
 
-     ⚠️ **الإذن لازم يتطلب بضغطة من المستخدم.** طلبه وقت التحميل بترفضه
+     ⚠ **الإذن لازم يتطلب بضغطة من المستخدم.** طلبه وقت التحميل بترفضه
         المتصفحات وبتحرق النطاق كله (يبقى مستحيل تطلبه تاني على نفس المتصفح).
-     ⚠️ **على الآيفون الإشعارات بتشتغل بس لو التطبيق متثبَّت** على الشاشة
+     ⚠ **على الآيفون الإشعارات بتشتغل بس لو التطبيق متثبَّت** على الشاشة
         الرئيسية — بنقول للمستخدم كده بالنص بدل ما يدوس ومايحصلش حاجة.
      ══════════════════════════════════════════════════════════════════════ */
   var PUSH_KEY = <?= js_json(\App\Core\WebPush::publicKey()) ?>;
@@ -244,7 +271,7 @@ $__pwa_splash = [
         message: 'الإشعارات متمنوعة من إعدادات المتصفح على الجهاز ده — افتحها من إعدادات الموقع.' };
     }
     if (subscribed) {
-      return { supported: true, subscribed: true, canEnable: false, message: '✅ الإشعارات شغّالة على الجهاز ده.' };
+      return { supported: true, subscribed: true, canEnable: false, message: '✓ الإشعارات شغّالة على الجهاز ده.' };
     }
     if (isIosDevice() && !standalone()) {
       return { supported: true, subscribed: false, canEnable: false,
@@ -391,7 +418,7 @@ $__pwa_splash = [
   var sub = document.createElement('div'); sub.className = 'pwa-sub';
   sub.textContent = <?= js_json($__pwa_app === 'rep' ? 'شغل المندوب' : 'إدارة النقل والتخليص الجمركي') ?>;
   el.appendChild(stage); el.appendChild(road); el.appendChild(sub);
-  // ⚠️ body لسه ما اتفكّش هنا — بنلزق في <html> عشان الشاشة تظهر من أول رسمة.
+  // ⚠ body لسه ما اتفكّش هنا — بنلزق في <html> عشان الشاشة تظهر من أول رسمة.
   (document.body || document.documentElement).appendChild(el);
 
   /* أقل مدة عرض: 1.5 ثانية — قد الحركة بالظبط (الكارت + اللمعة + الحلقة)

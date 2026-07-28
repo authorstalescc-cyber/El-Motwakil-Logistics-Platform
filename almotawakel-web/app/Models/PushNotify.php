@@ -36,6 +36,23 @@ class PushNotify
     /** أقصى عدد أجهزة نبعت لها في نداء واحد (حماية من الانفجار). */
     private const MAX_DEVICES_PER_SEND = 200;
 
+    /**
+     * حارس الانفجار (المرحلة ٣، قرار المالك ٧.٣) — **للموبايل بس**.
+     *
+     * أكتر من `BURST_MAX` إشعار **لنفس الشخص في نفس الدفعة** → بيتبعت العدد
+     * ده ورنّة واحدة «و N كمان». **السجل بيفضل بند لكل حدث** بلا أي تجميع —
+     * اللي اتلغى هو الرنّة لا البند. البند المكتوم بياخد `push_state='skipped'`
+     * وعلامة `BURST_MARK` في `push_last_error` فيبان في التشخيص وما يتعادش.
+     */
+    private const BURST_MAX  = 5;
+    private const BURST_MARK = 'burst';
+
+    /**
+     * أقصى عدد محاولات إرسال قبل ما نسيب البند (المرحلة ٥).
+     * التباعد بين المحاولات: ٥ دقايق ← ٣٠ ← ١٢٠ (في `deliverPending`).
+     */
+    public const MAX_ATTEMPTS = 3;
+
     /** @var array<int,int> أرقام الأحداث المستنية إرسال في الطلب ده */
     private static array $queue = [];
     private static bool $hooked = false;
@@ -100,28 +117,41 @@ class PushNotify
         ]);
     }
 
-    /** مندوب سجّل بند جديد مستنّي مراجعة — للمكتب. */
-    public static function submissionNew(string $repName, string $note, float $amount, bool $isMisc): void
+    /**
+     * مندوب سجّل بند جديد مستنّي مراجعة — للمكتب.
+     * `$permitNo` بيخلّي المكتب يعرف البند على أنهي إذن **من الإشعار نفسه**
+     * بدل ما يفتح الصندوق يدوّر (المرحلة ٣ — نصوص أغنى).
+     */
+    public static function submissionNew(string $repName, string $note, float $amount, bool $isMisc, string $permitNo = ''): void
     {
+        $bits = [($isMisc ? '🧷 نثرية: ' : '') . $note, number_format($amount, 2) . ' ج'];
+        if (!$isMisc && trim($permitNo) !== '') { $bits[] = 'إذن ' . trim($permitNo); }
         Notify::emit('submission.new', [
             'title'      => '📥 بند جديد من ' . $repName,
-            'body'       => ($isMisc ? '🧷 نثرية: ' : '') . $note
-                          . ' · ' . number_format($amount, 2) . ' ج — مستنّي مراجعتك',
+            'body'       => implode(' · ', $bits) . ' — مستنّي مراجعتك',
             'url'        => 'rep-custody/inbox',
             'actor_name' => $repName,
             'actor_type' => 'rep',
-            'meta'       => ['amount' => $amount, 'misc' => $isMisc],
+            'meta'       => ['amount' => $amount, 'misc' => $isMisc, 'permit_no' => $permitNo],
         ]);
     }
 
     /**
-     * قرار في بند مندوب — **للمندوب صاحب البند بس**.
-     * ⚠️ قاعدة v35: المبلغ هنا هو اللي المندوب دخّله بنفسه، مش سعر العميل.
+     * قرار في بند مندوب — **للمندوب صاحب البند بس**، **بند لكل حدث**.
+     *
+     * ⚠️ قاعدة v35: المبلغ هنا هو اللي المندوب دخّله بنفسه، مش سعر العميل
+     *    (`actual_amount`/`actual_unit`) — ممنوع يوصل شاشته ولا إشعاره.
+     *
+     * ⚠️ القرار الجماعي بينادّيها **مرّة لكل بند** (المرحلة ٣) — التقليل مكانه
+     *    قناة الموبايل بس (`deliverMany` → حارس الانفجار).
      */
-    public static function submissionDecided(int $repId, bool $approved, string $note, float $amount, string $reason = ''): void
+    public static function submissionDecided(int $repId, bool $approved, string $note, float $amount, string $reason = '', string $permitNo = '', string $day = ''): void
     {
         if ($repId <= 0) { return; }
-        $body = $note . ' · ' . number_format($amount, 2) . ' ج';
+        $bits = [$note, number_format($amount, 2) . ' ج'];
+        if (trim($permitNo) !== '') { $bits[] = 'إذن ' . trim($permitNo); }
+        if (trim($day) !== '')      { $bits[] = 'يوم ' . dfmt($day); }
+        $body = implode(' · ', $bits);
         if (!$approved && trim($reason) !== '') { $body .= ' — السبب: ' . $reason; }
         Notify::emit($approved ? 'submission.approved' : 'submission.rejected', [
             'title'      => $approved ? '✅ اتعمد بندك' : '❌ اترفض بندك',
@@ -130,26 +160,7 @@ class PushNotify
             'audience'   => 'rep:' . $repId,
             'severity'   => $approved ? 'info' : 'warn',
             'actor_type' => 'user',
-        ]);
-    }
-
-    /**
-     * قرار جماعي.
-     * ⚠️ **مؤقّتة لحد المرحلة ٣** — قرار المالك إن يبقى **إشعار لكل بند**؛
-     *    التجميع هيتشال من هنا ويتحوّل لحارس انفجار في القناة بس.
-     */
-    public static function submissionsDecidedBulk(int $repId, bool $approved, int $count, string $reason = ''): void
-    {
-        if ($repId <= 0 || $count <= 0) { return; }
-        $body = $approved ? 'المكتب اعتمد بنودك — شوفها في التطبيق' : 'شوف السبب في التطبيق';
-        if (!$approved && trim($reason) !== '') { $body = 'السبب: ' . $reason; }
-        Notify::emit($approved ? 'submission.approved' : 'submission.rejected', [
-            'title'      => $approved ? '✅ اتعمدوا ' . $count . ' بند' : '❌ اترفضوا ' . $count . ' بند',
-            'body'       => $body,
-            'url'        => 'm',
-            'audience'   => 'rep:' . $repId,
-            'severity'   => $approved ? 'info' : 'warn',
-            'actor_type' => 'user',
+            'work_date'  => $day !== '' ? $day : null,
         ]);
     }
 
@@ -164,6 +175,131 @@ class PushNotify
             'subject_type' => 'bill',
             'subject_id'   => $billId,
             'actor_type'   => 'user',
+        ]);
+    }
+
+    // ═══════════════════════════════════════ أنواع المرحلة ٣ (docs/15 §٣.٤)
+
+    /** بوليصة اتربطت بإذن (اتعملت من جوّه صفحة الإذن) — للمكتب. */
+    public static function billLinked(int $billId, string $billNo, int $permitId, string $permitNo, string $owner): void
+    {
+        $line = array_values(array_filter([
+            $permitNo !== '' ? 'إذن ' . $permitNo : 'إذن #' . $permitId,
+            trim($owner) !== '' ? 'صاحب البيان ' . trim($owner) : '',
+        ]));
+        Notify::emit('bill.linked', [
+            'title'        => '🚚 بوليصة ' . ($billNo !== '' ? $billNo : '#' . $billId) . ' على إذن',
+            'body'         => implode(' · ', $line),
+            'url'          => 'permits/' . $permitId . '/manage',
+            'subject_type' => 'bill',
+            'subject_id'   => $billId,
+            'actor_type'   => 'user',
+        ]);
+    }
+
+    /** مستند مالي اتصدر (فاتورة/كشف/مطالبة) — للمكتب. */
+    public static function invoiceIssued(int $invoiceId, string $docLabel, string $client, float $total, string $by): void
+    {
+        Notify::emit('invoice.new', [
+            'title'        => '🧾 ' . $docLabel . ' اتصدر',
+            'body'         => array_filter([trim($client), number_format($total, 2) . ' ج'])
+                              ? implode(' · ', array_filter([trim($client), number_format($total, 2) . ' ج'])) . ' — أصدره ' . $by
+                              : 'أصدره ' . $by,
+            'url'          => 'permits/invoice/' . $invoiceId,
+            'actor_name'   => $by,
+            'actor_type'   => 'user',
+            'subject_type' => 'invoice',
+            'subject_id'   => $invoiceId,
+            'meta'         => ['total' => $total, 'client' => $client],
+        ]);
+    }
+
+    /** إذن اتقفل أو اترجع مفتوح — للمكتب. */
+    public static function permitClosed(int $permitId, string $permitNo, bool $closed, string $by): void
+    {
+        Notify::emit('permit.closed', [
+            'title'        => ($closed ? '✅ اتقفل إذن ' : '↩️ اترجع مفتوح إذن ') . ($permitNo !== '' ? $permitNo : '#' . $permitId),
+            'body'         => ($closed ? 'الإذن خلص وبقى جاهز للفوترة' : 'الإذن اترجع مفتوح تاني') . ' · ' . $by,
+            'url'          => 'permits/' . $permitId,
+            'actor_name'   => $by,
+            'actor_type'   => 'user',
+            'subject_type' => 'permit',
+            'subject_id'   => $permitId,
+        ]);
+    }
+
+    /** تحصيل من عميل — للمكتب. */
+    public static function clientPaid(string $client, float $amount, string $route, string $date, string $by): void
+    {
+        $routeLbl = ['cash' => 'دخلت الخزنة', 'visa' => 'اتشحنت على كارت فيزا'][$route] ?? 'في حساب العميل بس';
+        Notify::emit('client.payment', [
+            'title'      => '💵 تحصيل من ' . ($client !== '' ? $client : 'عميل'),
+            'body'       => number_format($amount, 2) . ' ج · ' . $routeLbl . ' · سجّله ' . $by,
+            'url'        => 'payments',
+            'actor_name' => $by,
+            'actor_type' => 'user',
+            'work_date'  => $date,
+            'meta'       => ['amount' => $amount, 'route' => $route],
+        ]);
+    }
+
+    /** عهدة نزلت لمندوب — للمكتب. */
+    public static function repDeposit(int $repId, string $repName, float $amount, string $date, string $by): void
+    {
+        Notify::emit('rep.deposit', [
+            'title'        => '👛 نزلت عهدة لـ' . $repName,
+            'body'         => number_format($amount, 2) . ' ج · يوم ' . dfmt($date) . ' · نزّلها ' . $by,
+            'url'          => 'rep-custody/' . $repId,
+            'actor_name'   => $by,
+            'actor_type'   => 'user',
+            'subject_type' => 'rep',
+            'subject_id'   => $repId,
+            'work_date'    => $date,
+            'meta'         => ['amount' => $amount],
+        ]);
+    }
+
+    /** تسوية حساب عهدة مندوب — للمكتب. */
+    public static function repSettled(int $repId, string $repName, float $returned, string $date, string $by): void
+    {
+        Notify::emit('rep.settlement', [
+            'title'        => '🤝 اتسوّى حساب ' . $repName,
+            'body'         => 'المرتجع ' . number_format($returned, 2) . ' ج · يوم ' . dfmt($date) . ' · سوّاه ' . $by,
+            'url'          => 'rep-custody/' . $repId,
+            'actor_name'   => $by,
+            'actor_type'   => 'user',
+            'subject_type' => 'rep',
+            'subject_id'   => $repId,
+            'work_date'    => $date,
+            'meta'         => ['returned' => $returned],
+        ]);
+    }
+
+    /** مندوب سلّم عهدة لسائق — للمكتب. */
+    public static function driverHandover(string $repName, string $driver, float $amount, string $date): void
+    {
+        Notify::emit('driver.handover', [
+            'title'      => '🚛 ' . $repName . ' سلّم عهدة لسائق',
+            'body'       => ($driver !== '' ? $driver . ' · ' : '') . number_format($amount, 2) . ' ج · يوم ' . dfmt($date),
+            'url'        => 'rep-custody',
+            'actor_name' => $repName,
+            'actor_type' => 'rep',
+            'work_date'  => $date,
+            'meta'       => ['amount' => $amount],
+        ]);
+    }
+
+    /** تحويل عهدة من مندوب لمندوب — للمكتب. */
+    public static function repTransfer(string $fromName, string $toName, float $amount, string $date): void
+    {
+        Notify::emit('rep.transfer', [
+            'title'      => '🔁 ' . $fromName . ' حوّل لـ' . $toName,
+            'body'       => number_format($amount, 2) . ' ج · يوم ' . dfmt($date),
+            'url'        => 'rep-custody',
+            'actor_name' => $fromName,
+            'actor_type' => 'rep',
+            'work_date'  => $date,
+            'meta'       => ['amount' => $amount],
         ]);
     }
 
@@ -217,61 +353,122 @@ class PushNotify
         if (function_exists('fastcgi_finish_request')) { @fastcgi_finish_request(); }
         elseif (function_exists('litespeed_finish_request')) { @litespeed_finish_request(); }
 
-        foreach ($ids as $id) {
-            try { self::deliver((int) $id); }
-            catch (\Throwable $e) { error_log('PushNotify::deliver failed #' . $id . ': ' . $e->getMessage()); }
-        }
+        try { self::deliverMany($ids); }
+        catch (\Throwable $e) { error_log('PushNotify::flush failed: ' . $e->getMessage()); }
+    }
+
+    /** توصيل حدث واحد — غلاف رفيع فوق `deliverMany`. */
+    public static function deliver(int $notificationId): array
+    {
+        return self::deliverMany([$notificationId]);
     }
 
     /**
-     * توصيل حدث لكل مستلميه المستنيين.
-     * @return array{sent:int,failed:int,skipped:int}
+     * ═══════════════════════════════════════════════════════════════════════
+     * توصيل دفعة أحداث — **وهنا حارس الانفجار** (المرحلة ٣، قرار ٧.٣).
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * ⚠️ **القاعدة اللي الوحدة كلها قايمة عليها:** السجل بيفضل **بند لكل حدث
+     *    دايمًا**؛ الحارس ده بيقلّل **رنّات الموبايل بس**. اعتماد ٧ بنود =
+     *    ٧ صفوف في السجل، لكن ٥ رنّات + رنّة «و٢ كمان».
+     *
+     * ⚠️ **ليه على مستوى الدفعة مش لكل حدث لوحده:** القرار الجماعي بيولّد كل
+     *    أحداثه في **نفس الطلب**، فالطابور بيشوفهم مع بعض ويعرف **N بالظبط**.
+     *    لو الحارس كان جوّه `deliver()` لحدث واحد، كان لازم يخمّن الجاي —
+     *    ولا كان هيقدر يقول «و N كمان» أصلاً.
+     *
+     * ⚠️ التجميع **بالشخص مش بالحدث**: الحدث الواحد ممكن يروح ١٢ مستلمًا،
+     *    وكل واحد فيهم له سقفه هو.
+     *
+     * @param array<int,int> $ids
+     * @return array{sent:int,failed:int,skipped:int,burst:int}
      */
-    public static function deliver(int $notificationId): array
+    public static function deliverMany(array $ids): array
     {
-        $out = ['sent' => 0, 'failed' => 0, 'skipped' => 0];
-        $n = Notify::find($notificationId);
-        if (!$n) { return $out; }
+        $out = ['sent' => 0, 'failed' => 0, 'skipped' => 0, 'burst' => 0];
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $ids = array_filter($ids, static fn(int $i): bool => $i > 0);
+        if (!$ids) { return $out; }
 
+        $notifs = [];
+        foreach ($ids as $id) {
+            $n = Notify::find($id);
+            if ($n) { $notifs[$id] = $n; }
+        }
+        if (!$notifs) { return $out; }
+
+        $in = implode(',', array_map('intval', array_keys($notifs)));
         $recips = Database::all(
             "SELECT * FROM notification_recipients
-              WHERE notification_id = ? AND push_state IN ('pending','failed')",
-            [$notificationId]);
+              WHERE notification_id IN ($in) AND push_state IN ('pending','failed')
+              ORDER BY notification_id ASC, id ASC");
         if (!$recips) { return $out; }
 
-        $payload = [
-            'title' => (string) $n['title'],
-            'body'  => (string) $n['body'],
-            'url'   => $n['url'] ? url((string) $n['url']) : url(''),
-            'kind'  => (string) $n['kind'],
-            'tag'   => (string) $n['kind'] . ':' . $notificationId,
-        ];
-
-        $okTotal = 0; $failTotal = 0;
+        // تجميع بالشخص — «كام إشعار لفلان في الدفعة دي»
+        $byParty = [];
         foreach ($recips as $r) {
-            $devices = PushSubscription::forParty((string) $r['party_type'], (string) $r['party_key']);
+            $byParty[$r['party_type'] . '|' . $r['party_key']][] = $r;
+        }
+
+        // ok/fail لكل حدث عشان سجل `push_messages` يفضل دقيقًا
+        $stats = [];
+        foreach (array_keys($notifs) as $id) { $stats[$id] = ['ok' => 0, 'fail' => 0]; }
+
+        foreach ($byParty as $key => $rows) {
+            [$partyType, $partyKey] = explode('|', $key, 2);
+            $devices = PushSubscription::forParty($partyType, $partyKey);
             if (!$devices) {
                 // ⚠️ مفيش أجهزة = **متخطّى** مش فاشل — وإلا العامل يفضل يعيد للأبد
-                self::setState((int) $r['id'], 'skipped', 0, null);
-                $out['skipped']++;
+                foreach ($rows as $r) { self::setState((int) $r['id'], 'skipped', 0, null); $out['skipped']++; }
                 continue;
             }
             $devices = array_slice($devices, 0, self::MAX_DEVICES_PER_SEND);
-            $res = WebPush::send($devices, $payload);
 
-            $anyOk = false; $lastErr = null;
-            foreach ($devices as $i => $dev) {
-                $x = $res[$i] ?? ['ok' => false, 'gone' => false, 'status' => 0, 'error' => ''];
-                if ($x['ok']) { $anyOk = true; $okTotal++; }
-                else { $failTotal++; $lastErr = ((int) $x['status'] ?: '؟') . ' ' . (string) $x['error']; }
-                PushSubscription::recordResult((int) $dev['id'], (bool) $x['ok'], (bool) $x['gone']);
+            $send = array_slice($rows, 0, self::BURST_MAX);
+            $rest = array_slice($rows, self::BURST_MAX);
+
+            foreach ($send as $r) {
+                $nid = (int) $r['notification_id'];
+                $n   = $notifs[$nid];
+                $res = WebPush::send($devices, [
+                    'title' => (string) $n['title'],
+                    'body'  => (string) $n['body'],
+                    'url'   => $n['url'] ? url((string) $n['url']) : url(''),
+                    'kind'  => (string) $n['kind'],
+                    'tag'   => (string) $n['kind'] . ':' . $nid,
+                ]);
+                $anyOk = false; $lastErr = null;
+                foreach ($devices as $i => $dev) {
+                    $x = $res[$i] ?? ['ok' => false, 'gone' => false, 'status' => 0, 'error' => ''];
+                    if ($x['ok']) { $anyOk = true; $stats[$nid]['ok']++; }
+                    else { $stats[$nid]['fail']++; $lastErr = ((int) $x['status'] ?: '؟') . ' ' . (string) $x['error']; }
+                    PushSubscription::recordResult((int) $dev['id'], (bool) $x['ok'], (bool) $x['gone']);
+                }
+                self::setState((int) $r['id'], $anyOk ? 'sent' : 'failed',
+                               (int) $r['push_attempts'] + 1, $anyOk ? null : $lastErr);
+                $anyOk ? $out['sent']++ : $out['failed']++;
             }
-            self::setState((int) $r['id'], $anyOk ? 'sent' : 'failed',
-                           (int) $r['push_attempts'] + 1, $anyOk ? null : $lastErr);
-            $anyOk ? $out['sent']++ : $out['failed']++;
+
+            if ($rest) {
+                // ⚠️ البنود دي **موجودة في السجل كاملة** — اللي اتلغى هو الرنّة بس
+                foreach ($rest as $r) {
+                    self::setState((int) $r['id'], 'skipped', (int) $r['push_attempts'] + 1, self::BURST_MARK);
+                    $out['burst']++;
+                }
+                $more = count($rest);
+                WebPush::send($devices, [
+                    'title' => '🔔 و' . $more . ' إشعار كمان',
+                    'body'  => 'حصلت حاجات كتير مع بعض — افتح النظام تشوفها كلها.',
+                    'url'   => url('notifications'),
+                    'kind'  => 'burst',
+                    'tag'   => 'burst',
+                ]);
+            }
         }
 
-        self::log($n, $okTotal, $failTotal);
+        foreach ($stats as $id => $s) {
+            if ($s['ok'] || $s['fail']) { self::log($notifs[$id], $s['ok'], $s['fail']); }
+        }
         return $out;
     }
 
@@ -284,27 +481,133 @@ class PushNotify
     public static function deliverPending(int $limit = 100): array
     {
         $limit = max(1, min(500, $limit));
+
+        /* ⚠️ **التباعد المتزايد** (المرحلة ٥): من غيره العامل بيعيد على نفس
+           الجهاز الميت كل ٥ دقايق لحد ما يوصل الحد — ٣ محاولات في ١٥ دقيقة
+           كلها بتفشل لنفس السبب. دلوقتي: ٥ دقايق ← ٣٠ ← ١٢٠.
+
+           ⚠️ **المقارنة الزمنية جوّه SQL** (قاعدة v48) — ساعة القاعدة UTC
+           وPHP القاهرة، فأي مقارنة في PHP بتفشل بفرق ٣ ساعات. */
+        $backoff = self::hasCol('push_last_try')
+            ? "(push_last_try IS NULL
+                OR push_last_try < DATE_SUB(NOW(), INTERVAL "
+                    . "CASE push_attempts WHEN 0 THEN 5 WHEN 1 THEN 30 ELSE 120 END MINUTE))"
+            : '1';
+
         $ids = Database::all(
             "SELECT DISTINCT notification_id FROM notification_recipients
-              WHERE (push_state = 'failed' AND push_attempts < 3)
-                 OR (push_state = 'pending' AND created_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE))
+              WHERE ((push_state = 'failed' AND push_attempts < " . self::MAX_ATTEMPTS . " AND $backoff)
+                 OR (push_state = 'pending' AND created_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE)))
               ORDER BY notification_id DESC
               LIMIT $limit");
-        $total = ['sent' => 0, 'failed' => 0, 'skipped' => 0, 'events' => count($ids)];
-        foreach ($ids as $row) {
-            $r = self::deliver((int) $row['notification_id']);
-            $total['sent'] += $r['sent']; $total['failed'] += $r['failed']; $total['skipped'] += $r['skipped'];
-        }
+        // ⚠️ دفعة واحدة عن قصد — عشان حارس الانفجار يشوف كل المتأخّر لنفس
+        //    الشخص مع بعض. لو اتنادوا واحدًا واحدًا، تعطُّل الكرون ساعة كان
+        //    هيرجع فجأة بعشرات الرنّات.
+        $total = self::deliverMany(array_column($ids, 'notification_id'));
+        $total['events'] = count($ids);
         return $total;
     }
 
     private static function setState(int $recipientId, string $state, int $attempts, ?string $err): void
     {
+        // ⚠️ `push_last_try = NOW()` هو أساس التباعد المتزايد — من غيره العامل
+        //    بيعيد على طول ومفيش فرق بين محاولة لسه حاصلة وواحدة من ساعة.
+        $stamp = self::hasCol('push_last_try') ? ', push_last_try = NOW()' : '';
         Database::exec(
             "UPDATE notification_recipients
-                SET push_state = ?, push_attempts = ?, push_last_error = ?
+                SET push_state = ?, push_attempts = ?, push_last_error = ? $stamp
               WHERE id = ?",
             [$state, min(255, $attempts), $err !== null ? mb_substr($err, 0, 160) : null, $recipientId]);
+    }
+
+    /** عمود v53 موجود؟ (النظام لازم يشتغل عادي قبل الترحيل) */
+    private static function hasCol(string $col): bool
+    {
+        static $cache = [];
+        if (isset($cache[$col])) { return $cache[$col]; }
+        return $cache[$col] = (bool) Database::scalar(
+            "SELECT COUNT(*) FROM information_schema.columns
+              WHERE table_schema = DATABASE() AND table_name = 'notification_recipients'
+                AND column_name = ?", [$col]);
+    }
+
+    // ═══════════════════════════════════════════════ ④ صحة الإشعارات (المرحلة ٥)
+
+    /**
+     * لوحة صحة نظام الإشعارات — **قراءة فقط**، لشاشة `/push`.
+     *
+     * ⚠️ **«اتقرا فعلاً» أهم رقم هنا.** `push_messages` القديم كان بيقول «وصل ٣
+     *    فشل ٠» وبس — يعني الرسالة وصلت الجهاز، مش إن حد شافها. `read_at` على
+     *    صف المستلم هو الوحيد اللي بيقول إن بني آدم فتحها فعلاً.
+     *
+     * ⚠️ **كل المقارنات الزمنية جوّه SQL** (قاعدة v48).
+     *
+     * @return array<string,mixed>
+     */
+    public static function health(int $days = 7): array
+    {
+        $out = [
+            'ready' => false, 'days' => max(1, min(90, $days)),
+            'total' => 0, 'sent' => 0, 'failed' => 0, 'skipped' => 0, 'pending' => 0,
+            'read' => 0, 'delivery_rate' => 0.0, 'read_rate' => 0.0,
+            'devices' => 0, 'dead' => 0, 'retrying' => 0, 'gave_up' => 0,
+            'burst' => 0, 'muted' => 0, 'errors' => [], 'last_run' => null,
+        ];
+        if (!Notify::available()) { return $out; }
+        $out['ready'] = true;
+        $d = $out['days'];
+
+        $row = Database::row(
+            "SELECT COUNT(*) total,
+                    SUM(push_state = 'sent')    sent,
+                    SUM(push_state = 'failed')  failed,
+                    SUM(push_state = 'skipped') skipped,
+                    SUM(push_state = 'pending') pending,
+                    SUM(read_at IS NOT NULL)    rd
+               FROM notification_recipients
+              WHERE created_at >= DATE_SUB(NOW(), INTERVAL $d DAY)") ?: [];
+        foreach (['total', 'sent', 'failed', 'skipped', 'pending'] as $k) {
+            $out[$k] = (int) ($row[$k] ?? 0);
+        }
+        $out['read'] = (int) ($row['rd'] ?? 0);
+
+        // نسبة الوصول محسوبة على اللي **حاولنا نبعته** بس (المتخطّى مش فشل)
+        $tried = $out['sent'] + $out['failed'];
+        $out['delivery_rate'] = $tried > 0 ? round($out['sent'] / $tried * 100, 1) : 0.0;
+        $out['read_rate']     = $out['total'] > 0 ? round($out['read'] / $out['total'] * 100, 1) : 0.0;
+
+        $out['retrying'] = (int) Database::scalar(
+            "SELECT COUNT(*) FROM notification_recipients
+              WHERE push_state = 'failed' AND push_attempts < " . self::MAX_ATTEMPTS);
+        $out['gave_up'] = (int) Database::scalar(
+            "SELECT COUNT(*) FROM notification_recipients
+              WHERE push_state = 'failed' AND push_attempts >= " . self::MAX_ATTEMPTS);
+        $out['burst'] = (int) Database::scalar(
+            "SELECT COUNT(*) FROM notification_recipients
+              WHERE push_state = 'skipped' AND push_last_error = ?
+                AND created_at >= DATE_SUB(NOW(), INTERVAL $d DAY)", [self::BURST_MARK]);
+        if (self::hasCol('in_app')) {
+            $out['muted'] = (int) Database::scalar(
+                "SELECT COUNT(*) FROM notification_recipients
+                  WHERE in_app = 0 AND created_at >= DATE_SUB(NOW(), INTERVAL $d DAY)");
+        }
+
+        // آخر الأخطاء بأسبابها — «فشل ٣» بلا سبب ما بيفيدش
+        $out['errors'] = Database::all(
+            "SELECT push_last_error err, COUNT(*) c
+               FROM notification_recipients
+              WHERE push_state = 'failed' AND push_last_error IS NOT NULL
+                AND created_at >= DATE_SUB(NOW(), INTERVAL $d DAY)
+              GROUP BY push_last_error ORDER BY c DESC LIMIT 8");
+
+        if (PushSubscription::available()) {
+            // ⚠️ العمود اسمه `is_active` مش `status` — الأسماء اتفحصت من المخطَّط
+            $out['devices'] = (int) Database::scalar("SELECT COUNT(*) FROM push_subscriptions WHERE is_active = 1");
+            $out['dead']    = (int) Database::scalar("SELECT COUNT(*) FROM push_subscriptions WHERE is_active = 0");
+        }
+
+        $out['last_run'] = App::setting('push_worker_last_run', '') ?: null;
+        return $out;
     }
 
     // ═══════════════════════════════════════════════ ③ تشخيص وسجل

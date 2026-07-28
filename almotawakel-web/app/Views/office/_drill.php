@@ -2,7 +2,7 @@
 /**
  * أجسام نوافذ تفاصيل كروت الفيزا — المرحلة ١٤.
  *
- * ⚠️ بترندر بلا layout وبترجع HTML للنافذة العامة (`#uiDrill`)، وبتقرا من نفس
+ * ⚠ بترندر بلا layout وبترجع HTML للنافذة العامة (`#uiDrill`)، وبتقرا من نفس
  *    دوال `VisaCard` اللي أرقام الشاشة اتحسبت منها — فمستحيل الرقم يختلف.
  *
  * متغيّرات: $what $cards $summary $byOwner
@@ -44,7 +44,7 @@ case 'deposits':
 
 case 'payments':
     partial('drill', [
-        'how'   => 'المدفوع بالفيزا = كل عملية معلَّمة «💳 مدفوع بالفيزا» ومنسوبة لكارت — مصروفات وبنود أذونات وبنود حركات وسداد مديونيات وبنود المناديب.',
+        'how'   => 'المدفوع بالفيزا = كل عملية معلَّمة «مدفوع بالفيزا» ومنسوبة لكارت — مصروفات وبنود أذونات وبنود حركات وسداد مديونيات وبنود المناديب.',
         'count' => count($cards),
         'total' => ['label' => 'إجمالي المدفوع', 'value' => money($summary['payments'], false)],
         'more'  => ['label' => 'تتبع الفيزا', 'url' => url('debts?tab=visa')],
@@ -80,7 +80,7 @@ default:   // balance
         'count' => count($cards),
         'total' => ['label' => 'إجمالي الأرصدة المتاحة', 'value' => money($summary['balance'], false)],
         'more'  => ['label' => 'كل الكروت', 'url' => url('office')],
-        'empty' => ['title' => 'مفيش كروت فيزا لسه', 'note' => 'ضيف أول كارت عشان تتابع رصيده ومدفوعاته.'],
+        'empty' => ['title' => 'مفيش كروت فيزا لسه'],
         'body'  => function () use ($cards, $cardRow) { foreach ($cards as $c) { $cardRow($c, 'balance'); } },
     ]);
 }

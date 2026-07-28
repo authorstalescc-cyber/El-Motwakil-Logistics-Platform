@@ -101,8 +101,11 @@ class Custody
     {
         [$dedSql, $params] = self::deductionSql('custody', 'car_no');
         // is_legacy=0: البوالص المُرحَّلة من الأرشيف (v26) خارج رصيد العهدة تمامًا
+        // v60: عهدة دفعها مندوب من محفظته مش من درج المكتب — خارج الرصيد ده.
         $sql = "SELECT COALESCE(SUM($dedSql),0)
-                FROM bawalis WHERE is_legacy = 0 AND custody > 0" . ($excludeBillId > 0 ? " AND id <> ?" : "");
+                FROM bawalis WHERE is_legacy = 0 AND custody > 0"
+             . RepBillCustody::officeExcludeSql()
+             . ($excludeBillId > 0 ? " AND id <> ?" : "");
         if ($excludeBillId > 0) { $params[] = $excludeBillId; }
         return round((float) Database::scalar($sql, $params), 2);
     }
@@ -125,6 +128,66 @@ class Custody
     public static function availableForBill(int $excludeBillId = 0): float
     {
         return Closing::currentBalance($excludeBillId);
+    }
+
+    /**
+     * قاعدة سقف العهدة — المصدر الوحيد للفحص (تناديها BawalisController::validate
+     * و PermitController::updateBill؛ ممنوع تكتب الشرط بإيدك في مكان تالت).
+     *
+     * ⚠️ القاعدة على **الفلوس اللي هتطلع من الدرج دلوقتي**، مش على عهدة البوليصة كلها:
+     *  • بوليصة جديدة   → الخصم كله جديد، فيتقارن بالرصيد المتاح (السلوك القديم).
+     *  • تعديل بوليصة   → يتقارن **الفرق** بين الخصم الجديد والقديم فقط. يعني تعديل
+     *    التاريخ أو السائق أو أي حقل بلا زيادة في العهدة **مش بيتفحص خالص**.
+     *
+     * ليه اتغيّرت: القديمة كانت بتقارن العهدة كلها بالرصيد الحالي في كل تعديل، وده
+     * كان بيمنع تعديل أي بوليصة قديمة **حتى لو ما لمستش المبلغ**. والسبب إن
+     * Closing::currentBalance بيبني على آخر إقفال، وخصم البوليصة اللي تاريخها قبل
+     * آخر إقفال بيبقى **متجمّد جوّه اللقطة**، فـ$excludeBill مش بيقدر يرجّعه للرصيد
+     * → الرصيد المتاح بيطلع أقل من عهدة البوليصة نفسها والحفظ يترفض بلا سبب حقيقي.
+     * المقارنة بالفرق سليمة مهما كان تاريخ البوليصة، لأن الزيادة بس هي اللي بتطلع
+     * كاش النهاردة.
+     *
+     * البوالص المُرحَّلة من الأرشيف (is_legacy=1) خارج كل الأرصدة → بلا فحص.
+     *
+     * @return string|null رسالة الخطأ، أو null لو مسموح.
+     */
+    public static function capError(float $newCustody, ?string $newCarNo, ?int $billId): ?string
+    {
+        $old = ($billId !== null && $billId > 0)
+            ? Database::row('SELECT is_legacy, custody, car_no FROM bawalis WHERE id = ?', [$billId])
+            : null;
+
+        if ($old && (int) $old['is_legacy'] === 1) { return null; }
+
+        // ⚠️ v60: عهدة البوليصة دي مدفوعة من محفظة مندوب مش من درج المكتب، فهي
+        //    **خارج رصيد الخزنة أصلاً** (RepBillCustody::officeExcludeSql) —
+        //    فحصها بسقف الخزنة كان هيمنع المكتب من تعديل بوليصة مالهاش أي أثر
+        //    على الخزنة. حدّها الحقيقي عهدة المندوب، وهو تحذير مش منع (قرار
+        //    المالك في v49: الميدان بيدفع فيه المندوب من جيبه والسالب مسموح).
+        if ($old && RepBillCustody::billIsRepPaid($billId)) { return null; }
+
+        $newOut = self::billDeduction(max($newCustody, 0), $newCarNo);
+
+        if ($old) {
+            $oldOut = self::billDeduction((float) $old['custody'], $old['car_no'] ?? null);
+            $extra  = round($newOut - $oldOut, 2);
+            if ($extra <= 0.005) { return null; }   // مفيش فلوس زيادة هتطلع → تعديل حر
+            $available = Closing::currentBalance();
+            if ($extra > $available + 0.005) {
+                return 'الزيادة في عهدة السائق (' . number_format($extra, 0) . ') تتجاوز رصيد خزنة '
+                     . 'المكتب المتاح (' . number_format($available, 0) . '). أضِف عهدة للرصيد أولاً '
+                     . 'من صفحة «خزنة المكتب»، أو قلّل المبلغ. (باقي بيانات البوليصة تتعدّل بحرية.)';
+            }
+            return null;
+        }
+
+        if ($newOut <= 0) { return null; }
+        $available = self::availableForBill(0);
+        if ($newOut > $available + 0.005) {
+            return 'عهدة السائق (' . number_format($newCustody, 0) . ') تتجاوز رصيد خزنة المكتب المتاح ('
+                 . number_format($available, 0) . '). أضِف عهدة للرصيد أولاً من صفحة «خزنة المكتب».';
+        }
+        return null;
     }
 
     // ─────────────────────────────────────────────── السجل الموحّد
@@ -157,7 +220,7 @@ class Custody
         $drivers = Database::all(
             "SELECT b.id, b.bill_date AS d, b.bill_number, b.driver, b.company, b.custody, b.car_no, p.permit_no
              FROM bawalis b LEFT JOIN permits p ON p.id = b.permit_id
-             WHERE b.is_legacy = 0 AND b.custody > 0");
+             WHERE b.is_legacy = 0 AND b.custody > 0" . RepBillCustody::officeExcludeSql('b'));
         foreach ($drivers as $b) {
             $ded = self::billDeduction((float) $b['custody'], $b['car_no'] ?? null);
             $rows[] = [

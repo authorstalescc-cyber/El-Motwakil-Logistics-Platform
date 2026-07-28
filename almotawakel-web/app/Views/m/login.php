@@ -39,7 +39,7 @@
     <button class="btn gold" type="submit">ادخل</button>
   </form>
 
-  <p style="text-align:center;font-size:.8rem;color:var(--grey);margin-top:18px">
+  <p style="text-align:center;font-size:var(--fs-2);color:var(--grey);margin-top:18px">
     نسيت الرقم السري؟ كلّم المكتب.
   </p>
 </div>

@@ -74,6 +74,10 @@ class DailyReview
                 'المخصوم فعليًّا من الخزنة بعد خصم قيمة البوليصة'),
             'visa'    => self::group('visa',    'مدفوعات الفيزا', '💳', 'out', 'info',
                 'اتدفعت من كارت المكتب — مش من الدرج، فما بتمنعش الإقفال'),
+            // v57 — بنود «غير مدفوع»: اتحاسبت من برّه الخزنة وبرّه عهدة المندوب،
+            // فمفيش فلوس طلعت من الدرج بسببها. معلوماتية زي الفيزا بالظبط.
+            'unpaid'  => self::group('unpaid',  'بنود غير مدفوعة', 'ℹ️', 'out', 'info',
+                'اتحاسبت من برّه الخزنة والعهدة — بتظهر على الإذن وفي فاتورة العميل بس'),
         ];
 
         foreach (self::collect($date) as $item) {
@@ -108,7 +112,7 @@ class DailyReview
         unset($group);
 
         $totals = ['count'=>0,'reviewed'=>0,'pending'=>0,'stale'=>0,
-                   'cash'=>0.0,'visa'=>0.0,'blocking'=>0,'blocking_reviewed'=>0];
+                   'cash'=>0.0,'visa'=>0.0,'unpaid'=>0.0,'blocking'=>0,'blocking_reviewed'=>0];
         foreach ($groups as $key => $group) {
             $totals['count'] += $group['count'];
             $totals['reviewed'] += $group['reviewed'];
@@ -117,13 +121,17 @@ class DailyReview
                 $totals['blocking'] += $group['count'];
                 $totals['blocking_reviewed'] += $group['reviewed'];
                 $totals['cash'] += $group['dir'] === 'out' ? $group['total'] : 0;
+            } elseif ($key === 'unpaid') {
+                // ⚠️ منفصل عن الفيزا: الاتنين مش نقدي، لكن الفيزا خرجت من كارت
+                //    المكتب فعلاً و«غير مدفوع» ما خرجتش من أي محفظة عندنا.
+                $totals['unpaid'] += $group['total'];
             } else {
                 $totals['visa'] += $group['total'];
             }
         }
         $totals['pending'] = $totals['count'] - $totals['reviewed'];
         $totals['blocking_pending'] = $totals['blocking'] - $totals['blocking_reviewed'];
-        foreach (['cash', 'visa'] as $k) { $totals[$k] = round((float) $totals[$k], 2); }
+        foreach (['cash', 'visa', 'unpaid'] as $k) { $totals[$k] = round((float) $totals[$k], 2); }
         $totals['percent'] = $totals['blocking'] > 0
             ? (int) floor($totals['blocking_reviewed'] * 100 / $totals['blocking']) : 100;
 
@@ -193,13 +201,14 @@ class DailyReview
         $qtyCol   = self::columnExists('permit_stages', 'qty') ? 's.qty' : '1';
         $actualCol= self::columnExists('permit_stages', 'actual_amount') ? 's.actual_amount' : 'NULL';
         $repCol   = self::columnExists('permit_stages', 'paid_by_rep_id') ? 's.paid_by_rep_id' : 'NULL';
+        $unpaidCol= self::columnExists('permit_stages', 'unpaid') ? 's.unpaid' : '0';
         $repJoin  = $repCol === 'NULL' ? '' : 'LEFT JOIN reps rp ON rp.id = s.paid_by_rep_id';
         $repName  = $repCol === 'NULL' ? 'NULL' : 'rp.name';
         $mvCols   = self::columnExists('permit_movements', 'container_count')
             ? 'pm.container_count AS mv_cnt, pm.container_type AS mv_type'
             : 'NULL AS mv_cnt, NULL AS mv_type';
         $rows = Database::all(
-            "SELECT s.id,s.amount,s.note,s.ref_no,s.stage_key,s.is_visa,s.permit_id,
+            "SELECT s.id,s.amount,s.note,s.ref_no,s.stage_key,s.is_visa,$unpaidCol AS unpaid,s.permit_id,
                     $qtyCol AS qty, $actualCol AS actual_amount, $repName AS rep_name,
                     pm.seq AS movement_seq, $mvCols,
                     p.permit_no,p.permit_type,p.company,p.client,p.destination,
@@ -215,13 +224,15 @@ class DailyReview
         $ctByPermit = self::containerLabels(array_column($rows, 'permit_id'));
         foreach ($rows as $r) {
             $visa = (int) $r['is_visa'] === 1;
+            $unpaid = !empty($r['unpaid']);
             $qty  = max(1, (int) ($r['qty'] ?? 1));
             $mvCount = (int) ($r['mv_cnt'] ?? 0);
             $mvType  = trim((string) ($r['mv_type'] ?? ''));
             // «إذن 123» / «شهادة 123» — الوسم الطويل («رقم الإذن») بيتحوّل شارة تحت
             $theme = Permit::theme((string) $r['permit_type']);
             $kind  = (string) $r['permit_type'] === 'warid' ? 'شهادة' : 'إذن';
-            $items[] = self::item('stage', (int) $r['id'], $visa ? 'visa' : 'permits', (float) $r['amount'], [
+            $items[] = self::item('stage', (int) $r['id'],
+                $unpaid ? 'unpaid' : ($visa ? 'visa' : 'permits'), (float) $r['amount'], [
                 'ref'       => ($r['permit_no'] ? $kind . ' ' . $r['permit_no'] : '#' . (int) $r['permit_id']),
                 'title'     => Permit::label((string) $r['stage_key']),
                 'party'     => trim((string) ($r['client'] ?: $r['company'])) ?: '—',
@@ -244,6 +255,7 @@ class DailyReview
                 'by_rep'    => $r['rep_name'] ?: null,
                 'movement'  => $r['movement_seq'] ? 'حركة ' . (int) $r['movement_seq'] : null,
                 'visa'      => $visa,
+                'unpaid'    => $unpaid,
                 'link'      => 'permits/' . (int) $r['permit_id'],
             ]);
         }
@@ -314,7 +326,8 @@ class DailyReview
                     b.destination,b.container_type,b.container_count,b.declaration_owner,
                     b.freight,b.permit_id,p.permit_no,p.permit_type,p.agency,p.client
              FROM bawalis b LEFT JOIN permits p ON p.id=b.permit_id
-             WHERE b.is_legacy=0 AND b.bill_date=? AND b.custody>0 ORDER BY b.id', [$date]
+             WHERE b.is_legacy=0 AND b.bill_date=? AND b.custody>0'
+             . RepBillCustody::officeExcludeSql('b') . ' ORDER BY b.id', [$date]
         ) as $r) {
             $custody   = (float) $r['custody'];
             $deduction = Custody::billDeduction($custody, $r['car_no'] ?? null);
@@ -350,7 +363,7 @@ class DailyReview
     {
         return array_merge([
             'ref'=>'', 'title'=>'', 'party'=>'—', 'note'=>null, 'ref_no'=>null,
-            'movement'=>null, 'visa'=>false, 'link'=>null,
+            'movement'=>null, 'visa'=>false, 'unpaid'=>false, 'link'=>null,
             // تفاصيل إضافية للعرض — كلها وصفية ولا تدخل أي حساب
             'company'=>null, 'client'=>null, 'permit_type_label'=>null, 'destination'=>null,
             'agency'=>null, 'shipping_co'=>null, 'port'=>null, 'owner'=>null, 'party_label'=>'الجهة',

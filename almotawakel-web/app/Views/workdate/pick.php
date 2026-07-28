@@ -16,12 +16,12 @@ $current = $current ?? $today;
     <div class="login-head">
       <div class="login-logo"><img src="<?= url('assets/img/logo.png') ?>" alt="<?= e(App::setting('company_name','شركة المتوكل')) ?>"></div>
       <h1>بتشتغل بتاريخ إمتى؟</h1>
-      <p class="muted" style="margin:.35rem 0 0;font-size:.9rem">كل اللي هتدخّله النهاردة (مصروف / إيصال / بوليصة…) هيتسجّل بالتاريخ ده.</p>
+      <p class="muted" style="margin:.35rem 0 0;font-size:var(--fs-3)">كل اللي هتدخّله النهاردة (مصروف / إيصال / بوليصة…) هيتسجّل بالتاريخ ده.</p>
     </div>
     <div class="login-body">
       <?php if ($m = flash('error')): ?><div class="flash error"><?= icon('alert',18) ?> <?= e($m) ?></div><?php endif; ?>
       <?php if (Auth::freeEditMode()): ?>
-        <div class="wd-free-note">🔓 <b>الدخول الحر مفعّل:</b> يمكنك اختيار يوم مقفول والتعديل عليه، وسيعيد النظام حساب الإقفالات تلقائيًا.
+        <div class="wd-free-note"><?= icon('alert', 14) ?> <b>الدخول الحر مفعّل:</b> يمكنك اختيار يوم مقفول والتعديل عليه، وسيعيد النظام حساب الإقفالات تلقائيًا.
         </div>
       <?php endif; ?>
       <form action="<?= url('work-date') ?>" method="post" id="workdate-form">
@@ -55,7 +55,7 @@ $current = $current ?? $today;
 })();
 </script>
 <style>
-.wd-free-note{margin-bottom:14px;padding:11px 13px;border:1px solid #df9b76;border-radius:10px;background:#fff0e8;color:#873b25;font-size:.84rem;line-height:1.7}
+.wd-free-note{margin-bottom:14px;padding:11px 13px;border:1px solid #df9b76;border-radius:var(--radius-2);background:#fff0e8;color:#873b25;font-size:var(--fs-2);line-height:1.7}
 </style>
 </body>
 </html>

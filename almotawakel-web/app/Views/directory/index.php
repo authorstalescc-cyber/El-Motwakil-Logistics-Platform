@@ -7,9 +7,9 @@ $rows = $isA ? $agents : ($isC ? $companies : $owners);
 $label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
 ?>
 <nav class="tabs" aria-label="أقسام الدليل">
-  <a class="tab <?= $isA?'active':'' ?>" href="<?= url('directory?tab=agents') ?>">👤 الوكلاء (عملاؤنا) <span class="count-badge"><?= intf(count($agents)) ?></span></a>
-  <a class="tab <?= $isC?'active':'' ?>" href="<?= url('directory?tab=companies') ?>">🏢 الشركات <span class="count-badge"><?= intf(count($companies)) ?></span></a>
-  <a class="tab <?= $tab==='owners'?'active':'' ?>" href="<?= url('directory?tab=owners') ?>">📄 أصحاب البيان <span class="count-badge"><?= intf(count($owners)) ?></span></a>
+  <a class="tab <?= $isA?'active':'' ?>" href="<?= url('directory?tab=agents') ?>"><?= icon('user', 14) ?> الوكلاء (عملاؤنا) <span class="count-badge"><?= intf(count($agents)) ?></span></a>
+  <a class="tab <?= $isC?'active':'' ?>" href="<?= url('directory?tab=companies') ?>"><?= icon('building', 14) ?> الشركات <span class="count-badge"><?= intf(count($companies)) ?></span></a>
+  <a class="tab <?= $tab==='owners'?'active':'' ?>" href="<?= url('directory?tab=owners') ?>"><?= icon('file-text', 14) ?> أصحاب البيان <span class="count-badge"><?= intf(count($owners)) ?></span></a>
 </nav>
 
 <form method="post" action="<?= url('directory/master/'.$type) ?>" class="card mb" style="padding:14px;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
@@ -23,10 +23,10 @@ $label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
 <div class="dir-toolbar">
   <form method="get" action="<?= url('directory') ?>" class="dir-search">
     <input type="hidden" name="tab" value="<?= e($tab) ?>">
-    <span class="ic">🔍</span>
+    <span class="ic"><?= icon('search', 14) ?></span>
     <input type="search" name="q" value="<?= e($q) ?>" placeholder="ابحث باسم <?= e($label) ?> أو اسم بديل…">
   </form>
-  <?php if($q!==''): ?><a class="btn ghost sm" href="<?= url('directory?tab='.$tab) ?>">✕ مسح البحث</a><?php endif; ?>
+  <?php if($q!==''): ?><a class="btn ghost sm" href="<?= url('directory?tab='.$tab) ?>"><?= icon('x', 14) ?> مسح البحث</a><?php endif; ?>
   <div class="dir-hero-spacer"></div>
   <span class="count-badge"><?= intf(count($rows)) ?> <?= e($label) ?></span>
 </div>
@@ -104,14 +104,14 @@ $label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
 
 <style>
 .dir-bal{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:0 0 2px;
-  background:var(--bg);border-radius:9px;border:1px solid var(--line2)}
-.dir-bal-lbl{font-size:.78rem;color:var(--grey);font-weight:700}
-.dir-bal-val{font-size:1rem;font-weight:800;color:var(--navy)}
+  background:var(--bg);border-radius:var(--radius-1);border:1px solid var(--line2)}
+.dir-bal-lbl{font-size:var(--fs-1);color:var(--grey);font-weight:500}
+.dir-bal-val{font-size:var(--fs-4);font-weight:600;color:var(--navy)}
 .dir-bal-val.due{color:var(--red)}.dir-bal-val.credit{color:var(--green)}
-.master-edit{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}.master-edit summary{cursor:pointer;font-weight:700;color:var(--navy)}
-.master-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.master-grid input,.master-line input,.master-line select{padding:7px;border:1px solid var(--line);border-radius:7px;min-width:0}
+.master-edit{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}.master-edit summary{cursor:pointer;font-weight:500;color:var(--navy)}
+.master-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.master-grid input,.master-line input,.master-line select{padding:7px;border:1px solid var(--line);border-radius:var(--radius-1);min-width:0}
 .master-line{display:flex;gap:7px;margin-top:8px}.master-line input,.master-line select{flex:1}
-.dir-card-profile{display:flex;flex-direction:column;gap:13px;color:inherit;text-decoration:none;border-radius:12px;outline:none}
+.dir-card-profile{display:flex;flex-direction:column;gap:13px;color:inherit;text-decoration:none;border-radius:var(--radius-2);outline:none}
 .dir-card-profile:focus-visible{box-shadow:0 0 0 3px rgba(27,143,136,.25);outline:2px solid var(--teal);outline-offset:4px}
 .dir-card:has(.dir-card-profile[href]){cursor:default}
 @media(max-width:640px){.master-grid{grid-template-columns:1fr}}

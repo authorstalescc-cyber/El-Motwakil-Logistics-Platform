@@ -6,9 +6,9 @@
   <title>حدث خطأ</title>
   <style>
     body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f6f8;color:#15355b;font-family:Tahoma,Arial,sans-serif}
-    main{width:min(520px,calc(100% - 36px));box-sizing:border-box;padding:34px;border:1px solid #dfe4e8;border-radius:16px;background:#fff;text-align:center;box-shadow:0 12px 34px rgba(21,53,91,.08)}
-    h1{margin:0 0 12px;font-size:1.45rem}p{line-height:1.8;color:#596978}code{display:inline-block;padding:5px 9px;border-radius:7px;background:#eef2f5;color:#15355b}
-    a{display:inline-block;margin-top:14px;padding:9px 16px;border-radius:9px;background:#15355b;color:#fff;text-decoration:none}
+    main{width:min(520px,calc(100% - 36px));box-sizing:border-box;padding:34px;border:1px solid #dfe4e8;border-radius:var(--radius-3);background:#fff;text-align:center;box-shadow:0 12px 34px rgba(21,53,91,.08)}
+    h1{margin:0 0 12px;font-size:var(--fs-6)}p{line-height:1.8;color:#596978}code{display:inline-block;padding:5px 9px;border-radius:var(--radius-1);background:#eef2f5;color:#15355b}
+    a{display:inline-block;margin-top:14px;padding:9px 16px;border-radius:var(--radius-1);background:#15355b;color:#fff;text-decoration:none}
   </style>
 </head>
 <body><main>

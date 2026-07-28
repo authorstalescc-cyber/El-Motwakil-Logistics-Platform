@@ -49,7 +49,7 @@ class PrivateFile
         $logical = ltrim(trim((string) $logical), '/');
         if ($logical === '' || str_contains($logical, '..') || str_contains($logical, "\0")) { return null; }
 
-        if (preg_match('#^private/(permits|reps)/([a-f0-9]{40}\.[a-z0-9]+)$#', $logical, $m)) {
+        if (preg_match('#^private/(permits|reps|party_docs)/([a-f0-9]{40}\.[a-z0-9]+)$#', $logical, $m)) {
             $path = self::storageDir($m[1]) . '/' . $m[2];
         } elseif (preg_match('#^uploads/(permits|reps)/([A-Za-z0-9._-]+)$#', $logical, $m)) {
             // الملفات القديمة تبقى قابلة للعرض عبر الكنترولر فقط أثناء النقل التدريجي.
@@ -76,7 +76,7 @@ class PrivateFile
 
     private static function assertCategory(string $category): void
     {
-        if (!in_array($category, ['permits', 'reps'], true)) {
+        if (!in_array($category, ['permits', 'reps', 'party_docs'], true)) {
             throw new \InvalidArgumentException('تصنيف مرفق غير صالح.');
         }
     }

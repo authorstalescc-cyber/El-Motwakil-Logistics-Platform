@@ -548,6 +548,10 @@ class Track
         $r = self::resolveDestination($destination);
         if (!$r) { return null; }
         $p = $r['point'];
+        // ⚠️ من v59 الوجهة ممكن تتسجّل **بالاسم بس بلا إحداثيات** (السجل بقى
+        //    سجل جهات عام مش للخريطة وحدها). بلا إحداثيات مفيش تقدير مسافة —
+        //    بنرجّع null فالواجهة بتقول «مش متحدّدة» بدل ما تحسب من (0,0).
+        if ($p['lat'] === null || $p['lng'] === null) { return null; }
 
         $straightKm = self::haversine(
             (float) $last['lat'], (float) $last['lng'], (float) $p['lat'], (float) $p['lng']

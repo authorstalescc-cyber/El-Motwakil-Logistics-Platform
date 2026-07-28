@@ -140,6 +140,25 @@ foreach (['grid-2', 'grid-3', 'form-grid.one', 'form-grid.two'] as $cls) {
         : bad("`.$cls` مش معرَّف");
 }
 
+/* ⚠️ **مصيدة تخصيص اتصادفت فعليًا (2026-07-26):** الـmedia query ما بتزوّدش
+   تخصيص. `.d-kpis.four` (كلاسان) كانت بتغلب `.d-kpis` (كلاس واحد) اللي جوّه
+   الـmedia query — فشبكة الأرقام فضلت **٤ أعمدة على موبايل** والصفحة خرجت
+   برّه الشاشة. أي مُعدِّل أعمدة لازم يتعدّ **بالاسم** في القاعدة المتجاوبة. */
+$modifiers = [];
+preg_match_all('/\.d-kpis\.(three|four|five|six)\{grid-template-columns/', $cssCode, $mk);
+$modifiers = array_unique($mk[1]);
+$mobileGrid = '';
+if (preg_match_all('/@media\(max-width:(?:560|820)px\)\{(?:[^{}]|\{[^{}]*\})*\}/', $cssCode, $mm)) {
+    $mobileGrid = implode("\n", $mm[0]);
+}
+$missing = [];
+foreach ($modifiers as $mod) {
+    if (!preg_match('/\.d-kpis\.' . $mod . '\b/', $mobileGrid)) { $missing[] = $mod; }
+}
+$missing
+    ? bad('⚠️ مُعدِّل شبكة الأرقام مش متعدّ في القاعدة المتجاوبة (هيفضل ٤ أعمدة على الموبايل): ' . implode(', ', $missing))
+    : ok('⚠️ كل مُعدِّلات `.d-kpis` متعدّة بالاسم في نقاط كسر الموبايل (مصيدة التخصيص)');
+
 /* ══════════════ 4) النوافذ ══════════════ */
 sec('4) النوافذ ملء الشاشة على الهاتف');
 

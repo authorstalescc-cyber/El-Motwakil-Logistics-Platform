@@ -16,7 +16,7 @@ $msg   = $link !== '' ? Track::waMessage($t + ['bill_number' => $bill['bill_numb
 <div class="pg-head">
   <div>
     <h2 class="pg-title"><?= icon('map-pin', 22) ?> <?= e($t['driver'] ?: 'بلا سائق') ?>
-      <span class="trk-pulse <?= e($pk) ?>" style="font-size:.7rem;vertical-align:middle"><?= e($ptxt) ?></span>
+      <span class="trk-pulse <?= e($pk) ?>" style="font-size:var(--fs-1);vertical-align:middle"><?= e($ptxt) ?></span>
     </h2>
     <p class="pg-sub">
       <?= icon('truck', 13) ?> <?= e($t['car_no'] ?: '—') ?>
@@ -90,7 +90,7 @@ if ($eta): ?>
       <div class="card" style="text-align:center;padding:40px 20px;margin-bottom:12px">
         <div style="color:var(--grey);opacity:.45;margin-bottom:10px"><?= icon('map-pin', 40) ?></div>
         <h3 style="color:var(--navy);margin-bottom:6px">لسه مفيش مواقع</h3>
-        <p style="color:var(--grey);font-size:.87rem">
+        <p style="color:var(--grey);font-size:var(--fs-3)">
           السائق لسه مضغطش الزرار.
           <?= empty($t['opened_at']) ? 'ولا فتح الرابط أصلاً.' : 'بس هو فتح الرابط ' . e(Track::ago($t['opened_at'])) . '.' ?>
         </p>
@@ -135,7 +135,7 @@ if ($eta): ?>
       <b style="display:block;margin-bottom:10px;color:var(--navy)"><?= icon('send', 15) ?> رابط السائق</b>
 
       <?php if ($link === ''): ?>
-        <div class="flash error" style="margin:0 0 10px;font-size:.8rem">
+        <div class="flash error" style="margin:0 0 10px;font-size:var(--fs-2)">
           <?= icon('alert', 15) ?> مفيش رابط عام — شغّل «تشغيل-عام-على-النت» الأول.
         </div>
       <?php else: ?>
@@ -177,7 +177,7 @@ if ($eta): ?>
         </button>
       </form>
 
-      <div style="font-size:.73rem;color:var(--grey);margin-top:9px;line-height:1.7">
+      <div style="font-size:var(--fs-1);color:var(--grey);margin-top:9px;line-height:1.7">
         <?php if (!empty($t['expires_at'])): ?>
           الصلاحية: <b><?= e(date('d/m — H:i', strtotime($t['expires_at']))) ?></b><br>
         <?php endif; ?>
@@ -196,7 +196,7 @@ if ($eta): ?>
           </form>
         <?php endforeach; ?>
       </div>
-      <p style="font-size:.73rem;color:var(--grey);margin-top:9px;line-height:1.7">
+      <p style="font-size:var(--fs-1);color:var(--grey);margin-top:9px;line-height:1.7">
         «وصلت» أو «ملغاة» بتقفل الرابط فورًا — السائق ما يقدرش يبعت موقعه تاني.
       </p>
     </div>
@@ -211,39 +211,39 @@ if ($eta): ?>
 
 <style>
 .trk-eta-bar{display:flex;align-items:center;gap:12px;background:#eef4fd;border:1px solid #cddff5;
-  border-radius:13px;padding:12px 15px;margin-bottom:12px;color:#1f5fa8;flex-wrap:wrap}
+  border-radius:var(--radius-2);padding:12px 15px;margin-bottom:12px;color:#1f5fa8;flex-wrap:wrap}
 .trk-eta-bar.done{background:#e8f8ee;border-color:#bfe6cf;color:#0f7a42}
 .trk-eta-bar.none{background:#fff6e5;border-color:#f2dfa8;color:#8a6100}
 .eb-ic{flex-shrink:0;opacity:.9}
 .eb-main{flex:1;min-width:180px}
-.eb-main b{font-size:1rem;font-weight:900;display:block;line-height:1.5}
-.eb-main small{font-size:.78rem;display:block;margin-top:2px;opacity:.9}
-.eb-main a{color:inherit;font-weight:900;text-decoration:underline}
+.eb-main b{font-size:var(--fs-4);font-weight:700;display:block;line-height:1.5}
+.eb-main small{font-size:var(--fs-1);display:block;margin-top:2px;opacity:.9}
+.eb-main a{color:inherit;font-weight:700;text-decoration:underline}
 .eb-side{text-align:center;border-inline-start:1px solid currentColor;padding-inline-start:12px;opacity:.85}
-.eb-side span{font-size:.68rem;display:block}
-.eb-side b{font-size:1rem;font-weight:900;display:block}
-.eb-side small{font-size:.66rem;display:block}
-.eb-note{background:rgba(0,0,0,.07);border-radius:99px;padding:3px 9px;font-size:.7rem;font-weight:800;
+.eb-side span{font-size:var(--fs-1);display:block}
+.eb-side b{font-size:var(--fs-4);font-weight:700;display:block}
+.eb-side small{font-size:var(--fs-1);display:block}
+.eb-note{background:rgba(0,0,0,.07);border-radius:99px;padding:3px 9px;font-size:var(--fs-1);font-weight:600;
   cursor:help;white-space:nowrap}
 .trk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;margin-bottom:12px}
-.trk-stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
-.trk-stat span{font-size:.72rem;color:var(--grey);display:block}
-.trk-stat b{font-size:1.05rem;color:var(--navy);font-weight:900}
+.trk-stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);padding:10px 12px}
+.trk-stat span{font-size:var(--fs-1);color:var(--grey);display:block}
+.trk-stat b{font-size:var(--fs-4);color:var(--navy);font-weight:700}
 .trk-cols{display:grid;grid-template-columns:1fr 320px;gap:12px;align-items:start}
 .trk-side{display:flex;flex-direction:column;gap:10px;position:sticky;top:12px}
-.trk-link{background:var(--bg);border:1px dashed var(--line);border-radius:9px;padding:8px 10px;
-  font-size:.74rem;font-family:ui-monospace,monospace;word-break:break-all;color:var(--navy);direction:ltr;text-align:left}
-.trk-pulse{font-weight:800;padding:4px 9px;border-radius:99px;white-space:nowrap}
+.trk-link{background:var(--bg);border:1px dashed var(--line);border-radius:var(--radius-1);padding:8px 10px;
+  font-size:var(--fs-1);font-family:ui-monospace,monospace;word-break:break-all;color:var(--navy);direction:ltr;text-align:left}
+.trk-pulse{font-weight:600;padding:4px 9px;border-radius:99px;white-space:nowrap}
 .trk-pulse.live{background:#e8f8ee;color:#0f7a42}
 .trk-pulse.ok{background:#eef4fd;color:#1f5fa8}
 .trk-pulse.warn{background:#fff6e5;color:#8a6100}
 .trk-pulse.cold{background:#f1f3f6;color:#75808f}
-.trk-stale{font-size:.72rem;font-weight:700;color:#8a6100;background:#fff6e5;border:1px solid #f2dfa8;
-  border-radius:8px;padding:6px 9px;display:flex;align-items:center;gap:5px;line-height:1.6}
-.src{font-size:.7rem;font-weight:800;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.trk-stale{font-size:var(--fs-1);font-weight:500;color:#8a6100;background:#fff6e5;border:1px solid #f2dfa8;
+  border-radius:var(--radius-1);padding:6px 9px;display:flex;align-items:center;gap:5px;line-height:1.6}
+.src{font-size:var(--fs-1);font-weight:600;padding:3px 8px;border-radius:99px;white-space:nowrap}
 .src.manual{background:#eef4fd;color:#1f5fa8}
 .src.live{background:#e8f8ee;color:#0f7a42}
-.btn.wa{background:#25D366;color:#fff;border-color:#25D366;font-weight:800}
+.btn.wa{background:#25D366;color:#fff;border-color:#25D366;font-weight:600}
 .btn.wa:hover{background:#1eb356;border-color:#1eb356}
 .leaflet-container{font-family:inherit}
 .trk-pop{font-family:inherit;line-height:1.7}

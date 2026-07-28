@@ -25,7 +25,7 @@
     </div>
   </div>
   <div class="form-actions">
-    <button class="btn gold" type="submit" data-primary-submit>💾 حفظ التعديلات</button>
+    <button class="btn gold" type="submit" data-primary-submit><?= icon('download', 14) ?> حفظ التعديلات</button>
     <a class="btn ghost" href="<?= url($back ?? 'custody') ?>">إلغاء</a>
   </div>
 </form>

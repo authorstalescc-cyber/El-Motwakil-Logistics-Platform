@@ -215,7 +215,7 @@ class RepMiscExpense
             SELECT 'rep_misc' AS source, x.rep_id AS ref_id, x.exp_date AS d,
                    COALESCE(NULLIF(x.category,''),'" . self::CATEGORY . "') AS category,
                    COALESCE(NULLIF(r.name,''),'') AS party,
-                   x.amount AS amount, x.note AS note, $visa AS is_visa
+                   x.amount AS amount, x.note AS note, $visa AS is_visa, 0 AS unpaid
             FROM rep_misc_expenses x
             JOIN reps r ON r.id = x.rep_id
             WHERE x.amount <> 0

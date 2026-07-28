@@ -190,17 +190,21 @@ class RepDriverHandover
     }
 
     /** تسليمات مندوب (الأحدث أولاً) + بيانات البوليصة والإذن للعرض. */
-    public static function forRep(int $repId, int $limit = 0): array
+    public static function forRep(int $repId, int $limit = 0, ?string $day = null): array
     {
         if (!self::available()) { return []; }
         $lim = $limit > 0 ? ' LIMIT ' . (int) $limit : '';
+        // $day = عهدة يوم واحد (v49): شاشة المندوب بتعرض يوم العمل بس، والمكتب
+        // بيشوف الكل. null = السلوك القديم بالحرف.
+        $where = 'h.rep_id = ?'; $params = [$repId];
+        if ($day !== null && $day !== '') { $where .= ' AND h.handover_date = ?'; $params[] = $day; }
         return Database::all(
             "SELECT h.*, b.bill_number, b.container_no, p.permit_no, p.permit_type
              FROM rep_driver_handovers h
              LEFT JOIN bawalis b ON b.id = h.bawali_id
              LEFT JOIN permits p ON p.id = h.permit_id
-             WHERE h.rep_id = ?
-             ORDER BY h.handover_date DESC, h.id DESC$lim", [$repId]);
+             WHERE $where
+             ORDER BY h.handover_date DESC, h.id DESC$lim", $params);
     }
 
     /**

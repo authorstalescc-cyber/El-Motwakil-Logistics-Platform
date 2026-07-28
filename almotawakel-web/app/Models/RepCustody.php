@@ -106,18 +106,19 @@ class RepCustody
 
     /**
      * إجمالي اللي صرفه المندوب فعلاً **من كاش عهدته**.
-     * ٣ مصادر، كلها فلوسها خرجت من نفس العهدة:
+     * ٤ مصادر، كلها فلوسها خرجت من نفس العهدة:
      *   • بنود معتمدة على أذونات (permit_stages.paid_by_rep_id) — v35
      *   • نثريات معتمدة بلا إذن (rep_misc_expenses) — v39
      *   • تسليمات عهدة لسائقين (rep_driver_handovers) — v45
+     *   • عهدة سائق على بوليصة أضافها بنفسه (bawalis.custody_rep_id) — v60
      *
      * ⚠️ **v45 — المدفوع بالفيزا مستثنى** (`is_visa = 1`): البند ده خرج من كارت
      *    المكتب مش من جيب المندوب، فبيتخصم من رصيد الكارت وبس. لو اتحسب هنا كمان
      *    كان هيبقى تحسيب مزدوج ورصيد المندوب هيقلّ غلط.
      *
-     * ⚠️ تحذير تزامن: الـ٣ مصادر دي لازم يكونوا مع بعض في `spentTotal` و`cards`
-     *    و`totalOutstanding` و`spending`. لو واحد اتنسي، الكارت هيقول رقم
-     *    والكشف يقول رقم تاني.
+     * ⚠️ تحذير تزامن: الـ٤ مصادر دي لازم يكونوا مع بعض في `spentTotal` و`cards`
+     *    و`totalOutstanding` و`spending` و`dayLedger` و`dayTotalsByRep`
+     *    و`dashboard`. لو واحد اتنسي، الكارت هيقول رقم والكشف يقول رقم تاني.
      */
     public static function spentTotal(int $repId, ?string $day = null): float
     {
@@ -126,9 +127,10 @@ class RepCustody
         $w = self::dayClause('entry_date', $day, $args);
         $stages = (float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM permit_stages
-             WHERE paid_by_rep_id = ? AND is_visa = 0$w", $args);
+             WHERE paid_by_rep_id = ? AND " . Permit::cashOutSql('') . "$w", $args);
         return round(
-            $stages + RepMiscExpense::totalFor($repId, $day) + RepDriverHandover::totalFor($repId, $day), 2);
+            $stages + RepMiscExpense::totalFor($repId, $day) + RepDriverHandover::totalFor($repId, $day)
+            + RepBillCustody::totalFor($repId, $day), 2);
     }
 
     /** إجمالي اللي رجّعه المندوب في التسويات ($day = يوم واحد، null = كل الأيام). */
@@ -247,9 +249,10 @@ class RepCustody
 
         $add($pairs(Database::all(
             "SELECT entry_date d, SUM(amount) total FROM permit_stages
-             WHERE paid_by_rep_id = ? AND is_visa = 0 GROUP BY entry_date", [$repId])), 'spent');
+             WHERE paid_by_rep_id = ? AND " . Permit::cashOutSql('') . " GROUP BY entry_date", [$repId])), 'spent');
         $add(RepMiscExpense::totalsByDay($repId), 'spent');
         $add(RepDriverHandover::totalsByDay($repId), 'spent');
+        $add(RepBillCustody::totalsByDay($repId), 'spent');   // v60 — عهدة بوليصة من محفظته
 
         $add($pairs(Database::all(
             "SELECT settle_date d, SUM(returned) total FROM rep_custody_settlements
@@ -259,7 +262,9 @@ class RepCustody
         $add(RepTransfer::outTotalsByDay($repId), 'transfer_out');
 
         // المستنّي اعتماده كاش: خرج من إيد المندوب فعلاً في اليوم ده وإن كان
-        // لسه ما اتحسبش في `spent` (بيتحسب وقت الاعتماد) — بيتعرض للعلم بس.
+        // لسه ما اتحسبش في `spent` (بيتحسب وقت الاعتماد). عشان كده الشاشات
+        // بتعرض `pocket` (= balance − pending) كـ«الفاضل معاه»، و`balance`
+        // بيفضل الرصيد المحاسبي بعد المعتمد بس.
         $add($pairs(Database::all(
             "SELECT entry_date d, SUM(amount) total FROM rep_submissions
              WHERE rep_id = ? AND status = 'pending' AND is_visa = 0
@@ -308,10 +313,11 @@ class RepCustody
         $merge($byRep("SELECT rep_id rid, SUM(amount) total FROM rep_custody_deposits
                        WHERE dep_date = ? GROUP BY rep_id"), 'deposits');
         $merge($byRep("SELECT paid_by_rep_id rid, SUM(amount) total FROM permit_stages
-                       WHERE paid_by_rep_id IS NOT NULL AND is_visa = 0 AND entry_date = ?
+                       WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " AND entry_date = ?
                        GROUP BY paid_by_rep_id"), 'spent');
         $merge(RepMiscExpense::totalsByRep($day), 'spent');
         $merge(RepDriverHandover::totalsByRep($day), 'spent');
+        $merge(RepBillCustody::totalsByRep($day), 'spent');   // v60
         $merge($byRep("SELECT rep_id rid, SUM(returned) total FROM rep_custody_settlements
                        WHERE settle_date = ? GROUP BY rep_id"), 'returned');
         $merge(RepTransfer::inTotalsByRep($day), 'transfer_in');
@@ -392,7 +398,7 @@ class RepCustody
              LEFT JOIN (SELECT rep_id, SUM(amount) total, MAX(dep_date) last_date
                         FROM rep_custody_deposits GROUP BY rep_id) d ON d.rep_id = r.id
              LEFT JOIN (SELECT paid_by_rep_id rid, SUM(amount) total
-                        FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND is_visa = 0
+                        FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . "
                         GROUP BY paid_by_rep_id) s ON s.rid = r.id
              LEFT JOIN (SELECT rep_id, SUM(returned) total
                         FROM rep_custody_settlements GROUP BY rep_id) t ON t.rep_id = r.id
@@ -404,6 +410,8 @@ class RepCustody
         // الكارت هيقول رقم والكشف يقول رقم تاني.
         $misc = RepMiscExpense::totalsByRep();
         $hand = RepDriverHandover::totalsByRep();
+        // v60: عهدة بوالص دفعها المندوب من محفظته — مصروف من نفس العهدة.
+        $bcus = RepBillCustody::totalsByRep();
         // التحويلات بين المناديب (v46): مستلَم يتزاد، محوَّل يتخصم.
         $tin  = RepTransfer::inTotalsByRep();
         $tout = RepTransfer::outTotalsByRep();
@@ -412,9 +420,11 @@ class RepCustody
             $row['deposits']     = round((float) $row['deposits'], 2);
             $row['misc']         = $misc[$rid] ?? 0.0;
             $row['handover']     = $hand[$rid] ?? 0.0;
+            $row['bill_custody'] = $bcus[$rid] ?? 0.0;
             $row['transfer_in']  = $tin[$rid] ?? 0.0;
             $row['transfer_out'] = $tout[$rid] ?? 0.0;
-            $row['spent']    = round((float) $row['spent'] + $row['misc'] + $row['handover'], 2);
+            $row['spent']    = round(
+                (float) $row['spent'] + $row['misc'] + $row['handover'] + $row['bill_custody'], 2);
             $row['returned'] = round((float) $row['returned'], 2);
             $row['balance']  = round(
                 $row['deposits'] + $row['transfer_in']
@@ -431,14 +441,15 @@ class RepCustody
         $dep = (float) Database::scalar("SELECT COALESCE(SUM(amount),0) FROM rep_custody_deposits");
         $spent = (float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM permit_stages
-             WHERE paid_by_rep_id IS NOT NULL AND is_visa = 0");
+             WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql(''));
         $ret = (float) Database::scalar("SELECT COALESCE(SUM(returned),0) FROM rep_custody_settlements");
         // ⚠️ v46: التحويلات بين المناديب **بتلغي بعضها في الإجمالي** — كل تحويل
         //    بيزوّد محفظة ويخصم من تانية بنفس المبلغ، فالفلوس ما خرجتش من نظام
         //    عهدة المناديب. مضيفينها بطرفيها للتوثيق (net = 0) مش لتغيير الرقم.
         $tin = RepTransfer::available() ? RepTransfer::totalAll() : 0.0;   // = tout بالظبط
         return round(
-            $dep + $tin - $spent - RepMiscExpense::totalAll() - RepDriverHandover::totalAll() - $ret - $tin, 2);
+            $dep + $tin - $spent - RepMiscExpense::totalAll() - RepDriverHandover::totalAll()
+            - RepBillCustody::totalAll() - $ret - $tin, 2);
     }
 
     // ─────────────────────────────────────────────── التنزيلات
@@ -507,6 +518,7 @@ class RepCustody
      *   • `src='permit'`   — بنود على أذونات (permit_stages، v35)
      *   • `src='misc'`     — نثريات عامة بلا إذن (rep_misc_expenses، v39)
      *   • `src='handover'` — تسليم عهدة لسائق (rep_driver_handovers، v45)
+     *   • `src='bill'`     — عهدة سائق على بوليصة أضافها المندوب (v60)
      * صفوف النثريات والتسليمات `permit_no = null`، فالعرض لازم يفحص `src` قبل
      * ما يبني رابط إذن (وإلا يطلع رابط لإذن #0).
      *
@@ -520,9 +532,13 @@ class RepCustody
     public static function spending(int $repId, ?string $day = null): array
     {
         if (!self::available()) { return []; }
+        // v57: البند «غير مدفوع» بيظهر هنا موسومًا للعلم زي بند الفيزا بالظبط،
+        // لكن `spentTotal` بتفلتره فما بيتحسبش في الرصيد.
+        $unpaidCol = Permit::unpaidReady() ? 's.unpaid' : '0';
         $rows = Database::all(
             "SELECT s.id, 'permit' AS src, s.entry_date AS d, s.note, s.qty, s.amount, s.ref_no,
                     s.stage_key, s.direction, NULL AS category, s.is_visa, s.visa_card_id,
+                    $unpaidCol AS unpaid,
                     p.id AS permit_id, p.permit_no, p.permit_type, p.company, p.client
              FROM permit_stages s
              JOIN permits p ON p.id = s.permit_id
@@ -535,6 +551,7 @@ class RepCustody
                 'ref_no' => $m['ref_no'], 'stage_key' => 'custom', 'direction' => 'expense',
                 'category' => $m['category'],
                 'is_visa' => (int) ($m['is_visa'] ?? 0), 'visa_card_id' => $m['visa_card_id'] ?? null,
+                'unpaid' => 0,
                 'permit_id' => null, 'permit_no' => null, 'permit_type' => null,
                 'company' => null, 'client' => null,
             ];
@@ -547,7 +564,7 @@ class RepCustody
                 'ref_no' => null, 'stage_key' => 'custom', 'direction' => 'expense',
                 'category' => 'تسليم سائق',
                 // التسليم كاش دايمًا — مفيش فيزا في تسليم اليد
-                'is_visa' => 0, 'visa_card_id' => null,
+                'is_visa' => 0, 'visa_card_id' => null, 'unpaid' => 0,
                 'driver_name' => $h['driver_name'], 'car_no' => $h['car_no'],
                 'bawali_id' => $h['bawali_id'] !== null ? (int) $h['bawali_id'] : null,
                 'bill_number' => $h['bill_number'] ?? null,
@@ -558,6 +575,28 @@ class RepCustody
             ];
         }
 
+        // v60 — عهدة بوليصة أضافها المندوب ودفعها من محفظته. المبلغ هنا
+        // **العهدة كاملة** مش «العهدة − 100»: الـ100 قاعدة خزنة المكتب،
+        // والمندوب سلّم السائق المبلغ كامل من جيبه.
+        foreach (RepBillCustody::forRep($repId) as $b) {
+            $rows[] = [
+                'id' => (int) $b['id'], 'src' => 'bill', 'd' => $b['bill_date'],
+                'note' => $b['bill_number'] ? ('بوليصة ' . $b['bill_number']) : null,
+                'qty' => 1, 'amount' => $b['custody'],
+                'ref_no' => $b['bill_number'], 'stage_key' => 'custom', 'direction' => 'expense',
+                'category' => 'عهدة سائق على بوليصة',
+                // العهدة كاش دايمًا — مفيش فيزا في عهدة اليد
+                'is_visa' => 0, 'visa_card_id' => null, 'unpaid' => 0,
+                'driver_name' => $b['driver'], 'car_no' => $b['car_no'],
+                'bawali_id' => (int) $b['id'],
+                'bill_number' => $b['bill_number'] ?? null,
+                'permit_id' => $b['permit_id'] !== null ? (int) $b['permit_id'] : null,
+                'permit_no' => $b['permit_no'] ?? null,
+                'permit_type' => $b['permit_type'] ?? null,
+                'company' => $b['company'] ?? null, 'client' => $b['client'] ?? null,
+            ];
+        }
+
         // التحويلات الصادرة لمناديب تانية (v46) — بتخصم من عهدته زي الصرف.
         foreach (RepTransfer::outgoingFor($repId) as $t) {
             $rows[] = [
@@ -565,7 +604,7 @@ class RepCustody
                 'note' => $t['note'], 'qty' => 1, 'amount' => $t['amount'],
                 'ref_no' => null, 'stage_key' => 'custom', 'direction' => 'expense',
                 'category' => 'تحويل لمندوب',
-                'is_visa' => 0, 'visa_card_id' => null,
+                'is_visa' => 0, 'visa_card_id' => null, 'unpaid' => 0,
                 'other_name' => $t['other_name'] ?? '',
                 'permit_id' => null, 'permit_no' => null, 'permit_type' => null,
                 'company' => null, 'client' => null,
@@ -598,7 +637,8 @@ class RepCustody
         $bucket = static fn (): array => ['cnt' => 0, 'sum' => 0.0];
         $out = [
             'receipts' => $bucket(), 'expenses' => $bucket(), 'misc' => $bucket(),
-            'handover' => $bucket(), 'transfer' => $bucket(), 'visa' => $bucket(),
+            'handover' => $bucket(), 'bill' => $bucket(), 'transfer' => $bucket(),
+            'visa' => $bucket(),
             'cash' => 0.0, 'total' => 0.0, 'rows' => [],
         ];
         if (!self::available() || $day === '') { return $out; }
@@ -609,6 +649,7 @@ class RepCustody
             $key = match ((string) ($r['src'] ?? 'permit')) {
                 'misc'     => 'misc',
                 'handover' => 'handover',
+                'bill'     => 'bill',
                 'transfer' => 'transfer',
                 default    => ((string) ($r['stage_key'] ?? '') === 'receipts' ? 'receipts' : 'expenses'),
             };
@@ -638,6 +679,161 @@ class RepCustody
         return Database::all(
             "SELECT * FROM rep_custody_settlements WHERE rep_id = ?
              ORDER BY settle_date DESC, id DESC", [$repId]);
+    }
+
+    /**
+     * ⚠️⚠️ **الأيام اللي لسه فيها رصيد مفتوح** — أساس التصفية كلها (2026-07-27).
+     *
+     * **الاكتشاف اللي بنى المنطق ده (متحقَّق على بيانات الإنتاج):**
+     *     مجموع أرصدة كل الأيام = الرصيد التراكمي **بالظبط**.
+     * وده مش صدفة: كل صف في كل مصدر (تنزيل/صرف/مرتجع/تحويل) له تاريخ، فالتراكمي
+     * مش رقم مستقل — هو حاصل جمع الأيام. يعني **لو كل يوم اتقفل على تاريخه،
+     * التراكمي بيقع صفر لوحده** ومفيش تناقض بين «عهدة اليوم» و«برّه معاه».
+     *
+     * ده حلّ التناقض اللي كان بيطلّع أرقامًا غلط: التصفية القديمة كانت بتاخد
+     * **مبلغًا تراكميًّا** وتسجّله على **يوم واحد**، فاليوم ده بيتلوّث. (اتصاد
+     * فعليًّا: تسوية بـ−4,845 على 2026-07-26 خلّت عهدة اليوم ده تقرا 6,845
+     * والمنزَّل فيه 2,000 بس.)
+     *
+     * @return array<int,array> الأقدم أولاً، كل صف = صف `dayLedger` + `pending_cnt`
+     */
+    public static function openDays(int $repId, int $limit = 400): array
+    {
+        $rows = array_values(array_filter(
+            self::dayLedger($repId, $limit),
+            static fn (array $d): bool => abs((float) $d['balance']) > 0.005
+                                       || (float) $d['pending'] > 0.005
+        ));
+        usort($rows, static fn ($a, $b) => strcmp((string) $a['day'], (string) $b['day']));
+        if (!$rows) { return []; }
+
+        // عدد البنود المستنية لكل يوم — استعلام واحد لكل المندوب.
+        $cnt = [];
+        foreach (Database::all(
+            "SELECT entry_date d, COUNT(*) c FROM rep_submissions
+             WHERE rep_id = ? AND status = 'pending' GROUP BY entry_date", [$repId]) as $r) {
+            $cnt[(string) $r['d']] = (int) $r['c'];
+        }
+        foreach ($rows as &$row) { $row['pending_cnt'] = $cnt[(string) $row['day']] ?? 0; }
+        unset($row);
+        return $rows;
+    }
+
+    /**
+     * لقطة «تصفية العهدة» — الأرقام اللي زرار التصفية بيشتغل عليها.
+     *
+     * ⚠️ **المصدر الوحيد لمبلغ التصفية** — الكنترولر والشاشتان (المكتب والموبايل)
+     *    كلهم بيقروا منها، فمستحيل الشاشة تعرض رقمًا والزرار يقفل رقمًا تاني.
+     *
+     * `$day = null` → كل الأيام المفتوحة (وده اللي بيصفّر التراكمي كمان).
+     * `$day = 'YYYY-MM-DD'` → اليوم ده بس.
+     *
+     * ⚠️ **قرار المالك (2026-07-27): البنود المستنية بتوقف التصفية.**
+     *    قبل كده كان `amount = الرصيد − المستنّي`، فالزرار كان بيسيب وراه رصيدًا
+     *    = المستنّي والمالك يقول «مش بيصفّر». وأسوأ: لو المستنّي أكبر من الرصيد
+     *    كان بيسجّل تسوية **بالسالب** (حصل فعليًّا مرتين: −2,830 و−4,845).
+     *    دلوقتي: `amount` = الرصيد كامل، و`blocked=true` لو فيه بند مستنّي —
+     *    الشاشة بتقول «راجع البنود الأول» وبتوديه للصندوق، وبعد الاعتماد
+     *    التصفية بتصفّر **بالمليم**.
+     */
+    public static function clearSnapshot(int $repId, ?string $day = null): array
+    {
+        $days = self::openDays($repId);
+        if ($day !== null && $day !== '') {
+            $days = array_values(array_filter(
+                $days, static fn (array $d): bool => (string) $d['day'] === $day));
+        }
+        $amount = $pending = 0.0; $pendingCnt = 0; $locked = [];
+        foreach ($days as $d) {
+            $amount     += (float) $d['balance'];
+            $pending    += (float) $d['pending'];
+            $pendingCnt += (int) $d['pending_cnt'];
+            if (!empty($d['locked'])) { $locked[] = (string) $d['day']; }
+        }
+        // تفكيك تراكمي **للعرض بس** (شاشة المندوب بتشرح الرقم جه منين).
+        $b = self::breakdown($repId);
+        return [
+            'day'         => $day,
+            'days'        => $days,
+            'day_count'   => count($days),
+            'deposits'     => $b['deposits'],
+            'spent'        => $b['spent'],
+            'returned'     => $b['returned'],
+            'transfer_in'  => $b['transfer_in'],
+            'transfer_out' => $b['transfer_out'],
+            'amount'      => round($amount, 2),
+            'pending'     => round($pending, 2),
+            'pending_cnt' => $pendingCnt,
+            'locked_days' => $locked,
+            'blocked'     => $pendingCnt > 0,
+            // التراكمي — بيساوي مجموع كل الأيام المفتوحة (متحقَّق في الفاحص)
+            'balance'     => $b['balance'],
+        ];
+    }
+
+    /**
+     * **تصفية العهدة بضغطة واحدة — كل يوم بيتقفل على تاريخه هو.**
+     *
+     * ⚠️ **أهم قاعدة هنا:** التسوية بتتسجّل **بتاريخ اليوم اللي بتقفله**، مش
+     *    بتاريخ النهاردة. من غير كده الرصيد التراكمي يتصفّر لكن **عهدة اليوم
+     *    اللي اتسجّلت عليه تتلوّث** برقم من أيام تانية — وده بالظبط اللي كان
+     *    بيحصل (شوف `openDays`).
+     *
+     * • `$day = null`  → بيقفل **كل** الأيام المفتوحة، تسوية لكل يوم على تاريخه.
+     *                     النتيجة: كل يوم = صفر **والتراكمي = صفر** مع بعض.
+     * • `$day = 'Y-m-d'` → بيقفل اليوم ده بس.
+     *
+     * • مبلغ موجب = المندوب سلّم الفاضل معاه للمكتب.
+     * • مبلغ سالب = المكتب دفع له (كان صارف من جيبه أكتر من عهدة اليوم ده).
+     *
+     * ⚠️ **بترفض لو فيه بند مستنّي مراجعة** (قرار المالك) — مفيش مبلغ بيتقفل
+     *    والمالك مش شايفه.
+     * ⚠️ **مالهاش أي أثر على الخزنة** (قاعدة v42): الفلوس ماخرجتش من الخزنة وقت
+     *    التنزيل — الخزنة بتتخصم وقت الصرف. عشان كده **مفيش `Closing::guard`**.
+     *
+     * @return array{days:int,amount:float,ids:array<int>}
+     */
+    public static function settleZero(int $repId, ?string $day = null, string $note = '', ?string $by = null): array
+    {
+        $pdo = Database::conn();
+        $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            self::lockRep($repId);
+            // ⚠️ اللقطة بتتقرا **بعد** القفل: تصفيتان متزامنتان مايقروش نفس الرصيد.
+            $snap = self::clearSnapshot($repId, $day);
+
+            if ($snap['blocked']) {
+                throw new \RuntimeException(
+                    'فيه ' . $snap['pending_cnt'] . ' بند مستني مراجعتك بـ'
+                    . number_format($snap['pending'], 2, '.', ',')
+                    . ' — راجعهم الأول من «مراجعة بنود المناديب»، وبعدين التصفية هتصفّر الحساب بالظبط.');
+            }
+
+            $ids = []; $total = 0.0;
+            foreach ($snap['days'] as $d) {
+                $amount = round((float) $d['balance'], 2);
+                if (abs($amount) < 0.005) { continue; }
+                Database::exec(
+                    "INSERT INTO rep_custody_settlements
+                        (rep_id, settle_date, deposits_total, spent_total, returned,
+                         to_custody, custody_id, note, settled_by)
+                     VALUES (?,?,?,?,?,?,?,?,?)",
+                    [$repId, $d['day'], $d['deposits'], $d['spent'], $amount, 0, null,
+                     $note !== '' ? $note : 'تصفية عهدة يوم ' . $d['day'], $by ?? Auth::user()]
+                );
+                $ids[] = Database::lastId();
+                $total = round($total + $amount, 2);
+            }
+            if (!$ids) {
+                throw new \RuntimeException('العهدة مصفّرة أصلاً — مفيش يوم مفتوح يتقفل.');
+            }
+            if ($own) { $pdo->commit(); }
+            return ['days' => count($ids), 'amount' => $total, 'ids' => $ids];
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $e;
+        }
     }
 
     /**
@@ -724,13 +920,28 @@ class RepCustody
      * للرصيد ينفع يختلف عنها. **لا يمسّ الخزنة ولا التقفيل ولا العهدة العامة.**
      *
      * $day = تاريخ العمل (Auth::workDate) — بيتحسب عليه نشاط اليوم بس.
+     *
+     * ⚠️⚠️ **الداشبورد بقى يوم واحد بس (قرار المالك 2026-07-27).** عهدة المناديب
+     *    يومية بلا ترحيل (v49)، فعرض أرقام تراكمية في لوحة التحكم كان بيدّي صورة
+     *    غلط: المالك بيفتح عشان يعرف «أخدوا كام النهاردة وصرفوا كام النهاردة».
+     *    عشان كده:
+     *      • قايمة `reps` فيها **المناديب اللي عليهم حركة في اليوم ده بس**،
+     *        مرتّبة بفاضل اليوم.
+     *      • `feed` بيتفلتر على `entry_date = $day`.
+     *      • `low` («محتاج تنزيل») بقت على **عهدة اليوم** مش على التراكمي.
+     *      • `totals.day_*` هي أرقام العرض؛ والمفاتيح التراكمية القديمة
+     *        (`outstanding`/`balance`/`spent`…) **باقية في الحزمة** لأنها الحقيقة
+     *        المالية وأساس التسوية وبيقراها `verify_rep_dashboard` — بس
+     *        **الشاشة ما بتعرضش منها حاجة**. مكان التراكمي `/rep-custody`.
      */
     public static function dashboard(string $day, int $feedLimit = 10, int $cardLimit = 12): array
     {
         $empty = [
             'available' => false, 'reps' => [], 'feed' => [],
             'totals' => ['deposits'=>0.0,'spent'=>0.0,'returned'=>0.0,'outstanding'=>0.0,
-                         'pending_cnt'=>0,'pending_sum'=>0.0,'reps'=>0,'low'=>0],
+                         'pending_cnt'=>0,'pending_sum'=>0.0,'reps'=>0,'low'=>0,
+                         'day_deposits'=>0.0,'day_spent'=>0.0,'day_balance'=>0.0,'day_pocket'=>0.0,
+                         'day_returned'=>0.0,'day_pending_cnt'=>0,'day_pending_sum'=>0.0,'day_reps'=>0],
             'day' => ['sent_cnt'=>0,'sent_sum'=>0.0,'paid_cnt'=>0,'paid_sum'=>0.0],
         ];
         $miscReady = RepMiscExpense::available();
@@ -762,13 +973,13 @@ class RepCustody
                     s.last_spend _last_spend,
                     (SELECT COUNT(*) FROM rep_submissions WHERE entry_date=?) _sent_cnt,
                     (SELECT COALESCE(SUM(amount),0) FROM rep_submissions WHERE entry_date=?) _sent_sum,
-                    (SELECT COUNT(*) FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND is_visa=0 AND entry_date=?) _paid_cnt,
-                    (SELECT COALESCE(SUM(amount),0) FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND is_visa=0 AND entry_date=?) _paid_sum
+                    (SELECT COUNT(*) FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " AND entry_date=?) _paid_cnt,
+                    (SELECT COALESCE(SUM(amount),0) FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " AND entry_date=?) _paid_sum
                  FROM reps r
                  LEFT JOIN (SELECT rep_id, SUM(amount) total, MAX(dep_date) last_date
                             FROM rep_custody_deposits GROUP BY rep_id) d ON d.rep_id=r.id
                  LEFT JOIN (SELECT paid_by_rep_id rep_id, SUM(amount) total, MAX(entry_date) last_spend
-                            FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND is_visa=0 GROUP BY paid_by_rep_id) s ON s.rep_id=r.id
+                            FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " GROUP BY paid_by_rep_id) s ON s.rep_id=r.id
                  LEFT JOIN (SELECT rep_id, SUM(returned) total
                             FROM rep_custody_settlements GROUP BY rep_id) t ON t.rep_id=r.id
                  LEFT JOIN (SELECT rep_id, COUNT(*) cnt, $pendingSum total
@@ -802,9 +1013,20 @@ class RepCustody
         // ما نعقّد استعلام الكروت وحيلة الـfallback بتاعته.
         $tin  = RepTransfer::inTotalsByRep();
         $tout = RepTransfer::outTotalsByRep();
+        // v60 — عهد بوالص دفعها المندوب من محفظته. بتتضاف في PHP (زي التحويلات
+        // فوق) بدل ما تعقّد استعلام الكروت وحيلة الـfallback بتاعته.
+        $bcus = RepBillCustody::totalsByRep();
         // v49 — عهدة اليوم لكل مندوب (بلا ترحيل). بتتعرض جنب التراكمي مش بدله:
         // التراكمي هو الفلوس اللي برّه معاه فعلاً، واليوم هو اللي بيسحب منه دلوقتي.
         $dayMap = self::dayTotalsByRep($day);
+        // عدد البنود المستنية **في اليوم ده** لكل مندوب (dayTotalsByRep بترجّع
+        // المبلغ بس). العدّ يشمل الفيزا والمبلغ كاش بس — نفس تعريف التراكمي فوق.
+        $dayPendCnt = [];
+        foreach (Database::all(
+            "SELECT rep_id rid, COUNT(*) cnt FROM rep_submissions
+             WHERE status = 'pending' AND entry_date = ? GROUP BY rep_id", [$day]) as $r) {
+            $dayPendCnt[(int) $r['rid']] = (int) $r['cnt'];
+        }
         $daySummary = $allCards[0] ?? [];
         foreach ($allCards as &$card) {
             $rid = (int) $card['id'];
@@ -814,9 +1036,15 @@ class RepCustody
             $card['day_pending']  = $dayRow['pending'] ?? 0.0;
             $card['day_balance']  = $dayRow['balance'] ?? 0.0;
             $card['day_pocket']   = $dayRow['pocket'] ?? 0.0;
+            $card['day_returned']     = $dayRow['returned'] ?? 0.0;
+            $card['day_transfer_in']  = $dayRow['transfer_in'] ?? 0.0;
+            $card['day_transfer_out'] = $dayRow['transfer_out'] ?? 0.0;
+            $card['day_pending_cnt']  = $dayPendCnt[$rid] ?? 0;
             $card['deposits'] = round((float) $card['deposits'], 2);
             $card['handover'] = round((float) $card['handover'], 2);
-            $card['spent'] = round((float) $card['spent'] + (float) $card['misc'] + $card['handover'], 2);
+            $card['bill_custody'] = $bcus[$rid] ?? 0.0;
+            $card['spent'] = round((float) $card['spent'] + (float) $card['misc']
+                                   + $card['handover'] + $card['bill_custody'], 2);
             $card['returned'] = round((float) $card['returned'], 2);
             $card['misc'] = round((float) $card['misc'], 2);
             $card['transfer_in']  = $tin[$rid] ?? 0.0;
@@ -845,16 +1073,24 @@ class RepCustody
             $c['pc_spent']   = $d > 0 ? min(100, round($c['spent']    / $d * 100, 1)) : 0.0;
             $c['pc_pending'] = $d > 0 ? min(100, round($p['sum']      / $d * 100, 1)) : 0.0;
             $c['pc_return']  = $d > 0 ? min(100, round($c['returned'] / $d * 100, 1)) : 0.0;
-            // مندوب «محتاج تنزيل»: عنده حركة وفاضل معاه أقل من 15% مما نزل له
-            $c['low'] = ($d > 0 && $c['pocket'] < $d * 0.15);
+            // ⚠️ «محتاج تنزيل» بقت على **عهدة اليوم**: فاضل اليوم أقل من 15% من
+            //    اللي نزل له فيه (أو صرف من غير ما ينزل له حاجة النهاردة).
+            $dd = (float) $c['day_deposits'] + (float) $c['day_transfer_in'];
+            $c['low'] = $dd > 0
+                ? ($c['day_pocket'] < $dd * 0.15)
+                : ($c['day_spent'] > 0 || $c['day_pending'] > 0);
             if ($c['low']) { $low++; }
-            // نعرض اللي عليه حركة بس (نازل له أو صرف أو مستنّي)
-            if ($d > 0 || $c['spent'] > 0 || $p['cnt'] > 0) { $reps[] = $c; }
+            // ⚠️ اللي عليه حركة **في اليوم ده** بس — المندوب اللي مالوش حركة
+            //    النهاردة مالوش عهدة يوم أصلاً (بلا ترحيل، v49) فوجوده بصفر تشتيت.
+            if ($dd > 0 || $c['day_spent'] > 0 || $c['day_pending'] > 0
+                || abs((float) $c['day_returned']) > 0.005 || $c['day_transfer_out'] > 0) {
+                $reps[] = $c;
+            }
         }
-        // الأهم فوق: المحتاج تنزيل، ثم الأكبر رصيدًا
+        // الأهم فوق: المحتاج تنزيل، ثم الأكبر فاضلًا من عهدة اليوم
         usort($reps, function ($a, $b) {
             if ($a['low'] !== $b['low']) { return $a['low'] ? -1 : 1; }
-            return $b['balance'] <=> $a['balance'];
+            return $b['day_pocket'] <=> $a['day_pocket'];
         });
         // الإجماليات تظل على كل المناديب، بينما العرض يقتصر على الأكثر أولوية.
         $summaryReps = $reps;
@@ -862,6 +1098,7 @@ class RepCustody
 
         // نشاط اليوم: اللي المناديب بعتوه + اللي اتعتمد فعلاً (بتاريخ الدفع، قاعدة v29)
         // آخر المدخلات (كل الحالات) — بيانات وصفية للمتابعة
+        // ⚠️ بنود **يوم العمل** بس — بند من يوم فات مالوش علاقة بعهدة النهاردة.
         $feed = Database::all(
             "SELECT s.id, s.rep_id, s.kind, s.note, s.qty, s.amount, s.entry_date, s.status,
                     s.photo, s.review_note, r.name AS rep_name,
@@ -869,7 +1106,8 @@ class RepCustody
              FROM rep_submissions s
              JOIN reps r ON r.id = s.rep_id
              LEFT JOIN permits p ON p.id = s.permit_id
-             ORDER BY s.id DESC LIMIT " . max(1, $feedLimit));
+             WHERE s.entry_date = ?
+             ORDER BY s.id DESC LIMIT " . max(1, $feedLimit), [$day]);
 
         return [
             'available' => true,
@@ -884,10 +1122,18 @@ class RepCustody
                 'pending_sum' => round((float) $pendSum, 2),
                 'reps'        => count($summaryReps),
                 'low'         => $low,
-                // v49 — إجماليات عهدة يوم العمل نفسه (بلا ترحيل من قبله)
-                'day_deposits' => round(array_sum(array_column($summaryReps, 'day_deposits')), 2),
-                'day_spent'    => round(array_sum(array_column($summaryReps, 'day_spent')), 2),
-                'day_balance'  => round(array_sum(array_column($summaryReps, 'day_balance')), 2),
+                // v49 — إجماليات عهدة يوم العمل نفسه (بلا ترحيل من قبله).
+                // ⚠️ **دي أرقام العرض في الداشبورد**؛ اللي فوقها تراكمي للتوافق بس.
+                'day_deposits'    => round(array_sum(array_column($summaryReps, 'day_deposits')), 2),
+                'day_spent'       => round(array_sum(array_column($summaryReps, 'day_spent')), 2),
+                'day_balance'     => round(array_sum(array_column($summaryReps, 'day_balance')), 2),
+                'day_returned'    => round(array_sum(array_column($summaryReps, 'day_returned')), 2),
+                // «فاضل معاهم» = عهدة اليوم − المعتمد − اللي دفعوه ومستني اعتماد.
+                // نفس تعريف `pocket` في كل شاشات العهدة — مفيش تعريف تاني.
+                'day_pocket'      => round(array_sum(array_column($summaryReps, 'day_pocket')), 2),
+                'day_pending_sum' => round(array_sum(array_column($summaryReps, 'day_pending')), 2),
+                'day_pending_cnt' => (int) array_sum(array_column($summaryReps, 'day_pending_cnt')),
+                'day_reps'        => count($summaryReps),
             ],
             'day' => [
                 'sent_cnt' => (int) ($daySummary['_sent_cnt'] ?? 0),

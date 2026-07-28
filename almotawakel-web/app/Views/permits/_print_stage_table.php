@@ -31,7 +31,7 @@ return function(array $entries, bool $showActual = true, bool $showDir = false) 
         <tr>
           <td class="mut"><?= $i ?></td>
           <td class="num"><?= dfmt($en['entry_date']) ?></td>
-          <td class="r"><?= e($en['note'] ?: '—') ?><?php if(!empty($en['is_visa'])): ?> <span class="chip visa">💳 فيزا</span><?php endif; ?></td>
+          <td class="r"><?= e($en['note'] ?: '—') ?><?php if(!empty($en['is_visa'])): ?> <span class="chip visa"><?= icon('credit-card', 14) ?> فيزا</span><?php endif; ?></td>
           <?php if ($showDir): ?><td><?= $dir==='revenue' ? '<span class="chip pos-t">محصّل</span>' : ($dir==='expense' ? '<span class="chip neg-t">مصروف</span>' : '—') ?></td><?php endif; ?>
           <td class="num"><?= $qty > 1 ? intf($qty) : '1' ?></td>
           <td class="num <?= $amtCls ?>"><?= money($en['amount'], false) ?></td>

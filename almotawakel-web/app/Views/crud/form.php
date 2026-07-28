@@ -18,7 +18,7 @@ $val = fn($k) => $row[$k] ?? '';
   <?php if (!$isEdit && ($ent['table'] ?? '') === 'bawalis' && empty($legacyCreate)): ?><a class="btn ghost" href="<?= url('bawalis/new?copy=last') ?>">⧉ نسخ آخر بوليصة</a><?php endif; ?>
 </div>
 
-<?php if (!empty($errors['_form'])): ?><div class="form-error-summary" role="alert">⚠️ <?= e($errors['_form']) ?></div><?php endif; ?>
+<?php if (!empty($errors['_form'])): ?><div class="form-error-summary" role="alert"><?= icon('alert', 14) ?> <?= e($errors['_form']) ?></div><?php endif; ?>
 
 <?php if (!empty($legacyCreate)): ?>
 <div class="card" style="margin-bottom:14px;padding:13px 16px;border-inline-start:5px solid #c9a227;background:#fff9e8;color:#6d5510">
@@ -46,6 +46,13 @@ $val = fn($k) => $row[$k] ?? '';
         $isCalc = !empty($f['calc']);
         $type = $f['type']; $k = $f['key'];
         $dep = $f['dep'] ?? '';   // حقل مشروط بنوع البوليصة (warid/sader)
+        // أرقام الحاويات: خانة لكل حاوية (المكوّن بيتولّى الرسم والتفكيك)
+        if ($type === 'containers') {
+          partial('container_nos', [
+            'value' => $val($k), 'count' => (int) ($val('container_count') ?: 0), 'label' => $f['label'],
+          ]);
+          continue;
+        }
       ?>
         <div class="field <?= $isCalc?'calc':'' ?> <?= !empty($errors[$k])?'has-error':'' ?>" <?= $dep?'data-dep="'.$dep.'"':'' ?>>
           <label><?= e($f['label']) ?><?= $isCalc?' 🔒':'' ?></label>
@@ -59,6 +66,8 @@ $val = fn($k) => $row[$k] ?? '';
               <option value="egycool" <?= $val($k)==='egycool'?'selected':'' ?>>ايجي كول</option>
               <option value="shujaie" <?= $val($k)==='shujaie'?'selected':'' ?>>الشجيع</option>
             </select>
+          <?php elseif ($type==='select' && \App\Models\Lookup::isStrict($f['lookup'])): ?>
+            <?php partial('lookup_select', ['name'=>$k, 'type'=>$f['lookup'], 'value'=>$val($k)]); ?>
           <?php elseif ($type==='select'): ?>
             <input list="dl_<?= $f['lookup'] ?>" name="<?= $k ?>" value="<?= e($val($k)) ?>" autocomplete="off" data-smart-name="<?= e($f['lookup']) ?>" <?= !empty($errors[$k])?'aria-invalid="true"':'' ?>>
           <?php elseif ($type==='date'): ?>
@@ -72,7 +81,7 @@ $val = fn($k) => $row[$k] ?? '';
           <?php elseif ($type==='int'): ?>
             <input type="number" step="1" name="<?= $k ?>" value="<?= e($val($k)) ?>" placeholder="0">
           <?php else: ?>
-            <input type="text" name="<?= $k ?>" value="<?= e($val($k)) ?>" <?= $k==='bill_number'?'data-bill-number-check data-except="'.(int)($row['id']??0).'"':'' ?> <?= !empty($errors[$k])?'aria-invalid="true"':'' ?>>
+            <input type="text" name="<?= $k ?>" value="<?= e($val($k)) ?>" <?= !empty($f['smart'])?'data-smart-name="'.e($f['smart']).'" autocomplete="off"':'' ?> <?= $k==='bill_number'?'data-bill-number-check data-except="'.(int)($row['id']??0).'"':'' ?> <?= !empty($errors[$k])?'aria-invalid="true"':'' ?>>
           <?php endif; ?>
           <?php if (!empty($errors[$k])): ?><small class="field-error" role="alert"><?= e($errors[$k]) ?></small><?php endif; ?>
           <?php if ($k==='bill_number'): ?><small class="field-live-message" data-bill-number-message aria-live="polite"></small><?php endif; ?>
@@ -88,13 +97,13 @@ $val = fn($k) => $row[$k] ?? '';
         <label>إجمالي ما استلمه صاحب البيان لهذه البوليصة</label>
         <input type="number" step="0.01" min="0" name="legacy_paid" value="<?= e($legacyPaid ?? 0) ?>" placeholder="0"<?= fieldErrorAttrs('legacy_paid', $errors) ?>>
         <?= fieldError('legacy_paid', $errors) ?>
-        <small style="display:block;margin-top:6px;color:var(--grey)">يُسجّل كدفعة تاريخية معزولة، ولا يدخل حسابات اليوم أو التقفيل.</small>
+        <small style="display:block;margin-top:6px;color:var(--grey)">معزولة — مش بتدخل التقفيل</small>
       </div>
     </div>
   <?php endif; ?>
 
   <div class="form-actions">
-    <button class="btn gold" type="submit" data-primary-submit>💾 <?= $isEdit?'حفظ التعديلات':(!empty($legacyCreate)?'حفظ كبوليصة قديمة':'حفظ') ?></button>
+    <button class="btn gold" type="submit" data-primary-submit><?= icon('download', 14) ?> <?= $isEdit?'حفظ التعديلات':(!empty($legacyCreate)?'حفظ كبوليصة قديمة':'حفظ') ?></button>
     <?php if (!$isEdit && empty($legacyCreate)): ?><button class="btn ghost" type="submit" name="save_and_new" value="1">حفظ وإضافة آخر</button><?php endif; ?>
     <a class="btn ghost" href="<?= url($back) ?>">إلغاء</a>
   </div>

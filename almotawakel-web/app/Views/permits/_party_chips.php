@@ -31,7 +31,7 @@ $pcRow = static function (string $icon, string $label, array $list, string $acti
       <span class="pp-lbl"><?= $icon ?> <?= e($label) ?></span>
       <div class="pp-chips">
         <?php if ($active !== ''): ?>
-          <a class="pp-chip pp-clear" href="<?= e($url([$key => '', 'page' => 1])) ?>" title="إلغاء التصفية">✕ الكل</a>
+          <a class="pp-chip pp-clear" href="<?= e($url([$key => '', 'page' => 1])) ?>" title="إلغاء التصفية"><?= icon('x', 14) ?> الكل</a>
         <?php endif; ?>
         <?php foreach ($list as $i => $x): $on = ($x['name'] === $active); ?>
           <a class="pp-chip<?= $on ? ' on' : '' ?><?= $i >= $pcVisible ? ' pp-hid' : '' ?>"

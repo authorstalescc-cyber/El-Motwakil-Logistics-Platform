@@ -345,7 +345,27 @@ class SettingsController extends Controller
         $value = trim($_POST['value'] ?? '');
         if (!isset(Lookup::TYPES[$type])) { $this->fail('نوع القائمة ده مش معروف.', 'settings#tab-lists'); }
         if ($value === '') { $this->fail('اكتب قيمة العنصر الأول.', 'settings#tab-lists'); }
-        Lookup::add($type, $value);
+
+        // الشاشة دي هي الباب المتعمَّد لإضافة مفردة جديدة — فبتوقف وتخيّر بدل ما تبلع
+        // بالسكوت زي المسارات التلقائية. المالك يقدر يأكّد ويعدّي (`confirm_new`).
+        if (empty($_POST['confirm_new'])) {
+            $key = \App\Models\Maintenance::normkey($value);
+            foreach (Lookup::ofType($type) as $existing) {
+                if (\App\Models\Maintenance::normkey($existing) === $key) {
+                    $this->fail('«' . $existing . '» موجود في القائمة بالفعل — نفس الاسم بتهجئة تانية.', 'settings#tab-lists');
+                }
+            }
+            $g = \App\Models\NameSuggestion::resolve($type, $value);
+            if ($g['conflict'] !== null) {
+                $this->fail(
+                    'القيمة «' . $value . '» قريبة جدًا من «' . $g['conflict'] . '» الموجودة. '
+                    . 'استخدم الموجودة، أو أعِد الإضافة مع تأكيد إنها مفردة جديدة فعلاً.',
+                    'settings#tab-lists'
+                );
+            }
+        }
+
+        Lookup::add($type, $value, true);
         $this->done('تمت إضافة العنصر.', 'settings#tab-lists');
     }
 

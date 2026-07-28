@@ -6,10 +6,16 @@
  * على الجنب + جسم قابل للتمرير)، و`card` بيطبع `.card` العام. الشاشات
  * بتتحوّل ليه بالتدريج.
  *
+ * ⚠️ **مفيش `sub` — اتشال عن قصد (قانون التصميم، بند ١: صفر جملة تعليمية).**
+ *    كان بيطبع `<small class="d-head-sub">` بجملة بتشرح اللوح («أرقام مشتقّة
+ *    — مالهاش مكان تاني في الشاشة» · «الحركة الفعلية بغضّ النظر عن المبالغ»).
+ *    الترويسة بتقول **إيه** اللوح ده — مش **ليه** ولا **إزاي**.
+ *    محتاج تعرض عددًا أو حالة؟ استخدم `badge`. `bin/verify_density.php` بيفشل
+ *    لو `sub` رجعت لأي نداء.
+ *
  * المتغيّرات:
  *   title   string            العنوان
  *   icon    ?string           اسم أيقونة من `icon()` — **مش إيموجي**
- *   sub     ?string           سطر صغير تحت العنوان
  *   badge   ?array            ['text'=>, 'tone'=>'red|navy']
  *   action  ?array            ['label'=>, 'url'=>] أو ['label'=>, 'drill'=>, 'title'=>]
  *   scroll  ?bool             الجسم قابل للتمرير بارتفاع محدود (`.d-list`)
@@ -18,7 +24,6 @@
  */
 $title  = (string) ($title ?? '');
 $icon   = $icon ?? null;
-$sub    = $sub ?? null;
 $badge  = $badge ?? null;
 $action = $action ?? null;
 $scroll = !empty($scroll);
@@ -29,7 +34,7 @@ $class  = $class ?? '';
   <div class="d-card-head">
     <h3>
       <?php if ($icon) { echo icon($icon, 18); } ?>
-      <span><?= e($title) ?><?php if ($sub !== null && $sub !== ''): ?><small class="d-head-sub"><?= e($sub) ?></small><?php endif; ?></span>
+      <span><?= e($title) ?></span>
       <?php if (is_array($badge) && ($badge['text'] ?? '') !== ''): ?>
         <span class="d-badge <?= e($badge['tone'] ?? 'navy') ?>"><?= e((string) $badge['text']) ?></span>
       <?php endif; ?>

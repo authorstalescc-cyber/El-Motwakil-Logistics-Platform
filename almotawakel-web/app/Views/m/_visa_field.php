@@ -19,7 +19,7 @@ $selectedCard = (string) $o('visa_card_id');
   <?php else: ?>
     <label class="visa-toggle" for="visaChk">
       <input type="checkbox" id="visaChk" name="is_visa" value="1" <?= $visaOn ? 'checked' : '' ?>>
-      <span>💳 دفعت بكارت الفيزا</span>
+      <span><?= icon('credit-card', 14) ?> دفعت بكارت الفيزا</span>
     </label>
     <div class="hint" id="visaHint">سيبها فاضية لو دفعت كاش من العهدة اللي معاك.</div>
 

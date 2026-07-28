@@ -243,7 +243,7 @@ else
       --confirm-database='$REMOTE_DB' \
       --backup-sha256='$BACKUP_SHA' \
       --operator='$MIGRATION_OPERATOR'" 2>&1 | sed 's/^/    /' \
-      || die "فشل الترحيل v$version؛ توقف النشر ولم تُشغّل الإصدارات التالية."
+      || die "فشل الترحيل v${version} — توقف النشر ولم تُشغّل الإصدارات التالية."
   done <<< "$PENDING"
 fi
 

@@ -31,7 +31,7 @@ $stageTable = require __DIR__ . '/_print_stage_table.php';
 <body>
 
 <div class="bar noprint">
-  <button class="btn gold" onclick="__fitPrint()">🖨️ طباعة / حفظ PDF</button>
+  <button class="btn gold" onclick="__fitPrint()"><?= icon('file-text', 14) ?> طباعة / حفظ PDF</button>
   <a class="btn ghost" href="<?= url('permits/'.$pid) ?>">‹ رجوع للإذن</a>
 </div>
 

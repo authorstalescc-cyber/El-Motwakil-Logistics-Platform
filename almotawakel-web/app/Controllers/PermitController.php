@@ -393,7 +393,7 @@ class PermitController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         if ($err = $this->permitNoError(null)) { $this->formFailure('permits.create', 'permits/new', $_POST, ['permit_no'=>$err], 'permits'); }
-        if ($err = $this->nameGuardError(['company'=>'company','client'=>'client','destination'=>'destination'])) { $this->formFailure('permits.create', 'permits/new', $_POST, ['_form'=>$err], 'permits'); }
+        if ($err = $this->nameGuardError(self::NAME_GUARD_PERMIT)) { $this->formFailure('permits.create', 'permits/new', $_POST, ['_form'=>$err], 'permits'); }
         $this->claimForm('permits');
         $id = $this->save(null);
         Permit::createMovement($id);   // أول حركة جاهزة فورًا لإضافة البوالص/البنود
@@ -413,7 +413,7 @@ class PermitController extends Controller
         $formId = ($_POST['_form_id'] ?? '') === $manageId ? $manageId : 'permits.edit.' . (int) $id;
         $formPath = $formId === $manageId ? 'permits/' . (int) $id . '/manage#stage-data' : 'permits/' . (int) $id . '/edit';
         if ($err = $this->permitNoError((int)$id)) { $this->formFailure($formId, $formPath, $_POST, ['permit_no'=>$err], 'permits'); }
-        if ($err = $this->nameGuardError(['company'=>'company','client'=>'client','destination'=>'destination'])) { $this->formFailure($formId, $formPath, $_POST, ['_form'=>$err], 'permits'); }
+        if ($err = $this->nameGuardError(self::NAME_GUARD_PERMIT, Database::row('SELECT * FROM permits WHERE id = ?', [(int)$id]) ?? [])) { $this->formFailure($formId, $formPath, $_POST, ['_form'=>$err], 'permits'); }
         $this->claimForm('permits/' . (int) $id . '/manage#stage-data');
         try {
             $this->save((int)$id);
@@ -440,26 +440,19 @@ class PermitController extends Controller
     }
 
     /**
-     * حوكمة الأسماء عند الحفظ (منع البيانات الرديئة / التكرار الإملائي):
-     *   - يوحِّد تهجئة كل اسم تلقائيًا في $_POST لو طابق مفتاحه اسمًا مخزّنًا (همزة/ألف/ة/مسافات).
-     *   - يُرجع رسالة خطأ لأول اسم «قريب لكن مختلف» غير مؤكَّد (stop-and-choose)، وإلا null.
-     * التأكيد يأتي من العميل عبر الحقل المخفي `__newname_<field>=1` («ده اسم جديد فعلاً»).
-     * @param array<string,string> $map حقل الإدخال ⇒ نوع الاقتراح (owner/driver/company…)
+     * حقول الإذن اللي بتتحرس أسماؤها.
+     * ⚠️ الموانئ والتوكيلات وشركات الشحن وتصنيف الحاويات **كانت خارج الحراسة تمامًا**
+     *    (والموانئ بالذات هي مصدر «ميناء الإسكندرية / الإسكندرية / اسكندرية»).
      */
-    private function nameGuardError(array $map): ?string
-    {
-        foreach ($map as $field => $type) {
-            $raw = trim($_POST[$field] ?? '');
-            if ($raw === '') { continue; }
-            $g = \App\Models\NameSuggestion::resolve($type, $raw);
-            if ($g['conflict'] !== null && empty($_POST['__newname_'.$field])) {
-                return 'الاسم «'.$raw.'» قريب جدًا من «'.$g['conflict'].'» المخزَّن مسبقًا. '
-                     . 'اختر الاسم الموجود لتفادي التكرار، أو أكِّد أنه اسم جديد فعلاً.';
-            }
-            $_POST[$field] = $g['value']; // توحيد التهجئة المعتمدة (أو إبقاؤها كما هي)
-        }
-        return null;
-    }
+    private const NAME_GUARD_PERMIT = [
+        'company'        => 'company',
+        'client'         => 'client',
+        'destination'    => 'destination',
+        'port'           => 'port',
+        'agency'         => 'agency',
+        'shipping_co'    => 'shipping_co',
+        'container_type' => 'container_type',
+    ];
 
     private function save(?int $id): int
     {
@@ -902,6 +895,16 @@ class PermitController extends Controller
                     : 'تعذّر إصدار المستند، ولم تُحفظ أي تعديلات جزئية. حاول مرة أخرى.'],
                 'permits/' . $pid);
         }
+        // ⚠️ الإشعار **بعد** `commit` وخارج أي transaction (docs/15 §٨.٢):
+        //    جوّه المعاملة، أي rollback بعده = خبر عن حاجة ما حصلتش.
+        $issued = PermitInvoice::find($invId);
+        PushNotify::invoiceIssued(
+            $invId,
+            PermitInvoice::KINDS[$issued['doc_kind'] ?? 'invoice'] ?? 'مستند',
+            (string) ($p['client'] ?? ''),
+            (float) ($issued['total'] ?? 0),
+            (string) (\App\Core\Auth::user() ?? 'المكتب')
+        );
         flash('success', $msg);
         redirect('permits/invoice/'.$invId);
     }
@@ -1252,6 +1255,11 @@ class PermitController extends Controller
             'status'     => ($_POST['status'] ?? 'done') === 'pending' ? 'pending' : 'done',
             'is_visa'    => !empty($_POST['is_visa']) ? 1 : 0,   // فيزا: لا يُحتسب في التقفيل
             'visa_card_id' => (!empty($_POST['is_visa']) && !empty($_POST['visa_card_id'])) ? (int)$_POST['visa_card_id'] : null,
+            // v57 — «غير مدفوع»: البند اتحاسب من برّه الخزنة وبرّه عهدة المندوب.
+            // بيتسجّل على الإذن وبيتفوتر للعميل عادي، و`Permit::cashOutSql`
+            // بتستثنيه من رصيد الخزنة والتقفيل ومن عهدة المندوب مع بعض.
+            // ⚠️ متنافي مع الفيزا: الفيزا معناها اتدفع من كارت المكتب فعلاً.
+            'unpaid'     => (!empty($_POST['unpaid']) && empty($_POST['is_visa'])) ? 1 : 0,
         ];
 
         $this->claimForm('permits/'.$pid.'/manage'.($movementId ? '#movement-'.$movementId : '#stage-'.$key));
@@ -1264,16 +1272,16 @@ class PermitController extends Controller
             : null;
         if ($stageId > 0) {
             // تعديل بند قائم
-            $set = 'direction=:direction, amount=:amount, qty=:qty, actual_amount=:actual_amount, entry_date=:entry_date, ref_no=:ref_no, note=:note, status=:status, is_visa=:is_visa, visa_card_id=:visa_card_id';
+            $set = 'direction=:direction, amount=:amount, qty=:qty, actual_amount=:actual_amount, entry_date=:entry_date, ref_no=:ref_no, note=:note, status=:status, is_visa=:is_visa, visa_card_id=:visa_card_id, unpaid=:unpaid';
             $prm = array_combine(array_map(fn($c)=>":$c",array_keys($data)), array_values($data));
             $prm[':id'] = $stageId; $prm[':pid'] = $pid;
             if ($attach !== null) { $set .= ', attachment=:attachment'; $prm[':attachment'] = $attach; }
             Database::exec("UPDATE permit_stages SET $set WHERE id=:id AND permit_id=:pid", $prm);
         } else {
             Database::exec(
-                'INSERT INTO permit_stages (permit_id, movement_id, stage_key, direction, amount, qty, actual_amount, entry_date, ref_no, note, status, attachment, is_visa, visa_card_id)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                [$pid, $movementId, $key, $direction, $data['amount'], $data['qty'], $data['actual_amount'], $data['entry_date'], $data['ref_no'], $data['note'], $data['status'], $attach, $data['is_visa'], $data['visa_card_id']]
+                'INSERT INTO permit_stages (permit_id, movement_id, stage_key, direction, amount, qty, actual_amount, entry_date, ref_no, note, status, attachment, is_visa, visa_card_id, unpaid)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                [$pid, $movementId, $key, $direction, $data['amount'], $data['qty'], $data['actual_amount'], $data['entry_date'], $data['ref_no'], $data['note'], $data['status'], $attach, $data['is_visa'], $data['visa_card_id'], $data['unpaid']]
             );
             $stageId = Database::lastId();
         }
@@ -1462,7 +1470,7 @@ class PermitController extends Controller
         }
 
         // حوكمة الأسماء: توحيد التهجئة تلقائيًا + إيقاف الأسماء القريبة غير المؤكَّدة
-        if ($err = $this->nameGuardError(['declaration_owner'=>'owner','driver'=>'driver','car_owner'=>'car_owner'])) {
+        if ($err = $this->nameGuardError(['declaration_owner'=>'owner','driver'=>'driver','car_owner'=>'car_owner','destination'=>'destination','company'=>'company','container_type'=>'container_type','classification'=>'classification'])) {
             if ($this->wantsJson()) { $this->jsonFormFailure(['_form'=>$err]); }
             flash('error', $err);
             redirect('permits/'.$pid . '/manage' . ($movementId ? '#movement-'.$movementId : '#stage-bills'));
@@ -1538,6 +1546,11 @@ class PermitController extends Controller
         Audit::log('create', 'bawalis', $billId, null, $savedBill,
             'إضافة بوليصة '.($data['bill_number'] ?: '#'.$billId).' من داخل '.Permit::noLabel($type).' '.($p['permit_no'] ?: '#'.$pid),
             ['permit_id'=>$pid, 'permit_no'=>$p['permit_no'], 'movement_id'=>$targetMv, 'record_date'=>$billDate]);
+        // ⚠️ الإشعار **قبل** أي رد (بما فيه رد الـAJAX) عشان ما يتخطّاش في
+        //    مسار الـAJAX — وهو المسار الغالب هنا. الإرسال نفسه مؤجَّل لآخر
+        //    الطلب فما بيأخّرش الرد.
+        PushNotify::billLinked($billId, (string) ($data['bill_number'] ?? ''), $pid,
+                               (string) ($p['permit_no'] ?? ''), (string) ($data['declaration_owner'] ?? ''));
         if ($this->wantsJson()) {
             if ($targetMv) { $this->ajaxMovement((int)$targetMv, 'تم إنشاء البوليصة وربطها بالحركة.'); } else { $this->json(['ok'=>true, 'flash'=>'تم إنشاء البوليصة.', 'reload'=>true]); }
             return;
@@ -1590,11 +1603,12 @@ class PermitController extends Controller
             if ($fail('رقم البوليصة «'.$billNo.'» مُستخدَم من قبل — لا يمكن تكراره. اختر رقمًا مختلفًا.', 'bill_number')) return;
         }
 
-        // (3) عهدة السائق لا تتجاوز رصيد العهدة المتاح (باستثناء خصم هذه البوليصة)
+        // (3) سقف العهدة — الفحص كله في Custody::capError (المصدر الوحيد).
+        //     تعديل: بيتفحص **الفرق** بس، فتغيير التاريخ أو أي حقل بلا زيادة في
+        //     المبلغ ما بيترفضش (المالك له حرية كاملة في تعديل البوليصة).
         if ($newCustody > 0) {
-            $available = \App\Models\Custody::availableForBill($billId);
-            if ($newCustody > $available + 0.005) {
-                if ($fail('عهدة السائق ('.number_format($newCustody,0).') تتجاوز رصيد العهدة المتاح ('.number_format($available,0).').', 'custody')) return;
+            if ($err = \App\Models\Custody::capError($newCustody, $this->composeCarNo() ?: null, $billId)) {
+                if ($fail($err, 'custody')) return;
             }
         }
 
@@ -1610,7 +1624,8 @@ class PermitController extends Controller
         }
 
         // (5) حوكمة الأسماء: توحيد التهجئة تلقائيًا + إيقاف الأسماء القريبة غير المؤكَّدة
-        if ($err = $this->nameGuardError(['declaration_owner'=>'owner','driver'=>'driver','car_owner'=>'car_owner'])) {
+        //     `$bill` = القيم القديمة، فقيمة قائمة مقفولة قديمة تعدّي على سجلها
+        if ($err = $this->nameGuardError(['declaration_owner'=>'owner','driver'=>'driver','car_owner'=>'car_owner','destination'=>'destination','company'=>'company','container_type'=>'container_type','classification'=>'classification'], $bill)) {
             if ($fail($err)) return;
         }
 
@@ -1741,6 +1756,9 @@ class PermitController extends Controller
             redirect('permits/'.$pid);
         }
         Database::exec('UPDATE permits SET status = ? WHERE id = ?', [$new, $pid]);
+        // ⚠️ الإشعار **بعد** نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
+        PushNotify::permitClosed($pid, (string) ($p['permit_no'] ?? ''), $new === 'closed',
+                                 (string) (\App\Core\Auth::user() ?? 'المكتب'));
         flash('success', $new === 'closed' ? 'تم إتمام الإذن وإغلاقه ✓' : 'تم إعادة فتح الإذن.');
         redirect('permits/'.$pid);   // صفحة العرض
     }

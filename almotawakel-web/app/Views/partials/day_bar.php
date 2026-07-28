@@ -8,7 +8,8 @@
  *
  * المتغيّرات:
  *   day     string   تاريخ العمل (Y-m-d)
- *   note    ?string  سطر توضيحي تحت العنوان
+ * ⚠️ **مفيش `note` — اتشال (قانون التصميم، بند ١).** التحذيرات الوظيفية
+ *    (مُقفَل · مش تاريخ النهاردة) بيطبعها المكوّن بنفسه كشارات.
  *   locked  ?bool    اليوم متقفل (تقفيل الخزنة v18) → الشريط بلون تنبيه
  *   prefix  ?string  كلمة قبل التاريخ (الافتراضي «يوم»)
  *   change  ?bool    عرض زر «غيّر يوم العمل» (الافتراضي نعم)
@@ -16,7 +17,6 @@
  *   actions string|callable  أزرار إضافية قبل «غيّر يوم العمل» (الإدخال السريع مثلاً)
  */
 $day    = (string) ($day ?? work_date());
-$note   = $note ?? null;
 $locked = !empty($locked);
 $prefix = $prefix ?? 'يوم';
 $change = !isset($change) || $change;
@@ -24,11 +24,13 @@ $facts  = $facts ?? [];
 $actions = $actions ?? '';
 $isToday = $day === date('Y-m-d');
 ?>
-<div class="day-bar<?= $locked ? ' locked' : '' ?>">
+<?php /* ⚠️ الشريط ده بيخفي شريط تاريخ العمل بتاع التخطيط (`.content:has(.day-bar) .workbar`)
+         عشان التاريخ ما يتعرضش مرتين — فلازم ياخد تحذير «مش النهاردة» بنفسه،
+         وإلا التحذير يضيع في الشاشات اللي بترسمه. */ ?>
+<div class="day-bar<?= $locked ? ' locked' : ($isToday ? '' : ' warn') ?>">
   <span class="day-bar-ic" aria-hidden="true"><?= icon($locked ? 'alert' : 'calendar', 20) ?></span>
   <div class="day-bar-txt">
-    <strong><?= e($prefix) ?> <?= e(dfmt($day)) ?><?= $isToday ? ' (النهاردة)' : '' ?></strong>
-    <?php if ($note !== null && $note !== ''): ?><span><?= e((string) $note) ?></span><?php endif; ?>
+    <strong><?= e($prefix) ?> <?= e(dfmt($day)) ?><?= $isToday ? ' (النهاردة)' : ' — مش تاريخ النهاردة، خلّي بالك!' ?></strong>
   </div>
   <?php if ($facts): ?>
     <div class="day-bar-facts">

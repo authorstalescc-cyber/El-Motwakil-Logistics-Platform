@@ -63,6 +63,44 @@ foreach ([['permit_stages', 'idx_stage_rep_date'], ['rep_submissions', 'idx_sub_
         "فهرس $i موجود على $t");
 }
 
+// ═══ 0ب) ⚠️ تاريخ العمل ما بيتجمّدش على يوم فات
+// ده كان **أخطر باج في عهدة اليوم**: الاختيار كان بيتخزّن في الجلسة للأبد،
+// فالتبويب/التطبيق يفضل مفتوح، النهار يتغيّر، والنظام يكمّل يكتب على اليوم
+// القديم بلا أي تنبيه — وشاشة المندوب تعرض «فاضل من عهدة اليوم» وهي عهدة يوم
+// فات. متحقَّق في بيانات الإنتاج: تنزيل عهدة created 2026-07-26 11:00 مخزَّن
+// بـdep_date 2026-07-25 (وكذلك 22←21 و21←20).
+sec('0ب) ⚠️ اختيار «يوم عمل» قديم بيبطل مع أول يوم جديد');
+$sessionBackup = $_SESSION ?? [];
+$today   = date('Y-m-d');
+$pastDay = date('Y-m-d', strtotime('-3 day'));
+
+foreach ([
+    ['المكتب',  'work_date',     'work_date_set',     [\App\Core\Auth::class, 'workDate'],
+                                                      [\App\Core\Auth::class, 'setWorkDate']],
+    ['المندوب', 'rep_work_date', 'rep_work_date_set', [\App\Core\RepAuth::class, 'workDate'],
+                                                      [\App\Core\RepAuth::class, 'setWorkDate']],
+] as [$who, $key, $stampKey, $get, $set]) {
+    // (١) اختيار اتّخذ **النهاردة** على يوم قديم ⇒ محترَم (شغل مشروع)
+    $_SESSION = [];
+    chk($set($pastDay) === true, "$who: اختيار يوم قديم اتقبل");
+    chk($get() === $pastDay, "$who: والاختيار محترَم في نفس اليوم ($pastDay)");
+    chk(($_SESSION[$stampKey] ?? '') === $today, "$who: وبيتخزّن معاه ختم اليوم الحقيقي");
+
+    // (٢) نفس الاختيار بس اتّخذ في يوم فات ⇒ **باطل**، ويرجع للنهاردة
+    $_SESSION = [$key => $pastDay, $stampKey => $pastDay];
+    chk($get() === $today, "★ $who: اختيار من يوم فات بطل ورجع للنهاردة");
+    chk(!isset($_SESSION[$key]), "$who: والمفتاح اتمسح فالواجهة ما تكدبش عليه");
+
+    // (٣) جلسة قديمة بلا ختم (توافق رجعي) ⇒ برضه بترجع للنهاردة
+    $_SESSION = [$key => $pastDay];
+    chk($get() === $today, "$who: جلسة قديمة بلا ختم بترجع للنهاردة كمان");
+
+    // (٤) يوم النهاردة نفسه بيفضل شغّال عادي
+    $_SESSION = [];
+    chk($set($today) === true && $get() === $today, "$who: اختيار النهاردة شغّال عادي");
+}
+$_SESSION = $sessionBackup;
+
 // يومان مفتوحان متتاليان (مش متقفلين) — الفحص لازم يشتغل مهما كان آخر إقفال.
 $openDays = [];
 for ($i = 0; $i < 400 && count($openDays) < 2; $i++) {
@@ -332,28 +370,40 @@ try {
             (new \App\Controllers\RepCustodyController())->card((string) $repA);
             unset($_GET['tab']);
         },
-        ['فاضل من عهدة اليوم', 'ترحيل']);
+        // ⚠️ التسمية بقت «فاضل معاه» لما يكون فيه بنود مستنية اعتماد (بتتخصم من
+        //    الرقم عشان يوصف اللي في إيده فعلاً) — الفحص على **المعنى**: الرقم
+        //    عن اليوم وبيقول صراحةً إن مفيش ترحيل، مش على نصّ تسمية بعينه.
+        ['فاضل معاه', 'ترحيل']);
     $renderCheck('كارت عهدة المندوب — تبويب الحساب',
         static function () use ($repA) {
             $_GET['tab'] = 'account';
             (new \App\Controllers\RepCustodyController())->card((string) $repA);
             unset($_GET['tab']);
         },
-        ['عهدة كل يوم', 'فاضل من عهدة اليوم', 'بلا ترحيل']);
+        ['عهدة كل يوم', 'فاضل معاه', 'بلا ترحيل']);
     /* ⚠️ المرحلة ١١: لوحة المناديب المفصّلة اتشالت من الداشبورد (كانت بتكرّر
        صفحة `/rep-custody` كلها). عهدة المناديب بقت **رقم بيفتح تفاصيله** —
-       فالفحص بقى على المعنى (الرقم موجود وله طريق) مش على ماركب اتشال. */
+       فالفحص بقى على المعنى (الرقم موجود وله طريق) مش على ماركب اتشال.
+       ⚠️ 2026-07-27: الرقم نفسه بقى **يومي** («فاضل مع المناديب») بدل التراكمي
+       («برّه مع المناديب») بقرار المالك — فالفحص على المعنى مش على التسمية،
+       والقاعدة اليومية نفسها محروسة في `bin/verify_reps_day_scope.php`. */
     $renderCheck('لوحة التحكم',
         static fn() => (new \App\Controllers\DashboardController())->index(),
-        ['برّه مع المناديب', 'dashboard/drill/reps']);
+        ['مع المناديب', 'dashboard/drill/reps']);
 
     // شاشة المندوب نفسها — بجلسة مندوب مش جلسة مكتب.
-    $_SESSION = ['rep_id' => $repA, 'rep_name' => 'فحص v49', 'rep_user' => 'v49',
-                 'rep_seen' => time(), 'rep_check' => time(), 'rep_work_date' => $d2];
-    ob_start();
-    try { (new \App\Controllers\RepPortalController())->home(); $homeHtml = (string) ob_get_clean(); }
-    catch (\Throwable $e) { ob_end_clean(); $homeHtml = ''; bad('شاشة المندوب — استثناء: ' . $e->getMessage()); }
-    $_SESSION = [];
+    $renderHome = static function (string $workDay) use ($repA): string {
+        // الختم = النهاردة عشان الاختيار يبقى ساري (قاعدة 0ب فوق)
+        $_SESSION = ['rep_id' => $repA, 'rep_name' => 'فحص v49', 'rep_user' => 'v49',
+                     'rep_seen' => time(), 'rep_check' => time(),
+                     'rep_work_date' => $workDay, 'rep_work_date_set' => date('Y-m-d')];
+        ob_start();
+        try { (new \App\Controllers\RepPortalController())->home(); $out = (string) ob_get_clean(); }
+        catch (\Throwable $e) { ob_end_clean(); $out = ''; bad('شاشة المندوب — استثناء: ' . $e->getMessage()); }
+        $_SESSION = [];
+        return $out;
+    };
+    $homeHtml = $renderHome($d2);
     if ($homeHtml !== '') {
         preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $homeHtml, $m)
             ? bad('شاشة المندوب — خطأ PHP: ' . ($m[0] ?? ''))
@@ -362,9 +412,33 @@ try {
             '★ الشاشة مفيهاش سطر «إجمالي اللي معاك من كل الأيام»');
         chk(!str_contains($homeHtml, 'بند يوم قديم'),
             '★ الشاشة مفيهاش بند اليوم السابق');
-        // عنوان الرصيد بيتغيّر حسب السالب/الموجب، فالفحص على الجزء الثابت.
-        chk(str_contains($homeHtml, 'عهدة اليوم'), 'الشاشة بتعرض رصيد «عهدة اليوم»');
-        chk(str_contains($homeHtml, 'نزل لك اليوم'), 'وتفاصيلها كلها بأرقام اليوم');
+        // ⚠️ العنوان بقى بيسمّي اليوم لو مش النهاردة، فالفحص على **الحالة**
+        //    الصح لكل حالة مش على نص واحد ثابت.
+        $isToday = $d2 === date('Y-m-d');
+        chk(str_contains($homeHtml, $isToday ? 'عهدة اليوم' : 'عهدة يوم ' . dfmt($d2)),
+            'الشاشة بتسمّي اليوم اللي الرصيد بتاعه صح');
+        chk(str_contains($homeHtml, $isToday ? 'نزل لك اليوم' : 'نزل لك يوم'),
+            'وتفاصيلها كلها بأرقام نفس اليوم');
+    }
+
+    // ★ لو يوم العمل مش النهاردة لازم تحذير صريح — الرقم مش عهدة النهاردة
+    $pastOpen = null;
+    for ($i = 1; $i < 400 && $pastOpen === null; $i++) {
+        $cand = date('Y-m-d', strtotime("-$i day"));
+        if (!RepCustody::isDayLocked($cand)) { $pastOpen = $cand; }
+    }
+    if ($pastOpen === null) {
+        echo "  ~ مفيش يوم قديم مفتوح — اتخطّى فحص تحذير اليوم القديم\n";
+    } else {
+        $pastHtml = $renderHome($pastOpen);
+        if ($pastHtml !== '') {
+            chk(str_contains($pastHtml, 'hm-pastday'),
+                '★ تحذير «انت شغّال على يوم مش النهاردة» ظاهر على الشاشة');
+            chk(str_contains($pastHtml, 'عهدة يوم ' . dfmt($pastOpen)),
+                '★ وعنوان الرصيد بيقول اسم اليوم مش «اليوم»');
+            chk(str_contains($pastHtml, 'رجّعني للنهاردة'),
+                'وفيه طريق واضح يرجّعه للنهاردة');
+        }
     }
 } finally {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }

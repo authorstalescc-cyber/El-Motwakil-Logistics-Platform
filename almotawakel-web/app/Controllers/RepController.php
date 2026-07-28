@@ -145,6 +145,9 @@ class RepController extends Controller
         if (Rep::isCashKind($data['kind']) && ($err = Closing::guard($data['entry_date']))) {
             $this->repFailure('reps.entry.' . (int) $id, 'reps/' . $id, $data, $err);
         }
+        // بعد نجاح التحقّق وقبل الكتابة — إرسال نفس الشاشة مرتين يُرفض
+        // بدل أن يسجّل نفس المرتب/الخصم/السلفة مرتين في سجل المندوب.
+        $this->claimForm('reps/' . $id);
         Rep::createEntry((int) $id, $data);
         $this->done('تمت إضافة البند لسجل المندوب.', 'reps/' . $id, 'entries');
     }
@@ -188,6 +191,8 @@ class RepController extends Controller
         if ($pre['count'] === 0) {
             $this->repFailure('reps.settle.' . (int) $id, 'reps/' . $id, $settleOld, 'مفيش بنود غير متحاسبة في الفترة دي عشان تتقفل.');
         }
+        // بعد نجاح التحقّق وقبل الكتابة — تسوية مكررة تعني دفعة كاش مكررة
+        $this->claimForm('reps/' . $id);
         $sid = Rep::settle((int) $id, $from ?: null, $to ?: null, $payDate, $isVisa, $note);
         $this->done('تم تقفيل الحساب على صافي ' . money($pre['net']) . '.', 'reps/' . $id . '/settlement/' . $sid . '/print');
     }

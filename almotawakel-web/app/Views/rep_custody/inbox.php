@@ -114,18 +114,18 @@ foreach ($groups as $g) {
     💡 تقدر <strong>تعدّل البند وتصلّحه</strong> قبل ما تعتمده — أحسن من إنك ترفضه وتستنى المندوب يعيده.
     البند اللي تعتمده بيتحط على <strong>تايم لاين الإذن</strong> وبيدخل <strong>فاتورة العميل والمصروفات</strong>،
     و<strong>بيتخصم من الخزنة بتاريخ الصرف ومن عهدة المندوب في كشفه</strong>.
-    <br>🧷 أما <strong>النثرية</strong> فمالهاش إذن ولا عميل: بتروح <strong>للمصروفات وبس</strong>
+    <br><?= icon('anchor', 14) ?> أما <strong>النثرية</strong> فمالهاش إذن ولا عميل: بتروح <strong>للمصروفات وبس</strong>
     (تصنيف «نثريات المناديب» في <a href="<?= url('expenses') ?>">سجل المصروفات</a>)
     وبتتخصم من الخزنة وعهدة المندوب برضو — <strong>وعمرها ما تدخل حساب أي عميل</strong>.
     <?php if ($lockedThrough !== null): ?>
-      <br>🔒 الأيام لحد <strong><?= e(dfmt($lockedThrough)) ?></strong> متقفلة —
+      <br><?= icon('alert', 14) ?> الأيام لحد <strong><?= e(dfmt($lockedThrough)) ?></strong> متقفلة —
       أي بند تاريخه فيها لازم <strong>تغيّر تاريخه</strong> أو
       <a href="<?= url('closing') ?>">تفتح إقفال يومه</a> قبل ما تعتمده.
     <?php endif; ?>
   </div>
 
   <?php if (!$groups): ?>
-    <div class="card"><div class="empty"><div class="ic">✓</div>
+    <div class="card"><div class="empty"><div class="ic"><?= icon('check', 14) ?></div>
       مفيش بنود مستنية. كل حاجة اتراجعت.
     </div></div>
   <?php else: ?>
@@ -137,8 +137,8 @@ foreach ($groups as $g) {
     <?php /* فلاتر عرض — كلها في المتصفح على الصفوف المعروضة، بلا أي طلب للخادم */ ?>
     <div class="card mb ib-filters">
       <label class="ib-f-search">
-        <span>🔎 بحث</span>
-        <input type="search" id="ibSearch" placeholder="بيان، إذن، شركة، عميل، رقم إيصال…" autocomplete="off">
+        <span><?= icon('search', 14) ?> بحث</span>
+        <input type="search" id="ibSearch" placeholder="بحث" autocomplete="off">
       </label>
       <label>
         <span>المندوب</span>
@@ -164,7 +164,7 @@ foreach ($groups as $g) {
       </label>
       <label class="ib-f-chk">
         <input type="checkbox" id="ibOnlyLocked">
-        <span>المتقفل بس 🔒</span>
+        <span>المتقفل بس <?= icon('alert', 14) ?></span>
       </label>
       <button type="button" class="btn ghost sm" id="ibClearFilters">امسح الفلاتر</button>
       <span class="ib-f-count" id="ibCount"></span>
@@ -187,7 +187,7 @@ foreach ($groups as $g) {
               <input type="checkbox" class="js-ib-rep-all">
             </label>
             <div class="ib-rep-id">
-              <a href="<?= url('rep-custody/' . $g['rep_id']) ?>" class="ib-rep-name">🧑‍💼 <?= e($g['rep_name']) ?></a>
+              <a href="<?= url('rep-custody/' . $g['rep_id']) ?>" class="ib-rep-name"><?= icon('user', 14) ?>‍<?= icon('briefcase', 14) ?> <?= e($g['rep_name']) ?></a>
               <span class="ib-rep-sub"><?= intf($g['count']) ?> بند مستني · إجمالي <?= money($g['total'], false) ?></span>
             </div>
             <button type="button" class="btn ghost sm ib-collapse" aria-expanded="true">اطوِ</button>
@@ -202,15 +202,15 @@ foreach ($groups as $g) {
                   <input type="checkbox" class="js-ib-day-all">
                 </label>
                 <span class="ib-day-date">
-                  📅 <?= e(dfmt($d['day'])) ?>
+                  <?= icon('calendar', 14) ?> <?= e(dfmt($d['day'])) ?>
                   <?php if ($d['day'] === $today): ?><span class="pill st-done">النهاردة</span><?php endif; ?>
                   <?php if ($dayLocked): ?>
-                    <span class="pill st-late" title="اليوم متقفل — اعتماد بنوده هيترفض لحد ما تغيّر تاريخها أو تفتح الإقفال">🔒 متقفل</span>
+                    <span class="pill st-late" title="اليوم متقفل — اعتماد بنوده هيترفض لحد ما تغيّر تاريخها أو تفتح الإقفال"><?= icon('alert', 14) ?> متقفل</span>
                   <?php endif; ?>
                 </span>
                 <span class="ib-day-tot"><?= count($d['rows']) ?> بند · <?= money($d['total'], false) ?></span>
                 <?php /* ★ تغيير تاريخ يوم كامل بضغطة — كان محتاج بوب-أبين وكتابة تاريخ بالإيد */ ?>
-                <button type="button" class="btn ghost sm js-ib-day-date">📅 غيّر تاريخ اليوم</button>
+                <button type="button" class="btn ghost sm js-ib-day-date"><?= icon('calendar', 14) ?> غيّر تاريخ اليوم</button>
               </div>
 
               <div class="ib-items">
@@ -226,7 +226,10 @@ foreach ($groups as $g) {
                     $rowLocked  = $isLocked((string) $r['entry_date']);
                     $inReview   = !empty($r['review_started_at']);
                     // نص البحث الحيّ — كله في سمة واحدة عشان الفلترة تبقى سطرًا واحدًا
-                    $haystack = mb_strtolower(implode(' ', array_filter([
+                    // ⚠️ `search_norm` مش `mb_strtolower`: توحيد الألف والتاء المربوطة
+                    //    والياء إلزامي وإلا «إكرامية» ما تلاقيش «اكراميه» (نفس الباج
+                    //    اللي اتصاد في شاشة التقفيل). والواجهة بتطبّع بنفس الدالة.
+                    $haystack = search_norm(implode(' ', array_filter([
                         $r['note'], $r['permit_no'], $r['company'], $r['client'], $r['ref_no'], $g['rep_name'],
                     ])));
                   ?>
@@ -265,26 +268,29 @@ foreach ($groups as $g) {
                           <img src="<?= url('attachments/submission/' . $sid) ?>" alt="صورة الإيصال" loading="lazy">
                         </a>
                       <?php else: ?>
-                        <span class="ib-photo none" title="مبعتش صورة">📄</span>
+                        <span class="ib-photo none" title="مبعتش صورة"><?= icon('file-text', 14) ?></span>
                       <?php endif; ?>
 
                       <div class="ib-main">
                         <div class="ib-title">
                           <span class="ib-note"><?= e($r['note']) ?></span>
                           <?php if ($isMisc): ?>
-                            <span class="pill ib-misc" title="مصروف عام مش على إذن — بيروح للمصروفات مش لحساب أي عميل">🧷 نثرية</span>
+                            <span class="pill ib-misc" title="مصروف عام مش على إذن — بيروح للمصروفات مش لحساب أي عميل"><?= icon('anchor', 14) ?> نثرية</span>
                           <?php else: ?>
                             <span class="pill <?= $r['kind'] === 'receipt' ? 'st-done' : 'st-partial' ?>">
                               <?= $r['kind'] === 'receipt' ? 'إيصال' : 'مصروف' ?></span>
                           <?php endif; ?>
                           <?php if (!empty($r['is_visa'])): ?>
-                            <span class="pill visa-pill" title="مدفوع بكارت الفيزا — يتخصم من الكارت، لا من الخزنة ولا من عهدة المندوب">💳 فيزا</span>
+                            <span class="pill visa-pill" title="مدفوع بكارت الفيزا — يتخصم من الكارت، لا من الخزنة ولا من عهدة المندوب"><?= icon('credit-card', 14) ?> فيزا</span>
+                          <?php endif; ?>
+                          <?php if (!empty($r['unpaid'])): ?>
+                            <span class="pill unpaid-pill" title="غير مدفوع — اتحاسب من برّه عهدة المندوب وبرّه الخزنة؛ بيتسجّل على الإذن ويتفوتر للعميل عادي"><?= icon('info', 14) ?> غير مدفوع</span>
                           <?php endif; ?>
                           <?php if (!empty($r['edited_at'])): ?>
-                            <span class="pill st-partial" title="عدّله <?= e($r['edited_by'] ?: '') ?>">✏️ متعدّل</span>
+                            <span class="pill st-partial" title="عدّله <?= e($r['edited_by'] ?: '') ?>"><?= icon('edit', 14) ?> متعدّل</span>
                           <?php endif; ?>
                           <?php if ($inReview): ?>
-                            <span class="pill st-partial" title="<?= e($r['review_started_by'] ?: '') ?>">🔒 قيد المراجعة</span>
+                            <span class="pill st-partial" title="<?= e($r['review_started_by'] ?: '') ?>"><?= icon('alert', 14) ?> قيد المراجعة</span>
                           <?php endif; ?>
                         </div>
 
@@ -296,10 +302,10 @@ foreach ($groups as $g) {
                               <?= e(Permit::noLabel($r['permit_type'] ?? 'sader')) ?>
                               <?= e($r['permit_no'] ?: '#' . $r['permit_id']) ?></a>
                             <?php if (!empty($r['company'])): ?>
-                              <span class="ib-co">🏢 <?= e($r['company']) ?></span>
+                              <span class="ib-co"><?= icon('building', 14) ?> <?= e($r['company']) ?></span>
                             <?php endif; ?>
                             <?php if (!empty($r['client']) && $r['client'] !== $r['company']): ?>
-                              <span>👤 <?= e($r['client']) ?></span>
+                              <span><?= icon('user', 14) ?> <?= e($r['client']) ?></span>
                             <?php elseif (empty($r['company']) && empty($r['client'])): ?>
                               <span>بدون عميل</span>
                             <?php endif; ?>
@@ -312,7 +318,7 @@ foreach ($groups as $g) {
                         </div>
 
                         <?php if ($rowLocked): ?>
-                          <p class="ib-warn">🔒 تاريخه <?= e(dfmt($r['entry_date'])) ?> في يوم متقفل —
+                          <p class="ib-warn"><?= icon('alert', 14) ?> تاريخه <?= e(dfmt($r['entry_date'])) ?> في يوم متقفل —
                             <button type="button" class="ib-link js-ib-row-date" data-sid="<?= $sid ?>">غيّر تاريخه</button>
                             أو <a href="<?= url('closing') ?>">افتح الإقفال</a>، وإلا الاعتماد هيترفض.</p>
                         <?php endif; ?>
@@ -330,13 +336,13 @@ foreach ($groups as $g) {
                       </div>
 
                       <div class="ib-acts">
-                        <button class="ib-btn ok" type="submit" form="a<?= $sid ?>f" title="اعتمد البند ده">✓</button>
+                        <button class="ib-btn ok" type="submit" form="a<?= $sid ?>f" title="اعتمد البند ده"><?= icon('check', 14) ?></button>
                         <button class="ib-btn" type="button" title="غيّر التاريخ بس"
-                                onclick="ibRowDate(<?= $sid ?>)">📅</button>
+                                onclick="ibRowDate(<?= $sid ?>)"><?= icon('calendar', 14) ?></button>
                         <button class="ib-btn" type="button" title="عدّل البند كله"
-                                onclick="ibToggle('<?= $eid ?>')">✏️</button>
+                                onclick="ibToggle('<?= $eid ?>')"><?= icon('edit', 14) ?></button>
                         <button class="ib-btn no" type="button" title="ارفض البند"
-                                onclick="ibReject(<?= $sid ?>)">✕</button>
+                                onclick="ibReject(<?= $sid ?>)"><?= icon('x', 14) ?></button>
                       </div>
                     </div>
 
@@ -402,7 +408,7 @@ foreach ($groups as $g) {
                                      <?= $editFailed ? fieldErrorAttrs('actual_unit', $inboxErrors) : '' ?>><?= $editFailed ? fieldError('actual_unit', $inboxErrors) : '' ?></label>
                           <?php endif; ?>
                           <?php $editVisa = $editFailed ? !empty($inboxOld['is_visa']) : !empty($r['is_visa']); ?>
-                          <label class="ib-visa">💳 مدفوع بالفيزا
+                          <label class="ib-visa"><?= icon('credit-card', 14) ?> مدفوع بالفيزا
                             <span class="ib-visa-row">
                               <input type="checkbox" name="is_visa" form="<?= $eid ?>f" value="1" <?= $editVisa ? 'checked' : '' ?>>
                               <?= visa_card_select(
@@ -411,6 +417,16 @@ foreach ($groups as $g) {
                                   ) ?>
                             </span>
                           </label>
+                          <?php /* v57 — «غير مدفوع»: ⚠️ للبنود على الإذن بس (النثرية بتتدفع من عهدته فعلاً) */ ?>
+                          <?php if (!$isMisc): ?>
+                            <?php $editUnpaid = $editFailed ? !empty($inboxOld['unpaid']) : !empty($r['unpaid']); ?>
+                            <label class="ib-visa"><?= icon('info', 14) ?> غير مدفوع من عهدته
+                              <span class="ib-visa-row">
+                                <input type="checkbox" name="unpaid" form="<?= $eid ?>f" value="1" <?= $editUnpaid ? 'checked' : '' ?>>
+                                <span class="hint">اتحاسب من برّه — مش هيتخصم من عهدته ولا من الخزنة.</span>
+                              </span>
+                            </label>
+                          <?php endif; ?>
                         </div>
                       </div>
 
@@ -435,9 +451,9 @@ foreach ($groups as $g) {
                              value="<?= $editFailed ? e($inboxOld['approve_now'] ?? '') : '' ?>">
                       <div class="ib-edit-acts">
                         <button class="btn" type="submit" form="<?= $eid ?>f"
-                                onclick="document.getElementById('<?= $eid ?>ap').value=''">💾 احفظ بس</button>
+                                onclick="document.getElementById('<?= $eid ?>ap').value=''"><?= icon('download', 14) ?> احفظ بس</button>
                         <button class="btn gold" type="submit" form="<?= $eid ?>f"
-                                onclick="document.getElementById('<?= $eid ?>ap').value='1'">💾 احفظ واعتمد</button>
+                                onclick="document.getElementById('<?= $eid ?>ap').value='1'"><?= icon('download', 14) ?> احفظ واعتمد</button>
                         <button class="btn ghost" type="button" onclick="ibToggle('<?= $eid ?>')">إلغاء</button>
                       </div>
                     </div>
@@ -456,13 +472,13 @@ foreach ($groups as $g) {
       <div class="ib-bar-info">
         <b id="ibBarCount">0 بند</b>
         <span id="ibBarSum">0</span>
-        <span class="ib-bar-lock" id="ibBarLock" hidden>🔒 <span id="ibBarLockN">0</span> على أيام متقفلة</span>
+        <span class="ib-bar-lock" id="ibBarLock" hidden><?= icon('alert', 14) ?> <span id="ibBarLockN">0</span> على أيام متقفلة</span>
       </div>
       <div class="ib-bar-acts">
-        <button type="button" class="btn gold" id="ibDoApprove">✓ اعتمد المعلَّم</button>
-        <button type="button" class="btn" id="ibDoDate">📅 غيّر التاريخ</button>
-        <button type="button" class="btn ghost" id="ibDoActual">💰 حط الفعلي للعميل</button>
-        <button type="button" class="btn ghost" id="ibDoReject">✕ ارفض</button>
+        <button type="button" class="btn gold" id="ibDoApprove"><?= icon('check', 14) ?> اعتمد المعلَّم</button>
+        <button type="button" class="btn" id="ibDoDate"><?= icon('calendar', 14) ?> غيّر التاريخ</button>
+        <button type="button" class="btn ghost" id="ibDoActual"><?= icon('coins', 14) ?> حط الفعلي للعميل</button>
+        <button type="button" class="btn ghost" id="ibDoReject"><?= icon('x', 14) ?> ارفض</button>
         <button type="button" class="btn ghost" id="ibClearPick">شيل التعليم</button>
       </div>
     </div>
@@ -471,7 +487,7 @@ foreach ($groups as $g) {
              التاريخ بالإيد. منتقي تواريخ حقيقي + اختصارات + تحذير اليوم المتقفل. */ ?>
     <div class="ib-panel" id="ibDatePanel" hidden role="dialog" aria-modal="true" aria-labelledby="ibDatePanelTitle">
       <div class="ib-panel-box">
-        <h3 id="ibDatePanelTitle">📅 تغيير تاريخ <span id="ibDateN">0</span> بند</h3>
+        <h3 id="ibDatePanelTitle"><?= icon('calendar', 14) ?> تغيير تاريخ <span id="ibDateN">0</span> بند</h3>
         <p class="ib-panel-sub">التاريخ ده هو اليوم اللي البند هيتخصم فيه من الخزنة ومن عهدة المندوب.</p>
         <input type="date" id="ibDateInput" max="<?= e($today) ?>" value="<?= e($workDate) ?>">
         <div class="ib-panel-chips">
@@ -534,35 +550,35 @@ foreach ($groups as $g) {
             <td style="text-align:right"><?= e($r['note']) ?></td>
             <td style="text-align:right">
               <?php if (RepPortal::isMisc((string) $r['kind'])): ?>
-                <span class="pill ib-misc">🧷 نثرية</span>
+                <span class="pill ib-misc"><?= icon('anchor', 14) ?> نثرية</span>
               <?php else: ?>
                 <a href="<?= url('permits/' . $r['permit_id'] . '/manage') ?>"><?= e($r['permit_no'] ?: '#' . $r['permit_id']) ?></a>
               <?php endif; ?>
             </td>
             <td style="text-align:right">
               <?php if (!empty($r['company'])): ?>
-                <div style="font-weight:800">🏢 <?= e($r['company']) ?></div>
+                <div style="font-weight:600"><?= icon('building', 14) ?> <?= e($r['company']) ?></div>
               <?php endif; ?>
               <?php if (!empty($r['client']) && $r['client'] !== $r['company']): ?>
-                <div style="font-size:.8rem;color:var(--grey)">👤 <?= e($r['client']) ?></div>
+                <div style="font-size:var(--fs-2);color:var(--grey)"><?= icon('user', 14) ?> <?= e($r['client']) ?></div>
               <?php elseif (empty($r['company']) && empty($r['client'])): ?>
                 <span style="color:var(--grey)">—</span>
               <?php endif; ?>
             </td>
-            <td style="font-weight:700"><?= money($r['amount'], false) ?></td>
+            <td style="font-weight:500"><?= money($r['amount'], false) ?></td>
             <td>
               <?php if ($r['status'] === 'approved'): ?>
-                <span class="pill st-done">✓ معتمد</span>
+                <span class="pill st-done"><?= icon('check', 14) ?> معتمد</span>
               <?php elseif ($r['status'] === 'rejected'): ?>
-                <span class="pill st-late" title="<?= e($r['review_note'] ?? '') ?>">✕ مرفوض</span>
+                <span class="pill st-late" title="<?= e($r['review_note'] ?? '') ?>"><?= icon('x', 14) ?> مرفوض</span>
               <?php else: ?>
-                <span class="pill st-partial">⏳ مستني</span>
+                <span class="pill st-partial"><?= icon('hourglass', 14) ?> مستني</span>
               <?php endif; ?>
             </td>
-            <td style="font-size:.8rem;color:var(--grey)"><?= e($r['reviewed_by'] ?: '—') ?></td>
+            <td style="font-size:var(--fs-2);color:var(--grey)"><?= e($r['reviewed_by'] ?: '—') ?></td>
           </tr>
           <?php if ($r['status'] === 'rejected' && $r['review_note']): ?>
-            <tr><td colspan="8" style="text-align:right;font-size:.8rem;color:var(--red);background:var(--red-lt)">
+            <tr><td colspan="8" style="text-align:right;font-size:var(--fs-2);color:var(--red);background:var(--red-lt)">
               سبب الرفض: <?= e($r['review_note']) ?>
             </td></tr>
           <?php endif; ?>
@@ -575,27 +591,27 @@ foreach ($groups as $g) {
 
 <style>
 /* ══ صندوق مراجعة بنود المناديب — معاد بناؤه ══ */
-.ib-note{font-size:.85rem}
+.ib-note{font-size:var(--fs-2)}
 .kpi-grid.four{grid-template-columns:repeat(4,1fr)}
 @media (max-width:900px){ .kpi-grid.four{grid-template-columns:repeat(2,1fr)} }
 .kpi.danger{border-color:#F3C4C4;background:#FFF6F6}
 
 /* الفلاتر */
 .ib-filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;padding:13px 16px}
-.ib-filters label{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-1);font-weight:800;color:var(--ink-mut)}
+.ib-filters label{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-1);font-weight:600;color:var(--ink-mut)}
 .ib-filters input[type=search],.ib-filters select{
   min-height:38px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--radius-2);
   font-family:inherit;font-size:var(--fs-2);background:#fff}
 .ib-f-search{flex:1;min-width:220px}
 .ib-f-chk{flex-direction:row!important;align-items:center;gap:7px;min-height:38px}
 .ib-f-chk input{width:17px;height:17px;margin:0}
-.ib-f-count{margin-inline-start:auto;font-size:var(--fs-1);color:var(--ink-mut);font-weight:700}
+.ib-f-count{margin-inline-start:auto;font-size:var(--fs-1);color:var(--ink-mut);font-weight:500}
 
 /* كارت المندوب */
 .ib-rep-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
 .ib-rep-id{flex:1;min-width:0;display:flex;flex-direction:column}
-.ib-rep-name{font-size:1.08rem;font-weight:900;color:var(--navy)}
-.ib-rep-sub{font-size:.82rem;color:var(--grey);font-weight:700}
+.ib-rep-name{font-size:var(--fs-5);font-weight:700;color:var(--navy)}
+.ib-rep-sub{font-size:var(--fs-2);color:var(--grey);font-weight:500}
 .ib-pick-all,.ib-pick{flex:none;display:flex;align-items:center;cursor:pointer}
 .ib-pick-all input,.ib-pick input{width:18px;height:18px;margin:0;cursor:pointer}
 .ib-rep.collapsed .ib-rep-body{display:none}
@@ -605,8 +621,8 @@ foreach ($groups as $g) {
 .ib-day:last-child{border-bottom:0}
 .ib-day-head{display:flex;align-items:center;gap:11px;padding:10px 18px;background:var(--zebra);flex-wrap:wrap}
 .ib-day.is-locked .ib-day-head{background:#FFF3F3}
-.ib-day-date{font-weight:800;font-size:.9rem;display:flex;align-items:center;gap:6px}
-.ib-day-tot{font-size:.8rem;color:var(--grey);font-weight:700;margin-inline-start:auto}
+.ib-day-date{font-weight:600;font-size:var(--fs-3);display:flex;align-items:center;gap:6px}
+.ib-day-tot{font-size:var(--fs-2);color:var(--grey);font-weight:500;margin-inline-start:auto}
 
 /* البند */
 .ib-item{border-top:1px solid var(--line)}
@@ -616,27 +632,27 @@ foreach ($groups as $g) {
 .ib-row{display:flex;align-items:center;gap:12px;padding:12px 18px}
 .ib-main{flex:1;min-width:0}
 .ib-title{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-.ib-note{font-weight:800;font-size:1rem}
-.ib-meta{font-size:.78rem;color:var(--grey);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap}
-.ib-meta a{font-weight:700;color:var(--navy)}
-.ib-meta .ib-co{font-weight:800;color:var(--navy)}
-.ib-warn{margin:6px 0 0;font-size:.78rem;font-weight:700;color:#8E1F1F;line-height:1.6}
-.ib-link{background:0;border:0;padding:0;font:inherit;font-weight:900;color:#8E1F1F;text-decoration:underline;cursor:pointer}
+.ib-note{font-weight:600;font-size:var(--fs-4)}
+.ib-meta{font-size:var(--fs-1);color:var(--grey);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap}
+.ib-meta a{font-weight:500;color:var(--navy)}
+.ib-meta .ib-co{font-weight:600;color:var(--navy)}
+.ib-warn{margin:6px 0 0;font-size:var(--fs-1);font-weight:500;color:#8E1F1F;line-height:1.6}
+.ib-link{background:0;border:0;padding:0;font:inherit;font-weight:700;color:#8E1F1F;text-decoration:underline;cursor:pointer}
 .pill.ib-misc{background:#FBF3D9;color:#6B540A;border:1px solid #E6D49B}
 
 .ib-money{flex:none;text-align:center;min-width:112px;display:flex;flex-direction:column}
-.ib-paid{font-size:1.05rem;font-weight:900;color:var(--red);font-variant-numeric:tabular-nums}
-.ib-actual{font-size:.72rem;font-weight:700;color:var(--sader)}
+.ib-paid{font-size:var(--fs-4);font-weight:700;color:var(--red);font-variant-numeric:tabular-nums}
+.ib-actual{font-size:var(--fs-1);font-weight:500;color:var(--sader)}
 .ib-actual.has{color:var(--green)}
 
 .ib-photo{flex:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;
-  border-radius:8px;overflow:hidden;border:1px solid var(--line2);background:#fff}
+  border-radius:var(--radius-1);overflow:hidden;border:1px solid var(--line2);background:#fff}
 .ib-photo img{width:100%;height:100%;object-fit:cover;display:block}
 .ib-photo.none{border-style:dashed;border-color:var(--line);background:var(--zebra);opacity:.45}
 
 .ib-acts{flex:none;display:flex;gap:6px}
-.ib-btn{min-width:38px;min-height:38px;padding:0 10px;border:1px solid var(--line2);border-radius:8px;
-  background:#fff;font-family:inherit;font-weight:800;font-size:.95rem;cursor:pointer;color:var(--navy)}
+.ib-btn{min-width:38px;min-height:38px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--radius-1);
+  background:#fff;font-family:inherit;font-weight:600;font-size:var(--fs-3);cursor:pointer;color:var(--navy)}
 .ib-btn:hover{border-color:var(--navy)}
 .ib-btn.ok{background:var(--green-lt);border-color:#B9DCC6;color:var(--green)}
 .ib-btn.ok:hover{background:var(--green);color:#fff}
@@ -645,56 +661,56 @@ foreach ($groups as $g) {
 
 .ib-row-error{padding:10px 18px 0}
 .ib-retry{display:flex;align-items:end;gap:8px;padding:10px 0;flex-wrap:wrap}
-.ib-retry label{flex:1;min-width:220px;font-size:.8rem;font-weight:800}
-.ib-retry input{display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--line2);border-radius:8px}
+.ib-retry label{flex:1;min-width:220px;font-size:var(--fs-2);font-weight:600}
+.ib-retry input{display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--line2);border-radius:var(--radius-1)}
 
 /* درج التعديل */
 .ib-edit{padding:6px 18px 16px;background:var(--zebra);border-top:1px dashed var(--line2)}
 .ib-edit-sec{margin-top:12px}
-.ib-edit-sec h4{margin:0 0 7px;font-size:.76rem;font-weight:900;color:var(--grey);letter-spacing:.02em}
+.ib-edit-sec h4{margin:0 0 7px;font-size:var(--fs-1);font-weight:700;color:var(--grey);letter-spacing:.02em}
 .ib-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
-.ib-grid label{display:block;font-size:.78rem;font-weight:800;color:var(--grey)}
+.ib-grid label{display:block;font-size:var(--fs-1);font-weight:600;color:var(--grey)}
 .ib-grid label.wide{grid-column:1/-1}
 .ib-grid label.hi{color:var(--green)}
 .ib-grid input,.ib-grid select{width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--line2);
-  border-radius:8px;font-size:.9rem;background:#fff;font-family:inherit}
+  border-radius:var(--radius-1);font-size:var(--fs-3);background:#fff;font-family:inherit}
 .ib-grid label.hi input{border-color:#B9DCC6;background:#F6FCF8}
 .ib-visa-row{display:flex;align-items:center;gap:8px;margin-top:4px}
 .ib-visa-row input[type=checkbox]{width:17px;height:17px;margin:0;flex:none}
 .ib-date-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ib-date-row input[type=date]{min-height:38px;padding:0 10px;border:1px solid var(--line2);
-  border-radius:8px;font-family:inherit;font-size:.9rem;background:#fff}
-.ib-date-note{font-size:.78rem;font-weight:800;color:#8E1F1F}
+  border-radius:var(--radius-1);font-family:inherit;font-size:var(--fs-3);background:#fff}
+.ib-date-note{font-size:var(--fs-1);font-weight:600;color:#8E1F1F}
 .ib-edit-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-.ib-edit-acts .btn{min-height:38px;padding:0 16px;font-size:.88rem}
+.ib-edit-acts .btn{min-height:38px;padding:0 16px;font-size:var(--fs-3)}
 
 /* شريط الإجراءات */
 .ib-bar{position:fixed;inset-inline:0;bottom:0;z-index:900;display:flex;align-items:center;
   gap:14px;flex-wrap:wrap;padding:12px 20px;background:var(--navy);color:#fff;
   box-shadow:0 -6px 22px rgba(0,0,0,.22)}
 .ib-bar-info{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-.ib-bar-info b{font-size:1.02rem;font-weight:900}
-.ib-bar-info span{font-size:.85rem;opacity:.85;font-variant-numeric:tabular-nums}
+.ib-bar-info b{font-size:var(--fs-4);font-weight:700}
+.ib-bar-info span{font-size:var(--fs-2);opacity:.85;font-variant-numeric:tabular-nums}
 .ib-bar-lock{background:rgba(255,120,120,.22);border:1px solid rgba(255,150,150,.5);
-  border-radius:8px;padding:3px 9px;opacity:1!important;font-weight:800}
+  border-radius:var(--radius-1);padding:3px 9px;opacity:1!important;font-weight:600}
 .ib-bar-acts{display:flex;gap:8px;flex-wrap:wrap;margin-inline-start:auto}
 .ib-bar-acts .btn{min-height:40px}
 body.ib-has-bar{padding-bottom:78px}
 
 /* لوحة التاريخ */
-/* ⚠️ 990 مقصودة: تحت مودال AppUI (--z-modal = 1000) عشان أي تنبيه يطلع فوق
+/* ⚠ 990 مقصودة: تحت مودال AppUI (--z-modal = 1000) عشان أي تنبيه يطلع فوق
    اللوحة، وفوق شريط الإجراءات (900) عشان اللوحة تغطّيه. */
 .ib-panel{position:fixed;inset:0;z-index:990;background:rgba(10,18,30,.5);
   display:flex;align-items:center;justify-content:center;padding:18px}
-.ib-panel-box{background:#fff;border-radius:16px;padding:20px;width:min(420px,100%);
+.ib-panel-box{background:#fff;border-radius:var(--radius-3);padding:20px;width:min(420px,100%);
   box-shadow:0 18px 50px rgba(0,0,0,.3)}
-.ib-panel-box h3{margin:0 0 4px;font-size:1.05rem}
-.ib-panel-sub{margin:0 0 14px;font-size:.82rem;color:var(--grey);line-height:1.6}
+.ib-panel-box h3{margin:0 0 4px;font-size:var(--fs-4)}
+.ib-panel-sub{margin:0 0 14px;font-size:var(--fs-2);color:var(--grey);line-height:1.6}
 .ib-panel-box input[type=date]{width:100%;min-height:44px;padding:0 12px;border:1px solid var(--line2);
-  border-radius:10px;font-family:inherit;font-size:1rem}
+  border-radius:var(--radius-2);font-family:inherit;font-size:var(--fs-4)}
 .ib-panel-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
-.ib-panel-warn{margin:12px 0 0;padding:9px 11px;border-radius:9px;background:#FFF1F1;
-  border:1px solid #F3C4C4;color:#8E1F1F;font-size:.82rem;font-weight:700;line-height:1.6}
+.ib-panel-warn{margin:12px 0 0;padding:9px 11px;border-radius:var(--radius-1);background:#FFF1F1;
+  border:1px solid #F3C4C4;color:#8E1F1F;font-size:var(--fs-2);font-weight:500;line-height:1.6}
 .ib-panel-acts{display:flex;gap:8px;margin-top:16px}
 
 @media (max-width:860px){
@@ -792,8 +808,9 @@ body.ib-has-bar{padding-bottom:78px}
   var fLocked = document.getElementById('ibOnlyLocked');
   var counter = document.getElementById('ibCount');
 
+  var ibNorm = window.almSearchNorm || function (v) { return String(v || '').trim().toLowerCase(); };
   function applyFilters() {
-    var q = (fSearch.value || '').trim().toLowerCase();
+    var q = ibNorm(fSearch.value || '');
     var rep = fRep.value, day = fDay.value, onlyLocked = fLocked.checked;
     var shown = 0;
     form.querySelectorAll('.ib-item').forEach(function (item) {
@@ -940,7 +957,7 @@ body.ib-has-bar{padding-bottom:78px}
     var lockedN = sel.filter(function (b) { return b.closest('.ib-item').dataset.locked === '1'; }).length;
     var msg = 'تعتمد ' + sel.length + ' بند؟ هيتحطوا على أذوناتهم ويتخصموا من الخزنة وعهدة المندوب.';
     if (lockedN) {
-      msg = '⚠️ فيه ' + lockedN + ' بند على أيام متقفلة — دول اعتمادهم هيترفض والباقي هيعدّي. ' + msg;
+      msg = '⚠ فيه ' + lockedN + ' بند على أيام متقفلة — دول اعتمادهم هيترفض والباقي هيعدّي. ' + msg;
     }
     window.AppUI.confirm(msg, function () {
       document.getElementById('ibBulkDate').value = '';

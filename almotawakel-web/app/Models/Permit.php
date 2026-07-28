@@ -363,6 +363,60 @@ class Permit
         return "($a.stage_key IN ($keys) OR ($a.stage_key='custom' AND $a.direction='expense'))";
     }
 
+    /**
+     * هل عمود `permit_stages.unpaid` موجود؟ (v57) — النظام يشتغل قبل الترحيل
+     * بسلوكه القديم بالحرف بدل ما يكسر (نفس نمط `RepMiscExpense::visaReady`).
+     */
+    private static ?bool $unpaidReady = null;
+
+    public static function unpaidReady(): bool
+    {
+        if (self::$unpaidReady === null) {
+            self::$unpaidReady = (bool) Database::scalar(
+                "SELECT COUNT(*) FROM information_schema.columns
+                 WHERE table_schema = DATABASE() AND table_name = 'permit_stages'
+                   AND column_name = 'unpaid'"
+            );
+        }
+        return self::$unpaidReady;
+    }
+
+    /**
+     * ⚠️ **لازمة للترحيل v57 نفسه — وباج متحقَّق اتصاد على الإنتاج.**
+     *
+     * `unpaidReady()` بتكاش نتيجتها لكل الطلب. وملف الترحيل بيقرا رصيد الخزنة
+     * **قبل** ما يضيف العمود (عشان يتأكد إن الترحيل مالوش أثر مالي)، والقراءة
+     * دي بتمرّ على `cashOutSql` → `unpaidReady` فبتتكاش **false**. وبعد الـALTER
+     * فضل الكاش false، فتحقّق ما بعد الترحيل فشل والإصدار ما اتسجّلش في الـledger
+     * رغم إن العمود اتضاف فعلاً. النداء ده بيصفّر الكاش بعد أي تغيير في المخطط.
+     */
+    public static function refreshUnpaidReady(): void
+    {
+        self::$unpaidReady = null;
+    }
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لشرط «البند ده طلّع كاش فعلاً»** — ممنوع تكتبه بإيدك.
+     *
+     * البند بيخصم من **خزنة المكتب** (Closing/التقفيل/المطابقة) ومن **عهدة
+     * المندوب** (لو `paid_by_rep_id` متحطّ) بشرطين مع بعض:
+     *   • `is_visa = 0`  — المدفوع بالفيزا خرج من كارت المكتب مش من الدرج (v22/v45).
+     *   • `unpaid  = 0`  — بند «غير مدفوع» (v57) اتحاسب من برّه العهدة والخزنة
+     *                      خالص، فبيتسجّل على الإذن وبيتفوتر للعميل عادي لكن
+     *                      **ما بيخصمش ولا مليم من أي محفظة**.
+     *
+     * كل استعلام بيحسب كاش على `permit_stages` لازم يمرّ من هنا. لو اتكتب الشرط
+     * بإيد في مكان واحد بس، الرصيد هيقول رقمًا والشاشة تقول رقمًا تاني **بلا أي
+     * خطأ ظاهر** — و`bin/verify_unpaid_stages.php` بيفشل لو ده حصل.
+     *
+     * $a = الاسم المستعار للجدول ('' = بلا بادئة لاستعلام على الجدول مباشرةً).
+     */
+    public static function cashOutSql(string $a = 's'): string
+    {
+        $p = $a === '' ? '' : $a . '.';
+        return "{$p}is_visa = 0" . (self::unpaidReady() ? " AND {$p}unpaid = 0" : '');
+    }
+
     /** شرط SQL للمحصّل الإضافي (إيراد): البنود المخصّصة ذات الاتجاه revenue فقط. */
     public static function revenueSql(string $a = 's'): string
     {

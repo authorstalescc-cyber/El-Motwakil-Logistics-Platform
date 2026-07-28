@@ -18,7 +18,7 @@ $wdMoney  = static fn(float $v): string => number_format($v, 2);
 ?>
 <div class="wd-card <?= $wdLocked ? 'is-locked' : ($wdToday ? '' : 'is-past') ?>">
   <div class="wd-card-top">
-    <span class="wd-card-ic" aria-hidden="true">📅</span>
+    <span class="wd-card-ic" aria-hidden="true"><?= icon('calendar', 14) ?></span>
     <div class="wd-card-txt">
       <small><?= e($wdLabel ?? 'اليوم اللي بتسجّل عليه') ?></small>
       <b><?= e(dfmt($wd)) ?><?= $wdToday ? ' (النهاردة)' : '' ?></b>
@@ -27,7 +27,7 @@ $wdMoney  = static fn(float $v): string => number_format($v, 2);
   </div>
 
   <?php if ($wdLocked): ?>
-    <p class="wd-card-lock">🔒 <?= e((string) $pocket['lock_reason']) ?></p>
+    <p class="wd-card-lock"><?= icon('alert', 14) ?> <?= e((string) $pocket['lock_reason']) ?></p>
   <?php else: ?>
     <div class="wd-card-bal">
       <span>الفاضل من عهدة اليوم ده</span>
@@ -38,7 +38,7 @@ $wdMoney  = static fn(float $v): string => number_format($v, 2);
       <p class="wd-card-hint">ماحدش نزّل لك عهدة في اليوم ده. تقدر تسجّل عادي، والرصيد هيبان سالب لحد ما المكتب ينزّل.</p>
     <?php endif; ?>
     <?php /* تحذير حيّ لما المبلغ يتخطّى الفاضل — تنبيه بس، مش منع (قرار المالك) */ ?>
-    <p class="wd-card-over" id="wdOver" hidden>⚠️ المبلغ ده أكبر من الفاضل في عهدة اليوم — هيبقى عليك سالب.</p>
+    <p class="wd-card-over" id="wdOver" hidden><?= icon('alert', 14) ?> المبلغ ده أكبر من الفاضل في عهدة اليوم — هيبقى عليك سالب.</p>
   <?php endif; ?>
 </div>
 <script>

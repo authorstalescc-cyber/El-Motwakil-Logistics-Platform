@@ -48,7 +48,7 @@ $percent = (int) ($t['percent'] ?? 0);
     </nav>
 
     <div class="cl-top-actions">
-      <a class="btn ghost sm" href="<?= url('closing/print?date='.urlencode($date)) ?>" target="_blank">🖨️ طباعة</a>
+      <a class="btn ghost sm" href="<?= url('closing/print?date='.urlencode($date)) ?>" target="_blank"><?= icon('file-text', 14) ?> طباعة</a>
     </div>
   </header>
 
@@ -81,7 +81,7 @@ $percent = (int) ($t['percent'] ?? 0);
     <div class="rv-head">
       <div class="rv-head-txt">
         <h2>راجع بنود اليوم</h2>
-        <p>بُص على كل بند وعلّمه ✓. الإقفال بيتفتح لما كل البنود النقدية تتعلّم.</p>
+        <p>بُص على كل بند وعلّمه <?= icon('check', 14) ?>. الإقفال بيتفتح لما كل البنود النقدية تتعلّم.</p>
       </div>
 
       <div class="rv-gauge <?= $complete ? 'done' : '' ?>" id="rvGauge">
@@ -95,19 +95,19 @@ $percent = (int) ($t['percent'] ?? 0);
     </div>
 
     <?php if ($isLocked): ?>
-      <div class="rv-locked">🔒 اليوم متقفل — المراجعة مثبّتة كما هي. افتح الإقفال لو محتاج تعدّل.</div>
+      <div class="rv-locked"><?= icon('alert', 14) ?> اليوم متقفل — المراجعة مثبّتة كما هي. افتح الإقفال لو محتاج تعدّل.</div>
     <?php endif; ?>
 
     <div class="rv-error" id="rvError" role="alert" hidden></div>
 
     <?php if ((int)$t['stale'] > 0): ?>
-      <div class="rv-stale-note">⚠️ فيه <?= intf((int)$t['stale']) ?> بند اتغيّر مبلغه بعد ما اتراجع — علامته اتشالت لوحدها ومحتاج مراجعة تانية.</div>
+      <div class="rv-stale-note"><?= icon('alert', 14) ?> فيه <?= intf((int)$t['stale']) ?> بند اتغيّر مبلغه بعد ما اتراجع — علامته اتشالت لوحدها ومحتاج مراجعة تانية.</div>
     <?php endif; ?>
 
     <div class="rv-tools">
       <label class="rv-search">
-        <span aria-hidden="true">🔎</span>
-        <input type="search" id="rvSearch" placeholder="دوّر بالإذن أو العميل أو البيان…" aria-label="بحث في بنود اليوم" autocomplete="off">
+        <span aria-hidden="true"><?= icon('search', 14) ?></span>
+        <input type="search" id="rvSearch" placeholder="بحث" aria-label="بحث في بنود اليوم" autocomplete="off">
       </label>
       <div class="rv-filters" role="group" aria-label="فلترة البنود">
         <button type="button" class="rv-fbtn active" data-filter="all">الكل <b id="rvCntAll"><?= intf((int)$t['count']) ?></b></button>
@@ -153,6 +153,9 @@ $percent = (int) ($t['percent'] ?? 0);
                     $it['company'], $it['client'], $it['destination'], $it['containers'],
                     $it['by_rep'], $it['car'], $it['car_owner'], $it['permit_ref'],
                     $it['agency'], $it['shipping_co'], $it['port'], $it['owner'],
+                    // المبلغ كمان: الدوران على بند بمبلغه أسرع حاجة («50»)
+                    number_format((float) $it['amount'], 2, '.', ''),
+                    number_format((float) $it['amount'], 0, '.', ''),
                 ])));
                 /* سطر التفاصيل: كل الحقائق ظاهرة بلا فتح أي شيء. الترتيب مقصود —
                    الطرف الأساسي الأول ثم التوكيل والجهة ثم أرقام المستندات. */
@@ -170,16 +173,22 @@ $percent = (int) ($t['percent'] ?? 0);
                 if ($it['ref_no'])       { $facts['رقم الإيصال'] = $it['ref_no']; }
                 if ($it['freight'] !== null && $it['freight'] > 0) { $facts['النولون'] = money($it['freight'], false); }
                 $facts = array_filter($facts, fn($v) => $v !== null && $v !== '' && $v !== '—');
-                // عنوان البند = اسمه المكتوب (اسم الإيصال) إن وُجد، وإلا نوعه
-                $headline = trim((string) $it['note']) !== '' && $it['type'] === 'stage'
-                    ? $it['note'] : $it['title'];
+                /* عنوان البند = **اسمه المكتوب** إن وُجد، وإلا نوعه.
+                   ⚠️ كان مقصورًا على `type === 'stage'` (بنود الأذونات) وبس، فبنود
+                      المناديب والنثريات والمصروفات اليدوية كانت بتظهر بعنوان
+                      **نوعها** («نثريات») والبيان اللي كتبه المندوب («اكراميه أمن
+                      cma») ما بيظهرش على الشاشة **خالص** — كان جوّه `data-search`
+                      بس. فبندان في نفس اليوم بنفس المبلغ يبانوا متطابقين تمامًا،
+                      والمالك يدوّر على البند بالاسم وما يلاقيهوش فيفتكره ناقص.
+                      (اتصادف فعليًّا: نثرية بدر ٥٠ ج يوم ٢٥/٧.) */
+                $headline = trim((string) $it['note']) !== '' ? trim((string) $it['note']) : $it['title'];
                 $subline  = $headline === $it['title'] ? null : $it['title'];
               ?>
               <div class="rv-item<?= $it['reviewed'] ? ' is-done' : '' ?><?= $it['stale'] ? ' is-stale' : '' ?>"
                    data-key="<?= e($it['key']) ?>"
                    data-group="<?= e($key) ?>"
                    data-blocking="<?= $g['kind'] === 'cash' ? '1' : '0' ?>"
-                   data-search="<?= e(mb_strtolower($search)) ?>">
+                   data-search="<?= e(search_norm($search)) ?>">
                 <label class="rv-pick">
                   <input type="checkbox" class="rv-check" name="reviewed[]"
                          value="<?= e($it['key']) ?>"
@@ -198,10 +207,11 @@ $percent = (int) ($t['percent'] ?? 0);
                   <div class="rv-l1">
                     <span class="rv-ref"><?= e($it['ref']) ?></span>
                     <?php if ($it['permit_type_label']): ?><span class="rv-tag type"><?= e($it['permit_type_label']) ?></span><?php endif; ?>
-                    <?php if ($it['containers'] !== ''): ?><span class="rv-tag box">📦 <?= e($it['containers']) ?></span><?php endif; ?>
+                    <?php if ($it['containers'] !== ''): ?><span class="rv-tag box"><?= icon('package', 14) ?> <?= e($it['containers']) ?></span><?php endif; ?>
                     <?php if ($it['movement']): ?><span class="rv-tag"><?= e($it['movement']) ?></span><?php endif; ?>
-                    <?php if (!empty($it['visa'])): ?><span class="rv-tag visa">💳 فيزا</span><?php endif; ?>
-                    <?php if ($it['by_rep']): ?><span class="rv-tag rep">🧑‍💼 دفعها المندوب: <?= e($it['by_rep']) ?></span><?php endif; ?>
+                    <?php if (!empty($it['visa'])): ?><span class="rv-tag visa"><?= icon('credit-card', 14) ?> فيزا</span><?php endif; ?>
+                    <?php if (!empty($it['unpaid'])): ?><span class="rv-tag unpaid" title="اتحاسب من برّه الخزنة وبرّه عهدة المندوب"><?= icon('info', 14) ?> غير مدفوع</span><?php endif; ?>
+                    <?php if ($it['by_rep']): ?><span class="rv-tag rep"><?= icon('user', 14) ?>‍<?= icon('briefcase', 14) ?> دفعها المندوب: <?= e($it['by_rep']) ?></span><?php endif; ?>
                   </div>
 
                   <!-- ③ الحقائق: العميل والشركة والتوكيل والجهة… -->
@@ -214,10 +224,10 @@ $percent = (int) ($t['percent'] ?? 0);
                   <?php endif; ?>
 
                   <div class="rv-stamp"<?= $it['reviewed'] ? '' : ' hidden' ?>>
-                    ✓ راجعه <?= e($it['reviewed_by'] ?: '—') ?><?= $it['reviewed_at'] ? ' — '.e($it['reviewed_at']) : '' ?>
+                    <?= icon('check', 14) ?> راجعه <?= e($it['reviewed_by'] ?: '—') ?><?= $it['reviewed_at'] ? ' — '.e($it['reviewed_at']) : '' ?>
                   </div>
                   <?php if ($it['stale']): ?>
-                    <div class="rv-warn">⚠️ المبلغ اتغيّر بعد المراجعة — راجعه تاني</div>
+                    <div class="rv-warn"><?= icon('alert', 14) ?> المبلغ اتغيّر بعد المراجعة — راجعه تاني</div>
                   <?php endif; ?>
                 </div>
 
@@ -228,7 +238,7 @@ $percent = (int) ($t['percent'] ?? 0);
                   <?php endif; ?>
                   <?php if ($it['actual'] !== null): ?>
                     <span class="rv-actual" title="السعر الفعلي للعميل">فعلي: <?= money($it['actual'],false) ?></span>
-                  <?php elseif ($it['type'] === 'stage' && !$it['visa']): ?>
+                  <?php elseif ($it['type'] === 'stage' && !$it['visa'] && empty($it['unpaid'])): ?>
                     <span class="rv-actual missing" title="لم يُسجَّل السعر الفعلي للعميل بعد">فعلي: —</span>
                   <?php endif; ?>
                   <?php if ($it['gross'] !== null): ?>
@@ -249,9 +259,9 @@ $percent = (int) ($t['percent'] ?? 0);
 
       <?php if ((int)$t['count'] === 0): ?>
         <div class="rv-empty">
-          <span>✓</span>
+          <span><?= icon('check', 14) ?></span>
           <b>مفيش أي حركة مسجّلة في يوم <?= e(dfmt($date)) ?></b>
-          <small>تقدر تقفل اليوم على طول، أو تراجع تاريخ تاني من فوق.</small>
+          
         </div>
       <?php endif; ?>
 
@@ -259,8 +269,8 @@ $percent = (int) ($t['percent'] ?? 0);
 
       <?php if ($canReview): ?>
         <div class="rv-manual">
-          <button class="btn gold" type="submit">💾 احفظ المراجعة</button>
-          <small>الحفظ بيتم تلقائيًّا مع كل علامة. الزر ده احتياطي لو الجافاسكريبت متعطّل.</small>
+          <button class="btn gold" type="submit"><?= icon('download', 14) ?> احفظ المراجعة</button>
+          
         </div>
       <?php endif; ?>
     </form>
@@ -288,7 +298,7 @@ $percent = (int) ($t['percent'] ?? 0);
       <?php if ($isClosed && $canReopen): ?>
         <form method="post" action="<?= url('closing/reopen') ?>" class="confirm-financial" data-confirm="فتح إقفال يوم <?= e(dfmt($date)) ?>؟ هتقدر تعدّل، ولازم تقفله تاني بعدها.">
           <?= csrfField() ?><input type="hidden" name="date" value="<?= e($date) ?>">
-          <button class="btn" type="submit">🔓 فتح الإقفال</button>
+          <button class="btn" type="submit"><?= icon('alert', 14) ?> فتح الإقفال</button>
         </form>
       <?php elseif ($isClosed): ?>
         <small>لفتح اليوم ده، افتح الأيام الأحدث الأول.<br>آخر يوم متقفل: <?= e(dfmt($lastClosed)) ?></small>
@@ -297,7 +307,7 @@ $percent = (int) ($t['percent'] ?? 0);
               data-confirm="إقفال يوم <?= e(dfmt($date)) ?> على رصيد <?= e(money($carried,false)) ?>؟ الرقم هيتثبّت والكتابة على اليوم هتتمنع.">
           <?= csrfField() ?><input type="hidden" name="date" value="<?= e($date) ?>">
           <button class="btn gold" type="submit" id="clCloseBtn" <?= $complete ? '' : 'disabled' ?>>
-            🔒 اقفل اليوم على <?= money($carried,false) ?>
+            <?= icon('alert', 14) ?> اقفل اليوم على <?= money($carried,false) ?>
           </button>
         </form>
       <?php endif; ?>
@@ -442,7 +452,7 @@ $percent = (int) ($t['percent'] ?? 0);
 .rv-pick{display:grid;place-items:center;width:44px;height:44px;cursor:pointer;margin:0}
 .rv-check{position:absolute;opacity:0;width:1px;height:1px}
 .rv-box{display:grid;place-items:center;width:26px;height:26px;border:2px solid var(--line2);
-  border-radius:8px;background:var(--white);transition:all var(--dur-fast) var(--ease)}
+  border-radius:var(--radius-1);background:var(--white);transition:all var(--dur-fast) var(--ease)}
 .rv-box:after{content:"✓";font-size:var(--fs-2);font-weight:var(--fw-black);color:var(--white);
   transform:scale(.4);opacity:0;transition:all var(--dur-fast) var(--ease)}
 .rv-check:checked + .rv-box{background:var(--green);border-color:var(--green)}
@@ -450,7 +460,7 @@ $percent = (int) ($t['percent'] ?? 0);
 .rv-check:focus-visible + .rv-box{box-shadow:0 0 0 3px rgba(30,110,60,.25)}
 .rv-check:disabled + .rv-box{background:var(--zebra);border-color:var(--line);cursor:not-allowed}
 .rv-check:disabled:checked + .rv-box{background:var(--grey);border-color:var(--grey)}
-/* ⚠️ التسلسل البصري مقصود (طلب المالك: «اسم البند صغير جدًا ومش ظاهر»):
+/* ⚠ التسلسل البصري مقصود (طلب المالك: «اسم البند صغير جدًا ومش ظاهر»):
    ① اسم البند   fs-4 أسود   ← أول حاجة العين تقع عليها
    ② شارات التعريف fs-2       ← الإذن ونوعه والحاويات والحركة
    ③ الحقائق      fs-2       ← العميل/الشركة/التوكيل/الجهة…
@@ -466,6 +476,8 @@ $percent = (int) ($t['percent'] ?? 0);
 .rv-tag{padding:2px 9px;border-radius:var(--radius-pill);background:var(--zebra);border:1px solid var(--line);
   font-size:var(--fs-2);color:var(--grey);font-weight:var(--fw-bold)}
 .rv-tag.visa{background:#f3eefa;border-color:#ddd0ee;color:#5d4180}
+/* v57 — «غير مدفوع»: اتحاسب من برّه الخزنة والعهدة، فمعلوماتي زي الفيزا */
+.rv-tag.unpaid{background:var(--gold-light);border-color:var(--gold);color:var(--gold-dark)}
 .rv-tag.box{background:#eef4fa;border-color:#cddeee;color:var(--navy)}
 .rv-tag.type{background:var(--gold-light);border-color:#e0cf8f;color:var(--gold-dark)}
 .rv-tag.rep{background:#eaf6ef;border-color:#c3e2ce;color:var(--green)}
@@ -498,7 +510,7 @@ $percent = (int) ($t['percent'] ?? 0);
 .rv-nores{padding:var(--space-5);text-align:center;color:var(--grey);font-size:var(--fs-2)}
 .rv-manual{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);margin-top:var(--space-3)}
 .rv-manual small{font-size:var(--fs-1);color:var(--grey)}
-/* ⚠️ الإخفاء بالجافاسكريبت نفسه (`js-review` بتتحط من السكربت) مش من الخادم:
+/* ⚠ الإخفاء بالجافاسكريبت نفسه (`js-review` بتتحط من السكربت) مش من الخادم:
    لو اتخفى بشرط الخادم، المتصفح اللي الجافاسكريبت متعطّل فيه كان هيفضل بلا أي
    طريقة يحفظ بيها — الحفظ التلقائي والزرار الاحتياطي ما ينفعش يتشالوا مع بعض. */
 .cl-page.js-review .rv-manual{display:none}
@@ -585,7 +597,7 @@ $percent = (int) ($t['percent'] ?? 0);
 <?php if ($canReview): ?>
 <script>
 /* مراجعة بنود التقفيل — حفظ فوري لكل علامة (مع مسار رجوع كامل بلا JS).
-   ⚠️ الفورم بيفضل موجود وشغّال: لو النداء فشل بنرجّع العلامة زي ما كانت
+   ⚠ الفورم بيفضل موجود وشغّال: لو النداء فشل بنرجّع العلامة زي ما كانت
       وبنوضّح السبب، فمستحيل المالك يفتكر إنه علّم بند وهو ما اتحفظش. */
 (function () {
   var page = document.getElementById('clPage');
@@ -611,15 +623,15 @@ $percent = (int) ($t['percent'] ?? 0);
       .then(function (j) { if (!j || !j.ok) { throw new Error((j && j.flash) || 'تعذّر الحفظ'); } return j; });
   }
 
-  /* ⚠️ ممنوع alert/confirm الأصلية في الواجهات (قاعدة verify_forms_feedback):
+  /* ⚠ ممنوع alert/confirm الأصلية في الواجهات (قاعدة verify_forms_feedback):
      الرسالة بتتعرض في شريط ثابت جوّه الشاشة، و`AppUI.notice` فوقه لو موجودة. */
   var errBar = document.getElementById('rvError');
   function fail(msg) {
     if (errBar) {
-      errBar.textContent = '⚠️ ما اتحفظتش المراجعة: ' + msg;
+      errBar.textContent = '⚠ ما اتحفظتش المراجعة: ' + msg;
       errBar.hidden = false;
     }
-    // ⚠️ توقيع الدالة `notice(message, title)` — التاني **نص** مش كائن.
+    // ⚠ توقيع الدالة `notice(message, title)` — التاني **نص** مش كائن.
     //    تمرير كائن كان بيطبع «[object Object]» مكان العنوان. اتصادف فعليًّا.
     if (window.AppUI && window.AppUI.notice) { window.AppUI.notice(msg, 'ما اتحفظتش المراجعة'); }
   }
@@ -716,8 +728,12 @@ $percent = (int) ($t['percent'] ?? 0);
   /* بحث وفلترة — كلها في المتصفح بلا أي طلب للخادم */
   var search = document.getElementById('rvSearch');
   var mode = 'all';
+  /* ⚠️ التطبيع إلزامي على الطرفين: `data-search` بيتطبّع في الخادم بـ`search_norm()`
+     واللي المستخدم بيكتبه بيتطبّع هنا بـ`almSearchNorm` (نفس الجدول بالحرف).
+     من غيره «إكرامية» ما بتلاقي «اكراميه» فالبند يبان مش موجود وهو موجود. */
+  var norm = window.almSearchNorm || function (v) { return String(v || '').trim().toLowerCase(); };
   function applyFilter() {
-    var q = (search && search.value || '').trim().toLowerCase();
+    var q = norm(search && search.value || '');
     var shown = 0;
     document.querySelectorAll('.rv-item').forEach(function (row) {
       var done = row.classList.contains('is-done');

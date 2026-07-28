@@ -13,17 +13,18 @@
  * المتغيّرات:
  *   shown   int      عدد الصفوف المعروضة
  *   total   int      الإجمالي الحقيقي
- *   hint    ?string  نصيحة (الافتراضي: ضيّق البحث)
+ * ⚠️ **مفيش `hint` — اتشال (قانون التصميم، بند ١).** «٢٥ من ٤٠٠» بتقول
+ *    المعلومة كاملة؛ «ضيّق البحث عشان توصل للي انت عايزه» شرح لطريقة
+ *    استخدام حاجة المستخدم عارفها. **دي إشارة وظيفية فبتفضل** — اللي
+ *    اتشال هو النصيحة بس.
  *   unit    ?string  «صف» / «بند» / «بوليصة»…
  */
 $shown = (int) ($shown ?? 0);
 $total = (int) ($total ?? 0);
 $unit  = $unit ?? 'صف';
-$hint  = $hint ?? 'ضيّق البحث أو الفلترة عشان توصل للي انت عايزه.';
 if ($total <= $shown) { return; }
 ?>
 <div class="count-note" role="status">
   <?= icon('alert', 15) ?>
-  <span>بنعرض أول <b><?= intf($shown) ?></b> <?= e($unit) ?> من <b><?= intf($total) ?></b>.</span>
-  <span class="count-note-hint"><?= e($hint) ?></span>
+  <span><b><?= intf($shown) ?></b> من <b><?= intf($total) ?></b> <?= e($unit) ?></span>
 </div>

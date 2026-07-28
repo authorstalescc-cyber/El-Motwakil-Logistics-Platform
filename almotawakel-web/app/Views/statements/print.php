@@ -35,7 +35,7 @@ $typeAr = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--ink);
-    font-family:'Segoe UI',Tahoma,'Cairo',sans-serif;direction:rtl;text-align:right;
+    font-family:var(--font);direction:rtl;text-align:right;
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
   .sheet{width:297mm;min-height:210mm;margin:16px auto;background:#fff;position:relative;
     box-shadow:0 10px 40px rgba(21,53,91,.15);overflow:hidden}
@@ -45,57 +45,57 @@ $typeAr = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
     padding-bottom:11px;border-bottom:2px solid var(--line)}
   .brand{display:flex;align-items:center;gap:10px}
   .brandlogo{height:58px;width:auto;max-width:200px;object-fit:contain}
-  .brand .logo{width:58px;height:58px;border-radius:13px;background:var(--navy);color:var(--gold);
-    display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:800}
-  .brand .cap{color:var(--navy);font-size:13px;font-weight:800;letter-spacing:.5px}
+  .brand .logo{width:58px;height:58px;border-radius:var(--radius-2);background:var(--navy);color:var(--gold);
+    display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:600}
+  .brand .cap{color:var(--navy);font-size:13px;font-weight:600;letter-spacing:.5px}
   .inv-tag{text-align:left;min-width:200px}
-  .inv-tag .word{display:inline-block;background:var(--gold);color:var(--navy);font-size:21px;font-weight:800;
-    padding:9px 22px;border-radius:10px;letter-spacing:.5px}
+  .inv-tag .word{display:inline-block;background:var(--gold);color:var(--navy);font-size:21px;font-weight:600;
+    padding:9px 22px;border-radius:var(--radius-2);letter-spacing:.5px}
   .inv-tag .meta{margin-top:12px;font-size:12.5px;color:var(--muted);line-height:2}
   .inv-tag .meta b{color:var(--navy);font-size:14px}
-  .client-card{margin-top:11px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fcfdfe}
-  .client-card .t{font-size:11px;color:var(--gold);font-weight:800;letter-spacing:.5px;margin-bottom:5px}
-  .client-card .name{font-size:19px;font-weight:800;color:var(--navy)}
+  .client-card{margin-top:11px;border:1px solid var(--line);border-radius:var(--radius-2);padding:10px 14px;background:#fcfdfe}
+  .client-card .t{font-size:11px;color:var(--gold);font-weight:600;letter-spacing:.5px;margin-bottom:5px}
+  .client-card .name{font-size:19px;font-weight:600;color:var(--navy)}
   /* بطاقات الملخّص */
   .sum-cards{margin-top:10px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-  .sc{border:1px solid var(--line);border-radius:11px;padding:8px 10px;text-align:center;background:#fcfdfe}
-  .sc .l{font-size:10.5px;color:var(--muted);font-weight:700;margin-bottom:4px}
-  .sc .v{font-size:16px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+  .sc{border:1px solid var(--line);border-radius:var(--radius-2);padding:8px 10px;text-align:center;background:#fcfdfe}
+  .sc .l{font-size:10.5px;color:var(--muted);font-weight:500;margin-bottom:4px}
+  .sc .v{font-size:16px;font-weight:600;color:var(--navy);font-variant-numeric:tabular-nums}
   .sc.paid .v{color:var(--green)} .sc.rem{background:var(--navy)} .sc.rem .l{color:#dfe8f2} .sc.rem .v{color:var(--gold)}
   /* الأقسام */
   .sec{margin-top:12px}
   .sec-t{display:flex;justify-content:space-between;align-items:center;background:var(--navy);color:#fff;
-    padding:8px 14px;border-radius:9px 9px 0 0;font-size:13.5px;font-weight:800}
+    padding:8px 14px;border-radius:9px 9px 0 0;font-size:13.5px;font-weight:600}
   .sec-t.gold{background:var(--gold);color:var(--navy)}
-  .sec-t .n{font-size:11.5px;font-weight:700;opacity:.9}
+  .sec-t .n{font-size:11.5px;font-weight:500;opacity:.9}
   table.bills{width:100%;border-collapse:collapse;font-size:9px;border:1px solid var(--line);border-top:none}
-  table.bills thead th{background:#eef2f7;color:var(--navy);padding:5px 3px;font-weight:800;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.bills thead th{background:#eef2f7;color:var(--navy);padding:5px 3px;font-weight:600;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
   table.bills tbody td{padding:4px 3px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
   table.bills td.r{text-align:right}
   table.bills td.num{font-variant-numeric:tabular-nums}
   table.bills tbody tr:nth-child(even){background:#f8fafc}
-  table.bills .pos{color:var(--green);font-weight:700}
-  table.bills .neg{color:var(--red);font-weight:800}
-  table.bills tfoot td{padding:8px 6px;font-weight:800;background:#f3e6bd;color:#7a5f0e;border-top:2px solid var(--gold)}
+  table.bills .pos{color:var(--green);font-weight:500}
+  table.bills .neg{color:var(--red);font-weight:600}
+  table.bills tfoot td{padding:8px 6px;font-weight:600;background:#f3e6bd;color:#7a5f0e;border-top:2px solid var(--gold)}
   .empty-row{padding:14px;text-align:center;color:var(--muted);border:1px solid var(--line);border-top:none;font-size:12px}
-  .words{margin-top:11px;border:1px dashed var(--gold);background:var(--gold-l);border-radius:12px;padding:9px 14px}
-  .words .t{font-size:11px;color:#8a6d10;font-weight:800;margin-bottom:5px}
-  .words .v{font-size:14px;font-weight:700;color:var(--navy);line-height:1.8}
-  .note-box{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:9px 14px;font-size:12.5px;color:var(--ink);background:#fcfdfe}
-  .note-box .t{color:var(--gold);font-weight:800;font-size:11px;margin-bottom:3px}
+  .words{margin-top:11px;border:1px dashed var(--gold);background:var(--gold-l);border-radius:var(--radius-2);padding:9px 14px}
+  .words .t{font-size:11px;color:#8a6d10;font-weight:600;margin-bottom:5px}
+  .words .v{font-size:14px;font-weight:500;color:var(--navy);line-height:1.8}
+  .note-box{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius-2);padding:9px 14px;font-size:12.5px;color:var(--ink);background:#fcfdfe}
+  .note-box .t{color:var(--gold);font-weight:600;font-size:11px;margin-bottom:3px}
   .contact-bar{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);display:flex;align-items:center;gap:16px}
   .qr{flex:0 0 auto;text-align:center}
-  .qr img{width:84px;height:84px;border:1px solid var(--line);border-radius:8px;padding:3px;background:#fff}
-  .qr span{display:block;font-size:9.5px;color:var(--muted);margin-top:2px;font-weight:700}
+  .qr img{width:84px;height:84px;border:1px solid var(--line);border-radius:var(--radius-1);padding:3px;background:#fff}
+  .qr span{display:block;font-size:9.5px;color:var(--muted);margin-top:2px;font-weight:500}
   .contact{flex:1;display:flex;flex-direction:column;gap:5px}
-  .contact .cline{font-size:12px;color:var(--ink);font-weight:700;line-height:1.6}
+  .contact .cline{font-size:12px;color:var(--ink);font-weight:500;line-height:1.6}
   .contact .ci{display:inline-block;width:20px;color:var(--navy)}
   .pagefoot{text-align:center;color:var(--muted);font-size:10.5px;padding:10px 0 16px}
   .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-size:340px;font-weight:900;color:rgba(21,53,91,.035);pointer-events:none;z-index:0}
+    font-size:340px;font-weight:700;color:rgba(21,53,91,.035);pointer-events:none;z-index:0}
   .pad>*{position:relative;z-index:1}
   .bar{max-width:297mm;margin:0 auto;display:flex;gap:10px;justify-content:center;padding:6px}
-  .btn{padding:10px 22px;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;
+  .btn{padding:10px 22px;border:none;border-radius:var(--radius-2);font-weight:600;font-size:14px;cursor:pointer;
     font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
   .btn.gold{background:var(--gold);color:var(--navy)}
   .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
@@ -112,8 +112,14 @@ $typeAr = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
 <body>
 
 <div class="bar noprint">
-  <button class="btn gold" onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
-  <a class="btn ghost" href="<?= url('statements/form?owner=' . urlencode($st['owner'] ?? '')) ?>">‹ رجوع</a>
+  <button class="btn gold" onclick="window.print()"><?= icon('file-text', 14) ?> طباعة / حفظ PDF</button>
+  <?php /* ⚠️ الرجوع يوصّل لـ**صاحب البيان** لا لفورم إعداد الكشف.
+           كان بيوصّل لـ`statements/form?owner=` — أي أن كل من يطبع كشفًا يجد
+           نفسه أمام شاشة إصدار كشف جديد معبّأة، فيصدر كشفًا مكررًا.
+           القاعدة: الرجوع يذهب لما صُنع لا للشاشة التي صنعته
+           (docs/16-navigation-master-plan.md §٤ — يحرسها verify_navigation). */ ?>
+  <a class="btn ghost" href="<?= url('settlements?owner=' . urlencode($st['owner'] ?? '')) ?>">‹ رجوع لصاحب البيان</a>
+  <a class="btn ghost" href="<?= url('statements') ?>"><?= icon('folder', 14) ?> سجل الكشوف</a>
 </div>
 
 <div class="sheet">
@@ -160,8 +166,8 @@ $typeAr = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
         <table class="bills paid-one-line">
           <thead><tr><th>البيان</th><th>إجمالي المدفوع له</th></tr></thead>
           <tbody><tr>
-            <td class="r" style="font-weight:800">عدد <?= intf($st['paid_count']) ?> بوليصة حتى تاريخ <?= e(dfmt($st['statement_date'])) ?></td>
-            <td class="num pos" style="font-weight:800"><?= money($st['paid_sum'], false) ?></td>
+            <td class="r" style="font-weight:600">عدد <?= intf($st['paid_count']) ?> بوليصة حتى تاريخ <?= e(dfmt($st['statement_date'])) ?></td>
+            <td class="num pos" style="font-weight:600"><?= money($st['paid_sum'], false) ?></td>
           </tr></tbody>
         </table>
       <?php else: ?>
@@ -173,7 +179,7 @@ $typeAr = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
     <div class="sec">
       <div class="sec-t"><span>البوالص الباقية له بالتفصيل</span><span class="n"><?= intf($st['remaining_count']) ?> بوليصة</span></div>
       <?php if (!$rem): ?>
-        <div class="empty-row">لا توجد بوالص باقية مدرَجة — كل المستحقات مسدّدة ✓</div>
+        <div class="empty-row">لا توجد بوالص باقية مدرَجة — كل المستحقات مسدّدة <?= icon('check', 14) ?></div>
       <?php else: ?>
         <table class="bills">
           <thead><tr>
@@ -185,7 +191,7 @@ $typeAr = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
           <?php foreach ($rem as $i => $b): ?>
             <tr>
               <td><?= $i+1 ?></td>
-              <td class="r" style="font-weight:700"><?= e($billNo($b)) ?></td>
+              <td class="r" style="font-weight:500"><?= e($billNo($b)) ?></td>
               <td><?= $typeAr($b['type'] ?? '') ?></td>
               <td><?= dfmt($b['date'] ?? null) ?></td>
               <td><?= e($b['company'] ?: '—') ?></td>
@@ -230,9 +236,9 @@ $typeAr = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
     <!-- شريط التواصل (اتشال الـQR — كان بيتولّد من موقع خارجي) -->
     <div class="contact-bar">
       <div class="contact">
-        <?php if ($phone): ?><div class="cline"><span class="ci">📞</span> <bdi dir="ltr"><?= e($phone) ?></bdi></div><?php endif; ?>
-        <?php if ($email): ?><div class="cline"><span class="ci">✉️</span> <bdi dir="ltr"><?= e($email) ?></bdi></div><?php endif; ?>
-        <?php if ($address): ?><div class="cline"><span class="ci">📍</span> <?= e($address) ?></div><?php endif; ?>
+        <?php if ($phone): ?><div class="cline"><span class="ci"><?= icon('send', 14) ?></span> <bdi dir="ltr"><?= e($phone) ?></bdi></div><?php endif; ?>
+        <?php if ($email): ?><div class="cline"><span class="ci"><?= icon('send', 14) ?></span> <bdi dir="ltr"><?= e($email) ?></bdi></div><?php endif; ?>
+        <?php if ($address): ?><div class="cline"><span class="ci"><?= icon('map-pin', 14) ?></span> <?= e($address) ?></div><?php endif; ?>
       </div>
     </div>
 

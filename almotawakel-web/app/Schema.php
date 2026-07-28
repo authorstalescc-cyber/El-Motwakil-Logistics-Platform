@@ -55,13 +55,18 @@ class Schema
                 ['key'=>'bill_number','label'=>'رقم البوليصة','type'=>'text','group'=>'identity'],
                 ['key'=>'cert_number','label'=>'رقم الشهادة','type'=>'text','group'=>'identity','dep'=>'warid'],
                 ['key'=>'permit_no','label'=>'رقم الإذن','type'=>'text','group'=>'identity','dep'=>'sader'],
-                ['key'=>'declaration_owner','label'=>'صاحب البيان','type'=>'text','group'=>'identity'],
+                // `smart` = نوع اقتراح لحقل نصّي حرّ (بلا قائمة منسدلة) — بيشغّل حارس
+                // الأسماء في الواجهة زي حقول `select` بالظبط. الخادم بيحرسه من
+                // `CrudController::nameGuardMap`.
+                ['key'=>'declaration_owner','label'=>'صاحب البيان','type'=>'text','group'=>'identity','smart'=>'owner'],
                 ['key'=>'classification','label'=>'التصنيف','type'=>'select','lookup'=>'classification','group'=>'identity'],
                 ['key'=>'company','label'=>'العميل / الشركة','type'=>'select','lookup'=>'company','group'=>'identity'],
                 ['key'=>'destination','label'=>'الجهة','type'=>'select','lookup'=>'destination','group'=>'identity'],
-                ['key'=>'container_no','label'=>'رقم الحاوية','type'=>'text','group'=>'identity'],
-                ['key'=>'container_type','label'=>'تصنيف الحاويات','type'=>'select','lookup'=>'container_type','group'=>'identity'],
+                // ⚠️ «عدد الحاويات» قبل «رقم الحاوية» عن قصد: العدد بيحدّد عدد خانات
+                // الأرقام (نوع `containers` → المكوّن `partials/container_nos.php`).
                 ['key'=>'container_count','label'=>'عدد الحاويات','type'=>'int','group'=>'identity'],
+                ['key'=>'container_type','label'=>'تصنيف الحاويات','type'=>'select','lookup'=>'container_type','group'=>'identity'],
+                ['key'=>'container_no','label'=>'رقم الحاوية','type'=>'containers','group'=>'identity'],
                 ['key'=>'car_no','label'=>'رقم السيارة','type'=>'text','group'=>'vehicle'],
                 ['key'=>'driver','label'=>'اسم السائق','type'=>'select','lookup'=>'driver','group'=>'vehicle'],
                 ['key'=>'car_owner','label'=>'صاحب السيارة','type'=>'select','lookup'=>'car_owner','group'=>'vehicle'],

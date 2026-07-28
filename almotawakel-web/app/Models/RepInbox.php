@@ -202,15 +202,24 @@ class RepInbox
             throw new RuntimeException('كارت الفيزا المختار مش موجود أو متوقف.');
         }
 
+        // «غير مدفوع» (v57) — المالك يقدر يحطّه أو يشيله قبل الاعتماد زي أي حقل.
+        // ⚠️ النثرية مالهاش الوسم ده (قرار المالك: بتتدفع من عهدته فعلاً)،
+        //    ومتنافي مع الفيزا: يا اتدفع من كارت المكتب يا ما اتدفعش منّنا خالص.
+        $unpaid = $wasMisc ? false : (array_key_exists('unpaid', $d)
+            ? !empty($d['unpaid']) : !empty($s['unpaid']));
+        if ($unpaid && $isVisa) {
+            throw new RuntimeException('اختار واحدة بس: يا «مدفوع بالفيزا» يا «غير مدفوع».');
+        }
+
         Database::exec(
             "UPDATE rep_submissions
              SET note=?, kind=?, qty=?, unit_amount=?, actual_unit=?, amount=?,
-                 entry_date=?, ref_no=?, movement_id=?, is_visa=?, visa_card_id=?,
+                 entry_date=?, ref_no=?, movement_id=?, is_visa=?, visa_card_id=?, unpaid=?,
                  edited_by=?, edited_at=NOW()
              WHERE id=? AND status='pending'",
             [$note, $kind, $qty, $unit, $actual, round($unit * $qty, 2),
              $date, $ref !== '' ? $ref : null, $movementId, $isVisa ? 1 : 0, $cardId,
-             Auth::user(), $subId]);
+             $unpaid ? 1 : 0, Auth::user(), $subId]);
 
         Audit::log('update', 'rep_submissions', $subId, $s, self::find($subId),
             'تعديل بند مندوب قبل الاعتماد «' . $note . '» — ' . number_format($unit * $qty, 2, '.', ','),
@@ -345,8 +354,9 @@ class RepInbox
             Database::exec(
                 "INSERT INTO permit_stages
                     (permit_id, movement_id, stage_key, direction, amount, qty, actual_amount,
-                     entry_date, ref_no, note, status, attachment, is_visa, visa_card_id, paid_by_rep_id)
-                 VALUES (?,?,?,?,?,?,?,?,?,?, 'done', ?, ?, ?, ?)",
+                     entry_date, ref_no, note, status, attachment, is_visa, visa_card_id,
+                     unpaid, paid_by_rep_id)
+                 VALUES (?,?,?,?,?,?,?,?,?,?, 'done', ?, ?, ?, ?, ?)",
                 [
                     (int) $s['permit_id'], $s['movement_id'] ? (int) $s['movement_id'] : null,
                     $stageKey, $direction,
@@ -358,6 +368,10 @@ class RepInbox
                     // فيزا) **ومن عهدة المندوب الكاش** (RepCustody::spentTotal).
                     (int) ($s['is_visa'] ?? 0),
                     !empty($s['is_visa']) && !empty($s['visa_card_id']) ? (int) $s['visa_card_id'] : null,
+                    // v57: وسم «غير مدفوع» بيتنقل زي وسم الفيزا بالظبط — البند
+                    // بيظهر على الإذن وفي فاتورة العميل، لكن `Permit::cashOutSql`
+                    // بتستثنيه من **الخزنة ومن عهدة المندوب** مع بعض.
+                    (int) ($s['unpaid'] ?? 0),
                     (int) $s['rep_id'],             // يربط المصروف بعهدة المندوب
                 ]);
             $stageId = Database::lastId();

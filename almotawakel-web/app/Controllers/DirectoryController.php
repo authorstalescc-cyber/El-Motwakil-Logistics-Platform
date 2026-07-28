@@ -8,6 +8,7 @@ use App\Models\ClientPayment;
 use App\Models\Closing;
 use App\Models\VisaCard;
 use App\Models\PartyMaster;
+use App\Models\PartyDoc;
 
 /**
  * دليل الوكلاء والشركات — وحدة «عرض فقط».
@@ -76,6 +77,9 @@ class DirectoryController extends Controller
             'payments'  => ClientPayment::forClient($name),
             'statement' => ClientPayment::statement($name, $charges),
             'visaCards' => VisaCard::all(true),
+            'docs'      => PartyDoc::forParty('agent', (int)$id),
+            'docParty'  => ['type' => 'agent', 'id' => (int)$id, 'name' => $name],
+            'docState'  => \App\Core\FormState::consume('partydoc.agent.' . (int)$id, 'directory/agent/' . (int)$id),
         ]);
     }
 
@@ -102,6 +106,10 @@ class DirectoryController extends Controller
         }
         // العهدة النقدية تدخل التقفيل اليومي → امنع الكتابة على يوم متقفل
         if ($route === 'cash' && ($err = Closing::guard($date))) { $this->payFailure((int)$id, $err); }
+
+        // بعد نجاح التحقّق وقبل الكتابة — دفعة مكررة تعني رصيد عميل غلط،
+        // ولو `route=cash` تعني كمان إضافة عهدة مكررة تدخل التقفيل اليومي.
+        $this->claimForm($back);
 
         try {
             ClientPayment::create([
@@ -177,7 +185,97 @@ class DirectoryController extends Controller
             'invoices' => Party::invoicesBy('company', $name),
             'permitInvoices' => PermitInvoice::forName('company', $name),
             'permitInvSum'   => PermitInvoice::summaryFor('company', $name),
+            'docs'      => PartyDoc::forParty('company', (int)$id),
+            'docParty'  => ['type' => 'company', 'id' => (int)$id, 'name' => $name],
+            'docState'  => \App\Core\FormState::consume('partydoc.company.' . (int)$id, 'directory/company/' . (int)$id),
         ]);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  مستندات الطرف — البطاقة الضريبية / السجل التجاري / … (v56)
+    //
+    //  ⚠️ وحدة وصفية معزولة: **ولا رقم مالي ولا لمسة لخزنة أو تقفيل**.
+    //     الملف بيتخزَّن برّه `public` وبيتقدّم عبر `FileController` بعد
+    //     فحص الجلسة، و`rep_visible` بتقرّر هل يوصل موبايل المندوب.
+    // ══════════════════════════════════════════════════════════════════
+
+    /** رفع مستند جديد لطرف (شركة/وكيل/صاحب بيان). */
+    public function addDoc(string $type, string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $partyId = (int) $id;
+        $back    = $this->partyUrl($type, $partyId);
+
+        try {
+            $docId = PartyDoc::create(
+                $type,
+                $partyId,
+                $_POST,
+                $_FILES['doc_file'] ?? [],
+                \App\Core\Auth::user()
+            );
+        } catch (\Throwable $e) {
+            // ⚠️ الملف نفسه ما بيتحفظش في الحقيبة (مستحيل تقنيًّا)، فالرسالة
+            //    بتقول للمالك يختاره تاني — والباقي بيرجع متعبّي زي ما كان.
+            flash('error', $e->getMessage());
+            $this->formFailure(
+                'partydoc.' . $type . '.' . $partyId,
+                $back . '#party-docs',
+                $_POST,
+                ['_form' => $e->getMessage()],
+                $back
+            );
+        }
+
+        \App\Models\Audit::log(
+            'create', 'party_documents', $docId, null,
+            ['party_type' => $type, 'party_id' => $partyId, 'title' => $_POST['title'] ?? ''],
+            'رفع مستند لطرف (' . PartyDoc::partyLabel($type) . ')'
+        );
+        $this->done('اترفع المستند وبقى ظاهر في أذونات الطرف ده.', $back, 'party-docs');
+    }
+
+    /** تعديل بيانات مستند (بلا استبدال الملف — ارفع مستندًا جديدًا بدله). */
+    public function updateDoc(string $docId): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $doc = PartyDoc::find((int) $docId);
+        if (!$doc) { $this->notFound('المستند ده مش موجود أو اتمسح.'); }
+        $back = $this->partyUrl((string) $doc['party_type'], (int) $doc['party_id']);
+
+        try {
+            PartyDoc::update((int) $docId, $_POST);
+        } catch (\Throwable $e) {
+            $this->fail($e->getMessage(), $back, 'party-docs');
+        }
+        \App\Models\Audit::log('update', 'party_documents', (int) $docId, $doc, $_POST, 'تعديل بيانات مستند طرف');
+        $this->done('اتحفظت بيانات المستند.', $back, 'party-docs');
+    }
+
+    /** حذف مستند وملفه. */
+    public function deleteDoc(string $docId): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $doc = PartyDoc::find((int) $docId);
+        if (!$doc) { $this->notFound('المستند ده مش موجود أو اتمسح.'); }
+        $back = $this->partyUrl((string) $doc['party_type'], (int) $doc['party_id']);
+
+        PartyDoc::delete((int) $docId);
+        \App\Models\Audit::log('delete', 'party_documents', (int) $docId, $doc, null, 'حذف مستند طرف');
+        $this->done('اتمسح المستند.', $back, 'party-docs');
+    }
+
+    /** المصدر الوحيد لرابط بروفايل الطرف — ممنوع تكتبه بالإيد في أي مكان. */
+    private function partyUrl(string $type, int $id): string
+    {
+        return match ($type) {
+            'company' => 'directory/company/' . $id,
+            'agent'   => 'directory/agent/' . $id,
+            default   => 'directory?tab=owners',
+        };
     }
 
     public function createParty(string $type): void

@@ -256,14 +256,17 @@ class RepTransfer
     }
 
     /** تحويلات مندوب مُرسِل (الأحدث أولاً) + اسم المستقبِل — لكشفه وموبايله. */
-    public static function outgoingFor(int $repId, int $limit = 0): array
+    public static function outgoingFor(int $repId, int $limit = 0, ?string $day = null): array
     {
         if (!self::available()) { return []; }
         $lim = $limit > 0 ? ' LIMIT ' . (int) $limit : '';
+        // $day = عهدة يوم واحد (v49) — شاشة المندوب بتعرض يوم العمل بس.
+        $where = 't.from_rep_id = ?'; $params = [$repId];
+        if ($day !== null && $day !== '') { $where .= ' AND t.transfer_date = ?'; $params[] = $day; }
         return Database::all(
             "SELECT t.*, r.name AS other_name
              FROM rep_custody_transfers t JOIN reps r ON r.id = t.to_rep_id
-             WHERE t.from_rep_id = ? ORDER BY t.transfer_date DESC, t.id DESC$lim", [$repId]);
+             WHERE $where ORDER BY t.transfer_date DESC, t.id DESC$lim", $params);
     }
 
     /** تحويلات وصلت لمندوب مُستقبِل (الأحدث أولاً) + اسم المُرسِل — لكشفه. */

@@ -25,6 +25,24 @@
      التوأم الرقمي للورقة اللي في إيده.
    ============================================================================ */
 
+/* ══════════════════════════════════════════════════════════════════════════
+   الخط — Cairo (نسخة متغيّرة) مستضاف محليًا (الـCSP بتمنع أي CDN).
+
+   ⚠️ الكتلة دي **مكرَّرة حرفيًا في `app.css`** (شاشات المكتب ما بتحمّلش m.css).
+      أي تعديل هنا لازم يتزامن هناك — `bin/verify_typography.php` بيقارن
+      الوجهين بايت ببايت، والتفرّع بينهم بيكسر البوابة **بالسكوت**.
+
+   ⚠️⚠️ **ليه اتحوّلنا من Plex — باج مش ذوق. لا ترجّع الشكل القديم:**
+        الإعلان القديم كان ٨ وجوه بأوزان معلَنة غلط (400/500/600 كلهم متعلَنين
+        `400` فآخر واحد بيكسب، و700 متعلَن `500`)، فـ`font-weight:600` و`700`
+        ما كانش ليهم وجه والمتصفح بيزوّد **Bold صناعي**. دلوقتي وجهان بمحور
+        وزن متصل `200→1000` — كل وزن حقيقي، و٦٤KB بدل ١٩٧KB.
+        شرح `size-adjust:103%` كامل في رأس نفس الكتلة في `app.css`.
+   ══════════════════════════════════════════════════════════════════════════ */
+@font-face{font-family:'Cairo';font-style:normal;font-weight:200 1000;font-display:swap;size-adjust:103%;
+  src:url('../fonts/cairo-arabic.woff2') format('woff2');unicode-range:U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1}
+@font-face{font-family:'Cairo';font-style:normal;font-weight:200 1000;font-display:swap;size-adjust:103%;
+  src:url('../fonts/cairo-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 :root{
   --navy:#15355B; --navy-dk:#0E2440;
   --gold:#C9A227; --gold-dk:#9C7C15; --gold-lt:#F3E9C6;
@@ -36,9 +54,9 @@
   --bg:#EEF1F5; --card:#FFFFFF;
   --paper:#FFFDF6;                    /* ورق الإيصال الحراري */
   --tap:52px;                         /* أصغر هدف لمس */
-  --font:'Segoe UI','Tahoma',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
+  --font:'Cairo',system-ui,-apple-system,'Segoe UI',Tahoma,Arial,sans-serif;
 }
-.m-confirm{border:0;border-radius:16px;padding:0;max-width:min(360px,calc(100vw - 30px));box-shadow:0 22px 60px rgba(14,36,64,.28);font-family:var(--font);direction:rtl}.m-confirm::backdrop{background:rgba(14,36,64,.62)}.m-confirm-box{padding:20px}.m-confirm-box>b{display:block;color:var(--navy);font-size:1.05rem}.m-confirm-box p{color:var(--grey);line-height:1.7}.m-confirm-box>div{display:flex;gap:10px;justify-content:flex-end}.m-confirm button{min-height:44px;padding:8px 15px;border-radius:10px;border:1px solid var(--line);font:inherit;font-weight:800}.m-confirm .ghost{background:#fff;color:var(--navy)}.m-confirm .danger{background:var(--red);border-color:var(--red);color:#fff}
+.m-confirm{border:0;border-radius:16px;padding:0;max-width:min(360px,calc(100vw - 30px));box-shadow:0 22px 60px rgba(14,36,64,.28);font-family:var(--font);direction:rtl}.m-confirm::backdrop{background:rgba(14,36,64,.62)}.m-confirm-box{padding:20px}.m-confirm-box>b{display:block;color:var(--navy);font-size:1.05rem}.m-confirm-box p{color:var(--grey);line-height:1.7}.m-confirm-box>div{display:flex;gap:10px;justify-content:flex-end}.m-confirm button{min-height:44px;padding:8px 15px;border-radius:10px;border:1px solid var(--line);font:inherit;font-weight:600}.m-confirm .ghost{background:#fff;color:var(--navy)}.m-confirm .danger{background:var(--red);border-color:var(--red);color:#fff}
 
 *{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px;-webkit-text-size-adjust:100%}
@@ -49,7 +67,10 @@ body{
   overscroll-behavior-y:contain;
 }
 a{color:inherit;text-decoration:none}
-button,input,select,textarea{font-family:inherit;font-size:1rem}
+/* ⚠️ `line-height` إلزامية — اختصار `font` في ورقة المتصفح بيصفّرها لـ`normal`
+   فارتفاع الخانة يتحسب من مقاييس الخط. صندوق سطر Cairo أطول ٢٥٪ من Plex،
+   ومن غير السطر ده كل خانة في البوابة كانت هتطول. (نفسه في `app.css`.) */
+button,input,select,textarea{font-family:inherit;font-size:1rem;line-height:1.5}
 :focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 
 /* ─────────────────────────────── الشريط العلوي */
@@ -59,14 +80,14 @@ button,input,select,textarea{font-family:inherit;font-size:1rem}
   padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;
   background:var(--navy-dk); color:#fff;
 }
-.m-bar .who{font-weight:800; font-size:.95rem}
+.m-bar .who{font-weight:600; font-size:.95rem}
 .m-bar .sp{flex:1}
 /* لازم يشتغل على <a> و<button> الاتنين — كان مربوط بـa بس فالزرار طلع بلا تنسيق */
 .m-bar .out{
   min-height:38px; display:inline-flex; align-items:center; padding:0 13px;
   border:1px solid rgba(255,255,255,.22); border-radius:9px;
   background:rgba(255,255,255,.12); color:#fff;
-  font-size:.82rem; font-weight:700; font-family:inherit; cursor:pointer;
+  font-size:.82rem; font-weight:500; font-family:inherit; cursor:pointer;
 }
 .m-bar .out:active{background:rgba(255,255,255,.26)}
 
@@ -76,15 +97,15 @@ button,input,select,textarea{font-family:inherit;font-size:1rem}
   color:#fff; padding:22px 18px 18px; border-radius:0 0 22px 22px;
   box-shadow:0 6px 22px rgba(14,36,64,.22);
 }
-.pocket .lbl{font-size:.85rem; opacity:.75; font-weight:700; letter-spacing:.02em}
+.pocket .lbl{font-size:.85rem; opacity:.75; font-weight:500; letter-spacing:.02em}
 .pocket .amt{
   display:flex; align-items:baseline; gap:8px; margin:2px 0 4px;
 }
 .pocket .amt b{
-  font-size:3.4rem; font-weight:900; line-height:1.05;
+  font-size:3.4rem; font-weight:700; line-height:1.05;
   color:var(--gold); font-variant-numeric:tabular-nums; letter-spacing:-.02em;
 }
-.pocket .amt small{font-size:1rem; opacity:.7; font-weight:700}
+.pocket .amt small{font-size:1rem; opacity:.7; font-weight:500}
 .pocket .amt.zero b{color:#fff; opacity:.55}
 /* صرف أكتر من عهدته → الفلوس ليه عندنا. أخضر مش أحمر: ده مش خطأ منه. */
 .pocket.owed{background:linear-gradient(160deg,#14603A 0%,#0C3F26 100%)}
@@ -101,7 +122,7 @@ button,input,select,textarea{font-family:inherit;font-size:1rem}
 
 /* ─────────────────────────────── التخطيط */
 .wrap{padding:14px; max-width:640px; margin:0 auto}
-.sec{margin:20px 0 10px; font-size:.8rem; font-weight:800; color:var(--grey); letter-spacing:.04em}
+.sec{margin:20px 0 10px; font-size:.8rem; font-weight:600; color:var(--grey); letter-spacing:.04em}
 .sec .n{color:var(--navy); background:#fff; border:1px solid var(--line); border-radius:99px; padding:1px 8px; margin-inline-start:6px; font-size:.72rem}
 
 /* ─────────────────────────────── كارت الإذن */
@@ -115,13 +136,13 @@ button,input,select,textarea{font-family:inherit;font-size:1rem}
    ورقم الإذن مرجع تحتها. */
 .permit .top{padding:13px 15px 10px}
 .permit .kind{
-  display:inline-block; font-size:.7rem; font-weight:800; padding:2px 8px; border-radius:6px;
+  display:inline-block; font-size:.7rem; font-weight:600; padding:2px 8px; border-radius:6px;
   background:var(--sader-lt); color:#814708; margin-bottom:5px;
 }
 .permit.warid .kind{background:var(--warid-lt); color:#075B63}
-.permit h3{font-size:1.22rem; font-weight:900; letter-spacing:-.01em; overflow-wrap:anywhere; line-height:1.3}
+.permit h3{font-size:1.22rem; font-weight:700; letter-spacing:-.01em; overflow-wrap:anywhere; line-height:1.3}
 .permit .no{
-  font-size:.85rem; color:var(--grey); font-weight:700; margin-top:2px;
+  font-size:.85rem; color:var(--grey); font-weight:500; margin-top:2px;
   font-variant-numeric:tabular-nums;
 }
 
@@ -129,7 +150,7 @@ button,input,select,textarea{font-family:inherit;font-size:1rem}
 .permit .chips{display:flex; flex-wrap:wrap; gap:6px; padding:0 15px 11px}
 .permit .chip{
   display:inline-flex; align-items:center; gap:5px;
-  font-size:.84rem; font-weight:800; color:var(--navy);
+  font-size:.84rem; font-weight:600; color:var(--navy);
   background:#EDF1F6; border:1px solid var(--line); border-radius:9px; padding:5px 10px;
 }
 .permit .chip bdi{font-variant-numeric:tabular-nums}
@@ -141,14 +162,14 @@ button,input,select,textarea{font-family:inherit;font-size:1rem}
   background:#F7F9FB; border:1px solid var(--line); border-radius:11px;
   font-size:.83rem;
 }
-.permit .info dt{color:var(--grey); font-weight:700; white-space:nowrap}
-.permit .info dd{font-weight:800; overflow-wrap:anywhere}
+.permit .info dt{color:var(--grey); font-weight:500; white-space:nowrap}
+.permit .info dd{font-weight:600; overflow-wrap:anywhere}
 
-.permit .mv{font-size:.75rem; color:var(--grey); font-weight:700; padding:0 15px 10px}
+.permit .mv{font-size:.75rem; color:var(--grey); font-weight:500; padding:0 15px 10px}
 .permit .go{
   display:flex; align-items:center; justify-content:center; gap:8px;
   min-height:var(--tap); background:var(--gold-lt); color:var(--navy-dk);
-  font-weight:900; font-size:1rem; border-top:1px solid #EADFB4;
+  font-weight:700; font-size:1rem; border-top:1px solid #EADFB4;
 }
 .permit .go:active{background:var(--gold); color:#fff}
 
@@ -165,15 +186,15 @@ button,input,select,textarea{font-family:inherit;font-size:1rem}
 .slip::before{top:-1px; transform:rotate(180deg)}
 .slip::after{bottom:-5px}
 .slip .row{display:flex; align-items:flex-start; gap:10px}
-.slip .row b{flex:1; font-size:1rem; font-weight:800}
-.slip .amt{font-size:1.15rem; font-weight:900; font-variant-numeric:tabular-nums; white-space:nowrap}
+.slip .row b{flex:1; font-size:1rem; font-weight:600}
+.slip .amt{font-size:1.15rem; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap}
 .slip .sub{font-size:.78rem; color:var(--grey); margin-top:4px; display:flex; gap:8px; flex-wrap:wrap}
 /* صفّ الحالة: الشارة يمين والسلة شمال — flex بدل absolute اللي كان بيخلّي
    السلة تركب على الشارة */
 .slip .foot{display:flex; align-items:center; gap:8px; margin-top:9px}
 .slip .st{
   display:inline-flex; align-items:center; gap:5px;
-  font-size:.76rem; font-weight:800; padding:4px 10px; border-radius:99px;
+  font-size:.76rem; font-weight:600; padding:4px 10px; border-radius:99px;
 }
 .slip .st.pending {background:var(--gold-lt); color:#6B5200}
 .slip .st.approved{background:var(--green-lt); color:var(--green)}
@@ -191,26 +212,26 @@ button,input,select,textarea{font-family:inherit;font-size:1rem}
 
 /* ─────────────────────────────── الفورم */
 .field{margin:0 0 16px; padding:0; border:0; min-width:0}
-.field > label,.field > legend{display:block; font-size:.85rem; font-weight:800; margin-bottom:6px}
-.field .hint{font-size:.76rem; color:var(--grey); font-weight:600; margin-top:5px}
+.field > label,.field > legend{display:block; font-size:.85rem; font-weight:600; margin-bottom:6px}
+.field .hint{font-size:.76rem; color:var(--grey); font-weight:400; margin-top:5px}
 input[type=text], input[type=number], input[type=date], input[type=password], input[type=search], select, textarea{
   width:100%; min-height:var(--tap); padding:10px 12px;
   border:1.5px solid var(--line); border-radius:12px; background:#fff; color:var(--ink);
 }
 input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none; box-shadow:0 0 0 3px rgba(21,53,91,.12)}
-.optional{font-size:.74rem;font-weight:700;color:var(--grey);margin-inline-start:4px}
+.optional{font-size:.74rem;font-weight:500;color:var(--grey);margin-inline-start:4px}
 .field[data-error="1"] input,.field[data-error="1"] select{border-color:var(--red);box-shadow:0 0 0 2px rgba(155,44,44,.08)}
-.field-error{font-size:.8rem;font-weight:800;color:var(--red);margin-top:6px}
+.field-error{font-size:.8rem;font-weight:600;color:var(--red);margin-top:6px}
 
 /* المبلغ: أكبر حقل في الشاشة — هو الرقم اللي بيتغلط فيه */
 .money-in{position:relative}
 .money-in input{
-  font-size:2rem; font-weight:900; text-align:center; min-height:66px;
+  font-size:2rem; font-weight:700; text-align:center; min-height:66px;
   font-variant-numeric:tabular-nums; padding-inline-end:44px;
 }
 .money-in .cur{
   position:absolute; inset-inline-end:14px; top:50%; transform:translateY(-50%);
-  font-size:.9rem; font-weight:800; color:var(--grey); pointer-events:none;
+  font-size:.9rem; font-weight:700; color:var(--grey); pointer-events:none;
 }
 
 /* اختيار النوع: زرارين كبار مش قائمة منسدلة */
@@ -218,7 +239,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .pick label{
   display:flex; align-items:center; justify-content:center; gap:7px;
   min-height:var(--tap); border:1.5px solid var(--line); border-radius:12px;
-  background:#fff; font-weight:800; cursor:pointer; text-align:center;
+  background:#fff; font-weight:600; cursor:pointer; text-align:center;
 }
 .pick input{position:absolute; width:1px; height:1px; opacity:0; clip-path:inset(50%)}
 .pick input:checked + label{background:var(--navy); border-color:var(--navy); color:#fff}
@@ -228,10 +249,10 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .qty{display:flex; align-items:center; gap:8px}
 .qty button{
   width:var(--tap); height:var(--tap); flex:none; border:1.5px solid var(--line);
-  border-radius:12px; background:#fff; font-size:1.5rem; font-weight:900; color:var(--navy); cursor:pointer;
+  border-radius:12px; background:#fff; font-size:1.5rem; font-weight:700; color:var(--navy); cursor:pointer;
 }
 .qty button:active{background:var(--navy); color:#fff}
-.qty input{text-align:center; font-weight:900; font-size:1.2rem}
+.qty input{text-align:center; font-weight:700; font-size:1.2rem}
 
 /* الكاميرا
    ⚠️ لازم `.field > label.shot` مش `.shot` لوحدها: القاعدة `.field > label`
@@ -241,7 +262,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   display:flex; align-items:center; justify-content:center; gap:9px;
   min-height:var(--tap); padding:10px 12px;
   border:1.5px dashed var(--line); border-radius:12px;
-  background:#fff; font-weight:800; color:var(--navy); cursor:pointer; margin-bottom:0;
+  background:#fff; font-weight:600; color:var(--navy); cursor:pointer; margin-bottom:0;
 }
 .shot input{display:none}
 .shot.has{border-style:solid; border-color:var(--green); background:var(--green-lt); color:var(--green)}
@@ -256,7 +277,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   background:#E4EAF1;color:var(--navy-dk);font-size:.8rem
 }
 .entry-context b{font-size:1rem;flex-basis:100%}
-.entry-context span{color:var(--grey);font-weight:700}
+.entry-context span{color:var(--grey);font-weight:500}
 
 /* ── النثرية (v39) — مصروف عام مش على إذن ──
    لون مستقل عن الصادر/الوارد عن قصد: النثرية مش نوع إذن، فما ينفعش تاخد
@@ -277,40 +298,38 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .misc-cta:active{background:#F3E9C6}
 .misc-cta .ic{font-size:1.5rem;flex:none}
 .misc-cta .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.misc-cta .txt b{font-size:1rem;font-weight:900}
-.misc-cta .txt small{font-size:.76rem;color:#6B540A;font-weight:700;overflow-wrap:anywhere}
-.misc-cta .arw{flex:none;font-size:1.4rem;color:var(--gold-dk);font-weight:900}
+.misc-cta .txt b{font-size:1rem;font-weight:700}
+.misc-cta .txt small{font-size:.76rem;color:#6B540A;font-weight:500;overflow-wrap:anywhere}
+.misc-cta .arw{flex:none;font-size:1.4rem;color:var(--gold-dk);font-weight:700}
 /* زرار «افتح إذن جديد» (v43) — نفس شكل زرار النثرية بلون كحلي عشان ما يتلخبطوش */
 .permit-cta{background:linear-gradient(180deg,#F4F8FC,#E7EFF7);border-color:#C3D5E6;margin-bottom:10px}
 .permit-cta:active{background:#DCE8F3}
 .permit-cta .txt small{color:#3B5B7A}
 .permit-cta .arw{color:var(--navy)}
 /* شارة «منزّل لك» جنب نوع الإصدار — التنزيل بقى وسم مش شرط رؤية (v43) */
-.permit .kind.mine{background:#E4EEF7;color:#1B4C7A;margin-inline-start:5px}
-.permit.warid .kind.mine{background:#E4EEF7;color:#1B4C7A}
 /* تأكيد «ده اسم جديد فعلاً» في فورم فتح الإذن — بيظهر بس لما الخادم يوقف الاسم */
 .newname-confirm{
   display:flex;align-items:center;gap:8px;margin-top:8px;padding:9px 11px;
   border:1px solid #E6D49B;border-radius:11px;background:#FFFDF3;
-  font-size:.82rem;font-weight:800;color:#6B540A
+  font-size:.82rem;font-weight:600;color:#6B540A
 }
 .newname-confirm input{width:22px;height:22px;flex:none}
 .suggestions{display:flex;gap:6px;flex-wrap:wrap;padding:7px 0 2px}
 .suggestions[hidden]{display:none!important}
 .suggestions button,.mini-action{
   min-height:40px;max-width:100%;white-space:normal;overflow-wrap:anywhere;border:1px solid var(--line);border-radius:99px;
-  padding:7px 12px;background:#fff;color:var(--navy);font-weight:800;cursor:pointer
+  padding:7px 12px;background:#fff;color:var(--navy);font-weight:600;cursor:pointer
 }
 .suggestions button:active,.mini-action:active{background:var(--navy);color:#fff}
 .multi-toggle-row{
   display:flex;align-items:center;gap:10px;margin:-2px 0 16px;
-  font-size:.82rem;font-weight:700;color:var(--grey)
+  font-size:.82rem;font-weight:500;color:var(--grey)
 }
 .multi-toggle-row span{flex:1}
 .qty-extra{padding:12px;background:#E8EDF3;border-radius:13px}
 .existing-photo{display:flex;align-items:center;gap:12px;margin-bottom:9px;padding:9px;background:#fff;border:1px solid var(--line);border-radius:12px}
 .existing-photo img{width:64px;height:64px;object-fit:cover;border-radius:9px}
-.existing-photo label{display:flex;align-items:center;gap:7px;font-size:.8rem;font-weight:700;color:var(--red)}
+.existing-photo label{display:flex;align-items:center;gap:7px;font-size:.8rem;font-weight:500;color:var(--red)}
 .existing-photo input{width:22px;height:22px}
 
 .error-summary{
@@ -321,18 +340,18 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .error-summary:focus{outline:3px solid var(--gold);outline-offset:2px}
 .draft-note{
   display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:10px 12px;
-  border-radius:11px;background:#FFF4C7;color:#5D4800;font-size:.8rem;font-weight:800
+  border-radius:11px;background:#FFF4C7;color:#5D4800;font-size:.8rem;font-weight:600
 }
 .draft-note span{flex:1}
-.draft-note button{border:0;background:transparent;color:#5D4800;text-decoration:underline;font-weight:800;cursor:pointer}
+.draft-note button{border:0;background:transparent;color:#5D4800;text-decoration:underline;font-weight:600;cursor:pointer}
 .net-state{
   position:sticky;top:58px;z-index:19;display:flex;align-items:center;gap:10px;
-  padding:9px 14px;font-size:.82rem;font-weight:800;box-shadow:0 3px 10px rgba(14,36,64,.12)
+  padding:9px 14px;font-size:.82rem;font-weight:600;box-shadow:0 3px 10px rgba(14,36,64,.12)
 }
 .net-state span{flex:1}
 .net-state.weak{background:#FFF1BC;color:#604900}
 .net-state.offline{background:var(--red-lt);color:var(--red)}
-.net-state button{min-height:36px;border:1px solid currentColor;border-radius:8px;background:transparent;color:inherit;padding:5px 10px;font-weight:800;cursor:pointer}
+.net-state button{min-height:36px;border:1px solid currentColor;border-radius:8px;background:transparent;color:inherit;padding:5px 10px;font-weight:600;cursor:pointer}
 
 /* hidden سلوك وظيفي في نماذج البوابة؛ لا تسمح مكونات display:flex بتجاوزه. */
 [hidden]{display:none!important}
@@ -341,7 +360,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .btn{
   display:flex; align-items:center; justify-content:center; gap:8px;
   width:100%; min-height:56px; border:0; border-radius:14px;
-  font-size:1.05rem; font-weight:900; cursor:pointer; color:#fff; background:var(--navy);
+  font-size:1.05rem; font-weight:700; cursor:pointer; color:#fff; background:var(--navy);
 }
 .btn.gold{background:var(--gold); color:var(--navy-dk)}
 .btn.ghost{background:#fff; color:var(--navy); border:1.5px solid var(--line)}
@@ -356,7 +375,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 }
 
 /* ─────────────────────────────── فلاش / فاضي */
-.flash{padding:12px 14px; border-radius:12px; font-weight:800; font-size:.9rem; margin-bottom:12px}
+.flash{padding:12px 14px; border-radius:12px; font-weight:600; font-size:.9rem; margin-bottom:12px}
 .flash.ok{background:var(--green-lt); color:var(--green)}
 .flash.err{background:var(--red-lt); color:var(--red)}
 .empty{text-align:center; color:var(--grey); padding:30px 16px; font-size:.9rem}
@@ -366,30 +385,30 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .login{min-height:100dvh; display:flex; flex-direction:column; justify-content:center; padding:24px; max-width:420px; margin:0 auto}
 .login .logo{text-align:center; margin-bottom:26px}
 .login .logo img{width:74px; height:auto; opacity:.95}
-.login .logo h1{font-size:1.3rem; font-weight:900; margin-top:10px; color:var(--navy)}
+.login .logo h1{font-size:1.3rem; font-weight:700; margin-top:10px; color:var(--navy)}
 .login .logo p{font-size:.85rem; color:var(--grey); margin-top:2px}
 .login .box{background:var(--card); border-radius:18px; padding:20px; box-shadow:0 2px 6px rgba(16,36,64,.08), 0 12px 30px rgba(16,36,64,.08)}
-.login input[name=pin]{text-align:center; font-size:1.6rem; font-weight:900; letter-spacing:.35em; padding-inline-start:.35em}
+.login input[name=pin]{text-align:center; font-size:1.6rem; font-weight:700; letter-spacing:.35em; padding-inline-start:.35em}
 .password-wrap{position:relative}
 .password-wrap input{padding-inline-start:72px}
 .password-wrap button{
   position:absolute;inset-inline-start:7px;top:7px;bottom:7px;min-width:58px;
-  border:0;border-radius:8px;background:#E8EDF3;color:var(--navy);font-weight:800;cursor:pointer
+  border:0;border-radius:8px;background:#E8EDF3;color:var(--navy);font-weight:600;cursor:pointer
 }
 
 /* ─────────────────────────────── تنقّل وبحث بوابة المندوب */
 .m-tabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:2px 0 14px;padding:4px;background:#DDE3EA;border-radius:13px}
-.m-tabs a{min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:10px;font-weight:900;color:var(--grey)}
+.m-tabs a{min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:10px;font-weight:700;color:var(--grey)}
 .m-tabs a.active{background:#fff;color:var(--navy);box-shadow:0 2px 8px rgba(14,36,64,.10)}
 .m-tabs span{min-width:22px;padding:1px 6px;border-radius:99px;background:#E7ECF2;font-size:.72rem;text-align:center}
 .permit-search{margin-bottom:10px}
-.permit-search label{display:block;font-size:.78rem;font-weight:800;color:var(--grey);margin-bottom:5px}
+.permit-search label{display:block;font-size:.78rem;font-weight:600;color:var(--grey);margin-bottom:5px}
 .permit-search input{min-height:48px}
 .status-filters{display:flex;gap:7px;overflow-x:auto;margin:-2px 0 12px;padding-bottom:2px}
-.status-filters a{min-height:40px;display:flex;align-items:center;padding:6px 13px;border:1px solid var(--line);border-radius:99px;background:#fff;color:var(--grey);font-size:.8rem;font-weight:800;white-space:nowrap}
+.status-filters a{min-height:40px;display:flex;align-items:center;padding:6px 13px;border:1px solid var(--line);border-radius:99px;background:#fff;color:var(--grey);font-size:.8rem;font-weight:600;white-space:nowrap}
 .status-filters a.active{background:var(--navy);border-color:var(--navy);color:#fff}
-.slip-action{min-height:var(--tap);display:inline-flex;align-items:center;padding:5px 10px;border-radius:9px;background:#E8EDF3;color:var(--navy);font-size:.78rem;font-weight:900}
-.fix-entry{display:flex;align-items:center;justify-content:center;min-height:46px;margin-top:9px;border-radius:10px;background:var(--navy);color:#fff;font-size:.85rem;font-weight:900}
+.slip-action{min-height:var(--tap);display:inline-flex;align-items:center;padding:5px 10px;border-radius:9px;background:#E8EDF3;color:var(--navy);font-size:.78rem;font-weight:700}
+.fix-entry{display:flex;align-items:center;justify-content:center;min-height:46px;margin-top:9px;border-radius:10px;background:var(--navy);color:#fff;font-size:.85rem;font-weight:700}
 
 /* ─────────────────────────────── حركة (باحترام تقليل الحركة) */
 @media (prefers-reduced-motion:no-preference){
@@ -402,11 +421,11 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 
 /* ── الفيزا وتسليم السائق (v45) ─────────────────────────────── */
 .visa-field .visa-toggle{display:flex;align-items:center;gap:9px;padding:11px 12px;
-  border:1px solid var(--line);border-radius:12px;background:#fff;font-weight:700;cursor:pointer}
+  border:1px solid var(--line);border-radius:12px;background:#fff;font-weight:500;cursor:pointer}
 .visa-field .visa-toggle input{width:20px;height:20px;accent-color:#0E2440;flex:none}
 .visa-field .visa-toggle:has(input:checked){border-color:#0E2440;background:#F2F6FC}
 .visa-pick{margin-top:10px}
-.visa-pick label{display:block;font-size:.82rem;font-weight:700;margin-bottom:5px}
+.visa-pick label{display:block;font-size:.82rem;font-weight:500;margin-bottom:5px}
 .hand-cta .ic{background:#FFF3E0}
 .hand-note{background:#FFF8E7;border:1px solid #F0DFB8;border-radius:12px;
   padding:12px 13px;font-size:.86rem;line-height:1.65;margin-bottom:14px}
@@ -415,13 +434,70 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .bill-info{margin-top:8px;font-size:.82rem;color:var(--grey);
   background:#F6F8FB;border-radius:9px;padding:8px 10px}
 .hand-slip .s-main{display:flex;align-items:baseline;gap:10px}
-.hand-slip .s-amt{margin-inline-start:auto;font-weight:800;font-variant-numeric:tabular-nums}
+.hand-slip .s-amt{margin-inline-start:auto;font-weight:600;font-variant-numeric:tabular-nums}
 .hand-slip .s-meta{font-size:.78rem;color:var(--grey);margin-top:4px}
 .hand-slip .s-note{font-size:.8rem;margin-top:5px}
 .mini-action.danger{color:#B3261E}
-.sec-h{font-weight:800;margin:18px 0 10px;font-size:.95rem}
+.sec-h{font-weight:600;margin:18px 0 10px;font-size:.95rem}
 /* شارة البند المدفوع بالفيزا في قوائم المندوب والمكتب */
 .pill.visa-pill{background:#E8F0FE;color:#12448F;border-color:#C6D9F7}
+
+/* ══════════════════════════════════════════════════════════════
+   شاشة «بوليصة جديدة» (v60) — بديل «تسليم عهدة لسائق».
+   ⚠️ كل كلاس هنا بيتحقن من سكربت الشاشة كمان (.bn-cap.is-over ·
+   .bn-left.is-neg · .bn-no) — أي واحد بلا تعريف بيفشل **بالسكوت**
+   وبيقع على الشكل الافتراضي (نفس مصيدة .table-mobile-scroll).
+   ══════════════════════════════════════════════════════════════ */
+.bn-step{display:flex;align-items:center;gap:9px;margin:22px 0 12px;
+  font-weight:600;font-size:.95rem;color:var(--navy-dk)}
+.bn-step:first-of-type{margin-top:6px}
+.bn-num{display:grid;place-items:center;inline-size:24px;block-size:24px;flex:none;
+  border-radius:50%;background:var(--navy);color:#fff;font-size:.8rem;font-weight:700}
+/* لوح تأكيد بيانات الإذن المختار — «انت اخترت الصح؟» */
+.bn-permit{margin-top:9px;font-size:.82rem;line-height:1.7;color:var(--grey);
+  background:#F6F8FB;border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.bn-permit b{color:var(--ink,#102440);font-weight:600}
+/* عدّاد سعة الحاويات + الفاضل من العهدة: أخضر = تمام، أحمر = تحذير */
+.bn-cap,.bn-left{margin-top:8px;font-size:.82rem;font-weight:500;border-radius:9px;
+  padding:8px 10px;background:var(--green-lt);color:#1E5B36}
+.bn-cap.is-over,.bn-left.is-neg{background:var(--red-lt);color:var(--red);font-weight:600}
+/* خانة لكل حاوية */
+.bn-nos{display:grid;gap:8px}
+.bn-nos:empty{display:none}
+.bn-no{display:flex;align-items:center;gap:8px}
+.bn-no > span{display:grid;place-items:center;inline-size:26px;block-size:26px;flex:none;
+  border-radius:8px;background:#EEF2F7;color:var(--grey);font-size:.76rem;font-weight:600}
+.bn-no input{flex:1;min-width:0}
+/* زرار «عربية المكتب» — اختصار بيملا اللوحة والسائق وصاحب العربية */
+.bn-quick{display:flex;flex-wrap:wrap;gap:9px;margin:0 0 14px}
+.bn-quick-btn{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  min-height:44px;padding:9px 13px;border:1px solid var(--line);border-radius:12px;
+  background:#fff;font:inherit;font-weight:600;font-size:.86rem;color:var(--navy);cursor:pointer}
+.bn-quick-btn small{font-weight:500;font-size:.76rem;color:var(--grey);
+  font-variant-numeric:tabular-nums}
+.bn-quick-btn:active{background:#F2F6FC}
+.bn-quick-btn.on{border-color:var(--navy);background:#F2F6FC}
+.bn-quick-btn.on small{color:var(--navy)}
+
+/* رقم العربية: ٣ خانات حرف + خانة أرقام — الشكل نفسه بيقول للمندوب المتوقّع إيه */
+.bn-car{display:flex;align-items:center;gap:10px}
+.bn-car-l{display:flex;gap:6px;direction:rtl}
+.bn-car-l input{inline-size:46px;flex:none;text-align:center;font-weight:700;
+  font-size:1.15rem;padding-inline:0}
+.bn-car-d{flex:1;min-inline-size:0;text-align:center;font-weight:700;font-size:1.15rem;
+  letter-spacing:.14em;font-variant-numeric:tabular-nums;direction:ltr}
+/* وسم «مطلوب» جنب التسمية — عكس .optional بالظبط */
+.req{font-weight:500;font-size:.76rem;color:var(--red)}
+
+/* مراجعة قبل الحفظ */
+.bn-review{margin:20px 0 4px;border:1px solid var(--line);border-radius:12px;
+  background:#fff;padding:12px 13px}
+.bn-review-h{display:flex;align-items:center;gap:7px;font-weight:600;font-size:.88rem;
+  margin-bottom:9px;color:var(--navy-dk)}
+.bn-review dl{margin:0;display:grid;gap:7px}
+.bn-review dl > div{display:flex;gap:10px;align-items:baseline;font-size:.84rem}
+.bn-review dt{color:var(--grey);flex:none;min-inline-size:78px}
+.bn-review dd{margin:0;font-weight:600;overflow-wrap:anywhere}
 
 /* ══════════════════════════════════════════════════════════════
    شاشة المندوب الرئيسية — نمط المحفظة (هيدر غامق + شيت أبيض).
@@ -459,28 +535,28 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   width:42px; height:42px; border-radius:50%; flex:none;
   display:grid; place-items:center;
   background:linear-gradient(150deg,var(--hm-gold),#A5821C);
-  color:#1A1405; font-weight:900; font-size:1.15rem;
+  color:#1A1405; font-weight:700; font-size:1.15rem;
 }
 .hm-hi{display:flex; flex-direction:column; line-height:1.25; min-width:0}
 .hm-hi small{color:var(--hm-on-dark-dim); font-size:.76rem}
-.hm-hi b{color:var(--hm-on-dark); font-size:1rem; font-weight:800;
+.hm-hi b{color:var(--hm-on-dark); font-size:1rem; font-weight:600;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .hm-bar form{margin-inline-start:auto}
 .hm-bar button{
   min-height:38px; padding:0 15px; border-radius:99px; cursor:pointer;
   background:var(--hm-ink-2); color:var(--hm-on-dark-dim);
-  border:1px solid var(--hm-ink-3); font:inherit; font-size:.82rem; font-weight:700;
+  border:1px solid var(--hm-ink-3); font:inherit; font-size:.82rem; font-weight:500;
 }
 .hm-bar button:active{background:var(--hm-ink-3); color:var(--hm-on-dark)}
 
 /* الرصيد — بطل الشاشة */
 .hm-balance{margin-top:24px}
 .hm-balance-head{display:flex; align-items:center; gap:10px}
-.hm-balance-head>span{color:var(--hm-on-dark-dim); font-size:.85rem; font-weight:700}
+.hm-balance-head>span{color:var(--hm-on-dark-dim); font-size:.85rem; font-weight:500}
 .hm-toggle{
   margin-inline-start:auto; min-height:34px; padding:0 13px; border-radius:99px;
   background:var(--hm-ink-2); border:1px solid var(--hm-ink-3);
-  color:var(--hm-on-dark); font:inherit; font-size:.76rem; font-weight:700; cursor:pointer;
+  color:var(--hm-on-dark); font:inherit; font-size:.76rem; font-weight:500; cursor:pointer;
 }
 .hm-toggle[aria-expanded="true"]{background:var(--hm-gold); border-color:var(--hm-gold); color:#1A1405}
 
@@ -490,10 +566,10 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 }
 .hm-amt i{
   font-style:normal; color:var(--hm-gold);
-  font-size:1.9rem; font-weight:900; line-height:1;
+  font-size:1.9rem; font-weight:700; line-height:1;
 }
 .hm-amt b{
-  font-size:3.1rem; font-weight:900; line-height:1;
+  font-size:3.1rem; font-weight:700; line-height:1;
   letter-spacing:-.03em; font-variant-numeric:tabular-nums;
 }
 .hm-balance.is-owed .hm-amt i,
@@ -508,8 +584,8 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-dl div{background:var(--hm-ink-2); border-radius:12px; padding:10px 12px}
 /* لو العدد فردي، آخر واحد يمدّ على العرض الكامل بدل ما يقع لوحده */
 .hm-dl div:last-child:nth-child(odd){grid-column:1 / -1}
-.hm-dl dt{color:var(--hm-on-dark-dim); font-size:.74rem; font-weight:700}
-.hm-dl dd{margin:3px 0 0; color:var(--hm-on-dark); font-size:1.05rem; font-weight:900;
+.hm-dl dt{color:var(--hm-on-dark-dim); font-size:.74rem; font-weight:500}
+.hm-dl dd{margin:3px 0 0; color:var(--hm-on-dark); font-size:1.05rem; font-weight:700;
   font-variant-numeric:tabular-nums}
 
 /* صف الإجراءات — حاوية واحدة بفواصل، زي شريط المحفظة */
@@ -522,7 +598,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   flex:1; min-height:60px; display:flex; flex-direction:column;
   align-items:center; justify-content:center; gap:3px;
   color:var(--hm-on-dark); text-decoration:none;
-  font-size:.78rem; font-weight:700; text-align:center; padding:8px 4px;
+  font-size:.78rem; font-weight:500; text-align:center; padding:8px 4px;
 }
 .hm-actions a+a{border-inline-start:1px solid var(--hm-ink-3)}
 .hm-actions .ic{font-size:1.2rem; line-height:1}
@@ -534,7 +610,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   background:linear-gradient(135deg,var(--hm-gold),#B8912A);
   border-radius:16px; padding:13px 15px; text-decoration:none; color:#1A1405;
 }
-.hm-alert b{font-size:.95rem; font-weight:900}
+.hm-alert b{font-size:.95rem; font-weight:700}
 .hm-alert span{font-size:.78rem; opacity:.82; font-variant-numeric:tabular-nums}
 .hm-alert:active{filter:brightness(.94)}
 
@@ -552,13 +628,13 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   background:#CFD6E0; margin:0 auto 12px;
 }
 .hm-sheet-head{display:flex; align-items:center; gap:9px; margin:4px 2px 12px}
-.hm-sheet-head h2{margin:0; font-size:1.12rem; font-weight:900; letter-spacing:-.01em}
+.hm-sheet-head h2{margin:0; font-size:1.12rem; font-weight:700; letter-spacing:-.01em}
 .hm-count{
   background:var(--hm-card); border:1px solid var(--hm-line); color:var(--hm-muted);
-  border-radius:99px; padding:2px 9px; font-size:.76rem; font-weight:800;
+  border-radius:99px; padding:2px 9px; font-size:.76rem; font-weight:600;
 }
 .hm-group{
-  margin:18px 2px 9px; font-size:.79rem; font-weight:800;
+  margin:18px 2px 9px; font-size:.79rem; font-weight:600;
   color:var(--hm-muted); letter-spacing:.03em;
   display:flex; align-items:center; gap:7px;
 }
@@ -590,23 +666,23 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-stub-body{padding:14px 16px 12px 14px}
 .hm-stub-head{display:flex; align-items:flex-start; gap:9px}
 .hm-stub-head h3{
-  margin:0; flex:1; font-size:1.13rem; font-weight:900;
+  margin:0; flex:1; font-size:1.13rem; font-weight:700;
   line-height:1.35; letter-spacing:-.01em; overflow-wrap:anywhere;
 }
 .hm-kind{
   flex:none; background:var(--sader-lt); color:var(--sader);
-  border-radius:99px; padding:3px 10px; font-size:.72rem; font-weight:800;
+  border-radius:99px; padding:3px 10px; font-size:.72rem; font-weight:600;
 }
 .hm-stub.is-warid .hm-kind{background:var(--warid-lt); color:#07636B}
 .hm-ref{
-  margin-top:3px; color:var(--hm-muted); font-size:.82rem; font-weight:700;
+  margin-top:3px; color:var(--hm-muted); font-size:.82rem; font-weight:500;
   font-variant-numeric:tabular-nums; overflow-wrap:anywhere;
 }
 
 .hm-chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
 .hm-chip{
   background:var(--hm-sheet); border:1px solid var(--hm-line); border-radius:9px;
-  padding:4px 9px; font-size:.78rem; font-weight:700; color:var(--hm-text);
+  padding:4px 9px; font-size:.78rem; font-weight:500; color:var(--hm-text);
 }
 .hm-chip bdi{font-variant-numeric:tabular-nums}
 .hm-chip.is-mv{background:#FFF6DC; border-color:#F0E2B4; color:#7A6110}
@@ -614,7 +690,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-more{margin-top:11px}
 .hm-more summary{
   cursor:pointer; list-style:none; color:var(--hm-muted);
-  font-size:.79rem; font-weight:800; padding:5px 0;
+  font-size:.79rem; font-weight:600; padding:5px 0;
   display:flex; align-items:center; gap:5px;
 }
 .hm-more summary::-webkit-details-marker{display:none}
@@ -624,14 +700,14 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   display:grid; grid-template-columns:auto 1fr; gap:6px 12px;
   margin:6px 0 0; font-size:.83rem;
 }
-.hm-more dt{color:var(--hm-muted); font-weight:700; white-space:nowrap}
-.hm-more dd{margin:0; font-weight:800; overflow-wrap:anywhere}
+.hm-more dt{color:var(--hm-muted); font-weight:500; white-space:nowrap}
+.hm-more dd{margin:0; font-weight:600; overflow-wrap:anywhere}
 
 /* خط التخريم + الإجراء */
 .hm-stub-go{
   display:flex; align-items:center; justify-content:space-between;
   min-height:52px; padding:0 16px 0 14px; text-decoration:none;
-  color:var(--navy); font-weight:900; font-size:.97rem;
+  color:var(--navy); font-weight:700; font-size:.97rem;
   border-top:1.5px dashed var(--hm-line); background:#FCFDFE;
   position:relative;
 }
@@ -652,7 +728,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-filters a{
   flex:none; min-height:38px; display:inline-flex; align-items:center; padding:0 15px;
   border-radius:99px; background:var(--hm-card); border:1px solid var(--hm-line);
-  color:var(--hm-muted); text-decoration:none; font-size:.83rem; font-weight:800;
+  color:var(--hm-muted); text-decoration:none; font-size:.83rem; font-weight:600;
 }
 .hm-filters a.is-on{background:var(--hm-ink); border-color:var(--hm-ink); color:#fff}
 
@@ -667,14 +743,14 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   display:grid; place-items:center; font-size:1.15rem;
 }
 .hm-slip-mid{min-width:0}
-.hm-slip-mid b{display:block; font-size:.96rem; font-weight:800; overflow-wrap:anywhere}
+.hm-slip-mid b{display:block; font-size:.96rem; font-weight:600; overflow-wrap:anywhere}
 .hm-slip-meta{
   margin-top:3px; color:var(--hm-muted); font-size:.76rem;
   display:flex; gap:5px; flex-wrap:wrap;
 }
 .hm-slip-end{text-align:end; display:flex; flex-direction:column; align-items:flex-end; gap:4px}
-.hm-slip-amt{font-size:1.08rem; font-weight:900; font-variant-numeric:tabular-nums; white-space:nowrap}
-.hm-st{border-radius:99px; padding:2px 9px; font-size:.71rem; font-weight:800; white-space:nowrap}
+.hm-slip-amt{font-size:1.08rem; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap}
+.hm-st{border-radius:99px; padding:2px 9px; font-size:.71rem; font-weight:600; white-space:nowrap}
 .hm-st.is-pending {background:var(--gold-lt); color:#6B5200}
 .hm-st.is-approved{background:var(--green-lt); color:var(--green)}
 .hm-st.is-rejected{background:var(--red-lt); color:var(--red)}
@@ -687,7 +763,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-slip-acts a, .hm-slip-acts button{
   min-height:38px; padding:0 14px; border-radius:10px; cursor:pointer;
   border:1px solid var(--hm-line); background:var(--hm-sheet);
-  color:var(--navy); font:inherit; font-size:.82rem; font-weight:800; text-decoration:none;
+  color:var(--navy); font:inherit; font-size:.82rem; font-weight:600; text-decoration:none;
   display:inline-flex; align-items:center;
 }
 .hm-slip-acts form{margin:0; margin-inline-start:auto}
@@ -700,7 +776,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-why a{
   display:inline-block; margin-top:8px; min-height:38px; line-height:38px;
   padding:0 14px; border-radius:10px; background:var(--red); color:#fff;
-  text-decoration:none; font-size:.82rem; font-weight:800;
+  text-decoration:none; font-size:.82rem; font-weight:600;
 }
 
 /* ── الفاضي ──────────────────────────────────────── */
@@ -709,7 +785,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   border:1px dashed var(--hm-line);
 }
 .hm-empty .ic{font-size:2.1rem; display:block; margin-bottom:9px; opacity:.65}
-.hm-empty b{display:block; font-size:1rem; font-weight:900}
+.hm-empty b{display:block; font-size:1rem; font-weight:700}
 .hm-empty p{margin:6px 0 0; color:var(--hm-muted); font-size:.85rem; line-height:1.65}
 
 /* ── تاب بار تحت ─────────────────────────────────── */
@@ -724,7 +800,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-tabs a{
   flex:1; min-height:var(--hm-nav-h); position:relative;
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
-  color:var(--hm-muted); text-decoration:none; font-size:.75rem; font-weight:800;
+  color:var(--hm-muted); text-decoration:none; font-size:.75rem; font-weight:600;
 }
 .hm-tabs svg{width:23px; height:23px; fill:currentColor}
 .hm-tabs svg .cut{fill:rgba(255,255,255,.55)}
@@ -736,7 +812,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-badge{
   position:absolute; top:9px; inset-inline-end:calc(50% - 26px);
   min-width:18px; height:18px; padding:0 5px; border-radius:99px;
-  background:var(--hm-ink); color:#fff; font-size:.66rem; font-weight:900;
+  background:var(--hm-ink); color:#fff; font-size:.66rem; font-weight:700;
   font-style:normal; display:grid; place-items:center;
 }
 .hm-badge.is-wait{background:var(--hm-gold); color:#1A1405}
@@ -791,10 +867,10 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-install{
   display:flex; align-items:center; gap:10px; width:100%; margin-top:14px; cursor:pointer;
   background:var(--hm-ink-2); border:1px dashed var(--hm-gold); border-radius:14px;
-  padding:11px 13px; color:var(--hm-on-dark); font:inherit; font-size:.84rem; font-weight:700; text-align:start;
+  padding:11px 13px; color:var(--hm-on-dark); font:inherit; font-size:.84rem; font-weight:500; text-align:start;
 }
 .hm-install .ic{font-size:1.1rem}
-.hm-install .x{margin-inline-start:auto; color:var(--hm-on-dark-dim); font-weight:900; padding:2px 6px}
+.hm-install .x{margin-inline-start:auto; color:var(--hm-on-dark-dim); font-weight:700; padding:2px 6px}
 
 /* تنبيه العهدة المنخفضة */
 .hm-low{
@@ -806,7 +882,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-low-txt span{color:var(--hm-on-dark-dim); font-size:.78rem}
 .hm-low-btn{
   margin-inline-start:auto; flex:none; min-height:40px; padding:0 16px; border-radius:11px;
-  background:var(--hm-gold); color:#1A1405; text-decoration:none; font-weight:800; font-size:.83rem;
+  background:var(--hm-gold); color:#1A1405; text-decoration:none; font-weight:600; font-size:.83rem;
   display:inline-flex; align-items:center;
 }
 
@@ -817,10 +893,10 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   animation:hm-rise .3s both;
 }
 .hm-fresh-ic{font-size:1.15rem; flex:none}
-.hm-fresh-txt{flex:1; font-size:.85rem; font-weight:700; line-height:1.4}
+.hm-fresh-txt{flex:1; font-size:.85rem; font-weight:500; line-height:1.4}
 .hm-fresh-ok{
   flex:none; min-height:36px; padding:0 14px; border-radius:10px; cursor:pointer;
-  background:rgba(255,255,255,.22); border:0; color:#fff; font:inherit; font-weight:800; font-size:.8rem;
+  background:rgba(255,255,255,.22); border:0; color:#fff; font:inherit; font-weight:600; font-size:.8rem;
 }
 
 /* عهدة يوم — تاريخ العمل (بانر أعلى الصفحة الرئيسية، جوّه الهيدر الغامق) */
@@ -835,7 +911,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-wd-txt b{color:#fff; font-size:.92rem; font-variant-numeric:tabular-nums}
 .hm-wd-go{
   margin-inline-start:auto; flex:none; min-height:34px; padding:0 15px; border-radius:10px;
-  background:rgba(255,255,255,.16); color:#fff; font-weight:800; font-size:.8rem;
+  background:rgba(255,255,255,.16); color:#fff; font-weight:600; font-size:.8rem;
   display:inline-flex; align-items:center;
 }
 .hm-wd.is-past{background:rgba(212,175,55,.15); border-color:rgba(212,175,55,.5)}
@@ -852,9 +928,33 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-locked span{color:#A24040; font-size:.83rem; line-height:1.6}
 .hm-locked-btn{
   align-self:flex-start; margin-top:6px; min-height:38px; padding:0 16px; border-radius:10px;
-  background:#8E1F1F; color:#fff; font-weight:800; font-size:.83rem;
+  background:#8E1F1F; color:#fff; font-weight:600; font-size:.83rem;
   display:inline-flex; align-items:center; text-decoration:none;
 }
+
+/* «انت شغّال على يوم فات» — تحذير صريح إن الرقم الكبير مش عهدة النهاردة.
+   (كان مكتوب بخط صغير جوّه شريحة التاريخ فما حدش بيلاحظه.) */
+.hm-pastday{
+  margin:12px 16px 0; padding:13px 15px; border-radius:14px;
+  background:var(--gold-lt, #FBF3DC); border:1px solid #E5D6A4;
+  display:flex; flex-direction:column; gap:4px;
+}
+.hm-pastday b{color:#6B5200; font-size:.95rem}
+.hm-pastday span{color:#7A6212; font-size:.83rem; line-height:1.6}
+.hm-pastday-btn{
+  align-self:flex-start; margin-top:6px; min-height:38px; padding:0 16px; border-radius:10px;
+  background:#6B5200; color:#fff; font-weight:600; font-size:.83rem;
+  display:inline-flex; align-items:center; text-decoration:none;
+}
+
+/* «ماحدش نزّل لك عهدة على اليوم ده» — بيشرح ليه الرقم صفر أو سالب */
+.hm-nodep{
+  margin:12px 16px 0; padding:12px 15px; border-radius:14px;
+  background:var(--hm-sheet, #F5F7FA); border:1px dashed var(--hm-line, #E3E7ED);
+  display:flex; flex-direction:column; gap:3px;
+}
+.hm-nodep b{color:var(--hm-text, #16202B); font-size:.9rem}
+.hm-nodep span{color:var(--hm-muted, #6B7683); font-size:.82rem; line-height:1.6}
 
 /* «إجمالي اللي معاك من كل الأيام» — سطر مفصول عن أرقام اليوم عشان ما يتخلطش بيها */
 .hm-dl-all{border-top:1px dashed var(--hm-line); margin-top:6px; padding-top:8px}
@@ -869,53 +969,53 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .wd-card-top{display:flex; align-items:center; gap:10px}
 .wd-card-ic{font-size:1.05rem; flex:none}
 .wd-card-txt{display:flex; flex-direction:column; line-height:1.35; flex:1; min-width:0}
-.wd-card-txt small{color:var(--grey); font-size:.75rem; font-weight:700}
-.wd-card-txt b{color:var(--navy); font-size:.92rem; font-weight:900; font-variant-numeric:tabular-nums}
+.wd-card-txt small{color:var(--grey); font-size:.75rem; font-weight:500}
+.wd-card-txt b{color:var(--navy); font-size:.92rem; font-weight:700; font-variant-numeric:tabular-nums}
 .wd-card-go{
   flex:none; min-height:34px; padding:0 13px; border-radius:10px; text-decoration:none;
-  background:var(--navy); color:#fff; font-weight:800; font-size:.78rem;
+  background:var(--navy); color:#fff; font-weight:600; font-size:.78rem;
   display:inline-flex; align-items:center;
 }
 .wd-card-bal{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
-  border-top:1px dashed #D9E0E8; padding-top:8px; font-size:.83rem; color:var(--grey); font-weight:700;
+  border-top:1px dashed #D9E0E8; padding-top:8px; font-size:.83rem; color:var(--grey); font-weight:500;
 }
-.wd-card-bal b{color:#14713E; font-size:1rem; font-weight:900; font-variant-numeric:tabular-nums}
+.wd-card-bal b{color:#14713E; font-size:1rem; font-weight:700; font-variant-numeric:tabular-nums}
 .wd-card-bal b.is-neg{color:#B3261E}
 .wd-card-hint{margin:0; font-size:.78rem; color:var(--grey); line-height:1.6}
-.wd-card-lock{margin:0; font-size:.83rem; color:#8E1F1F; font-weight:700; line-height:1.6}
+.wd-card-lock{margin:0; font-size:.83rem; color:#8E1F1F; font-weight:500; line-height:1.6}
 .wd-card-over{
-  margin:0; font-size:.8rem; font-weight:800; line-height:1.6; color:#8A5A00;
+  margin:0; font-size:.8rem; font-weight:600; line-height:1.6; color:#8A5A00;
   background:#FFF6E0; border:1px solid #F0DFA8; border-radius:10px; padding:8px 10px;
 }
 
 /* سطر «عهدة يوم» فوق حقل التاريخ في فورمي الإيصال/النثرية (على الشيت الأبيض) */
 .hf-wd{
-  font-size:.8rem; color:var(--grey); font-weight:700; margin-bottom:8px;
+  font-size:.8rem; color:var(--grey); font-weight:500; margin-bottom:8px;
   display:flex; gap:6px; flex-wrap:wrap; align-items:center;
 }
-.hf-wd b{color:var(--navy); font-weight:900}
-.hf-wd a{color:var(--gold-dk); font-weight:800; text-decoration:underline}
+.hf-wd b{color:var(--navy); font-weight:700}
+.hf-wd a{color:var(--gold-dk); font-weight:600; text-decoration:underline}
 
 /* إحصائيات الإذن (بوالص/عربيات/سائقين/حركات) */
 .hm-metrics{display:flex; flex-wrap:wrap; gap:7px; margin-top:11px}
 .hm-metrics span{
   background:var(--hm-sheet); border:1px solid var(--hm-line); border-radius:9px;
-  padding:5px 10px; font-size:.78rem; font-weight:700; color:var(--hm-muted);
+  padding:5px 10px; font-size:.78rem; font-weight:500; color:var(--hm-muted);
 }
-.hm-metrics b{color:var(--hm-text); font-weight:900; font-variant-numeric:tabular-nums}
+.hm-metrics b{color:var(--hm-text); font-weight:700; font-variant-numeric:tabular-nums}
 
 /* قائمة السائقين في التفاصيل */
 .hm-drivers{margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; align-items:center}
-.hm-drivers-lbl{font-size:.79rem; font-weight:800; color:var(--hm-muted)}
+.hm-drivers-lbl{font-size:.79rem; font-weight:600; color:var(--hm-muted)}
 .hm-driver{
-  background:#EEF2F7; border-radius:8px; padding:3px 9px; font-size:.78rem; font-weight:700; color:var(--hm-text);
+  background:#EEF2F7; border-radius:8px; padding:3px 9px; font-size:.78rem; font-weight:500; color:var(--hm-text);
 }
 
 /* شارة «جديد» — شريط علوي على الكارت (مش overlay عشان ما يغطّيش اسم الشركة) */
 .hm-new-tag{
   display:block; background:#1E88E5; color:#fff;
-  font-size:.74rem; font-weight:900; padding:5px 14px; letter-spacing:.02em;
+  font-size:.74rem; font-weight:700; padding:5px 14px; letter-spacing:.02em;
 }
 .hm-stub.is-new{box-shadow:0 0 0 1.5px #1E88E5, 0 6px 18px rgba(30,136,229,.12)}
 
@@ -957,29 +1057,29 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 }
 .hf-back svg{width:20px; height:20px; transform:scaleX(-1)}   /* السهم يوجّه لجهة الرجوع في RTL */
 .hf-back:active{background:var(--hm-ink-3)}
-.hf-title{font-size:1.05rem; font-weight:800}
+.hf-title{font-size:1.05rem; font-weight:600}
 
 .hf-context{
   margin-top:16px; background:var(--hm-ink-2); border:1px solid var(--hm-ink-3);
   border-radius:16px; padding:14px 15px; display:flex; flex-wrap:wrap; align-items:center; gap:8px;
 }
-.hf-context b{flex-basis:100%; font-size:1.25rem; font-weight:900; letter-spacing:-.01em; color:#fff; line-height:1.3}
+.hf-context b{flex-basis:100%; font-size:1.25rem; font-weight:700; letter-spacing:-.01em; color:#fff; line-height:1.3}
 .hf-context .hf-kind{
-  order:-1; font-size:.72rem; font-weight:800; padding:3px 10px; border-radius:99px;
+  order:-1; font-size:.72rem; font-weight:600; padding:3px 10px; border-radius:99px;
 }
 .hf-context .hf-kind.is-sader{background:var(--sader-lt); color:var(--sader)}
 .hf-context .hf-kind.is-warid{background:var(--warid-lt); color:#07636B}
-.hf-context .hf-no{color:var(--hm-on-dark-dim); font-size:.85rem; font-weight:700; font-variant-numeric:tabular-nums}
+.hf-context .hf-no{color:var(--hm-on-dark-dim); font-size:.85rem; font-weight:500; font-variant-numeric:tabular-nums}
 .hf-context .hf-box{
   background:var(--hm-ink-3); color:var(--hm-on-dark); border-radius:8px; padding:3px 9px;
-  font-size:.78rem; font-weight:700;
+  font-size:.78rem; font-weight:500;
 }
 .hf-context .hf-box bdi{font-variant-numeric:tabular-nums}
 
 /* شريط حالة الشبكة */
 .hf-body .net-state{
   max-width:640px; margin:0 auto; border-radius:0;
-  display:flex; align-items:center; gap:10px; padding:10px 16px; font-weight:700; font-size:.85rem;
+  display:flex; align-items:center; gap:10px; padding:10px 16px; font-weight:500; font-size:.85rem;
 }
 
 /* الشيت الأبيض */
@@ -992,7 +1092,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 /* الحقول */
 .hf-body .field{margin:0 0 18px}
 .hf-body .field > label, .hf-body .field > legend{
-  font-size:.9rem; font-weight:800; margin-bottom:8px; color:var(--hm-text);
+  font-size:.9rem; font-weight:600; margin-bottom:8px; color:var(--hm-text);
 }
 .hf-body .field .hint{color:var(--hm-muted)}
 .hf-body .optional{color:var(--hm-muted)}
@@ -1010,26 +1110,26 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hf-body .pick{gap:11px}
 .hf-body .pick label{
   min-height:58px; border:1.5px solid var(--hm-line); border-radius:14px; background:var(--hm-card);
-  font-size:1rem; font-weight:800; color:var(--hm-text);
+  font-size:1rem; font-weight:600; color:var(--hm-text);
 }
 .hf-body .pick input:checked + label{background:var(--hm-ink); border-color:var(--hm-ink); color:#fff}
 .hf-body .pick input:focus-visible + label{outline:3px solid var(--hm-gold); outline-offset:2px}
 
 /* المبلغ: أكبر حقل في الشاشة */
 .hf-body .money-in input{
-  min-height:72px; font-size:2.1rem; font-weight:900; text-align:center; border-radius:16px;
+  min-height:72px; font-size:2.1rem; font-weight:700; text-align:center; border-radius:16px;
   background:#fff;
 }
 .hf-body .money-in .cur{color:var(--hm-muted)}
 .hf-body .total-hint{
   background:var(--gold-lt); color:#6B5200; border-radius:10px; padding:8px 11px;
-  font-weight:800; margin-top:8px;
+  font-weight:600; margin-top:8px;
 }
 
 /* عدّاد الكمية */
 .hf-body .qty button{
   width:52px; height:52px; border-radius:13px; border:1.5px solid var(--hm-line);
-  background:var(--hm-card); font-size:1.5rem; font-weight:900; color:var(--hm-text);
+  background:var(--hm-card); font-size:1.5rem; font-weight:700; color:var(--hm-text);
 }
 .hf-body .qty button:active{background:var(--hm-ink); color:#fff; border-color:var(--hm-ink)}
 .hf-body .qty input{min-height:52px}
@@ -1038,12 +1138,12 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   display:flex; align-items:center; gap:10px; margin:0 0 14px;
   background:var(--hm-card); border:1px solid var(--hm-line); border-radius:13px; padding:11px 13px;
 }
-.hf-body .multi-toggle-row span{flex:1; font-weight:700; font-size:.88rem; color:var(--hm-text)}
+.hf-body .multi-toggle-row span{flex:1; font-weight:500; font-size:.88rem; color:var(--hm-text)}
 
 /* شرائح الاقتراح + زر «أكتر من واحد» */
 .hf-body .suggestions button, .hf-body .mini-action{
   border:1px solid var(--hm-line); background:var(--hm-card); color:var(--hm-text);
-  border-radius:99px; padding:7px 14px; font-weight:800; font-size:.82rem; cursor:pointer;
+  border-radius:99px; padding:7px 14px; font-weight:600; font-size:.82rem; cursor:pointer;
 }
 .hf-body .suggestions button:active, .hf-body .mini-action:active{background:var(--hm-ink); color:#fff; border-color:var(--hm-ink)}
 
@@ -1051,7 +1151,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hf-body .shot{
   display:flex; align-items:center; justify-content:center; gap:8px; min-height:56px;
   border:1.5px dashed var(--hm-line); border-radius:14px; background:var(--hm-card);
-  color:var(--hm-muted); font-weight:800; cursor:pointer;
+  color:var(--hm-muted); font-weight:600; cursor:pointer;
 }
 .hf-body .shot.has{border-style:solid; border-color:var(--green); background:var(--green-lt); color:var(--green)}
 .hf-body .shot-prev{margin-top:10px; border-radius:14px; overflow:hidden; border:1px solid var(--hm-line)}
@@ -1069,7 +1169,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 }
 .hf-body .draft-note{
   display:flex; align-items:center; gap:10px; background:var(--gold-lt); color:#6B5200;
-  border-radius:13px; padding:11px 13px; margin-bottom:14px; font-weight:700; font-size:.86rem;
+  border-radius:13px; padding:11px 13px; margin-bottom:14px; font-weight:500; font-size:.86rem;
 }
 .hf-body .draft-note span{flex:1}
 
@@ -1091,9 +1191,9 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 
 /* ── تحويل عهدة لمندوب (v46): سياق الرصيد في هيدر الشاشة ─────── */
 .hf-context-bal{flex-direction:column; align-items:flex-start; gap:5px}
-.hf-bal-lbl{color:var(--hm-on-dark-dim); font-size:.82rem; font-weight:700}
-.hf-bal-amt{color:#fff; font-size:2rem; font-weight:900; font-variant-numeric:tabular-nums; line-height:1}
-.hf-bal-amt small{font-size:.95rem; font-weight:700; color:var(--hm-on-dark-dim)}
+.hf-bal-lbl{color:var(--hm-on-dark-dim); font-size:.82rem; font-weight:500}
+.hf-bal-amt{color:#fff; font-size:2rem; font-weight:700; font-variant-numeric:tabular-nums; line-height:1}
+.hf-bal-amt small{font-size:.95rem; font-weight:500; color:var(--hm-on-dark-dim)}
 .hf-note-line{color:var(--hm-on-dark-dim); font-size:.8rem; line-height:1.6; margin-top:4px}
 
 /* لو الإجراءات بقت 4، تلتفّ في صفّين بأناقة بدل ما تتزنق */
@@ -1107,8 +1207,8 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 }
 
 /* سطر توضيحي تحت عنوان التبويب — بيقول إن المعروض ليوم العمل بس (v49) */
-.hm-sheet-sub{display:block; font-size:.76rem; color:var(--hm-muted, #6B7683); font-weight:600; margin-top:2px}
-.hm-empty a{color:var(--gold-dk); font-weight:800; text-decoration:underline}
+.hm-sheet-sub{display:block; font-size:.76rem; color:var(--hm-muted, #6B7683); font-weight:400; margin-top:2px}
+.hm-empty a{color:var(--gold-dk); font-weight:600; text-decoration:underline}
 
 /* ══════════════════════════════════════════════════════════════
    متابعة المناديب (v47) — شاشة المشرف `/m/team`.
@@ -1126,25 +1226,34 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .tw-rep-head{display:flex; align-items:center; gap:11px}
 .tw-face{
   width:40px; height:40px; flex:none; border-radius:50%; display:grid; place-items:center;
-  background:#EEF2F7; color:var(--hm-text); font-weight:900; font-size:1.05rem;
+  background:#EEF2F7; color:var(--hm-text); font-weight:700; font-size:1.05rem;
 }
 .tw-rep-id{display:flex; flex-direction:column; min-width:0; flex:1}
-.tw-rep-id b{font-size:1rem; font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.tw-rep-id b{font-size:1rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .tw-rep-id small{color:var(--hm-muted); font-size:.76rem; margin-top:2px}
 .tw-rep-bal{display:flex; flex-direction:column; align-items:flex-end; flex:none}
-.tw-rep-bal b{font-size:1.25rem; font-weight:900; font-variant-numeric:tabular-nums; line-height:1.1}
-.tw-rep-bal small{color:var(--hm-muted); font-size:.72rem; font-weight:700}
+.tw-rep-bal b{font-size:1.25rem; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1}
+.tw-rep-bal small{color:var(--hm-muted); font-size:.72rem; font-weight:500}
 .tw-rep-bal.is-owed b{color:var(--green)}
 
-.tw-bar{height:7px; border-radius:99px; background:#EDF1F6; overflow:hidden; margin:11px 0 9px}
+.tw-bar{height:7px; border-radius:99px; background:#EDF1F6; overflow:hidden; margin:11px 0 9px; display:flex}
 .tw-bar i{display:block; height:100%; background:var(--hm-gold)}
+/* الجزء المستنّي مراجعة — فلوس خرجت من إيده بس البند لسه ما اتعتمدش */
+.tw-bar i.is-wait{background:repeating-linear-gradient(45deg,#D9BE6A 0 5px,#EBD9A6 5px 10px)}
+
+/* سطر توضيحي جوّه «التفاصيل» فوق (ليه الرقم بيخصم المستنّي) */
+.tw-hint{
+  margin:9px 0 0; font-size:.76rem; line-height:1.65;
+  color:var(--hm-on-dark-dim);
+}
+.tw-hint b{font-weight:700; color:var(--hm-on-dark)}
 
 .tw-facts{display:flex; flex-wrap:wrap; gap:6px}
 .tw-facts span{
   background:var(--hm-sheet); border:1px solid var(--hm-line); border-radius:9px;
-  padding:4px 9px; font-size:.76rem; font-weight:700; color:var(--hm-muted);
+  padding:4px 9px; font-size:.76rem; font-weight:500; color:var(--hm-muted);
 }
-.tw-facts b{color:var(--hm-text); font-weight:900; font-variant-numeric:tabular-nums}
+.tw-facts b{color:var(--hm-text); font-weight:700; font-variant-numeric:tabular-nums}
 .tw-facts .is-wait{background:var(--gold-lt); border-color:#E5D6A4; color:#6B5200}
 .tw-facts .is-wait b{color:#6B5200}
 .tw-facts .is-low{background:var(--red-lt); border-color:#F0C9C9; color:var(--red)}
@@ -1155,7 +1264,7 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 
 /* الهيدر المشترك مع شاشات الفورم (hf-back/hf-title) جوّه الهيدر الغامق */
 .hm-top .hf-back{background:var(--hm-ink-2); border:1px solid var(--hm-ink-3); color:var(--hm-on-dark)}
-.hm-top .hf-title{color:var(--hm-on-dark); font-size:1.05rem; font-weight:800}
+.hm-top .hf-title{color:var(--hm-on-dark); font-size:1.05rem; font-weight:600}
 .tw-facts .is-done{background:var(--green-lt); border-color:#C4E3CE; color:var(--green)}
 
 /* سطر «عهدة اليوم» في كارت المندوب على شاشة المشرف (v49) */
@@ -1164,8 +1273,8 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   padding:7px 10px; border-radius:11px; background:var(--hm-sheet, #F5F7FA);
   border:1px solid var(--hm-line, #E3E7ED);
 }
-.tw-day>span{font-size:.75rem; color:var(--hm-muted, #6B7683); font-weight:700}
-.tw-day>b{font-size:.95rem; font-weight:900; font-variant-numeric:tabular-nums; color:var(--hm-text, #16202B)}
+.tw-day>span{font-size:.75rem; color:var(--hm-muted, #6B7683); font-weight:500}
+.tw-day>b{font-size:.95rem; font-weight:700; font-variant-numeric:tabular-nums; color:var(--hm-text, #16202B)}
 .tw-day>b.is-neg{color:#B3261E}
 .tw-day>small{margin-inline-start:auto; font-size:.74rem; color:var(--hm-muted, #6B7683); font-variant-numeric:tabular-nums}
 
@@ -1173,3 +1282,140 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
    عشان الوحدة المشتركة ما تحتاجش تعرف هي في أي نظام. */
 .mv-flash{animation:mvflash 1s ease}
 @keyframes mvflash{0%{background:rgba(212,175,55,.28)}100%{background:transparent}}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   إشعارات المندوب (المرحلة ٦ من docs/15)
+   ⚠️ الكلاسات ببادئة `nt-`/`ntp-` عشان ما تلمسش أي شاشة تانية بتشارك m.css.
+   ══════════════════════════════════════════════════════════════════════════ */
+.nt-gear{
+  margin-inline-start:auto; width:38px; height:38px; display:flex; align-items:center;
+  justify-content:center; border-radius:11px; background:var(--hm-ink-2, #1B2836);
+  border:1px solid var(--hm-ink-3, #27374A); font-size:1.05rem; text-decoration:none
+}
+.nt-allform{margin:0 0 12px}
+.nt-all{
+  width:100%; min-height:44px; padding:10px 14px; border-radius:12px;
+  border:1.5px solid var(--gold); background:#FFF9E6; color:var(--navy);
+  font:inherit; font-weight:500; font-size:.88rem; cursor:pointer
+}
+.nt-snoozed,.nt-hint{
+  margin:0 0 12px; padding:10px 12px; border-radius:11px;
+  background:var(--hm-sheet, #F5F7FA); border:1px solid var(--hm-line, #E3E7ED);
+  color:var(--hm-muted, #6B7683); font-size:.8rem; font-weight:500
+}
+.nt-empty{
+  display:flex; flex-direction:column; gap:6px; align-items:center; text-align:center;
+  padding:44px 16px; color:var(--hm-muted, #6B7683)
+}
+.nt-empty b{font-size:1.05rem; color:var(--hm-text, #16202B); font-weight:500}
+.nt-empty span{font-size:.85rem; font-weight:500}
+.nt-list{list-style:none; margin:0; padding:0}
+.nt-day{
+  padding:12px 2px 6px; font-size:.78rem; font-weight:500;
+  color:var(--hm-muted, #6B7683); letter-spacing:.03em
+}
+.nt-item{
+  padding:12px 13px; margin-bottom:9px; border-radius:13px;
+  background:#fff; border:1px solid var(--hm-line, #E3E7ED)
+}
+.nt-item.unread{border-color:var(--gold); background:#FFFDF5}
+.nt-link{display:block; text-decoration:none; color:inherit}
+.nt-item b{display:block; font-size:.95rem; font-weight:500; color:var(--hm-text, #16202B); line-height:1.35}
+.nt-body{display:block; margin-top:3px; font-size:.83rem; font-weight:500; color:var(--hm-muted, #6B7683); line-height:1.5}
+.nt-when{display:block; margin-top:5px; font-size:.74rem; font-weight:500; color:var(--hm-muted, #6B7683)}
+
+/* شاشة تفضيلات المندوب */
+.ntp-list{list-style:none; margin:0 0 16px; padding:0; border-radius:13px; overflow:hidden; border:1px solid var(--hm-line, #E3E7ED)}
+.ntp-head,.ntp-row{
+  display:grid; grid-template-columns:1fr 54px 54px; align-items:center; gap:8px;
+  padding:12px 13px; background:#fff
+}
+.ntp-head{background:var(--hm-sheet, #F5F7FA); font-size:.76rem; font-weight:500; color:var(--hm-muted, #6B7683)}
+.ntp-head span:not(:first-child),.ntp-ch{text-align:center; display:flex; justify-content:center}
+.ntp-row{border-top:1px solid var(--hm-line, #E3E7ED)}
+.ntp-lbl{font-size:.88rem; font-weight:500; color:var(--hm-text, #16202B)}
+.ntp-ch input{width:22px; height:22px; accent-color:var(--navy)}
+.ntp-ch input:disabled{opacity:.4}
+
+/* شارة الجرس في شريط شاشة المندوب الرئيسية */
+.nt-bell{position:relative; text-decoration:none}
+.nt-bell .nt-dot{
+  position:absolute; top:-2px; inset-inline-end:-2px; min-width:17px; height:17px;
+  padding:0 4px; display:flex; align-items:center; justify-content:center;
+  border-radius:99px; background:#B3261E; color:#fff; font-size:.62rem; font-weight:500;
+  line-height:1; border:2px solid var(--hm-ink, #0F151E)
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   مستندات الأطراف على موبايل المندوب (v56)
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ بوابة `/m` بتحمّل `m.css` بس (مش app.css)، فكلاسات `.pdoc-*` اللي في
+   app.css **ما توصلش هنا** — عشان كده الشاشة ليها ماركب وكلاسات خاصة بيها.
+   ══════════════════════════════════════════════════════════════════════ */
+.hm-stub-docs{
+  display:flex; align-items:center; gap:8px; min-height:44px; padding:0 16px;
+  text-decoration:none; color:var(--navy); font-weight:600; font-size:.88rem;
+  border-top:1px solid var(--hm-line); background:#F8FAFD;
+}
+.hm-stub-docs:active{background:#EEF3F9}
+.hf-docs{
+  display:inline-flex; align-items:center; gap:6px; text-decoration:none;
+  padding:5px 11px; border-radius:99px; font-size:.8rem; font-weight:600;
+  background:var(--hm-ink-3); color:var(--hm-on-dark);
+}
+.hf-docs:active{background:#3A4A5E}
+
+.md-hint{margin:0 0 14px; color:var(--hm-muted); font-size:.85rem; line-height:1.7}
+.md-card{
+  background:var(--hm-card); border:1px solid var(--hm-line); border-radius:16px;
+  padding:14px; margin-bottom:12px;
+}
+.md-card.is-expired{border-color:#E7C2C2; background:#FDF7F7}
+.md-head{display:flex; align-items:center; gap:11px}
+.md-ic{
+  display:flex; align-items:center; justify-content:center; width:38px; height:38px;
+  flex:none; border-radius:12px; background:#EEF3F9; color:var(--navy);
+}
+.md-title{min-width:0}
+.md-title b{display:block; font-size:1rem; font-weight:600; color:var(--hm-text);
+  line-height:1.4; overflow-wrap:anywhere}
+.md-title span{display:block; margin-top:2px; color:var(--hm-muted); font-size:.78rem}
+
+.md-meta{display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:10px;
+  color:var(--hm-muted); font-size:.78rem}
+.md-flag{display:inline-flex; align-items:center; gap:4px; border-radius:99px;
+  padding:2px 9px; font-weight:600; line-height:1.6}
+.md-flag.ok{color:#1F7A45; background:#EBF6EF}
+.md-flag.warn{color:#8A6A11; background:#FBF3DE}
+.md-flag.bad{color:#B3261E; background:#FBEBEA}
+
+.md-acts{display:flex; gap:8px; margin-top:13px}
+.md-btn{
+  flex:1; min-height:46px; display:flex; align-items:center; justify-content:center; gap:6px;
+  text-decoration:none; border-radius:12px; font-size:.86rem; font-weight:600;
+  background:#EEF3F9; color:var(--navy); border:1px solid var(--hm-line);
+}
+.md-btn.is-main{background:var(--navy); color:#fff; border-color:var(--navy)}
+.md-btn:active{filter:brightness(.95)}
+
+/* لافتة التحديث الإجباري — نسخة البوابة.
+   ⚠️ `m.css` مالهاش توكنات `--space/--z/--radius` بتاعة app.css، فالقيم هنا
+      مكتوبة صراحةً. و`bottom` مرفوعة **فوق التاب بار** (z-index:40) وشريط
+      الحفظ اللاصق، وإلا اللافتة تتخبّى وراهم ومحدش يشوف إن فيه تحديث. */
+.upd-bar{
+  position:fixed; z-index:60; inset-inline:12px;
+  bottom:calc(env(safe-area-inset-bottom,0px) + 76px);
+  max-width:616px; margin-inline:auto;
+  display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:10px;
+  padding:12px 14px; border-radius:16px; text-align:center;
+  background:var(--navy); color:#fff; font-size:.85rem; font-weight:500; line-height:1.6;
+  box-shadow:0 10px 28px rgba(0,0,0,.34);
+  animation:updIn .3s cubic-bezier(.2,.8,.3,1) both;
+}
+.upd-btn{
+  width:100%; min-height:44px; border:none; cursor:pointer; border-radius:12px;
+  background:var(--gold); color:var(--navy-dk);
+  font-family:inherit; font-size:.9rem; font-weight:600;
+}
+@keyframes updIn{from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none}}
+@media(prefers-reduced-motion:reduce){.upd-bar{animation:none}}

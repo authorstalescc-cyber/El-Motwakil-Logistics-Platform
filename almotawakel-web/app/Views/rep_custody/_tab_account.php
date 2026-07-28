@@ -20,7 +20,10 @@ $back = 'rep-custody/' . $repId . '?tab=account';
    اللي كل صف فيها **كيان** (بند / تنزيل / تسوية) مش سطر مقارنة. */ ?>
 <div class="d-card mb" id="day-custody">
   <div class="d-card-head"><h3><?= icon('calendar', 18) ?>
-    <span>عهدة كل يوم<small class="d-head-sub">كل يوم عهدة مستقلة بلا ترحيل من اليوم اللي قبله</small></span></h3></div>
+    <span>عهدة كل يوم</span>
+    <?php /* ⚠️ تحذير وظيفي (قاعدة v49) — الجدول ده أيام جنب بعض، ومن غير
+             الشارة دي حد يجمعهم أو يفتكر إن الفاضل بيترحّل. */ ?>
+    <span class="d-badge navy" title="كل يوم عهدة مستقلة — الفاضل من اليوم اللي قبله ما بيترحّلش عليها">بلا ترحيل</span></h3></div>
   <div class="pv-tbl-wrap"><table class="data pv-tbl">
     <thead><tr>
       <th>اليوم</th>
@@ -29,7 +32,7 @@ $back = 'rep-custody/' . $repId . '?tab=account';
       <th>وصله من زميل</th>
       <th>حوّل لزميل</th>
       <th>رجّع</th>
-      <th>فاضل من عهدة اليوم</th>
+      <th>فاضل معاه</th>
       <th>مستني مراجعة</th>
       <th data-no-sort></th>
     </tr></thead>
@@ -39,13 +42,12 @@ $back = 'rep-custody/' . $repId . '?tab=account';
           <?php partial('empty', [
             'emoji' => '📆',
             'title' => 'مفيش أي حركة عهدة له لسه',
-            'note'  => 'نزّل له عهدة من تبويب اليوم وهي هتظهر هنا على يومها.',
             'action' => ['label' => '💰 نزّله عهدة', 'url' => url('rep-custody/' . $repId . '?tab=day#deposit-form')],
           ]); ?>
         </td></tr>
       <?php else: foreach ($dayLedger as $d): ?>
         <tr<?= $d['day'] === $day ? ' class="rc-row-today"' : '' ?>>
-          <td style="white-space:nowrap;font-weight:800">
+          <td style="white-space:nowrap;font-weight:600">
             <a href="<?= url('rep-custody/' . $repId . '?tab=day') ?>"><?= e(dfmt($d['day'])) ?></a>
             <?php if ($d['day'] === $day): ?><span class="pill st-done">يوم الشغل</span><?php endif; ?>
           </td>
@@ -53,17 +55,26 @@ $back = 'rep-custody/' . $repId . '?tab=account';
           <td><?= $d['spent'] > 0 ? money($d['spent']) : '—' ?></td>
           <td><?= $d['transfer_in'] > 0 ? money($d['transfer_in']) : '—' ?></td>
           <td><?= $d['transfer_out'] > 0 ? money($d['transfer_out']) : '—' ?></td>
-          <td><?= $d['returned'] > 0 ? money($d['returned']) : '—' ?></td>
-          <td style="font-weight:900;<?= $d['balance'] < 0 ? 'color:#B3261E' : '' ?>">
-            <?= money($d['balance']) ?>
-            <?php if ($d['balance'] < 0): ?>
-              <div style="font-size:var(--fs-1);font-weight:600;color:var(--grey)">صرف أكتر من عهدة اليوم</div>
+          <?php /* سالب = تصفية رصيد سالب (المكتب دفع له) — لازم تبان مش تختفي */ ?>
+          <td><?= abs($d['returned']) > 0.005
+                 ? ($d['returned'] < 0 ? 'دفعناله ' . money(abs($d['returned'])) : money($d['returned']))
+                 : '—' ?></td>
+          <?php /* «فاضل معاه» = `pocket` (بعد خصم المستنّي كمان) — نفس تعريف
+                   كل شاشات العهدة. `balance` (بعد المعتمد بس) بيبان تحته لو فيه
+                   فرق، عشان الفرق يتشرح بدل ما يختفي. */ ?>
+          <td style="font-weight:700;<?= $d['pocket'] < 0 ? 'color:#B3261E' : '' ?>">
+            <?= money($d['pocket']) ?>
+            <?php if ($d['pending'] > 0): ?>
+              <div style="font-size:var(--fs-1);font-weight:400;color:var(--grey)">قبل خصم المستني <?= money($d['balance'], false) ?></div>
+            <?php endif; ?>
+            <?php if ($d['pocket'] < 0): ?>
+              <div style="font-size:var(--fs-1);font-weight:400;color:var(--grey)">صرف أكتر من عهدة اليوم</div>
             <?php endif; ?>
           </td>
           <td><?= $d['pending'] > 0 ? money($d['pending']) : '—' ?></td>
           <td style="white-space:nowrap">
             <?php if ($d['locked']): ?>
-              <span class="pill st-partial" title="اليوم متقفل — المندوب مش هيقدر يسجّل عليه">🔒 متقفل</span>
+              <span class="pill st-partial" title="اليوم متقفل — المندوب مش هيقدر يسجّل عليه"><?= icon('alert', 14) ?> متقفل</span>
             <?php endif; ?>
           </td>
         </tr>
@@ -72,9 +83,19 @@ $back = 'rep-custody/' . $repId . '?tab=account';
   </table></div>
 </div>
 
-<?php /* ═══ تسوية الحساب ═══ */ ?>
-<div class="d-card mb" id="settle-form">
-  <div class="d-card-head"><h3><?= icon('check-circle', 18) ?> <span>تسوية الحساب</span></h3></div>
+<?php /* ═══ تصفية العهدة بضغطة (الطريقة المعتمدة) ═══
+   الجزء نفسه اللي في تبويب «اليوم» — مصدر واحد للرقم وللزرار. */ ?>
+<?php include __DIR__ . '/_settle_zero.php'; ?>
+
+<?php /* ═══ تسوية جزئية (المندوب رجّع جزء بس) ═══
+   ⚠️ فضلت للحالات النادرة اللي المندوب بيسلّم فيها جزء من الفاضل. الطريقة
+   المعتمدة للتقفيل هي زرار التصفية فوق — كتابة الرقم بالإيد هي اللي كانت
+   بتسيب فروق فالرصيد يفضل مترحّل. */ ?>
+<?php /* ⚠️ بتتفتح لوحدها لو الخادم رجّع خطأ — وإلا المالك يشوف رسالة فشل
+         لفورم مطويّ ومش عارف منين يصلّحه. */ ?>
+<details class="d-card mb" id="settle-form"<?= $settleErrors ? ' open' : '' ?>>
+  <summary class="d-card-head" style="cursor:pointer"><h3><?= icon('coins', 18) ?>
+    <span>تسوية جزئية</span></h3></summary>
   <?= formErrorSummary($settleErrors) ?>
   <form class="js-dirty-form" method="post" action="<?= url('rep-custody/' . $repId . '/settle') ?>" style="padding:14px 18px">
     <?= csrfField() ?>
@@ -100,7 +121,7 @@ $back = 'rep-custody/' . $repId . '?tab=account';
     </div>
     <button class="btn" type="submit" data-primary-submit <?= $b['balance'] <= 0 ? 'disabled' : '' ?>><?= icon('check-circle', 15) ?> سجّل التسوية</button>
   </form>
-</div>
+</details>
 
 <?php /* ═══ كل اللي صرفه (تراكمي) ═══
    الجدول (٦ أعمدة) اتشال: كل صف هنا **بند** مش سطر مقارنة رقمية. */ ?>
@@ -112,8 +133,7 @@ $back = 'rep-custody/' . $repId . '?tab=account';
   'class'  => 'mb',
   'body'   => function () use ($spending, $day) {
     if (!$spending) {
-      partial('empty', ['emoji' => '🧾', 'title' => 'لسه ما صرفش حاجة من عهدته',
-                        'note' => 'البنود بتظهر هنا بعد اعتمادها من صندوق المراجعة.']);
+      partial('empty', ['emoji' => '🧾', 'title' => 'لسه ما صرفش حاجة من عهدته',]);
       return;
     }
     foreach ($spending as $s) {
@@ -122,6 +142,7 @@ $back = 'rep-custody/' . $repId . '?tab=account';
       [$ic, $kind] = match ($src) {
         'misc'     => ['coins', $s['category'] ?: 'نثرية'],
         'handover' => ['truck', 'تسليم سائق'],
+        'bill'     => ['truck', 'عهدة بوليصة'],   // v60 — أضافها من موبايله
         'transfer' => ['shuffle', 'تحويل لمندوب'],
         default    => $isReceipt ? ['clipboard', 'إيصال'] : ['trending-down', 'مصروف إذن'],
       };
@@ -131,6 +152,10 @@ $back = 'rep-custody/' . $repId . '?tab=account';
       } elseif ($src === 'handover') {
         $meta[] = ['icon' => 'user', 'text' => $s['driver_name'] ?: '—'];
         if (!empty($s['bill_number'])) { $meta[] = ['icon' => 'truck', 'text' => 'بوليصة ' . $s['bill_number']]; }
+      } elseif ($src === 'bill') {
+        $meta[] = ['icon' => 'user', 'text' => $s['driver_name'] ?: '—'];
+        if (!empty($s['car_no'])) { $meta[] = ['icon' => 'truck', 'text' => $s['car_no']]; }
+        if (!empty($s['permit_no'])) { $meta[] = ['icon' => 'folder', 'text' => 'إذن ' . $s['permit_no']]; }
       } elseif ($src === 'transfer') {
         $meta[] = ['icon' => 'user', 'text' => 'لـ ' . ($s['other_name'] ?? '—')];
       } else {
@@ -148,7 +173,6 @@ $back = 'rep-custody/' . $repId . '?tab=account';
         'chips'  => !empty($s['is_visa']) ? [['icon' => 'credit-card', 'text' => 'فيزا — مش من العهدة']] : [],
         'amount' => money($s['amount'], false),
         'amount_tone' => empty($s['is_visa']) ? 'ex' : '',
-        'sub'    => dfmt($s['d']) . ((string) $s['d'] === $day ? ' · يوم الشغل' : ''),
       ]);
     }
   },
@@ -192,8 +216,7 @@ $back = 'rep-custody/' . $repId . '?tab=account';
     'scroll' => true,
     'body'   => function () use ($deposits, $day, $back) {
       if (!$deposits) {
-        partial('empty', ['emoji' => '💰', 'title' => 'لا تنزيلات بعد',
-                          'note' => 'نزّل له عهدة من تبويب اليوم.']);
+        partial('empty', ['emoji' => '💰', 'title' => 'لا تنزيلات بعد',]);
         return;
       }
       foreach ($deposits as $d) {
@@ -203,7 +226,6 @@ $back = 'rep-custody/' . $repId . '?tab=account';
           'meta'   => [['icon' => 'calendar', 'text' => dfmt($d['dep_date'])]],
           'amount' => money($d['amount'], false),
           'amount_tone' => 'pos',
-          'sub'    => (string) $d['dep_date'] === $day ? 'يوم الشغل' : null,
           'extra'  => function () use ($d, $back) { ?>
             <form method="post" action="<?= url('rep-custody/deposit/' . $d['id'] . '/delete') ?>"
                   class="confirm-delete" data-confirm="حذف تنزيل العهدة ده؟">
@@ -224,19 +246,20 @@ $back = 'rep-custody/' . $repId . '?tab=account';
     'scroll' => true,
     'body'   => function () use ($settlements, $back) {
       if (!$settlements) {
-        partial('empty', ['emoji' => '🤝', 'title' => 'لا تسويات بعد',
-                          'note' => 'التسوية بتقفل حساب العهدة مع المندوب.']);
+        partial('empty', ['emoji' => '🤝', 'title' => 'لا تسويات بعد',]);
         return;
       }
       foreach ($settlements as $s) {
+        // ⚠️ `returned` ممكن يكون **سالبًا** بعد تصفية رصيد سالب (المكتب هو اللي
+        //    دفع للمندوب). لازم يتعرض بالمعنى الصح مش بالرقم الخام.
+        $ret = (float) $s['returned'];
         partial('row_item', [
-          'title'  => 'تسوية حساب',
+          'title'  => $ret < 0 ? 'تصفية — المكتب دفع له' : 'تسوية حساب',
           'icon'   => 'check-circle',
           'meta'   => [['icon' => 'calendar', 'text' => dfmt($s['settle_date'])],
-                       ['icon' => 'info', 'text' => ((int) $s['to_custody'] === 1)
-                        ? 'ترحيل قديم للخزنة' : 'بدون أثر على الخزنة']],
-          'amount' => money($s['returned'], false),
-          'sub'    => 'رجّع',
+                       ['icon' => 'info', 'text' => trim((string) ($s['note'] ?? '')) !== ''
+                        ? (string) $s['note'] : 'بدون أثر على الخزنة']],
+          'amount' => money(abs($ret), false),
           'extra'  => function () use ($s, $back) { ?>
             <form method="post" action="<?= url('rep-custody/settlement/' . $s['id'] . '/delete') ?>"
                   class="confirm-delete" data-confirm="حذف التسوية دي؟">

@@ -34,6 +34,7 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 
 use App\Core\App;
 use App\Models\Notify;
+use App\Models\NotifyWatch;
 use App\Models\PushNotify;
 
 $verbose = in_array('--verbose', $argv, true) || in_array('-v', $argv, true);
@@ -62,8 +63,18 @@ try {
         // الاستثناء الوحيد المسموح له يبعت من سطر الأوامر
         PushNotify::workerMode(true);
         PushNotify::mute(false);
+
+        /* ⚠️ **الترتيب مقصود: التوليد قبل الإرسال.** التذكيرات اللي بتتولّد
+           دلوقتي بتتبعت في نفس التشغيلة بدل ما تستنى ٥ دقايق كمان. */
+        $watch = NotifyWatch::run();
+        $made  = array_sum($watch);
+        if ($made > 0) {
+            $say('تنبيهات تلقائية اتولّدت: ' . json_encode($watch, JSON_UNESCAPED_UNICODE));
+        }
+
         $result = PushNotify::deliverPending(100);
-        $say("أحداث: {$result['events']} · اتبعت: {$result['sent']} · فشل: {$result['failed']} · متخطّى: {$result['skipped']}");
+        $result['watch'] = $made;
+        $say("أحداث: {$result['events']} · اتبعت: {$result['sent']} · فشل: {$result['failed']} · متخطّى: {$result['skipped']} · تلقائي: {$made}");
     }
 
     // ختم آخر تشغيل — الشاشة بتقراه عشان تقول إن الكرون شغّال فعلاً

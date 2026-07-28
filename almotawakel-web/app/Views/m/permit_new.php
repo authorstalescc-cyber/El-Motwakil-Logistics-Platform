@@ -31,7 +31,7 @@ $dl = function (string $id, string $lookupType) use ($lookups) {
 <div class="m-bar">
   <a href="<?= url('m') ?>" class="out">→ رجوع</a>
   <span class="sp"></span>
-  <span class="who">📄 إذن جديد</span>
+  <span class="who"><?= icon('file-text', 14) ?> إذن جديد</span>
 </div>
 
 <form method="post" action="<?= url('m/permit/new') ?>" id="f">
@@ -129,10 +129,14 @@ $dl = function (string $id, string $lookupType) use ($lookups) {
 
     <div class="field" id="field-container_type" <?= $err('container_type') ? 'data-error="1"' : '' ?>>
       <label for="ctype">تصنيف الحاويات <span class="optional">اختياري</span></label>
-      <input type="text" id="ctype" name="container_type" maxlength="120" list="dl_ctype"
-             enterkeyhint="next" autocomplete="off" value="<?= $o('container_type') ?>"
-             placeholder="مثال: 40 قدم" aria-describedby="err-container_type"
-             <?= $err('container_type') ? 'aria-invalid="true"' : '' ?>>
+      <?php partial('lookup_select', [
+        'name'  => 'container_type',
+        'type'  => 'container_type',
+        'value' => html_entity_decode((string) $o('container_type'), ENT_QUOTES, 'UTF-8'),
+        'blank' => '— اختر التصنيف —',
+        'attrs' => 'id="ctype" aria-describedby="err-container_type"'
+                 . ($err('container_type') ? ' aria-invalid="true"' : ''),
+      ]); ?>
       <p class="field-error" id="err-container_type" <?= $err('container_type') ? '' : 'hidden' ?>><?= e($err('container_type')) ?></p>
     </div>
 

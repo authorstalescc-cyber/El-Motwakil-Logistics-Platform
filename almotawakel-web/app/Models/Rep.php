@@ -457,7 +457,8 @@ class Rep
             SELECT 'reps' AS source, e.rep_id AS ref_id, e.entry_date AS d,
                    CASE e.kind WHEN 'advance' THEN 'سُلفة مندوب' ELSE 'تسوية حساب مندوب' END AS category,
                    COALESCE(NULLIF(r.name,''),'') AS party,
-                   e.amount AS amount, COALESCE(e.note, r.name) AS note, e.is_visa AS is_visa
+                   e.amount AS amount, COALESCE(e.note, r.name) AS note, e.is_visa AS is_visa,
+                   0 AS unpaid
             FROM rep_entries e
             JOIN reps r ON r.id = e.rep_id
             WHERE e.kind IN ($cash) AND e.amount <> 0

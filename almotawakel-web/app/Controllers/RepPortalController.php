@@ -6,6 +6,8 @@ use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\RepAuth;
 use App\Core\PrivateFile;
+use App\Models\PartyDoc;
+use App\Models\Permit;
 use App\Models\RepDriverHandover;
 use App\Models\PushNotify;
 use App\Models\RepPortal;
@@ -100,8 +102,32 @@ class RepPortalController extends Controller
     public function ping(): void
     {
         $this->requireRep();
-        $this->json(RepPortal::pingState(RepAuth::repId(), RepAuth::workDate()));
+        // `build` بتغذّي التحديث الإجباري من **نفس النداء** — صفر طلب زيادة.
+        // بتتحطّ في الكنترولر مش في `pingState` لأنها شأن عميل لا بيانات مندوب.
+        $this->json(RepPortal::pingState(RepAuth::repId(), RepAuth::workDate())
+            + ['build' => \App\Core\App::buildId()]);
         exit;
+    }
+
+    /**
+     * إشعارات المندوب (المرحلة ٦ من docs/15) — **قراءة فقط**.
+     *
+     * ⚠️ نفس مصدر الحقيقة بتاع المكتب بالحرف (`Notify::feed`)، فمستحيل الجرس
+     *    يقول حاجة والشاشة تقول غيرها. والهوية من الجلسة عبر `Notify::me()`.
+     *
+     * ⚠️ قاعدة v35 سارية: البنود اللي بتوصل المندوب أصلاً مفيهاش سعر العميل
+     *    (`Notify::ROUTES` بتوجّه له قرار بنده بس، ونصّه فيه **مبلغه هو**).
+     */
+    public function notifications(): void
+    {
+        $this->requireRep();
+        [$pt, $pk] = \App\Models\Notify::me();
+        $this->render('m/notifications', [
+            'title'   => 'الإشعارات',
+            'items'   => \App\Models\Notify::feed($pt, $pk, 60),
+            'unread'  => \App\Models\Notify::unreadCount($pt, $pk),
+            'snoozed' => \App\Models\Notify::snoozedCount($pt, $pk),
+        ], false);
     }
 
     // ═══════════════════════════════════════════ تاريخ العمل
@@ -294,6 +320,26 @@ class RepPortalController extends Controller
         $this->renderEntry($permit, $old, $errors, null);
     }
 
+    /**
+     * مستندات أطراف الإذن على موبايل المندوب (v56) — يفتحها أو يحمّلها أو يطبعها.
+     *
+     * ⚠️ **قراءة فقط بالكامل** — مفيش فورم ولا رقم مالي (قاعدة v35: ممنوع أي
+     *    مبلغ بيخصّ العميل يوصل شاشة المندوب). الحدّ الحقيقي على الملف نفسه في
+     *    `FileController::partyDoc` (شرط `rep_visible`)، مش في إخفاء الزرار.
+     */
+    public function permitDocs(string $id): void
+    {
+        $this->requireRep();
+        $permit = RepPortal::myPermit(RepAuth::repId(), (int) $id);
+        if (!$permit) { flash('error', 'الإذن ده اتقفل أو مش موجود — كلّم المكتب.'); redirect('m'); }
+
+        $this->render('m/docs', [
+            'title'  => 'مستندات ' . $permit['no'],
+            'permit' => $permit,
+            'groups' => PartyDoc::forPermit($permit, true),
+        ], false);
+    }
+
     public function entryStore(string $id): void
     {
         $this->requireRep();
@@ -483,81 +529,183 @@ class RepPortalController extends Controller
      *    اللي بتقعد pending. والأثر الوحيد هو ده: لا البوليصة ولا الخزنة ولا
      *    المصروفات بتتغيّر (شوف App\Models\RepDriverHandover).
      */
-    public function handoverForm(): void
+    // ═══════════════════════════════════════════ إضافة بوليصة (v60)
+
+    /**
+     * شاشة «بوليصة جديدة» — بديل شاشة «تسليم عهدة لسائق» القديمة (v45).
+     *
+     * بدل ما المندوب يسجّل تسليم كاش مجرّد، بقى بيضيف **البوليصة نفسها**
+     * وبيكتب عهدة السائق جوّاها — فالبيان بيدخل النظام مرّة واحدة صح، والعهدة
+     * بتتخصم من محفظته زي ما كان التسليم بيعمل بالظبط.
+     */
+    public function billForm(): void
     {
         $this->requireRep();
         $repId = RepAuth::repId();
-        if (!RepDriverHandover::available()) {
-            flash('error', 'الخاصية دي لسه مش مفعّلة — كلّم المكتب.');
-            redirect('m');
-        }
         $old = $_SESSION['_m_old'] ?? [];
         $errors = $_SESSION['_m_errors'] ?? [];
         unset($_SESSION['_m_old'], $_SESSION['_m_errors']);
 
+        $day = RepAuth::workDate();
         $permits = RepPortal::myPermits($repId);
-        // بوالص كل إذن مفتوح — بتتحمّل مرة واحدة والاختيار بيفلتر بالـJS، عشان
-        // المندوب ما يستناش تحميل صفحة عند كل تغيير إذن (الشبكة في الميناء بطيئة).
-        $bills = [];
+
+        // سعة الحاويات لكل حركة (والإذن نفسه) بتتحمّل **مرة واحدة** والاختيار
+        // بيفلتر بالـJS — شبكة الميناء بطيئة والمندوب ما يستناش تحميل صفحة عند
+        // كل تغيير إذن. الخادم بيعيد الفحص وقت الحفظ فالقيم دي إرشاد للعرض بس.
+        $caps = [];
         foreach ($permits as $p) {
-            $rows = RepDriverHandover::billsOf((int) $p['id']);
-            if ($rows) { $bills[(int) $p['id']] = $rows; }
+            $pid = (int) $p['id'];
+            $caps[$pid] = ['permit' => Permit::billContainerCapacity($pid, null)];
+            foreach ($p['movements'] as $mv) {
+                $caps[$pid]['mv'][(int) $mv['id']] = Permit::billContainerCapacity($pid, (int) $mv['id']);
+            }
         }
 
-        $this->render('m/handover', [
-            'title'     => 'تسليم عهدة لسائق',
+        $this->render('m/bill_new', [
+            'title'     => 'بوليصة جديدة',
             'old'       => $old,
             'errors'    => $errors,
+            // رمز لمرة واحدة يستهلكه `claimForm` — البوليصة ما ينفعش تتسجّل مرتين
+            // على شبكة بطيئة، والوسم بيخصم من عهدة المندوب مرتين لو حصل.
+            'formToken' => \App\Core\FormState::token(),
             'permits'   => $permits,
-            'bills'     => $bills,
-            'recent'    => RepDriverHandover::forRep($repId, 10),
-            'pocket'    => RepPortal::dayPocket($repId, RepAuth::workDate()),   // v49 — عهدة اليوم
-            'workDate'  => RepAuth::workDate(),
+            'caps'      => $caps,
+            // زرار «عربية المكتب» — بيملا اللوحة والسائق وصاحب العربية بضغطة.
+            // ⚠️ السائق بيتقرا من سجل السيارة (`office_cars.driver`) مش مكتوب في
+            //    الكود، فالمالك بيغيّره من `/cars` بلا تعديل كود.
+            'officeCars' => \App\Models\OfficeCar::available()
+                ? \App\Models\OfficeCar::fillPresets() : [],
+            'recent'    => RepPortal::myBills($repId, $day),
+            'pocket'    => RepPortal::dayPocket($repId, $day),
+            'workDate'  => $day,
         ], false);
     }
 
-    public function handoverStore(): void
+    public function billStore(): void
     {
         $this->requireRep();
         $this->requireCsrf();
         $repId = RepAuth::repId();
+        $this->claimForm('m/bill/new');
 
-        $photo = null;
         try {
-            $photo = $this->handlePhoto();
-            RepDriverHandover::create($repId, [
-                'bawali_id'     => (int) ($_POST['bawali_id'] ?? 0),
-                'driver_name'   => (string) ($_POST['driver_name'] ?? ''),
-                'car_no'        => (string) ($_POST['car_no'] ?? ''),
-                'amount'        => (string) ($_POST['amount'] ?? ''),
-                'handover_date' => RepAuth::workDate(),   // v49: بيتخصم من عهدة يوم العمل
-                'note'          => (string) ($_POST['note'] ?? ''),
-                'attachment'    => $photo ?? '',
+            $res = RepPortal::createBill($repId, [
+                'permit_id'       => (int) ($_POST['permit_id'] ?? 0),
+                'movement_id'     => (int) ($_POST['movement_id'] ?? 0),
+                'bill_number'     => (string) ($_POST['bill_number'] ?? ''),
+                'container_count' => (int) ($_POST['container_count'] ?? 0),
+                'container_type'  => (string) ($_POST['container_type'] ?? ''),
+                // bootstrap بيلمّ `container_no[]` في نصّ واحد قبل ما نوصل هنا
+                'container_no'    => (string) ($_POST['container_no'] ?? ''),
+                'driver'          => (string) ($_POST['driver'] ?? ''),
+                'car_no'          => (string) ($_POST['car_no'] ?? ''),
+                'car_owner'       => (string) ($_POST['car_owner'] ?? ''),
+                'custody'         => (string) ($_POST['custody'] ?? ''),
+                // ⚠️ التاريخ من الجلسة مش من الفورم (قاعدة v49)
+                'bill_date'       => RepAuth::workDate(),
+                'newname_driver'    => $_POST['newname_driver'] ?? '',
+                'newname_car_owner' => $_POST['newname_car_owner'] ?? '',
             ]);
         } catch (\Throwable $e) {
-            if ($photo) { $this->deletePhoto($photo); }
-            $this->submitFailure($e, 'm/handover');
+            $this->submitFailure($e, 'm/bill/new');
+            return;   // submitFailure بتعمل redirect/exit؛ ده للوضوح بس
         }
 
-        flash('success', 'اتسجّل التسليم ✓ — اتخصم من عهدتك.');
-        redirect('m/handover');
+        // ⚠️ الإشعار **بعد** نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
+        PushNotify::billLinked((int) $res['id'], (string) ($_POST['bill_number'] ?? ''),
+            (int) $res['permit_id'], '', 'مندوب: ' . (string) ($_SESSION['rep_name'] ?? ''));
+        flash('success', 'اتسجّلت ' . $res['label'] . ' ✓'
+            . ((float) ($_POST['custody'] ?? 0) > 0 ? ' — العهدة اتخصمت من عهدتك.' : ''));
+        redirect('m/bill/new');
     }
 
-    /** المندوب بيمسح تسليم سجّله بالغلط. */
-    public function handoverDelete(string $hid): void
+    /** المندوب بيمسح بوليصة سجّلها بالغلط النهاردة. */
+    public function billDelete(string $bid): void
     {
         $this->requireRep();
         $this->requireCsrf();
         try {
-            $row = RepDriverHandover::findMine(RepAuth::repId(), (int) $hid);
-            if (!$row) { throw new \RuntimeException('التسليم مش موجود.'); }
-            $photo = RepDriverHandover::delete((int) $hid);
-            if ($photo) { $this->deletePhoto($photo); }
-            flash('success', 'اتمسح التسليم — رجع لعهدتك.');
+            RepPortal::deleteMyBill(RepAuth::repId(), (int) $bid, RepAuth::workDate());
+            flash('success', 'اتمسحت البوليصة — العهدة رجعت لعهدتك.');
         } catch (\Throwable $e) {
             flash('error', $e->getMessage());
         }
-        redirect('m/handover');
+        redirect('m/bill/new');
+    }
+
+    /* ⚠️ v60 — شاشة «تسليم عهدة لسائق» (v45) اتشالت من بوابة المندوب بقرار
+       المالك، ومكانها «بوليصة جديدة» فوق: بدل ما يسجّل تسليم كاش مجرّد، بقى
+       بيضيف البوليصة نفسها وبيكتب عهدة السائق جوّاها.
+
+       ⚠️ **جدول `rep_driver_handovers` والموديل `RepDriverHandover` ما اتلمسوش**:
+       السجلات الموجودة (٨ على الإنتاج بـ٤٠,٠٠٠ ج) لسه بتتخصم من عهدة المناديب
+       وبتظهر في كارت المندوب بالمكتب وفي `RepCustody::spending` بـ`src='handover'`.
+       حذفها كان هيغيّر أرصدة تاريخية. اللي اتشال هو **مدخل الإنشاء من الموبايل**
+       بس (المسارات والشاشة). */
+
+    // ═══════════════════════════════════════════ تصفية العهدة مع المكتب
+
+    /**
+     * شاشة «صفّي العهدة مع المكتب» — المندوب بيسلّم كل اللي معاه ويرجع صفر.
+     *
+     * ⚠️ **دي الشاشة الوحيدة في البوابة اللي بتعرض رقمًا تراكميًّا** (كل الأيام)،
+     *    وده مقصود: هو بيسلّم الكاش اللي في جيبه فعلاً مش عهدة يوم واحد. باقي
+     *    الشاشات بتفضل على عهدة اليوم بالحرف (قاعدة v49). وبرضه **مفيش أي رقم
+     *    بيخصّ العميل** هنا (قاعدة v35) — بس فلوس المندوب.
+     */
+    public function settleForm(): void
+    {
+        $this->requireRep();
+        $repId = RepAuth::repId();
+        $this->render('m/settle', [
+            'title'    => 'تصفية العهدة مع المكتب',
+            'snap'     => \App\Models\RepCustody::clearSnapshot($repId),
+            'recent'   => \App\Models\RepCustody::settlements($repId),
+            'pocket'   => RepPortal::dayPocket($repId, RepAuth::workDate()),
+            'workDate' => RepAuth::workDate(),
+        ], false);
+    }
+
+    /**
+     * تنفيذ التصفية من الموبايل.
+     *
+     * ⚠️ **المبلغ بيتحسب في الموديل مش من الفورم** — الفورم مش مصدر ثقة، والرقم
+     *    اللي في الشاشة ممكن يكون قديم لو المكتب اعتمد له بندًا وهو فاتح الصفحة.
+     * ⚠️ **المندوب يصفّي بس لما يكون معاه فلوس** (موجب): الرصيد السالب معناه
+     *    المكتب مدين له، وتسجيل إن المكتب دفعه قرار مكتب مش قرار مندوب.
+     */
+    public function settleStore(): void
+    {
+        $this->requireRep();
+        $this->requireCsrf();
+        $repId = RepAuth::repId();
+        $name  = (string) ($_SESSION['rep_name'] ?? 'مندوب');
+        $date  = RepAuth::workDate();
+        try {
+            // ⚠️ المندوب بيصفّي **كل الأيام المفتوحة** (اللي في إيده فعلاً)،
+            //    وكل يوم بيتقفل على تاريخه هو فما بيلوّثش يوم تاني.
+            $snap = \App\Models\RepCustody::clearSnapshot($repId);
+            if (!empty($snap['blocked'])) {
+                throw new \RuntimeException(
+                    'فيه ' . $snap['pending_cnt'] . ' بند لسه مستني مراجعة المكتب بـ'
+                    . number_format($snap['pending'], 2) . ' ج — استنى يتراجعوا الأول.');
+            }
+            if ($snap['amount'] < 0.005) {
+                throw new \RuntimeException($snap['amount'] < -0.005
+                    ? 'رصيدك سالب — يعني المكتب مستحق لك فلوس. التصفية دي بيعملها المكتب.'
+                    : 'عهدتك مصفّرة أصلاً — مفيش مبلغ تسلّمه.');
+            }
+            $res = \App\Models\RepCustody::settleZero($repId, null, 'تصفية من المندوب', 'مندوب: ' . $name);
+        } catch (\Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect('m/settle');
+        }
+
+        // ⚠️ الإشعار **بعد** نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
+        PushNotify::repSettled($repId, $name, $res['amount'], $date, $name);
+        $msg = 'اتصفّت عهدتك ✓ — سلّمت ' . number_format($res['amount'], 2) . ' ج ورصيدك بقى صفر.';
+        flash('success', $msg);
+        redirect('m/settle');
     }
 
     // ═══════════════════════════════════════════ تحويل عهدة لمندوب (v46)
@@ -590,8 +738,11 @@ class RepPortalController extends Controller
             'title'   => 'تحويل عهدة لمندوب',
             'old'     => $old,
             'errors'  => $errors,
+            // رمز لمرة واحدة يستهلكه `claimForm` في transferStore — اقرأ التعليق
+            // المقابل في billForm.
+            'formToken' => \App\Core\FormState::token(),
             'mates'   => $mates,
-            'recent'  => \App\Models\RepTransfer::outgoingFor($repId, 10),
+            'recent'  => \App\Models\RepTransfer::outgoingFor($repId, 10, RepAuth::workDate()),   // v49 — يوم العمل بس
             'pocket'  => RepPortal::dayPocket($repId, RepAuth::workDate()),   // v49 — عهدة اليوم
             'workDate'=> RepAuth::workDate(),
         ], false);
@@ -602,6 +753,10 @@ class RepPortalController extends Controller
         $this->requireRep();
         $this->requireCsrf();
         $repId = RepAuth::repId();
+
+        // إرسال نفس الشاشة مرتين يُرفض بدل أن يحوّل المبلغ مرتين
+        $this->claimForm('m/transfer');
+
         try {
             \App\Models\RepTransfer::create($repId, [
                 'to_rep_id'     => (int) ($_POST['to_rep_id'] ?? 0),
@@ -612,6 +767,15 @@ class RepPortalController extends Controller
         } catch (\Throwable $e) {
             $this->submitFailure($e, 'm/transfer');
         }
+        // ⚠️ الإشعار **بعد** نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
+        $toName = (string) (\App\Core\Database::scalar(
+            'SELECT name FROM reps WHERE id = ?', [(int) ($_POST['to_rep_id'] ?? 0)]) ?? 'زميله');
+        PushNotify::repTransfer(
+            (string) ($_SESSION['rep_name'] ?? 'مندوب'),
+            $toName,
+            (float) ($_POST['amount'] ?? 0),
+            RepAuth::workDate()
+        );
         flash('success', 'اتحوّل ✓ — اتخصم من عهدتك وزاد لعهدة زميلك.');
         redirect('m/transfer');
     }
@@ -677,6 +841,9 @@ class RepPortalController extends Controller
             // v45 — الوسم والكارت؛ RepPortal بيتحقق إن الكارت شغّال فعلاً
             'is_visa'     => !empty($_POST['is_visa']),
             'visa_card_id'=> (int) ($_POST['visa_card_id'] ?? 0),
+            // v57 — «غير مدفوع»: البند بيتسجّل على الإذن بلا خصم من عهدته ولا
+            // من الخزنة. RepPortal بيفرض إنه لبنود الأذونات بس ومش مع الفيزا.
+            'unpaid'      => !empty($_POST['unpaid']),
         ];
     }
 
@@ -764,11 +931,23 @@ class RepPortalController extends Controller
     {
         $qty  = max(1, (int) ($data['qty'] ?? 1));
         $unit = (float) ($data['unit_amount'] ?? $data['amount'] ?? 0);
+        // رقم الإذن في نص الإشعار (المرحلة ٣) عشان المكتب يعرف البند على إيه
+        // من الإشعار نفسه بدل ما يفتح الصندوق يدوّر. قراءة خفيفة وفشلها مبلوع.
+        $permitNo = '';
+        try {
+            $pid = (int) ($data['permit_id'] ?? 0);
+            if ($pid > 0 && !$isMisc) {
+                $permitNo = (string) (\App\Core\Database::scalar(
+                    'SELECT permit_no FROM permits WHERE id = ?', [$pid]) ?? '');
+            }
+        } catch (\Throwable $e) { $permitNo = ''; }
+
         PushNotify::submissionNew(
             (string) ($_SESSION['rep_name'] ?? 'مندوب'),
             (string) ($data['note'] ?? ''),
             round($unit * $qty, 2),
-            $isMisc
+            $isMisc,
+            $permitNo
         );
     }
 }

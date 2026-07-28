@@ -68,9 +68,9 @@
   <!-- البحث والتصفية على كل الأذونات المفتوحة، لا على الصفحة الظاهرة فقط. -->
   <form class="pv-ftools" method="get" action="<?= url('permits') ?>">
     <div class="pvf-search">
-      <span class="pvf-search-ic">🔍</span>
-      <input type="search" name="q" value="<?= e($followQ) ?>" placeholder="ابحث في كل الأذونات برقم الإذن / الشركة / الوكيل…" autocomplete="off">
-      <?php if($followQ!==''): ?><a class="pvf-clear" href="<?= url('permits?'.$followQs(['q'=>''])) ?>" title="مسح البحث">✕</a><?php endif; ?>
+      <span class="pvf-search-ic"><?= icon('search', 14) ?></span>
+      <input type="search" name="q" value="<?= e($followQ) ?>" placeholder="بحث" autocomplete="off">
+      <?php if($followQ!==''): ?><a class="pvf-clear" href="<?= url('permits?'.$followQs(['q'=>''])) ?>" title="مسح البحث"><?= icon('x', 14) ?></a><?php endif; ?>
     </div>
     <input type="hidden" name="state" value="<?= e($followState) ?>">
     <input type="hidden" name="co" value="<?= e($followCo) ?>">
@@ -78,8 +78,8 @@
     <input type="hidden" name="group" value="<?= e($followGroup) ?>">
     <div class="pvf-chips" role="tablist">
       <a class="pvf-chip <?= $followState==='all'?'on':'' ?>" href="<?= url('permits?'.$followQs(['state'=>'all'])) ?>">الكل <span class="pvf-ct num"><?= intf($followCounts['all']) ?></span></a>
-      <a class="pvf-chip <?= $followState==='warn'?'on':'' ?>" href="<?= url('permits?'.$followQs(['state'=>'warn'])) ?>">⚠ ناقص <span class="pvf-ct num"><?= intf($followCounts['warn']) ?></span></a>
-      <a class="pvf-chip <?= $followState==='ok'?'on':'' ?>" href="<?= url('permits?'.$followQs(['state'=>'ok'])) ?>">✓ جاهز <span class="pvf-ct num"><?= intf($followCounts['ok']) ?></span></a>
+      <a class="pvf-chip <?= $followState==='warn'?'on':'' ?>" href="<?= url('permits?'.$followQs(['state'=>'warn'])) ?>"><?= icon('alert', 14) ?> ناقص <span class="pvf-ct num"><?= intf($followCounts['warn']) ?></span></a>
+      <a class="pvf-chip <?= $followState==='ok'?'on':'' ?>" href="<?= url('permits?'.$followQs(['state'=>'ok'])) ?>"><?= icon('check', 14) ?> جاهز <span class="pvf-ct num"><?= intf($followCounts['ok']) ?></span></a>
     </div>
     <div class="pvf-spacer"></div>
     <label class="pvf-sort">
@@ -104,26 +104,26 @@
   <div class="pv-viewbar">
     <?php if ($followCo!=='' || $followCl!==''): ?>
       <span class="pvv-active">
-        🔎 معروض الآن:
+        <?= icon('search', 14) ?> معروض الآن:
         <?php if($followCo!==''): ?><b><?= e($followCo) ?></b><?php endif; ?>
         <?php if($followCo!=='' && $followCl!==''): ?> · <?php endif; ?>
         <?php if($followCl!==''): ?><b><?= e($followCl) ?></b><?php endif; ?>
         — <span class="num"><?= intf($followTotal) ?></span> إذن
       </span>
-      <a class="pvv-x" href="<?= e($followUrl(['co'=>'','cl'=>''])) ?>">✕ إلغاء التصفية</a>
+      <a class="pvv-x" href="<?= e($followUrl(['co'=>'','cl'=>''])) ?>"><?= icon('x', 14) ?> إلغاء التصفية</a>
     <?php endif; ?>
     <span style="flex:1"></span>
     <a class="pvv-toggle<?= $followGroup==='co'?' on':'' ?>" href="<?= e($followUrl(['group'=>$followGroup==='co'?'':'co'])) ?>">
-      🗂️ <?= $followGroup==='co' ? 'إلغاء التجميع' : 'تجميع حسب الشركة' ?>
+      <?= icon('folder', 14) ?> <?= $followGroup==='co' ? 'إلغاء التجميع' : 'تجميع حسب الشركة' ?>
     </a>
   </div>
   <?php endif; ?>
 
   <?php if (!$rows): ?>
     <?php if($followQ!=='' || $followState!=='all'): ?>
-      <div class="pv-empty"><div class="ic">🔍</div>لا توجد أذونات مطابقة للبحث أو التصفية.<br><a class="btn ghost" style="margin-top:14px" href="<?= url('permits') ?>">مسح التصفية</a></div>
+      <div class="pv-empty"><div class="ic"><?= icon('search', 14) ?></div>لا توجد أذونات مطابقة للبحث أو التصفية.<br><a class="btn ghost" style="margin-top:14px" href="<?= url('permits') ?>">مسح التصفية</a></div>
     <?php else: ?>
-      <div class="pv-empty"><div class="ic">✅</div>لا أذونات مفتوحة حالياً — كل شيء مغلق.<br><a class="btn gold" style="margin-top:14px" href="<?= url('permits/new') ?>">➕ إصدار جديد</a></div>
+      <div class="pv-empty"><div class="ic"><?= icon('check', 14) ?></div>لا أذونات مفتوحة حالياً — كل شيء مغلق.<br><a class="btn gold" style="margin-top:14px" href="<?= url('permits/new') ?>"><?= icon('plus', 14) ?> إصدار جديد</a></div>
     <?php endif; ?>
   <?php else: ?>
     <?php
@@ -147,7 +147,7 @@
             $url = url('permits/'.$r['id']); ?>
         <?php if ($followGroup==='co'): $gk = (string)($r['company'] ?? ''); if ($gk !== $grpCur): $grpCur = $gk; ?>
           <div class="dkt-grp">
-            <span class="dg-ic">🏢</span>
+            <span class="dg-ic"><?= icon('building', 14) ?></span>
             <b class="dg-nm"><?= e($gk !== '' ? $gk : 'بدون شركة') ?></b>
             <span class="dg-ct"><span class="num"><?= intf($grpCnt[$gk] ?? 0) ?></span> إذن</span>
             <?php if(($grpRem[$gk] ?? 0) != 0): ?><span class="dg-rem">المتبقّي <b class="num"><?= money($grpRem[$gk],false) ?></b></span><?php endif; ?>
@@ -163,7 +163,7 @@
              onkeydown="if(event.key==='Enter'){location.href='<?= $url ?>'}">
           <header class="dkt-hd">
             <span class="dkt-kind <?= $th['cls'] ?>"><?= $th['full'] ?> <span class="dk-arrow"><?= $th['arrow'] ?></span></span>
-            <?php if($ctLbl!==''): ?><span class="dkt-cth">📦 <?= e($ctLbl) ?></span><?php endif; ?>
+            <?php if($ctLbl!==''): ?><span class="dkt-cth"><?= icon('package', 14) ?> <?= e($ctLbl) ?></span><?php endif; ?>
             <span class="dkt-serial num"><?= e($r['permit_no'] ?: '#'.$r['id']) ?></span>
           </header>
 
@@ -180,11 +180,11 @@
               <?php if($r['client']): ?>
                 <?php if($followCl!==$r['client']): ?>
                   <a class="dkt-tag dkt-tag-lnk" href="<?= e($followUrl(['cl'=>$r['client'],'page'=>1])) ?>" onclick="event.stopPropagation()"
-                     title="اعرض أذونات هذا الوكيل فقط">👤 <?= e($r['client']) ?></a>
-                <?php else: ?><span class="dkt-tag">👤 <?= e($r['client']) ?></span><?php endif; ?>
+                     title="اعرض أذونات هذا الوكيل فقط"><?= icon('user', 14) ?> <?= e($r['client']) ?></a>
+                <?php else: ?><span class="dkt-tag"><?= icon('user', 14) ?> <?= e($r['client']) ?></span><?php endif; ?>
               <?php endif; ?>
               <span class="dkt-tag">🗓️ <span class="num"><?= dfmt($r['permit_date']) ?: '—' ?></span></span>
-              <span class="dkt-tag">🚛 <span class="num"><?= intf($r['bills']) ?></span> بوليصة</span>
+              <span class="dkt-tag"><?= icon('truck', 14) ?> <span class="num"><?= intf($r['bills']) ?></span> بوليصة</span>
             </div>
 
             <div class="dkt-prog">
@@ -197,7 +197,7 @@
           <!-- الإيصالات: سطر مضغوط + قائمة تفصيلية تفتح/تقفل بالضغط -->
           <div class="dkt-rcp<?= $rcps ? ' has-rcps' : '' ?>">
             <div class="rcp-strip"<?= $rcps ? ' onclick="event.stopPropagation();this.closest(\'.dkt-rcp\').classList.toggle(\'open\')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();event.stopPropagation();this.closest(\'.dkt-rcp\').classList.toggle(\'open\')}"' : '' ?>>
-              <span class="rcp-ttl">🧾</span>
+              <span class="rcp-ttl"><?= icon('receipt', 14) ?></span>
               <span class="rcp-cnt"><?= intf(count($rcps)) ?></span>
               <?php if($rcTotal>0): ?><span class="rcp-sum num"><?= money($rcTotal,false) ?></span><?php endif; ?>
               <?php if (empty($rcps) && empty($r['rcp_missing'])): ?><span class="rcp-empty">لا إيصالات بعد</span><?php endif; ?>
@@ -220,12 +220,12 @@
 
           <footer class="dkt-ft">
             <span class="dkt-money"><span class="k">المتبقّي</span><b class="num <?= $r['remaining']>0?'neg':'pos' ?>"><?= money($r['remaining'],false) ?></b></span>
-            <?php if ($inc): ?><span class="stamp wip" title="<?= e($missTip) ?>">⚠ ناقص</span>
-            <?php else: ?><span class="stamp ready">✓ جاهز</span><?php endif; ?>
+            <?php if ($inc): ?><span class="stamp wip" title="<?= e($missTip) ?>"><?= icon('alert', 14) ?> ناقص</span>
+            <?php else: ?><span class="stamp ready"><?= icon('check', 14) ?> جاهز</span><?php endif; ?>
             <span class="dkt-ft-sp"></span>
             <span class="dkt-acts" onclick="event.stopPropagation()">
-              <a class="dkt-act primary" href="<?= url('permits/'.$r['id'].'/manage') ?>#movementsWrap" title="إضافة إيصال">🧾</a>
-              <a class="dkt-act" href="<?= $url ?>" title="فتح الملف">🗂️</a>
+              <a class="dkt-act primary" href="<?= url('permits/'.$r['id'].'/manage') ?>#movementsWrap" title="إضافة إيصال"><?= icon('receipt', 14) ?></a>
+              <a class="dkt-act" href="<?= $url ?>" title="فتح الملف"><?= icon('folder', 14) ?></a>
             </span>
           </footer>
         </div>
@@ -241,7 +241,7 @@
   <div class="pv-tools">
     <form method="get" action="<?= url('permits') ?>">
       <input type="hidden" name="view" value="movements">
-      <input type="search" name="q" value="<?= e($q ?? '') ?>" placeholder="ابحث برقم الإذن / الشركة / الوكيل…">
+      <input type="search" name="q" value="<?= e($q ?? '') ?>" placeholder="بحث">
       <button class="btn sm" type="submit">تصفية</button>
       <?php if(($q ?? '')!==''): ?><a class="btn ghost sm" href="<?= url('permits?view=movements') ?>">إلغاء</a><?php endif; ?>
     </form>
@@ -250,7 +250,7 @@
   </div>
 
   <?php if (!$moves): ?>
-    <div class="pv-empty"><div class="ic">🔀</div>لا حركات — أنشئ إذناً وأضف حركاته.</div>
+    <div class="pv-empty"><div class="ic"><?= icon('shuffle', 14) ?></div>لا حركات — أنشئ إذناً وأضف حركاته.</div>
   <?php else: ?>
     <div class="dkt-grid">
       <?php foreach ($moves as $m): $closed = ($m['status']??'open')==='closed'; $ctb = $m['ctype_breakdown'] ?? []; $th = Permit::theme($m['permit_type']); ?>
@@ -264,9 +264,9 @@
           <div class="dkt-bd">
             <div class="dkt-co"><?= e($m['company'] ?: '—') ?></div>
             <div class="dkt-meta">
-              <?php if($m['client']): ?><span class="dkt-tag">👤 <?= e($m['client']) ?></span><?php endif; ?>
-              <span class="dkt-tag">🚛 <span class="num"><?= intf($m['bills']) ?></span> بوليصة</span>
-              <span class="dkt-tag">📦 <span class="num"><?= intf($m['containers']) ?></span> حاوية</span>
+              <?php if($m['client']): ?><span class="dkt-tag"><?= icon('user', 14) ?> <?= e($m['client']) ?></span><?php endif; ?>
+              <span class="dkt-tag"><?= icon('truck', 14) ?> <span class="num"><?= intf($m['bills']) ?></span> بوليصة</span>
+              <span class="dkt-tag"><?= icon('package', 14) ?> <span class="num"><?= intf($m['containers']) ?></span> حاوية</span>
               <span class="dkt-tag <?= $closed?'':'ct' ?>"><?= $closed?'مقفول':'جارٍ' ?></span>
               <?php foreach ($ctb as $c): ?><span class="dkt-tag ct"><span class="num"><?= intf($c['cnt']) ?></span>×<?= e($c['type']) ?></span><?php endforeach; ?>
             </div>
@@ -300,7 +300,7 @@
       <input type="hidden" name="view" value="records">
       <input type="hidden" name="co" value="<?= e($co) ?>">
       <input type="hidden" name="cl" value="<?= e($cl) ?>">
-      <input type="search" name="q" value="<?= e($q) ?>" placeholder="رقم الإذن/الشهادة، شركة، عميل…">
+      <input type="search" name="q" value="<?= e($q) ?>" placeholder="بحث">
       <select name="type">
         <option value="">كل الأنواع</option>
         <option value="sader" <?= $type==='sader'?'selected':'' ?>>إذن (صادر)</option>
@@ -327,13 +327,13 @@
 
   <?php if ($co!=='' || $cl!==''): ?>
     <div class="pv-viewbar">
-      <span class="pvv-active">🔎 معروض الآن:
+      <span class="pvv-active"><?= icon('search', 14) ?> معروض الآن:
         <?php if($co!==''): ?><b><?= e($co) ?></b><?php endif; ?>
         <?php if($co!=='' && $cl!==''): ?> · <?php endif; ?>
         <?php if($cl!==''): ?><b><?= e($cl) ?></b><?php endif; ?>
         — <span class="num"><?= intf($total) ?></span> إصدار
       </span>
-      <a class="pvv-x" href="<?= e($recordUrl(['co'=>'','cl'=>''])) ?>">✕ إلغاء التصفية</a>
+      <a class="pvv-x" href="<?= e($recordUrl(['co'=>'','cl'=>''])) ?>"><?= icon('x', 14) ?> إلغاء التصفية</a>
     </div>
   <?php endif; ?>
 
@@ -348,12 +348,12 @@
     <label class="pbb-all"><input type="checkbox" id="pvAll"> تحديد الكل</label>
     <span class="pbb-count"><span class="num" id="pvCount">0</span> إذن محدَّد</span>
     <span style="flex:1"></span>
-    <button type="button" class="btn gold sm pv-bulk-btn" id="pvPrintBtn" disabled onclick="printSelectedPermits()">🖨️ طباعة</button>
-    <button type="button" class="btn ghost sm pv-bulk-btn" data-bulk="close"  disabled>✅ إتمام وإغلاق</button>
-    <button type="button" class="btn ghost sm pv-bulk-btn" data-bulk="reopen" disabled>🔓 إعادة فتح</button>
-    <button type="button" class="btn ghost sm pv-bulk-btn" id="pvPartyBtn"    disabled>👤 تغيير الوكيل/الشركة</button>
+    <button type="button" class="btn gold sm pv-bulk-btn" id="pvPrintBtn" disabled onclick="printSelectedPermits()"><?= icon('file-text', 14) ?> طباعة</button>
+    <button type="button" class="btn ghost sm pv-bulk-btn" data-bulk="close"  disabled><?= icon('check', 14) ?> إتمام وإغلاق</button>
+    <button type="button" class="btn ghost sm pv-bulk-btn" data-bulk="reopen" disabled><?= icon('alert', 14) ?> إعادة فتح</button>
+    <button type="button" class="btn ghost sm pv-bulk-btn" id="pvPartyBtn"    disabled><?= icon('user', 14) ?> تغيير الوكيل/الشركة</button>
     <button type="button" class="btn ghost sm pv-bulk-btn" data-bulk="csv"    disabled>⬇️ تصدير CSV</button>
-    <button type="button" class="btn ghost sm pv-bulk-btn pv-danger" data-bulk="delete" disabled>🗑️ حذف</button>
+    <button type="button" class="btn ghost sm pv-bulk-btn pv-danger" data-bulk="delete" disabled><?= icon('trash', 14) ?> حذف</button>
     <button type="button" class="btn ghost sm pv-bulk-btn" id="pvClearSel"    disabled>إلغاء التحديد</button>
   </div>
 
@@ -383,7 +383,7 @@
         <input type="text" id="pvPartyCompany" name="company" form="pvBulkForm" list="pvCompanyOpts" maxlength="150" autocomplete="off" data-smart-name="company" placeholder="اتركه فاضي = بلا تغيير">
         <datalist id="pvCompanyOpts"><?php foreach ($companyOptions as $n): ?><option value="<?= e($n) ?>"><?php endforeach; ?></datalist>
         <div class="pv-modal-actions">
-          <button type="button" class="btn gold" id="pvPartySave">💾 طبّق على المحدَّد</button>
+          <button type="button" class="btn gold" id="pvPartySave"><?= icon('download', 14) ?> طبّق على المحدَّد</button>
           <button type="button" class="btn ghost pv-modal-x">إلغاء</button>
         </div>
       </div>
@@ -410,7 +410,7 @@
       </tr></thead>
       <tbody>
         <?php if(!$rows): ?>
-          <tr><td colspan="14"><div class="pv-empty sm"><div class="ic">🗂️</div>لا نتائج.</div></td></tr>
+          <tr><td colspan="14"><div class="pv-empty sm"><div class="ic"><?= icon('folder', 14) ?></div>لا نتائج.</div></td></tr>
         <?php else:
           $tCustody=$tExpense=$tFees=$tRemaining=$tBills=$tContainers=0;
           foreach($rows as $r):
@@ -438,9 +438,9 @@
             <td class="num"><?= money($r['remaining'],false) ?></td>
             <td><span class="stamp mini <?= ($r['status']??'open')==='closed'?'ready':'wip' ?>"><?= ($r['status']??'open')==='closed'?'مقفول':'جارٍ' ?></span></td>
             <td onclick="event.stopPropagation()"><div class="actions">
-              <a class="edit" href="<?= url('permits/'.$r['id']) ?>" title="فتح">🗂️</a>
+              <a class="edit" href="<?= url('permits/'.$r['id']) ?>" title="فتح"><?= icon('folder', 14) ?></a>
               <form class="confirm-delete" method="post" action="<?= url('permits/'.$r['id'].'/delete') ?>" style="margin:0">
-                <?= csrfField() ?><button class="del" type="submit" title="حذف">🗑️</button>
+                <?= csrfField() ?><button class="del" type="submit" title="حذف"><?= icon('trash', 14) ?></button>
               </form>
             </div></td>
           </tr>
@@ -486,25 +486,25 @@
 <?php if ($mode === 'records'): ?>
 <style>
   .pv-batchbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 10px;
-    padding:9px 14px;background:#fff;border:1px solid var(--line,#E2E7EE);border-radius:12px}
-  .pv-batchbar .pbb-all{display:inline-flex;align-items:center;gap:7px;font-weight:700;cursor:pointer;color:var(--navy,#15355B)}
+    padding:9px 14px;background:#fff;border:1px solid var(--line,#E2E7EE);border-radius:var(--radius-2)}
+  .pv-batchbar .pbb-all{display:inline-flex;align-items:center;gap:7px;font-weight:500;cursor:pointer;color:var(--navy,#15355B)}
   .pv-batchbar .pbb-all input,.pv-tbl .pv-pick input{width:17px;height:17px;cursor:pointer;accent-color:var(--gold,#C9A227)}
-  .pv-batchbar .pbb-count{color:var(--muted,#5A6472);font-weight:700}
+  .pv-batchbar .pbb-count{color:var(--muted,#5A6472);font-weight:500}
   .pv-batchbar .pv-bulk-btn:disabled{opacity:.45;cursor:not-allowed}
   .pv-batchbar .pv-bulk-btn.pv-danger{color:#b32020;border-color:#e7bcbc}
   .pv-batchbar .pv-bulk-btn.pv-danger:not(:disabled):hover{background:#fdf1f1}
   .pv-modal[hidden]{display:none}
   .pv-modal{position:fixed;inset:0;z-index:1000;background:rgba(13,29,49,.58);display:flex;align-items:center;justify-content:center;padding:20px}
-  .pv-modal-card{width:min(560px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.28)}
+  .pv-modal-card{width:min(560px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:var(--radius-3);box-shadow:0 24px 70px rgba(0,0,0,.28)}
   .pv-modal-head{display:flex;justify-content:space-between;align-items:center;padding:15px 18px;background:var(--navy,#15355B);color:#fff}
-  .pv-modal-x{border:0;background:transparent;color:inherit;font-size:1.5rem;cursor:pointer;line-height:1}
+  .pv-modal-x{border:0;background:transparent;color:inherit;font-size:var(--fs-6);cursor:pointer;line-height:1}
   .pv-modal-body{padding:18px}
-  .pv-modal-body .pv-lbl{display:block;font-weight:800;color:var(--navy,#15355B);font-size:.82rem;margin-top:12px}
-  .pv-modal-body input[type=text]{display:block;width:100%;margin-top:6px;border:1px solid var(--line2,#D6DDE6);border-radius:9px;padding:9px 11px;font-family:inherit}
-  .pv-hint{font-size:.78rem;color:var(--grey,#5A6472);line-height:1.7;margin:0 0 6px}
+  .pv-modal-body .pv-lbl{display:block;font-weight:600;color:var(--navy,#15355B);font-size:var(--fs-2);margin-top:12px}
+  .pv-modal-body input[type=text]{display:block;width:100%;margin-top:6px;border:1px solid var(--line2,#D6DDE6);border-radius:var(--radius-1);padding:9px 11px;font-family:inherit}
+  .pv-hint{font-size:var(--fs-1);color:var(--grey,#5A6472);line-height:1.7;margin:0 0 6px}
   .pv-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
   .pv-tbl th.pv-pick,.pv-tbl td.pv-pick{width:38px;text-align:center;padding-inline:6px}
-  .pv-tbl tfoot .pv-tot td{background:var(--navy,#15355B);color:#fff;font-weight:800;padding:11px 12px;
+  .pv-tbl tfoot .pv-tot td{background:var(--navy,#15355B);color:#fff;font-weight:600;padding:11px 12px;
     text-align:center;white-space:nowrap;border-top:2px solid var(--gold,#C9A227)}
   .pv-tbl tfoot .pv-tot td.txt{text-align:right}
   .pv-tbl tfoot .pv-tot td.num{font-family:var(--mono);font-feature-settings:"tnum" 1}

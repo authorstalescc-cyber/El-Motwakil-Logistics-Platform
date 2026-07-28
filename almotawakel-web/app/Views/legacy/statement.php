@@ -66,7 +66,7 @@ $renderTable = function (array $rows) use ($cols) {
             <?php elseif ($t === 'money' || $t === 'calc'): ?>
               <td class="num <?= $k==='paid' ? 'pos' : ($k==='net' && (float)$v > 0.005 ? 'neg' : '') ?>"><?= money($v, false) ?></td>
             <?php elseif ($k === 'bill_number'): ?>
-              <td class="r" style="font-weight:700"><?= ($v !== null && $v !== '') ? e($v) : '—' ?></td>
+              <td class="r" style="font-weight:500"><?= ($v !== null && $v !== '') ? e($v) : '—' ?></td>
             <?php elseif ($k === 'classification'): // توحيد عرض التصنيف: «1*40» → «40 قدم» (الأرشيف الخام لا يُلمَس) ?>
               <td><?php $cv = container_norm($v); echo ($cv !== null && $cv !== '') ? e($cv) : '—'; ?></td>
             <?php else: ?>
@@ -95,7 +95,7 @@ $renderTable = function (array $rows) use ($cols) {
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--ink);
-    font-family:'Segoe UI',Tahoma,'Cairo',sans-serif;direction:rtl;text-align:right;
+    font-family:var(--font);direction:rtl;text-align:right;
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
   /* A4 عرضي */
   .sheet{width:297mm;min-height:210mm;margin:16px auto;background:#fff;position:relative;
@@ -106,63 +106,63 @@ $renderTable = function (array $rows) use ($cols) {
     padding-bottom:12px;border-bottom:2px solid var(--line)}
   .brand{display:flex;align-items:center;gap:12px}
   .brandlogo{height:64px;width:auto;max-width:200px;object-fit:contain}
-  .brand .logo{width:64px;height:64px;border-radius:14px;background:var(--navy);color:var(--gold);
-    display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800}
-  .brand .cap{color:var(--navy);font-size:14px;font-weight:800;letter-spacing:.5px}
+  .brand .logo{width:64px;height:64px;border-radius:var(--radius-2);background:var(--navy);color:var(--gold);
+    display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:600}
+  .brand .cap{color:var(--navy);font-size:14px;font-weight:600;letter-spacing:.5px}
   .inv-tag{text-align:left;min-width:200px}
-  .inv-tag .word{display:inline-block;background:var(--gold);color:var(--navy);font-size:18px;font-weight:800;
-    padding:8px 16px;border-radius:10px;letter-spacing:.5px}
+  .inv-tag .word{display:inline-block;background:var(--gold);color:var(--navy);font-size:18px;font-weight:600;
+    padding:8px 16px;border-radius:var(--radius-2);letter-spacing:.5px}
   .inv-tag .arch{display:inline-block;margin-inline-start:8px;background:var(--navy);color:#fff;font-size:11px;
-    font-weight:800;padding:5px 12px;border-radius:8px;vertical-align:middle}
+    font-weight:600;padding:5px 12px;border-radius:var(--radius-1);vertical-align:middle}
   .inv-tag .meta{margin-top:8px;font-size:12px;color:var(--muted);line-height:1.9}
   .inv-tag .meta b{color:var(--navy);font-size:13px}
   /* صاحب البيان + الملخّص في صفّ واحد لتوفير الارتفاع */
   .top-row{margin-top:12px;display:grid;grid-template-columns:1.2fr 2fr;gap:10px;align-items:stretch}
-  .client-card{border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:#fcfdfe}
-  .client-card .t{font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:.5px;margin-bottom:4px}
-  .client-card .name{font-size:18px;font-weight:800;color:var(--navy)}
+  .client-card{border:1px solid var(--line);border-radius:var(--radius-2);padding:11px 14px;background:#fcfdfe}
+  .client-card .t{font-size:10.5px;color:var(--gold);font-weight:600;letter-spacing:.5px;margin-bottom:4px}
+  .client-card .name{font-size:18px;font-weight:600;color:var(--navy)}
   .client-card .vars{margin-top:4px;font-size:10.5px;color:var(--muted)}
   .sum-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-  .sc{border:1px solid var(--line);border-radius:11px;padding:10px 10px;text-align:center;background:#fcfdfe;
+  .sc{border:1px solid var(--line);border-radius:var(--radius-2);padding:10px 10px;text-align:center;background:#fcfdfe;
     display:flex;flex-direction:column;justify-content:center}
-  .sc .l{font-size:10px;color:var(--muted);font-weight:700;margin-bottom:4px}
-  .sc .v{font-size:15px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+  .sc .l{font-size:10px;color:var(--muted);font-weight:500;margin-bottom:4px}
+  .sc .v{font-size:15px;font-weight:600;color:var(--navy);font-variant-numeric:tabular-nums}
   .sc.paid .v{color:var(--green)} .sc.rem{background:var(--navy)} .sc.rem .l{color:#dfe8f2} .sc.rem .v{color:var(--gold)}
   .sec{margin-top:14px}
   .sec-t{display:flex;justify-content:space-between;align-items:center;background:var(--navy);color:#fff;
-    padding:7px 14px;border-radius:9px 9px 0 0;font-size:13px;font-weight:800}
+    padding:7px 14px;border-radius:9px 9px 0 0;font-size:13px;font-weight:600}
   .sec-t.gold{background:var(--gold);color:var(--navy)}
-  .sec-t .n{font-size:11px;font-weight:700;opacity:.9}
+  .sec-t .n{font-size:11px;font-weight:500;opacity:.9}
   table.bills{width:100%;border-collapse:collapse;font-size:10.5px;border:1px solid var(--line);border-top:none}
-  table.bills thead th{background:#eef2f7;color:var(--navy);padding:6px 4px;font-weight:800;text-align:center;
+  table.bills thead th{background:#eef2f7;color:var(--navy);padding:6px 4px;font-weight:600;text-align:center;
     border-bottom:1px solid var(--line);white-space:nowrap}
   table.bills tbody td{padding:5px 4px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
   table.bills td.r{text-align:right}
   table.bills td.num{font-variant-numeric:tabular-nums}
   table.bills tbody tr:nth-child(even){background:#f8fafc}
-  table.bills .pos{color:var(--green);font-weight:700}
-  table.bills .neg{color:var(--red);font-weight:800}
-  table.bills tfoot td{padding:7px 4px;font-weight:800;background:#f3e6bd;color:#7a5f0e;border-top:2px solid var(--gold)}
+  table.bills .pos{color:var(--green);font-weight:500}
+  table.bills .neg{color:var(--red);font-weight:600}
+  table.bills tfoot td{padding:7px 4px;font-weight:600;background:#f3e6bd;color:#7a5f0e;border-top:2px solid var(--gold)}
   .empty-row{padding:13px;text-align:center;color:var(--muted);border:1px solid var(--line);border-top:none;font-size:12px}
-  .words{margin-top:12px;border:1px dashed var(--gold);background:var(--gold-l);border-radius:12px;padding:10px 14px}
-  .words .t{font-size:10.5px;color:#8a6d10;font-weight:800;margin-bottom:4px}
-  .words .v{font-size:13.5px;font-weight:700;color:var(--navy);line-height:1.7}
-  .arch-note{margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:8px 14px;
+  .words{margin-top:12px;border:1px dashed var(--gold);background:var(--gold-l);border-radius:var(--radius-2);padding:10px 14px}
+  .words .t{font-size:10.5px;color:#8a6d10;font-weight:600;margin-bottom:4px}
+  .words .v{font-size:13.5px;font-weight:500;color:var(--navy);line-height:1.7}
+  .arch-note{margin-top:10px;border:1px solid var(--line);border-radius:var(--radius-2);padding:8px 14px;
     font-size:11px;color:var(--muted);background:#fcfdfe}
   .foot{margin-top:16px;padding-top:12px;border-top:2px solid var(--line);
     display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:end}
   .sign{text-align:center}
-  .sign .line{margin-top:24px;border-top:1.5px dashed var(--muted);padding-top:5px;color:var(--muted);font-size:12px;font-weight:700}
+  .sign .line{margin-top:24px;border-top:1.5px dashed var(--muted);padding-top:5px;color:var(--muted);font-size:12px;font-weight:500}
   .contact-bar{margin-top:14px;padding-top:10px;border-top:1px solid var(--line);display:flex;gap:24px;flex-wrap:wrap}
-  .contact-bar .cline{font-size:11.5px;color:var(--ink);font-weight:700;line-height:1.6}
+  .contact-bar .cline{font-size:11.5px;color:var(--ink);font-weight:500;line-height:1.6}
   .contact-bar .ci{display:inline-block;width:18px;color:var(--navy)}
   .pagefoot{text-align:center;color:var(--muted);font-size:10px;padding:8px 0 14px}
   .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-size:170px;font-weight:900;color:rgba(21,53,91,.04);pointer-events:none;z-index:0;
+    font-size:170px;font-weight:700;color:rgba(21,53,91,.04);pointer-events:none;z-index:0;
     transform:rotate(-18deg);letter-spacing:20px}
   .pad>*{position:relative;z-index:1}
   .bar{max-width:297mm;margin:0 auto;display:flex;gap:10px;justify-content:center;padding:6px}
-  .btn{padding:10px 22px;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;
+  .btn{padding:10px 22px;border:none;border-radius:var(--radius-2);font-weight:600;font-size:14px;cursor:pointer;
     font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
   .btn.gold{background:var(--gold);color:var(--navy)}
   .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
@@ -180,7 +180,7 @@ $renderTable = function (array $rows) use ($cols) {
 <body>
 
 <div class="bar noprint">
-  <button class="btn gold" onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+  <button class="btn gold" onclick="window.print()"><?= icon('file-text', 14) ?> طباعة / حفظ PDF</button>
   <a class="btn ghost" href="<?= url('legacy') ?>">‹ رجوع للأرشيف</a>
 </div>
 
@@ -200,7 +200,7 @@ $renderTable = function (array $rows) use ($cols) {
         <div class="cap">لمقاولات النقل</div>
       </div>
       <div class="inv-tag">
-        <span class="word">كشف حساب</span><span class="arch">📦 من أرشيف البوالص القديمة</span>
+        <span class="word">كشف حساب</span><span class="arch"><?= icon('package', 14) ?> من أرشيف البوالص القديمة</span>
         <div class="meta">تاريخ الإصدار: <b><?= e(dfmt($today)) ?></b></div>
       </div>
     </div>
@@ -226,7 +226,7 @@ $renderTable = function (array $rows) use ($cols) {
     <div class="sec">
       <div class="sec-t"><span>البوالص الباقية له بالتفصيل</span><span class="n"><?= intf(count($due)) ?> بوليصة</span></div>
       <?php if (!$due): ?>
-        <div class="empty-row">لا توجد بوالص عليها باقٍ — كل المستحقات مسدّدة ✓</div>
+        <div class="empty-row">لا توجد بوالص عليها باقٍ — كل المستحقات مسدّدة <?= icon('check', 14) ?></div>
       <?php else: $renderTable($due); endif; ?>
     </div>
 
@@ -245,7 +245,7 @@ $renderTable = function (array $rows) use ($cols) {
     </div>
 
     <div class="arch-note">
-      ⚠️ هذا كشف <b>أرشيفي</b> من بيانات النظام القديم (قبل التشغيل على البرنامج الحالي) — للمراجعة والمطابقة فقط،
+      <?= icon('alert', 14) ?> هذا كشف <b>أرشيفي</b> من بيانات النظام القديم (قبل التشغيل على البرنامج الحالي) — للمراجعة والمطابقة فقط،
       ولا يدخل في حسابات العهدة أو التقفيل أو مديونيات النظام الحالي.
     </div>
 
@@ -258,9 +258,9 @@ $renderTable = function (array $rows) use ($cols) {
     <!-- التواصل -->
     <?php if ($phone || $email || $address): ?>
     <div class="contact-bar">
-      <?php if ($phone): ?><div class="cline"><span class="ci">📞</span> <bdi dir="ltr"><?= e($phone) ?></bdi></div><?php endif; ?>
-      <?php if ($email): ?><div class="cline"><span class="ci">✉️</span> <bdi dir="ltr"><?= e($email) ?></bdi></div><?php endif; ?>
-      <?php if ($address): ?><div class="cline"><span class="ci">📍</span> <?= e($address) ?></div><?php endif; ?>
+      <?php if ($phone): ?><div class="cline"><span class="ci"><?= icon('send', 14) ?></span> <bdi dir="ltr"><?= e($phone) ?></bdi></div><?php endif; ?>
+      <?php if ($email): ?><div class="cline"><span class="ci"><?= icon('send', 14) ?></span> <bdi dir="ltr"><?= e($email) ?></bdi></div><?php endif; ?>
+      <?php if ($address): ?><div class="cline"><span class="ci"><?= icon('map-pin', 14) ?></span> <?= e($address) ?></div><?php endif; ?>
     </div>
     <?php endif; ?>
 

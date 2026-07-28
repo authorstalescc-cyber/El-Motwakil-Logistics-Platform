@@ -55,6 +55,41 @@ class App
         return self::baseUrl() . '/' . ltrim($path, '/');
     }
 
+    /**
+     * بصمة النسخة الحالية من كود العميل — المصدر الوحيد لـ«فيه تحديث؟».
+     *
+     * ⚠️ **مشتقّة من تواريخ الملفات نفسها، مش من رقم نسخة بنكتبه بالإيد ولا من
+     *    ملف بيكتبه سكربت النشر.** السبب: الرفع على الإنتاج بيحصل أحيانًا
+     *    بسكربت مقصور مش `bin/deploy.sh` (لما المجلد فيه شغل نص طريق)، فأي
+     *    خطوة «افتكر تزوّد الرقم» كانت هتتنسي **والميزة تقف بالسكوت**. كده
+     *    البصمة بتتغيّر لوحدها بمجرّد ما ملف يترفع.
+     *
+     * ⚠️ **بتغطّي كود العميل بس** (CSS/JS/الـService Worker) — وده بالظبط اللي
+     *    إعادة التحميل بتصلّحه. الصفحات نفسها عمرها ما بتتكاش (`sw.js`
+     *    network-first)، فأي انتقال لأي صفحة بيجيب أحدث HTML أصلاً. النشر
+     *    اللي بيمسّ الخادم بس ما بيحتاجش يزعّق لحد فاتح الشاشة.
+     *
+     * التكلفة: `glob` على مجلدين (≈١٠ ملفات) مرّة واحدة كل طلب.
+     */
+    public static function buildId(): string
+    {
+        static $id = null;
+        if ($id !== null) { return $id; }
+
+        $newest = 0;
+        $files = array_merge(
+            glob(self::basePath('public/assets/css/*.css')) ?: [],
+            glob(self::basePath('public/assets/js/*.js')) ?: [],
+            [self::basePath('public/sw.js')]
+        );
+        foreach ($files as $f) {
+            $t = @filemtime($f);
+            if ($t !== false && $t > $newest) { $newest = $t; }
+        }
+        // بيتقصّر لثمن حروف: البصمة بتتقارن بس، ومحدش محتاج يقرا التاريخ منها
+        return $id = substr(hash('crc32b', (string) $newest) . '0000000', 0, 8);
+    }
+
     /** قراءة إعداد من جدول settings (مع كاش) */
     public static function setting(string $key, $default = null)
     {

@@ -31,44 +31,90 @@ class Maintenance
         return $cache[$t];
     }
 
-    /** مجموعات الحقول التي تحمل نفس نوع الاسم */
-    private static function groups(): array
+    /**
+     * **خريطة الحقول اللي بتحمل نفس نوع الاسم — المصدر الوحيد.**
+     *
+     * بيقراها `normalizeNames()` هنا و`App\Models\DataQuality` (شاشة التنظيف)
+     * مع بعض. ⚠️ لو ضفت عمود اسم جديد في النظام ضيفه هنا — وإلا التنظيف
+     * بيوحّد نص الأعمدة ويسيب الباقي، فالتقرير يفضل مفتَّت **بلا أي خطأ ظاهر**.
+     *
+     * `key`     مفتاح مستقر للمسارات (مش الاسم العربي اللي ممكن يتغيّر)
+     * `suggest` نوع الاقتراح في `NameSuggestion` (للكشف عن المتشابه)
+     * `party`   الاسم ده له سجل قانوني في `PartyMaster` ⇒ **الدمج بيمرّ من هناك**
+     *           (بيحرّك الـid والـaliases وagent_company)، مش بتحديث نصّي.
+     */
+    public static function groups(): array
     {
         return [
             'السائقون' => [
+                'key' => 'driver', 'suggest' => 'driver',
                 'cols' => [['bawalis','driver'], ['movements','driver']],
                 'lookup' => 'driver', 'prefer' => null,
             ],
             'أصحاب السيارات' => [
+                'key' => 'car_owner', 'suggest' => 'car_owner',
                 'cols' => [['bawalis','car_owner'], ['movements','car_owner']],
                 'lookup' => 'car_owner', 'prefer' => null,
             ],
             'الشركات' => [
+                'key' => 'company', 'suggest' => 'company', 'party' => 'company',
                 'cols' => [['bawalis','company'], ['permits','company'], ['generators','company'], ['shamil','company']],
                 'lookup' => 'company', 'prefer' => 'companies',
             ],
             'العملاء (الوكلاء)' => [
+                'key' => 'client', 'suggest' => 'client', 'party' => 'agent',
                 'cols' => [['permits','client'], ['shamil','client'], ['balances','name',"party_type='client'"]],
                 'lookup' => 'client', 'prefer' => 'agents',
             ],
             'الجهات' => [
+                'key' => 'destination', 'suggest' => 'destination',
                 'cols' => [['bawalis','destination'], ['permits','destination'], ['shamil','destination']],
                 'lookup' => 'destination', 'prefer' => null,
             ],
             'التصنيفات' => [
+                'key' => 'classification', 'suggest' => 'classification',
                 'cols' => [['bawalis','classification']],
                 'lookup' => 'classification', 'prefer' => null,
             ],
             'تصنيف الحاويات' => [
-                'cols' => [['bawalis','container_type']],
+                'key' => 'container_type', 'suggest' => 'container_type',
+                'cols' => [['bawalis','container_type'], ['permits','container_type'], ['permit_movements','container_type']],
                 'lookup' => 'container_type', 'prefer' => null,
             ],
             'أصحاب البيانات' => [
+                'key' => 'owner', 'suggest' => 'owner', 'party' => 'owner',
                 'cols' => [['bawalis','declaration_owner']],
                 'lookup' => null, 'prefer' => null,
             ],
+            'الموانئ' => [
+                'key' => 'port', 'suggest' => 'port',
+                'cols' => [['permits','port'], ['movements','port']],
+                'lookup' => 'port', 'prefer' => null,
+            ],
+            'التوكيلات' => [
+                'key' => 'agency', 'suggest' => 'agency',
+                'cols' => [['permits','agency'], ['movements','agency']],
+                'lookup' => 'agency', 'prefer' => null,
+            ],
+            'شركات الشحن' => [
+                'key' => 'shipping_co', 'suggest' => 'shipping_co',
+                'cols' => [['permits','shipping_co'], ['movements','shipping_co']],
+                'lookup' => 'shipping_co', 'prefer' => null,
+            ],
         ];
     }
+
+    /** مجموعة واحدة بمفتاحها المستقر، أو null. */
+    public static function group(string $key): ?array
+    {
+        foreach (self::groups() as $label => $g) {
+            if (($g['key'] ?? '') === $key) { return $g + ['label' => $label]; }
+        }
+        return null;
+    }
+
+    /** هل الجدول موجود؟ (عام عشان `DataQuality` يستخدمه بدل ما يكرّره) */
+    public static function hasTable(string $t): bool { return self::tableExists($t); }
 
     /**
      * توحيد المسميات. يُعيد تقريراً:

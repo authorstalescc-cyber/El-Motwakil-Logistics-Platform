@@ -2,6 +2,9 @@
 # مفاتيح Groq API الحقيقية. النسخة النموذجية المرفوعة: config.example.php
 groq-APIs-AI-Tokens.md
 almotawakel-web/config/config.php
+# بيانات دخول التجربة المحلية (اسم مستخدم/رقم سري) — للجهاز فقط
+almotawakel-web/config/dev-login.local.txt
+*.local.txt
 
 # ===== ملفات مؤقتة من الماك وأوفيس =====
 .DS_Store

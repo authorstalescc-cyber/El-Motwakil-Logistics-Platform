@@ -73,6 +73,10 @@ class RepWatch
 
         $pendCnt  = self::pendingCounts();
         $lastSeen = self::lastActivity();
+        // ⚠️ عدّاد بنود **اليوم** لكل مندوب — الشاشة بقت يوم واحد بس (قرار المالك
+        //    2026-07-26)، فـ«آخر إدخال ٢٥/٧» كان بيدّي إحساس إن فيه شغل النهاردة
+        //    وهو مش كده. استعلام مجمَّع واحد بدل استعلام لكل مندوب.
+        $dayEntries = self::entryCountsFor(\App\Core\RepAuth::workDate());
         // v49 — عهدة يوم عمل المشرف نفسه، من نفس مصدر الكارت في المكتب.
         $day    = \App\Core\RepAuth::workDate();
         $dayMap = RepCustody::dayTotalsByRep($day);
@@ -87,19 +91,46 @@ class RepWatch
             $c['pending_sum'] = RepPortal::pendingAmount($rid);
             $c['pocket']      = round($c['balance'] - $c['pending_sum'], 2);
             $c['last_entry']  = $lastSeen[$rid] ?? null;
+            // بنود اليوم بس — هو اللي بيتعرض على الكارت (مش «آخر إدخال» من يوم فات)
+            $c['day_entries']     = (int) ($dayEntries['all'][$rid] ?? 0);
+            $c['day_pending_cnt'] = (int) ($dayEntries['pending'][$rid] ?? 0);
             $dayRow = $dayMap[$rid] ?? null;
             $c['day']          = $day;
             $c['day_deposits'] = $dayRow['deposits'] ?? 0.0;
             $c['day_spent']    = $dayRow['spent'] ?? 0.0;
             $c['day_balance']  = $dayRow['balance'] ?? 0.0;
+            // ⚠️ **«الباقي» اللي المشرف بيشوفه = عهدة اليوم بعد المستنّي.**
+            //    قرار المالك: الرقم الكبير على الشاشة عمره ما يكون تراكميًّا —
+            //    عهدة المناديب يومية بلا ترحيل (v49)، فرقم من يوم سابق بيتقري
+            //    وكأنه فاضل من عهدة النهاردة. و«بعد المستنّي» لأن فلوس البنود
+            //    اللي لسه ما اتعتمدتش **خرجت من إيده فعلاً**، فلو ما اتخصمتش
+            //    الشاشة بتقول إن معاه فلوس هو أصلاً صرفها.
+            //    مفيش تعريف تاني هنا: `pocket` جاية من `dayTotalsByRep` نفسها
+            //    اللي بتغذّي شاشة المكتب (`/rep-custody`) بالمليم.
+            $c['day_pending'] = $dayRow['pending'] ?? 0.0;
+            $c['day_pocket']  = $dayRow['pocket']  ?? 0.0;
+            // باقي حقائق اليوم — الكارت بقى يوم واحد بس فما ينفعش يعرض تراكميًّا
+            $c['day_returned']     = $dayRow['returned'] ?? 0.0;
+            $c['day_transfer_in']  = $dayRow['transfer_in'] ?? 0.0;
+            $c['day_transfer_out'] = $dayRow['transfer_out'] ?? 0.0;
 
             $dep = (float) $c['deposits'];
             $c['pc_spent'] = $dep > 0 ? min(100, round($c['spent'] / $dep * 100, 1)) : 0.0;
+            // شريط استهلاك **عهدة اليوم** (المصروف ثم المستنّي) — الشريط لازم
+            // يوصف نفس الرقم الكبير، وإلا يوري «خلصت» على رقم يوم تاني.
+            $dDep = (float) $c['day_deposits'];
+            $c['day_pc_spent']   = $dDep > 0 ? min(100, round($c['day_spent'] / $dDep * 100, 1)) : 0.0;
+            $c['day_pc_pending'] = $dDep > 0
+                ? min(100 - $c['day_pc_spent'], round($c['day_pending'] / $dDep * 100, 1)) : 0.0;
             // مندوب متسوّي حسابه (رجّع الباقي ومفيش عنده مستنّي) — رصيده صفر
             // **مش لأن عهدته خلصت** فما ينفعش يتحسب «محتاج تنزيل» ويزعّق للمشرف.
-            $c['settled'] = ($c['balance'] <= 0.005 && (float) $c['returned'] > 0 && $c['pending_cnt'] === 0);
-            // «عهدته قربت تخلص» — نفس قاعدة الداشبورد: فاضل أقل من 15% مما نزل له
-            $c['low'] = (!$c['settled'] && $dep > 0 && $c['pocket'] < $dep * 0.15);
+            // ⚠️ `returned` ممكن يكون سالبًا بعد تصفية رصيد سالب (المكتب دفع له)
+            //    — الشرط بالقيمة المطلقة عشان الحالة دي تتحسب «متسوّي» برضه.
+            $c['settled'] = ($c['balance'] <= 0.005 && abs((float) $c['returned']) > 0.005 && $c['pending_cnt'] === 0);
+            // «عهدته قربت تخلص» — على **عهدة اليوم** زي الرقم المعروض: فاضل أقل
+            // من 15% من اللي نزل له في اليوم ده (مندوب ما نزلش له اليوم = مفيش
+            // إنذار، مش «خلصت عهدته»).
+            $c['low'] = (!$c['settled'] && $dDep > 0 && $c['day_pocket'] < $dDep * 0.15);
             if ($c['low']) { $low++; }
 
             $tDep    += $dep;
@@ -112,11 +143,12 @@ class RepWatch
             if ($dep > 0 || $c['spent'] > 0 || $c['pending_cnt'] > 0) { $reps[] = $c; }
         }
 
-        // الأهم فوق: المحتاج تنزيل، ثم اللي عنده بنود مستنّية، ثم الأكبر رصيدًا
+        // الأهم فوق: المحتاج تنزيل، ثم اللي عنده بنود مستنّية، ثم الأكبر في
+        // عهدة اليوم (نفس الرقم المعروض — الترتيب لازم يوافق اللي العين شايفاه)
         usort($reps, function ($a, $b) {
             if ($a['low'] !== $b['low']) { return $a['low'] ? -1 : 1; }
             if ($a['pending_cnt'] !== $b['pending_cnt']) { return $b['pending_cnt'] <=> $a['pending_cnt']; }
-            return $b['balance'] <=> $a['balance'];
+            return $b['day_pocket'] <=> $a['day_pocket'];
         });
 
         return [
@@ -133,6 +165,8 @@ class RepWatch
                 'day_deposits' => round(array_sum(array_column($reps, 'day_deposits')), 2),
                 'day_spent'    => round(array_sum(array_column($reps, 'day_spent')), 2),
                 'day_balance'  => round(array_sum(array_column($reps, 'day_balance')), 2),
+                'day_pending'  => round(array_sum(array_column($reps, 'day_pending')), 2),
+                'day_pocket'   => round(array_sum(array_column($reps, 'day_pocket')), 2),
             ],
         ];
     }
@@ -140,8 +174,21 @@ class RepWatch
     // ─────────────────────────────────────────── تفصيل مندوب واحد
 
     /**
-     * كل حاجة عن مندوب واحد: عهدته، وكل حركة طلعت منها، وتنزيلاته، وبنوده.
+     * كل حاجة عن مندوب واحد **في يوم عمل المشرف وبس**: عهدة اليوم، والحركات اللي
+     * طلعت منها فيه، وتنزيلاته فيه، وبنوده اللي اتسجّلت عليه.
      * بترجّع null لو المندوب مش موجود (أو قبل migrate_v35).
+     *
+     * ⚠️⚠️ **قرار المالك (2026-07-26): الشاشة دي يوم واحد بس — ولا بند من يوم
+     *    تاني.** قبل كده كانت بتعرض كل الحركات وكل الإدخالات وكل التنزيلات على
+     *    كل الأيام، فالمشرف بيفتح الشاشة ويلاقي بنود أسبوع فوق بعض ومايعرفش
+     *    أنهي بند بتاع النهاردة — «مشتت». الفلترة كلها بتمرّ على **معامل `$day`
+     *    الموجود أصلاً** في `RepCustody::spending/deposits` (v49) فمفيش شرط
+     *    تاريخ مكتوب بالإيد ولا استعلام جديد.
+     *    نفس قاعدة شاشة المندوب نفسه `/m` بالحرف (v49 §9ب).
+     *
+     * ⚠️ الأرقام التراكمية (`b` · `pending` · `pocket`) **باقية في الحزمة** لأنها
+     *    الحقيقة المالية وأساس التسوية وبيقراها `verify_v47`، لكن **الشاشة مش
+     *    بتعرضها** — العرض كله من مفاتيح `day_*`.
      */
     public static function rep(int $viewerId, int $repId): ?array
     {
@@ -153,21 +200,36 @@ class RepWatch
         $b = RepCustody::breakdown($repId);
         $pending = RepPortal::pendingAmount($repId);
         $day = \App\Core\RepAuth::workDate();
+        // ⚠️ **الرقم الكبير في الشاشة = `day_pocket['pocket']`** (عهدة اليوم بعد
+        //    المستنّي). المصدر هو `RepPortal::dayPocket` نفسها اللي بتغذّي شاشة
+        //    المندوب `/m` بالمليم، فمستحيل الشاشتين يقولوا رقمين.
+        $dayPocket = RepPortal::dayPocket($repId, $day);
+
+        // تحويلات وتسويات اليوم بس — الفلترة على العمود المؤرَّخ بتاع كل مصدر
+        $transfersIn = [];
+        if (RepTransfer::available()) {
+            $transfersIn = array_values(array_filter(
+                RepTransfer::incomingFor($repId, 60),
+                static fn (array $t): bool => (string) ($t['transfer_date'] ?? '') === $day));
+        }
+        $settlements = array_values(array_filter(
+            RepCustody::settlements($repId),
+            static fn (array $s): bool => (string) ($s['settle_date'] ?? '') === $day));
 
         return [
             'rep'          => $rep,
-            'b'            => $b,
+            'b'            => $b,                                    // تراكمي — للحساب لا للعرض
             'day'          => $day,
             'day_b'        => RepCustody::breakdown($repId, $day),   // v49 — عهدة يوم العمل
-            'day_ledger'   => RepCustody::dayLedger($repId, 30),
-            'pending'      => $pending,
+            'day_pocket'   => $dayPocket,                            // عهدة اليوم بعد المستنّي
+            'pending'      => $pending,                              // تراكمي — يقراه verify_v47
             'pending_cnt'  => self::pendingCounts()[$repId] ?? 0,
-            'pocket'       => round($b['balance'] - $pending, 2),
-            'spending'     => array_slice(RepCustody::spending($repId), 0, self::SPEND_LIMIT),
-            'deposits'     => RepCustody::deposits($repId),
-            'transfers_in' => RepTransfer::available() ? RepTransfer::incomingFor($repId, 20) : [],
-            'settlements'  => RepCustody::settlements($repId),
-            'submissions'  => self::submissions($repId),
+            'pocket'       => round($b['balance'] - $pending, 2),     // تراكمي — أساس التسوية
+            'spending'     => array_slice(RepCustody::spending($repId, $day), 0, self::SPEND_LIMIT),
+            'deposits'     => RepCustody::deposits($repId, $day),
+            'transfers_in' => $transfersIn,
+            'settlements'  => $settlements,
+            'submissions'  => self::submissions($repId, '', $day),
         ];
     }
 
@@ -175,14 +237,22 @@ class RepWatch
      * بنود المندوب زي ما هي في صندوق الانتظار (مستنّي/اتقبل/اترفض).
      *
      * ⚠️ الأعمدة بالاسم عن قصد — **ممنوع `actual_unit`** (سعر العميل، v37).
+     * `$day` (2026-07-26): بنود يوم واحد بس — `''` = كل الأيام (السلوك القديم).
      */
-    public static function submissions(int $repId, string $status = ''): array
+    public static function submissions(int $repId, string $status = '', string $day = ''): array
     {
         $where = 's.rep_id = ?';
         $args  = [$repId];
         if (in_array($status, ['pending', 'approved', 'rejected'], true)) {
             $where .= ' AND s.status = ?';
             $args[] = $status;
+        }
+        // ⚠️ الفلترة على `entry_date` (يوم الصرف) مش `created_at` (يوم الإدخال):
+        //    البند بيتخصم من عهدة يوم صرفه، فالمشرف لازم يشوفه على نفس اليوم
+        //    اللي العهدة اتحسبت عليه — نفس قاعدة v29 و`/m`.
+        if ($day !== '') {
+            $where .= ' AND s.entry_date = ?';
+            $args[] = $day;
         }
         return Database::all(
             "SELECT s.id, s.rep_id, s.permit_id, s.kind, s.note, s.qty, s.unit_amount, s.amount,
@@ -211,6 +281,25 @@ class RepWatch
             $cache[(int) $r['rep_id']] = (int) $r['cnt'];
         }
         return $cache;
+    }
+
+    /**
+     * عدد بنود **يوم واحد** لكل مندوب — ['all'=>[rid=>n], 'pending'=>[rid=>n]].
+     * استعلام مجمَّع واحد (مش استعلام لكل مندوب) وقراءة فقط.
+     */
+    private static function entryCountsFor(string $day): array
+    {
+        $out = ['all' => [], 'pending' => []];
+        if ($day === '') { return $out; }
+        foreach (Database::all(
+            "SELECT rep_id, COUNT(*) cnt,
+                    SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) pend
+             FROM rep_submissions WHERE entry_date = ? GROUP BY rep_id", [$day]) as $r) {
+            $rid = (int) $r['rep_id'];
+            $out['all'][$rid] = (int) $r['cnt'];
+            $out['pending'][$rid] = (int) $r['pend'];
+        }
+        return $out;
     }
 
     /** آخر يوم فيه إدخال لكل مندوب — [rep_id => date]. */

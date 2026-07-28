@@ -113,14 +113,12 @@ $returnPath = current_app_path() ?: 'custody';
 <?php partial('panel', [
   'title'  => 'سجل حركات الخزنة',
   'icon'   => 'layers',
-  'sub'    => 'الإضافات وعهد السائقين — المصروفات بتتخصم في التقفيل وفي الرصيد فوق',
   'badge'  => $ledger ? ['text' => intf(count($ledger)), 'tone' => 'navy'] : null,
   'scroll' => true,
   'body'   => function () use ($ledger, $returnPath) {
     if (!$ledger) {
       partial('empty', [
         'emoji' => '📭', 'title' => 'لا حركات عهدة بعد',
-        'note'  => 'أضِف عهدة للرصيد من الفورم فوق.',
       ]);
       return;
     }

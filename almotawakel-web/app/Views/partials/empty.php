@@ -10,7 +10,9 @@
  *   emoji  string   الأيقونة (إيموجي). الافتراضي 📭
  *   icon   ?string  بديل: اسم أيقونة SVG من `icon()` — بيتقدّم على emoji
  *   title  string   السطر العريض
- *   note   ?string  سطر التوضيح
+ * ⚠️ **مفيش `note` — اتشال (قانون التصميم، بند ١).** كان بيطبع جملة زي
+ *    «جرّب تغيّر الفلاتر، أو سجّل مصروف جديد» تحت كل حالة فراغ. العنوان
+ *    بيقول إن مفيش بيانات، و**زر التصرّف** بيقول تعمل إيه — والجملة بينهم زيادة.
  *   action ?array   ['label'=>, 'url'=>, 'class'=>'btn sm'] زر التصرّف
  *
  * ملحوظة: لو محطوط جوّه جدول، الشاشة هي اللي بتلفّه بـ`<tr><td colspan=…>` زي
@@ -19,9 +21,7 @@
 $emoji  = $emoji  ?? '📭';
 $icon   = $icon   ?? null;
 $title  = $title  ?? 'مفيش بيانات';
-$note   = $note   ?? null;
 $action = $action ?? null;
 ?>
 <div class="empty"><div class="ic"><?= $icon ? icon($icon, 44) : e($emoji) ?></div><b><?= e($title) ?></b><?php
-if ($note !== null && $note !== ''): ?><span><?= e($note) ?></span><?php endif;
 if (is_array($action) && !empty($action['url']) && !empty($action['label'])): ?><a class="<?= e($action['class'] ?? 'btn sm') ?>" href="<?= e($action['url']) ?>"><?= e($action['label']) ?></a><?php endif; ?></div>

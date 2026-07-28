@@ -88,8 +88,8 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
         <span class="cp-route-lbl">توجيه الدفعة:</span>
         <?php $formRoute = $formOld['route'] ?? 'none'; ?>
         <label class="cp-route-opt"><input type="radio" name="route" value="none" <?= $formRoute==='none'?'checked':'' ?> onchange="cpRoute()"> <span>بدون توجيه</span></label>
-        <label class="cp-route-opt"><input type="radio" name="route" value="cash" <?= $formRoute==='cash'?'checked':'' ?> onchange="cpRoute()"> <span>💵 عهدة نقدية (تُضاف لعهدة اليوم)</span></label>
-        <label class="cp-route-opt"><input type="radio" name="route" value="visa" <?= $formRoute==='visa'?'checked':'' ?> onchange="cpRoute()"> <span>💳 شحن كارت فيزا</span></label>
+        <label class="cp-route-opt"><input type="radio" name="route" value="cash" <?= $formRoute==='cash'?'checked':'' ?> onchange="cpRoute()"> <span><?= icon('banknote', 14) ?> عهدة نقدية (تُضاف لعهدة اليوم)</span></label>
+        <label class="cp-route-opt"><input type="radio" name="route" value="visa" <?= $formRoute==='visa'?'checked':'' ?> onchange="cpRoute()"> <span><?= icon('credit-card', 14) ?> شحن كارت فيزا</span></label>
         <span id="cpVisaBox" class="cp-visa-box" style="display:<?= $formRoute==='visa'?'flex':'none' ?>"><?= visa_card_select($formOld['visa_card_id'] ?? null) ?><?= fieldError('visa_card_id', $formErrors) ?></span>
       </div>
       <label class="cp-route-opt" style="margin-bottom:12px"><input type="checkbox" name="auto_allocate" value="1" <?= $autoAllocateChecked?'checked':'' ?>>
@@ -127,13 +127,13 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
     <div class="field" style="margin:0;width:150px"><label>إلى تاريخ</label><input type="date" name="to" value="<?= e($f['to']) ?>"></div>
     <div class="field" style="margin:0;flex:1;min-width:150px"><label>بحث</label><input type="search" name="q" value="<?= e($f['q']) ?>" placeholder="عميل / بيان"></div>
     <button class="btn" type="submit">تصفية</button>
-    <?php if($hasFilter): ?><a class="btn ghost" href="<?= url('payments') ?>">✕ مسح</a><?php endif; ?>
+    <?php if($hasFilter): ?><a class="btn ghost" href="<?= url('payments') ?>"><?= icon('x', 14) ?> مسح</a><?php endif; ?>
   </form>
 </div>
 
 <!-- السجل -->
 <div class="card">
-  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('layers', 17) ?> سجل الدفعات <span style="color:var(--grey);font-weight:400;font-size:.85rem">(<?= count($payments) ?>)</span></div>
+  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('layers', 17) ?> سجل الدفعات <span style="color:var(--grey);font-weight:400;font-size:var(--fs-2)">(<?= count($payments) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">التاريخ</th><th class="g-identity">العميل</th><th class="g-identity">المبلغ</th>
@@ -141,17 +141,17 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
     </tr></thead>
     <tbody>
       <?php if(!$payments): ?>
-        <tr><td colspan="8"><div class="empty"><div class="ic">📭</div><?= $hasFilter?'لا نتائج مطابقة للفلاتر.':'لا تحصيلات مسجّلة بعد. سجّل أول تحصيل من الأعلى.' ?></div></td></tr>
+        <tr><td colspan="8"><div class="empty"><div class="ic"><?= icon('inbox', 14) ?></div><?= $hasFilter?'لا نتائج مطابقة للفلاتر.':'لا تحصيلات مسجّلة بعد. سجّل أول تحصيل من الأعلى.' ?></div></td></tr>
       <?php else: foreach($payments as $pm): ?>
         <tr>
           <td><?= $pm['pay_date'] ? e(dfmt($pm['pay_date'])) : '—' ?></td>
-          <td style="text-align:right;font-weight:700"><?= e($pm['client_name']) ?></td>
-          <td class="pos" style="font-weight:800"><?= money($pm['amount'],false) ?></td>
+          <td style="text-align:right;font-weight:500"><?= e($pm['client_name']) ?></td>
+          <td class="pos" style="font-weight:600"><?= money($pm['amount'],false) ?></td>
           <td>
             <?php if($pm['route']==='cash'): ?>
-              <span class="pill st-paid">💵 عهدة نقدية</span>
+              <span class="pill st-paid"><?= icon('banknote', 14) ?> عهدة نقدية</span>
             <?php elseif($pm['route']==='visa'): ?>
-              <span class="pill st-partial">💳 <?= e($cardName[(int)$pm['visa_card_id']] ?? 'فيزا') ?></span>
+              <span class="pill st-partial"><?= icon('credit-card', 14) ?> <?= e($cardName[(int)$pm['visa_card_id']] ?? 'فيزا') ?></span>
             <?php else: ?>
               <span class="pill" style="background:var(--bg);color:var(--grey)">بدون توجيه</span>
             <?php endif; ?>
@@ -165,7 +165,7 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
               <?= csrfField() ?>
               <?= formStateFields(FormState::token(), current_app_path()) ?>
               <input type="text" name="reason" required placeholder="سبب العكس" style="width:110px">
-              <button class="edit" type="submit" title="عكس التحصيل" style="background:none;border:0;cursor:pointer">↩️</button>
+              <button class="edit" type="submit" title="عكس التحصيل" style="background:none;border:0;cursor:pointer"><?= icon('undo', 14) ?></button>
             </form><?php else: ?><small><?= e($pm['reverse_reason'] ?? '') ?></small><?php endif; ?>
           </td>
         </tr>
@@ -173,8 +173,8 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
     </tbody>
     <?php if($payments): ?>
     <tfoot><tr>
-      <td colspan="2" style="background:var(--gold-light);font-weight:800;text-align:left">إجمالي المعروض</td>
-      <td style="background:var(--gold-light);font-weight:800"><?= money(array_sum(array_map(fn($p)=>(float)$p['amount'],$payments)),false) ?></td>
+      <td colspan="2" style="background:var(--gold-light);font-weight:600;text-align:left">إجمالي المعروض</td>
+      <td style="background:var(--gold-light);font-weight:600"><?= money(array_sum(array_map(fn($p)=>(float)$p['amount'],$payments)),false) ?></td>
       <td colspan="5" style="background:var(--gold-light)"></td>
     </tr></tfoot>
     <?php endif; ?>
@@ -185,12 +185,12 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
 .cp-form-box{padding:14px 20px 18px;background:linear-gradient(180deg,#fafbfd,#fff)}
 .cp-form-grid{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:12px}
 .cp-route{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:12px}
-.cp-route-lbl{font-weight:800;color:var(--navy);font-size:.88rem}
-.cp-route-opt{display:flex;align-items:center;gap:6px;font-size:.86rem;font-weight:600;cursor:pointer}
+.cp-route-lbl{font-weight:600;color:var(--navy);font-size:var(--fs-3)}
+.cp-route-opt{display:flex;align-items:center;gap:6px;font-size:var(--fs-2);font-weight:400;cursor:pointer}
 .cp-visa-box{display:flex;align-items:center}
-.cp-visa-box select{padding:7px 10px;border:1px solid var(--line2);border-radius:8px;font-family:inherit}
+.cp-visa-box select{padding:7px 10px;border:1px solid var(--line2);border-radius:var(--radius-1);font-family:inherit}
 .cp-form-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.cp-hint{font-size:.78rem;color:var(--grey)}
+.cp-hint{font-size:var(--fs-1);color:var(--grey)}
 </style>
 <script>
 function cpRoute(){

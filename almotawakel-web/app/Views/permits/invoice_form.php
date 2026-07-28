@@ -42,12 +42,39 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
 ?>
 <div class="permit-bar">
   <a class="btn ghost sm" href="<?= url('permits/'.$pid) ?>">‹ رجوع للإذن</a>
-  <span class="pb-title">🧾 إصدار فاتورة — <?= Permit::typeLabel($type) ?> <b><?= e($p['permit_no'] ?: '#'.$pid) ?></b></span>
+  <span class="pb-title"><?= icon('receipt', 14) ?> إصدار فاتورة — <?= Permit::typeLabel($type) ?> <b><?= e($p['permit_no'] ?: '#'.$pid) ?></b></span>
   <span class="pill <?= $isClosed?'st-paid':'st-partial' ?>"><?= $isClosed?'مقفول ✓':'جارٍ' ?></span>
 </div>
 
+<?php
+/* ⚠️ تنبيه «صدر مستند بالفعل» — لازم يفضل **فوق** الفورم.
+   المعلومة دي كانت موجودة في آخر الصفحة (جدول «مستندات صادرة سابقاً») حيث
+   لا تُرى قبل الضغط على «إصدار». وأخطر حالة بتوصّل هنا هي **رجوع المتصفح**:
+   بعد الحفظ التحويل بيروح لصفحة المستند، فالرجوع بيرجّع الفورم معبّى، ومفيش
+   رابط ممكن يمنع ده — الفورم نفسه لازم يقول إن شغله خلص.
+   verify_navigation §٦ بيفشل لو التنبيه اتنقل تحت الفورم. */
+$issuedDocs = array_values(array_filter($invoices, fn($iv) => ($iv['status'] ?? '') !== 'void'));
+?>
+<?php if ($issuedDocs): ?>
+  <div class="issued-warn js-issued-warn" role="status">
+    <span class="iw-ic" aria-hidden="true"><?= icon('alert', 14) ?></span>
+    <div class="iw-body">
+      <div class="iw-t">صدر لهذا الإذن <?= intf(count($issuedDocs)) ?> مستند بالفعل</div>
+      <div>لو كنت راجع من صفحة المستند، مش محتاج تصدر تاني — افتحه من هنا.
+        الإصدار من الشاشة دي بيعمل مستنداً <b>إضافياً</b> برقم جديد.</div>
+      <div class="iw-list">
+        <?php foreach ($issuedDocs as $iv): ?>
+          <a class="iw-doc" href="<?= url('permits/invoice/'.(int)$iv['id']) ?>">
+            <?= icon('receipt', 14) ?> <?= e($iv['doc_no'] ?: '#'.$iv['id']) ?> · <?= money($iv['total'], false) ?>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  </div>
+<?php endif; ?>
+
 <!-- ===== ملخص سريع للإذن ===== -->
-<div class="sec-head"><span>📋 ملخص الإذن</span></div>
+<div class="sec-head"><span><?= icon('clipboard', 14) ?> ملخص الإذن</span></div>
 <div class="card mb" style="padding:0;overflow:hidden">
   <div class="inv-sum-grid">
     <?php
@@ -81,7 +108,7 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
   </div>
   <?php if ($allBills): ?>
     <details class="inv-bills">
-      <summary>🚛 البوالص التي تمت (<?= intf(count($allBills)) ?>) — اضغط للعرض</summary>
+      <summary><?= icon('truck', 14) ?> البوالص التي تمت (<?= intf(count($allBills)) ?>) — اضغط للعرض</summary>
       <div class="table-wrap"><table class="data">
         <thead><tr><th class="g-identity">رقم البوليصة</th><th class="g-identity">التاريخ</th>
           <th class="g-identity">الحاوية</th><th class="g-vehicle">العدد</th>
@@ -89,7 +116,7 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
         <tbody>
         <?php foreach ($allBills as $b): ?>
           <tr>
-            <td style="font-weight:700"><?= e($b['bill_number'] ?: '—') ?></td>
+            <td style="font-weight:500"><?= e($b['bill_number'] ?: '—') ?></td>
             <td><?= dfmt($b['bill_date']) ?></td>
             <td><?= e($b['container_no'] ?: '—') ?><?php if($b['container_type']??''): ?> <span class="ct-chip"><?= e($b['container_type']) ?></span><?php endif; ?></td>
             <td><?= intf($b['container_count'] ?? 0) ?></td>
@@ -116,15 +143,15 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
       <label class="ichip"><input type="radio" name="doc_kind" value="statement" <?= $docKind==='statement'?'checked':'' ?>><span>كشف حساب</span></label>
       <label class="ichip"><input type="radio" name="doc_kind" value="claim" <?= $docKind==='claim'?'checked':'' ?>><span>مطالبة بالإيصالات</span></label>
     </div>
-    <div id="claimHint" class="i-hint" style="display:none;margin-top:10px">🧾 المطالبة بالإيصالات تسحب <b>كل الإيصالات فقط</b> بدون النولون وبدون الرسوم الأولية أو الضريبة.</div>
+    <div id="claimHint" class="i-hint" style="display:none;margin-top:10px"><?= icon('receipt', 14) ?> المطالبة بالإيصالات تسحب <b>كل الإيصالات فقط</b> بدون النولون وبدون الرسوم الأولية أو الضريبة.</div>
     <div id="taxBlock" style="margin-top:14px">
-      <div style="font-weight:700;color:var(--navy,#15355B);margin-bottom:8px">خاضعة لضريبة القيمة المضافة (<?= $vatPct ?>%)؟</div>
+      <div style="font-weight:500;color:var(--navy,#15355B);margin-bottom:8px">خاضعة لضريبة القيمة المضافة (<?= $vatPct ?>%)؟</div>
       <div class="inv-choice">
         <label class="ichip sm"><input type="radio" name="taxable" value="0" <?= $taxableOld!=='1'?'checked':'' ?>><span>غير خاضعة</span></label>
         <label class="ichip sm"><input type="radio" name="taxable" value="1" <?= $taxableOld==='1'?'checked':'' ?>><span>خاضعة للضريبة</span></label>
       </div>
       <div id="internalBlock" style="margin-top:12px;display:none">
-        <label for="internalNo" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">رقم الفاتورة (يُدخَل يدوياً)<span id="internalReq"> *</span></label>
+        <label for="internalNo" style="font-size:var(--fs-2);font-weight:500;color:var(--grey,#5A6472)">رقم الفاتورة (يُدخَل يدوياً)<span id="internalReq"> *</span></label>
         <input type="text" name="internal_no" id="internalNo" value="<?= e($old['internal_no'] ?? '') ?>"
                aria-describedby="internalHint"
                style="display:block;width:100%;max-width:320px;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
@@ -134,7 +161,7 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
 
     <!-- اسم العميل في الطباعة (اختياري) — للطباعة فقط، لا يمسّ بيانات الإذن -->
     <div style="margin-top:14px">
-      <label for="invoice-display-client" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">اسم العميل في الطباعة (اختياري)</label>
+      <label for="invoice-display-client" style="font-size:var(--fs-2);font-weight:500;color:var(--grey,#5A6472)">اسم العميل في الطباعة (اختياري)</label>
       <input id="invoice-display-client" type="text" name="display_client" value="<?= e($old['display_client'] ?? ($p['client'] ?? '')) ?>"
              style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
       <div class="i-hint">يظهر هذا الاسم على المستند المطبوع فقط — لا يغيّر اسم العميل المسجّل في الإذن أو التقارير.</div>
@@ -143,13 +170,13 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
     <!-- عنوان بديل + رقم مسلسل خاص بالعميل (اختياريان) -->
     <div class="inv-extra">
       <div>
-        <label for="invoice-custom-title" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">عنوان الفاتورة (اختياري)</label>
+        <label for="invoice-custom-title" style="font-size:var(--fs-2);font-weight:500;color:var(--grey,#5A6472)">عنوان الفاتورة (اختياري)</label>
         <input id="invoice-custom-title" type="text" name="custom_title" value="<?= e($old['custom_title'] ?? '') ?>" placeholder="اتركه فارغاً للعنوان الافتراضي (فاتورة / كشف حساب / مطالبة بالإيصالات)"
                style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
         <div class="i-hint">لو أدخلت عنواناً هنا سيظهر بدل العنوان الافتراضي في الطباعة.</div>
       </div>
       <div>
-        <label for="invoice-serial-no" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">رقم مسلسل خاص بالعميل (اختياري)</label>
+        <label for="invoice-serial-no" style="font-size:var(--fs-2);font-weight:500;color:var(--grey,#5A6472)">رقم مسلسل خاص بالعميل (اختياري)</label>
         <input id="invoice-serial-no" type="text" name="serial_no" value="<?= e($old['serial_no'] ?? '') ?>" placeholder="رقم مرجعي للعميل — لا يتكرّر"<?= fieldErrorAttrs('serial_no', $errors) ?>
                style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
         <?= fieldError('serial_no', $errors) ?>
@@ -162,19 +189,19 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
   <?php if ($needAgency || $needPort): ?>
     <!-- بيانات ناقصة في الإذن: توكيل ملاحي / ميناء — تُدخَل هنا وتُسجَّل في الإذن -->
     <div class="card mb" style="padding:16px;border:1.5px dashed var(--gold,#C9A227);background:#fffdf4">
-      <div style="font-weight:800;color:var(--navy,#15355B);margin-bottom:4px">⚓ بيانات ناقصة في الإذن</div>
+      <div style="font-weight:600;color:var(--navy,#15355B);margin-bottom:4px"><?= icon('anchor', 14) ?> بيانات ناقصة في الإذن</div>
       <div class="i-hint" style="margin-bottom:10px">التوكيل الملاحي/الميناء غير مسجّلين في هذا الإذن. أدخلهما هنا قبل الإصدار — سيُحفظان في الإذن نفسه تلقائياً.</div>
       <div class="inv-extra">
         <?php if ($needAgency): ?>
           <div>
-            <label for="invoice-agency" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">توكيل ملاحي</label>
-            <input id="invoice-agency" type="text" name="agency" value="<?= e($old['agency'] ?? '') ?>" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
+            <label for="invoice-agency" style="font-size:var(--fs-2);font-weight:500;color:var(--grey,#5A6472)">توكيل ملاحي</label>
+            <?php partial('lookup_select', ['name'=>'agency','type'=>'agency','value'=>$old['agency'] ?? '','attrs'=>'id="invoice-agency" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px"']); ?>
           </div>
         <?php endif; ?>
         <?php if ($needPort): ?>
           <div>
-            <label for="invoice-port" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">الميناء</label>
-            <input id="invoice-port" type="text" name="port" value="<?= e($old['port'] ?? '') ?>" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px">
+            <label for="invoice-port" style="font-size:var(--fs-2);font-weight:500;color:var(--grey,#5A6472)">الميناء</label>
+            <?php partial('lookup_select', ['name'=>'port','type'=>'port','value'=>$old['port'] ?? '','attrs'=>'id="invoice-port" style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px"']); ?>
           </div>
         <?php endif; ?>
       </div>
@@ -205,33 +232,33 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
             <td><input type="number" step="0.01" name="item_qty[]" value="<?= e($rr['qty']) ?>" class="i-qty" aria-label="كمية البند <?= (int)$rowIndex+1 ?>"></td>
             <td><input type="number" step="0.01" name="item_price[]" value="<?= e($rr['price']) ?>" placeholder="0.00" class="i-price" aria-label="سعر البند <?= (int)$rowIndex+1 ?>"></td>
             <td class="i-total">0.00</td>
-            <td><?php if(!$isFreightRow): ?><button type="button" class="row-del" title="حذف البند">✕</button><?php endif; ?></td>
+            <td><?php if(!$isFreightRow): ?><button type="button" class="row-del" title="حذف البند"><?= icon('x', 14) ?></button><?php endif; ?></td>
           </tr>
         <?php endforeach; ?>
       </tbody>
     </table></div>
     <div style="padding:12px 16px;border-top:1px solid var(--line,#E2E7EE)">
-      <button type="button" class="btn ghost sm" id="addRow">➕ إضافة بند</button>
+      <button type="button" class="btn ghost sm" id="addRow"><?= icon('plus', 14) ?> إضافة بند</button>
     </div>
   </div>
 
   <!-- (3) الإصدار -->
   <div class="sec-head"><span>③ الإجمالي والإصدار</span></div>
   <div class="card mb" style="padding:16px">
-    <label for="invoice-note" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">ملاحظة على الفاتورة (اختياري)</label>
+    <label for="invoice-note" style="font-size:var(--fs-2);font-weight:500;color:var(--grey,#5A6472)">ملاحظة على الفاتورة (اختياري)</label>
     <textarea id="invoice-note" name="note" rows="2" placeholder="أي بيان إضافي يظهر في المستند"
-              style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:9px;font-family:inherit"><?= e($old['note'] ?? '') ?></textarea>
+              style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line,#E2E7EE);border-radius:var(--radius-1);font-family:inherit"><?= e($old['note'] ?? '') ?></textarea>
 
     <div class="inv-extra" style="margin-top:14px">
-      <div><label for="invoice-date" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">تاريخ الإصدار</label>
+      <div><label for="invoice-date" style="font-size:var(--fs-2);font-weight:500;color:var(--grey,#5A6472)">تاريخ الإصدار</label>
         <input id="invoice-date" type="date" name="invoice_date" value="<?= e($old['invoice_date'] ?? work_date()) ?>" required></div>
-      <div><label for="invoice-due-date" style="font-size:.8rem;font-weight:700;color:var(--grey,#5A6472)">تاريخ الاستحقاق</label>
+      <div><label for="invoice-due-date" style="font-size:var(--fs-2);font-weight:500;color:var(--grey,#5A6472)">تاريخ الاستحقاق</label>
         <input id="invoice-due-date" type="date" name="due_date" value="<?= e($old['due_date'] ?? date('Y-m-d',strtotime(work_date().' +'.(int)($paymentTermsDays ?? 30).' days'))) ?>">
         <div class="i-hint">يُحسب افتراضياً من شروط دفع العميل، ويمكن تعديله قبل الإصدار.</div></div>
     </div>
 
     <?php if (!$isClosed): ?>
-      <div class="close-opt">🔒 سيتم <b>إغلاق الإذن تلقائياً</b> بمجرد إصدار المستند. لإعادة فتحه لاحقاً لازم تلغي المستند أولاً.</div>
+      <div class="close-opt"><?= icon('alert', 14) ?> سيتم <b>إغلاق الإذن تلقائياً</b> بمجرد إصدار المستند. لإعادة فتحه لاحقاً لازم تلغي المستند أولاً.</div>
     <?php endif; ?>
 
     <div class="inv-summary" data-vat="<?= e($vatRate) ?>">
@@ -241,8 +268,8 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
     </div>
 
     <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-      <button type="submit" class="btn gold" formaction="<?= url('permits/'.$pid.'/invoice/preview') ?>">👁️ معاينة قبل الإصدار</button>
-      <button type="submit" class="btn ghost" data-primary-submit>🧾 إصدار مباشر وحفظ</button>
+      <button type="submit" class="btn gold" formaction="<?= url('permits/'.$pid.'/invoice/preview') ?>"><?= icon('search', 14) ?> معاينة قبل الإصدار</button>
+      <button type="submit" class="btn ghost" data-primary-submit><?= icon('receipt', 14) ?> إصدار مباشر وحفظ</button>
       <a class="btn ghost" href="<?= url('permits/'.$pid) ?>">إلغاء</a>
     </div>
   </div>
@@ -250,7 +277,7 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
 
 <!-- سجل الفواتير السابقة لهذا الإذن -->
 <?php if ($invoices): ?>
-  <div class="sec-head"><span>🗂️ مستندات صادرة سابقاً لهذا الإذن (<?= intf(count($invoices)) ?>)</span></div>
+  <div class="sec-head"><span><?= icon('folder', 14) ?> مستندات صادرة سابقاً لهذا الإذن (<?= intf(count($invoices)) ?>)</span></div>
   <?= formErrorSummary($voidState['errors']) ?>
   <div class="card mb" style="padding:0;overflow:hidden">
     <div class="table-wrap"><table class="data">
@@ -261,18 +288,18 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
       <tbody>
       <?php foreach ($invoices as $iv): ?>
         <tr>
-          <td style="font-weight:700"><?= e($iv['doc_no'] ?: '#'.$iv['id']) ?></td>
+          <td style="font-weight:500"><?= e($iv['doc_no'] ?: '#'.$iv['id']) ?></td>
           <td><span class="pill <?= $iv['doc_kind']==='statement'?'st-partial':'st-paid' ?>"><?= e(PermitInvoice::kindLabel($iv['doc_kind'])) ?><?= $iv['taxable']?' • ضريبية':'' ?></span></td>
           <td><?= dfmt($iv['invoice_date']) ?></td>
           <td><span class="pill"><?= e(PermitInvoice::statusLabel($iv['status'],$iv['due_date'])) ?></span></td>
-          <td style="font-weight:800;color:var(--navy,#15355B)"><?= money($iv['total'], false) ?></td>
-          <td style="font-weight:800"><?= money($iv['balance_due'],false) ?></td>
+          <td style="font-weight:600;color:var(--navy,#15355B)"><?= money($iv['total'], false) ?></td>
+          <td style="font-weight:600"><?= money($iv['balance_due'],false) ?></td>
           <td><div class="actions">
-            <a class="edit" href="<?= url('permits/invoice/'.$iv['id']) ?>" target="_blank" title="طباعة">🖨️</a>
+            <a class="edit" href="<?= url('permits/invoice/'.$iv['id']) ?>" target="_blank" title="طباعة"><?= icon('file-text', 14) ?></a>
             <?php if($iv['status']!=='void'): ?><form method="post" action="<?= url('permits/invoice/'.$iv['id'].'/delete') ?>" style="display:inline"
                   data-danger="1" data-confirm="إلغاء المستند مع الاحتفاظ برقمه؟">
               <?= csrfField() ?><?= formStateFields($voidState['token'], $voidState['back']) ?><input type="hidden" name="_void_id" value="<?= (int)$iv['id'] ?>"><input type="hidden" name="lock_version" value="<?= (int)$iv['lock_version'] ?>">
-              <span class="field" style="display:inline-block;margin:0"><input name="reason" value="<?= $voidOldId===(int)$iv['id'] ? e($voidState['old']['reason'] ?? '') : '' ?>" required placeholder="سبب الإلغاء" style="width:110px"<?= $voidOldId===(int)$iv['id'] ? fieldErrorAttrs('reason', $voidState['errors']) : '' ?>><?= $voidOldId===(int)$iv['id'] ? fieldError('reason', $voidState['errors']) : '' ?></span><button class="del" type="submit" data-primary-submit title="إلغاء">⛔</button>
+              <span class="field" style="display:inline-block;margin:0"><input name="reason" value="<?= $voidOldId===(int)$iv['id'] ? e($voidState['old']['reason'] ?? '') : '' ?>" required placeholder="سبب الإلغاء" style="width:110px"<?= $voidOldId===(int)$iv['id'] ? fieldErrorAttrs('reason', $voidState['errors']) : '' ?>><?= $voidOldId===(int)$iv['id'] ? fieldError('reason', $voidState['errors']) : '' ?></span><button class="del" type="submit" data-primary-submit title="إلغاء"><?= icon('x', 14) ?></button>
             </form><?php endif; ?>
           </div></td>
         </tr>
@@ -285,44 +312,44 @@ foreach ($movements as $mv) { foreach ($mv['bills'] as $b) { $allBills[] = $b; }
 <style>
   .inv-sum-grid{display:grid;grid-template-columns:repeat(5,1fr)}
   .isg-cell{padding:10px 14px;border-bottom:1px solid var(--line,#E2E7EE);border-inline-start:1px solid var(--line,#E2E7EE)}
-  .isg-l{display:block;font-size:.72rem;color:var(--grey,#5A6472);font-weight:700;margin-bottom:3px}
-  .isg-v{font-weight:700;color:var(--navy,#15355B)}
+  .isg-l{display:block;font-size:var(--fs-1);color:var(--grey,#5A6472);font-weight:500;margin-bottom:3px}
+  .isg-v{font-weight:500;color:var(--navy,#15355B)}
   .inv-ct{padding:10px 14px;border-bottom:1px solid var(--line,#E2E7EE);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .ct-chip{display:inline-block;background:#eef4ff;color:#2a5aa5;border-radius:6px;padding:2px 9px;font-size:.75rem;font-weight:700}
+  .ct-chip{display:inline-block;background:#eef4ff;color:#2a5aa5;border-radius:var(--radius-1);padding:2px 9px;font-size:var(--fs-1);font-weight:500}
   .inv-tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:0}
   .itile{padding:12px;text-align:center;border-inline-start:1px solid var(--line,#E2E7EE)}
-  .itile b{display:block;font-size:1.05rem}.itile span{font-size:.72rem;color:var(--grey,#5A6472)}
+  .itile b{display:block;font-size:var(--fs-4)}.itile span{font-size:var(--fs-1);color:var(--grey,#5A6472)}
   .inv-bills{border-top:1px solid var(--line,#E2E7EE)}
-  .inv-bills>summary{padding:11px 16px;cursor:pointer;font-weight:700;color:var(--navy,#15355B)}
+  .inv-bills>summary{padding:11px 16px;cursor:pointer;font-weight:500;color:var(--navy,#15355B)}
   .inv-choice{display:flex;gap:10px;flex-wrap:wrap}
   .ichip{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:1.5px solid var(--line,#E2E7EE);
-    border-radius:10px;cursor:pointer;font-weight:700;user-select:none;transition:.15s}
+    border-radius:var(--radius-2);cursor:pointer;font-weight:500;user-select:none;transition:.15s}
   .ichip.sm{padding:8px 14px}
   .inv-extra{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
   @media(max-width:700px){.inv-extra{grid-template-columns:1fr}}
   .ichip input{accent-color:var(--navy,#15355B)}
   .ichip:has(input:checked){border-color:var(--gold,#C9A227);background:#fff9e9;color:var(--navy,#15355B);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
   .inv-items td{vertical-align:top}
-  .inv-items input{width:100%;padding:7px 9px;border:1px solid var(--line,#E2E7EE);border-radius:7px;font-family:inherit}
-  .inv-items .i-label{font-weight:700}
+  .inv-items input{width:100%;padding:7px 9px;border:1px solid var(--line,#E2E7EE);border-radius:var(--radius-1);font-family:inherit}
+  .inv-items .i-label{font-weight:500}
   .inv-items .i-qty,.inv-items .i-price{text-align:center;font-variant-numeric:tabular-nums}
-  .inv-items .i-total{font-weight:800;color:var(--navy,#15355B);font-variant-numeric:tabular-nums;text-align:left;white-space:nowrap;padding-top:14px}
+  .inv-items .i-total{font-weight:600;color:var(--navy,#15355B);font-variant-numeric:tabular-nums;text-align:left;white-space:nowrap;padding-top:14px}
   .freight-row{background:#fffdf4}
-  .i-hint{font-size:.72rem;color:var(--grey,#5A6472);margin-top:4px}
+  .i-hint{font-size:var(--fs-1);color:var(--grey,#5A6472);margin-top:4px}
   .i-hint b{color:var(--navy,#15355B)}
-  .freight-tag{display:inline-block;background:#fff3d6;color:#8a6d10;border-radius:5px;padding:1px 7px;margin-inline-start:4px;font-weight:700}
-  .auto-tag{display:inline-block;background:#eef4ff;color:#2a5;border-radius:5px;padding:0 6px;font-weight:700}
-  .mini-btn{border:1px solid var(--navy,#15355B);background:#fff;color:var(--navy,#15355B);border-radius:6px;padding:1px 8px;cursor:pointer;font-size:.72rem;font-weight:700;margin-inline-start:4px}
-  .row-del{border:none;background:#fbe7e9;color:#b4383e;border-radius:7px;width:30px;height:30px;cursor:pointer;font-weight:800}
+  .freight-tag{display:inline-block;background:#fff3d6;color:#8a6d10;border-radius:var(--radius-1);padding:1px 7px;margin-inline-start:4px;font-weight:500}
+  .auto-tag{display:inline-block;background:#eef4ff;color:#2a5;border-radius:var(--radius-1);padding:0 6px;font-weight:500}
+  .mini-btn{border:1px solid var(--navy,#15355B);background:#fff;color:var(--navy,#15355B);border-radius:var(--radius-1);padding:1px 8px;cursor:pointer;font-size:var(--fs-1);font-weight:500;margin-inline-start:4px}
+  .row-del{border:none;background:#fbe7e9;color:#b4383e;border-radius:var(--radius-1);width:30px;height:30px;cursor:pointer;font-weight:600}
   .close-opt{display:flex;align-items:center;gap:8px;margin-top:14px;padding:10px 14px;border:1px dashed var(--gold,#C9A227);
-    border-radius:9px;background:#fffdf4;font-weight:700;color:var(--navy,#15355B);cursor:pointer;width:fit-content}
+    border-radius:var(--radius-1);background:#fffdf4;font-weight:500;color:var(--navy,#15355B);cursor:pointer;width:fit-content}
   .close-opt input{width:17px;height:17px;accent-color:var(--gold,#C9A227)}
-  .inv-summary{margin-top:16px;max-width:360px;margin-inline-start:auto;border:1px solid var(--line,#E2E7EE);border-radius:12px;overflow:hidden}
-  .inv-summary .r{display:flex;justify-content:space-between;padding:10px 16px;font-size:.95rem;border-bottom:1px solid var(--line,#E2E7EE)}
-  .inv-summary .r b{font-variant-numeric:tabular-nums;font-weight:700}
-  .inv-summary .r.grand{background:var(--navy,#15355B);color:#fff;border:none;font-size:1.1rem}
-  .inv-summary .r.grand b{color:var(--gold,#C9A227);font-weight:800}
-  .del{background:none;border:none;cursor:pointer;font-size:1rem}
+  .inv-summary{margin-top:16px;max-width:360px;margin-inline-start:auto;border:1px solid var(--line,#E2E7EE);border-radius:var(--radius-2);overflow:hidden}
+  .inv-summary .r{display:flex;justify-content:space-between;padding:10px 16px;font-size:var(--fs-3);border-bottom:1px solid var(--line,#E2E7EE)}
+  .inv-summary .r b{font-variant-numeric:tabular-nums;font-weight:500}
+  .inv-summary .r.grand{background:var(--navy,#15355B);color:#fff;border:none;font-size:var(--fs-5)}
+  .inv-summary .r.grand b{color:var(--gold,#C9A227);font-weight:600}
+  .del{background:none;border:none;cursor:pointer;font-size:var(--fs-4)}
   @media(max-width:700px){.inv-sum-grid,.inv-tiles{grid-template-columns:repeat(2,1fr)}}
 </style>
 

@@ -50,7 +50,7 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--ink);
-    font-family:'Segoe UI',Tahoma,'Cairo',sans-serif;direction:rtl;text-align:right;
+    font-family:var(--font);direction:rtl;text-align:right;
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
   .sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;position:relative;
     box-shadow:0 10px 40px rgba(21,53,91,.15);overflow:hidden}
@@ -61,82 +61,82 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
     padding-bottom:18px;border-bottom:2px solid var(--line)}
   .brand{display:flex;flex-direction:column;align-items:center;gap:6px}
   .brandlogo{height:82px;width:auto;max-width:240px;object-fit:contain}
-  .brand .logo{width:82px;height:82px;border-radius:16px;background:var(--navy);color:var(--gold);
-    display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:800}
-  .brand .cap{color:var(--navy);font-size:15px;font-weight:800;letter-spacing:.5px}
+  .brand .logo{width:82px;height:82px;border-radius:var(--radius-3);background:var(--navy);color:var(--gold);
+    display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:600}
+  .brand .cap{color:var(--navy);font-size:15px;font-weight:600;letter-spacing:.5px}
   .inv-tag{text-align:left;min-width:200px}
-  .inv-tag .word{display:inline-block;background:var(--navy);color:#fff;font-size:22px;font-weight:800;
-    padding:9px 26px;border-radius:10px;letter-spacing:1px}
+  .inv-tag .word{display:inline-block;background:var(--navy);color:#fff;font-size:22px;font-weight:600;
+    padding:9px 26px;border-radius:var(--radius-2);letter-spacing:1px}
   .inv-tag .word.stmt{background:var(--gold);color:var(--navy)}
   .inv-tag .word.claim{background:#1f7a52;color:#fff;font-size:18px}
   .inv-tag .meta{margin-top:12px;font-size:12.5px;color:var(--muted);line-height:2}
   .inv-tag .meta b{color:var(--navy);font-size:14px}
-  .badge-tax{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:999px;font-weight:800;font-size:11.5px;
+  .badge-tax{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:999px;font-weight:600;font-size:11.5px;
     background:#e4f5ec;color:var(--green)}
-  .badge-notax{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:999px;font-weight:800;font-size:11.5px;
+  .badge-notax{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:999px;font-weight:600;font-size:11.5px;
     background:#eef1f6;color:var(--muted)}
   /* العميل + تفاصيل الإذن */
-  .client-card{margin-top:18px;border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fcfdfe}
-  .client-card .t{font-size:11px;color:var(--gold);font-weight:800;letter-spacing:.5px;margin-bottom:6px}
-  .client-card .name{font-size:19px;font-weight:800;color:var(--navy)}
-  .details{margin-top:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  .client-card{margin-top:18px;border:1px solid var(--line);border-radius:var(--radius-2);padding:14px 16px;background:#fcfdfe}
+  .client-card .t{font-size:11px;color:var(--gold);font-weight:600;letter-spacing:.5px;margin-bottom:6px}
+  .client-card .name{font-size:19px;font-weight:600;color:var(--navy)}
+  .details{margin-top:14px;border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden;
     display:grid;grid-template-columns:repeat(4,1fr)}
   .details .cell{padding:11px 14px;border-bottom:1px solid var(--line);border-inline-start:1px solid var(--line)}
-  .details .cell .l{font-size:10.5px;color:var(--muted);font-weight:700;margin-bottom:3px}
-  .details .cell .v{font-weight:800;color:var(--ink);font-size:13px}
+  .details .cell .l{font-size:10.5px;color:var(--muted);font-weight:500;margin-bottom:3px}
+  .details .cell .v{font-weight:600;color:var(--ink);font-size:13px}
   /* جدول البنود */
   table.items{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px;
-    border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  table.items thead th{background:var(--navy);color:#fff;padding:11px 12px;font-weight:700;text-align:center}
+    border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden}
+  table.items thead th{background:var(--navy);color:#fff;padding:11px 12px;font-weight:500;text-align:center}
   table.items thead th.bayan{text-align:right}
   table.items tbody td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:center}
   table.items tbody td.bayan{text-align:right}
   table.items tbody td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
-  table.items tbody td.total{font-weight:800;color:var(--navy)}
+  table.items tbody td.total{font-weight:600;color:var(--navy)}
   table.items tbody tr:nth-child(even){background:#f8fafc}
   table.items td.idx{color:var(--muted);width:34px}
-  table.items tr.vat td{background:var(--gold-l);font-weight:800;color:#7a5f0e}
+  table.items tr.vat td{background:var(--gold-l);font-weight:600;color:#7a5f0e}
   /* الإجماليات */
   .totals{display:grid;grid-template-columns:1.25fr .9fr;gap:16px;margin-top:16px;align-items:start}
-  .words{border:1px dashed var(--gold);background:var(--gold-l);border-radius:12px;padding:14px 16px}
-  .words .t{font-size:11px;color:#8a6d10;font-weight:800;margin-bottom:6px}
-  .words .v{font-size:14px;font-weight:700;color:var(--navy);line-height:1.9}
-  .sumbox{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .words{border:1px dashed var(--gold);background:var(--gold-l);border-radius:var(--radius-2);padding:14px 16px}
+  .words .t{font-size:11px;color:#8a6d10;font-weight:600;margin-bottom:6px}
+  .words .v{font-size:14px;font-weight:500;color:var(--navy);line-height:1.9}
+  .sumbox{border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden}
   .sumbox .r{display:flex;justify-content:space-between;padding:10px 16px;font-size:13.5px;border-bottom:1px solid var(--line)}
   .sumbox .r .l{color:var(--muted)}
-  .sumbox .r .v{font-weight:700;font-variant-numeric:tabular-nums}
+  .sumbox .r .v{font-weight:500;font-variant-numeric:tabular-nums}
   .sumbox .r.sub{background:#f8fafc}
   .sumbox .r.grand{background:var(--navy);color:#fff;font-size:16px;padding:14px 16px;border:none}
-  .sumbox .r.grand .l{color:#dfe8f2}.sumbox .r.grand .v{color:var(--gold);font-weight:800}
-  .note-box{margin-top:14px;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--ink);background:#fcfdfe}
-  .note-box .t{color:var(--gold);font-weight:800;font-size:11px;margin-bottom:3px}
+  .sumbox .r.grand .l{color:#dfe8f2}.sumbox .r.grand .v{color:var(--gold);font-weight:600}
+  .note-box{margin-top:14px;border:1px solid var(--line);border-radius:var(--radius-2);padding:10px 14px;font-size:12.5px;color:var(--ink);background:#fcfdfe}
+  .note-box .t{color:var(--gold);font-weight:600;font-size:11px;margin-bottom:3px}
   .foot{margin-top:22px;padding-top:16px;border-top:2px solid var(--line);
     display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:end}
   .sign{text-align:center}
-  .sign .line{margin-top:30px;border-top:1.5px dashed var(--muted);padding-top:6px;color:var(--muted);font-size:12.5px;font-weight:700}
+  .sign .line{margin-top:30px;border-top:1.5px dashed var(--muted);padding-top:6px;color:var(--muted);font-size:12.5px;font-weight:500}
   /* شريط التواصل + QR */
   .contact-bar{margin-top:20px;padding-top:14px;border-top:1px solid var(--line);
     display:flex;align-items:center;gap:16px}
   .qr{flex:0 0 auto;text-align:center}
-  .qr img{width:88px;height:88px;border:1px solid var(--line);border-radius:8px;padding:3px;background:#fff}
-  .qr span{display:block;font-size:9.5px;color:var(--muted);margin-top:2px;font-weight:700}
+  .qr img{width:88px;height:88px;border:1px solid var(--line);border-radius:var(--radius-1);padding:3px;background:#fff}
+  .qr span{display:block;font-size:9.5px;color:var(--muted);margin-top:2px;font-weight:500}
   .contact{flex:1;display:flex;flex-direction:column;gap:5px}
-  .contact .cline{font-size:12px;color:var(--ink);font-weight:700;line-height:1.6}
+  .contact .cline{font-size:12px;color:var(--ink);font-weight:500;line-height:1.6}
   .contact .ci{display:inline-block;width:20px;color:var(--navy)}
   .pagefoot{text-align:center;color:var(--muted);font-size:10.5px;padding:10px 0 16px}
   .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-size:340px;font-weight:900;color:rgba(21,53,91,.035);pointer-events:none;z-index:0}
+    font-size:340px;font-weight:700;color:rgba(21,53,91,.035);pointer-events:none;z-index:0}
   .wm img{width:62%;max-width:430px;height:auto;object-fit:contain;opacity:.05}
   .pad>*{position:relative;z-index:1}
   .pv-banner{max-width:210mm;margin:10px auto 0;background:#fff4d6;border:1.5px solid var(--gold);
-    color:#7a5f0e;border-radius:10px;padding:11px 16px;font-size:13.5px;font-weight:700;text-align:center}
+    color:#7a5f0e;border-radius:var(--radius-2);padding:11px 16px;font-size:13.5px;font-weight:500;text-align:center}
   .pv-banner b{color:var(--navy)}
   /* ووتر مارك «معاينة» مائل يوضّح أن المستند غير نهائي (يُخفى عند الطباعة) */
   .pv-stamp{position:absolute;top:50%;right:50%;transform:translate(50%,-50%) rotate(-32deg);
-    font-size:120px;font-weight:900;color:rgba(180,56,62,.10);letter-spacing:8px;
+    font-size:120px;font-weight:700;color:rgba(180,56,62,.10);letter-spacing:8px;
     pointer-events:none;z-index:2;white-space:nowrap}
   .bar{max-width:210mm;margin:0 auto;display:flex;gap:10px;justify-content:center;padding:6px}
-  .btn{padding:10px 22px;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;
+  .btn{padding:10px 22px;border:none;border-radius:var(--radius-2);font-weight:600;font-size:14px;cursor:pointer;
     font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
   .btn.gold{background:var(--gold);color:var(--navy)}
   .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
@@ -154,7 +154,7 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
 
 <?php if ($preview): ?>
   <div class="pv-banner noprint">
-    👁️ هذه <b>معاينة</b> فقط — لم يتم إصدار المستند أو حفظه بعد. راجع البيانات ثم اضغط «تأكيد الإصدار».
+    <?= icon('search', 14) ?> هذه <b>معاينة</b> فقط — لم يتم إصدار المستند أو حفظه بعد. راجع البيانات ثم اضغط «تأكيد الإصدار».
   </div>
   <div class="bar noprint">
     <form method="post" action="<?= e($storeUrl) ?>" style="display:contents">
@@ -165,14 +165,21 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
               <?php endforeach; else: ?>
                 <input type="hidden" name="<?= e($k) ?>" value="<?= e((string)$v) ?>">
               <?php endif; endforeach; ?>
-      <button class="btn gold" type="submit">✅ تأكيد الإصدار وحفظ</button>
+      <button class="btn gold" type="submit"><?= icon('check', 14) ?> تأكيد الإصدار وحفظ</button>
     </form>
-    <button class="btn ghost" type="button" onclick="history.back()">✏️ رجوع للتعديل</button>
+    <button class="btn ghost" type="button" onclick="history.back()"><?= icon('edit', 14) ?> رجوع للتعديل</button>
   </div>
 <?php else: ?>
   <div class="bar noprint">
-    <button class="btn gold" onclick="fitAndPrint()">🖨️ طباعة / حفظ PDF</button>
-    <a class="btn ghost" href="<?= url('permits/'.$inv['permit_id'].'/invoice') ?>">‹ رجوع</a>
+    <button class="btn gold" onclick="fitAndPrint()"><?= icon('file-text', 14) ?> طباعة / حفظ PDF</button>
+    <?php /* ⚠️ الرجوع يوصّل لـ**الإذن** لا لفورم إصدار الفاتورة.
+             كان بيوصّل لـ`permits/{id}/invoice` — أي أن من يحفظ فاتورة ويعاينها
+             ثم يضغط رجوع يجد نفسه أمام شاشة إصدار فاتورة معبّأة بنفس البيانات،
+             وهو البلاغ الأصلي (2026-07-25) وسبب خطر الفاتورة المكررة.
+             القاعدة: الرجوع يذهب لما صُنع لا للشاشة التي صنعته
+             (docs/16-navigation-master-plan.md §٤ — يحرسها verify_navigation). */ ?>
+    <a class="btn ghost" href="<?= url('permits/'.$inv['permit_id']) ?>">‹ رجوع للإذن</a>
+    <a class="btn ghost" href="<?= url('invoices') ?>"><?= icon('folder', 14) ?> سجل الفواتير</a>
   </div>
 <?php endif; ?>
 
@@ -282,9 +289,9 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
     <!-- شريط التواصل (اتشال الـQR — كان بيتولّد من موقع خارجي) -->
     <div class="contact-bar">
       <div class="contact">
-        <?php if ($phone): ?><div class="cline"><span class="ci">📞</span> <bdi dir="ltr"><?= e($phone) ?></bdi></div><?php endif; ?>
-        <?php if ($email): ?><div class="cline"><span class="ci">✉️</span> <bdi dir="ltr"><?= e($email) ?></bdi></div><?php endif; ?>
-        <?php if ($address): ?><div class="cline"><span class="ci">📍</span> <?= e($address) ?></div><?php endif; ?>
+        <?php if ($phone): ?><div class="cline"><span class="ci"><?= icon('send', 14) ?></span> <bdi dir="ltr"><?= e($phone) ?></bdi></div><?php endif; ?>
+        <?php if ($email): ?><div class="cline"><span class="ci"><?= icon('send', 14) ?></span> <bdi dir="ltr"><?= e($email) ?></bdi></div><?php endif; ?>
+        <?php if ($address): ?><div class="cline"><span class="ci"><?= icon('map-pin', 14) ?></span> <?= e($address) ?></div><?php endif; ?>
       </div>
     </div>
 

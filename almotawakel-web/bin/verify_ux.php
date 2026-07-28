@@ -450,6 +450,12 @@ $exempt = [
     'DebtController.php'      => ['redirectBack'],
     // بوابة المناديب — خارج نطاق إعادة التصميم، ليها نظام رسايل خاص بيها
     'RepPortalController.php' => ['*'],
+    /* الدخول الناجح بيروح لشاشة «اختر تاريخ العمل» وهي بتشرح نفسها — مفيش
+       رسالة مطلوبة. مسار الفشل ليه `formFailure` ورسالة صريحة.
+       ⚠️ كان بيعدّي **بالصدفة** لأن `flash()` بتاعة صلاحية الدخول الحر كانت
+       داخل نافذة الـ٦ سطور اللي الفحص بيبصّ فيها؛ أول ما اتزاد سطر واحد
+       في الدالة الفحص فشل بإنذار كاذب. الاستثناء الصريح أوضح من الصدفة. */
+    'AuthController.php'      => ['login'],
 ];
 $silent = [];
 foreach (glob($root . '/app/Controllers/*.php') ?: [] as $file) {
@@ -823,9 +829,17 @@ $deadQueries ? bad('استعلامات رسوم ميتة لسه في كنترو�
 // الرسم المنقول لازم يشتغل فعلاً في التقارير
 $repView = (string) file_get_contents($root . '/app/Views/reports/index.php');
 $repCtrl = php_code((string) file_get_contents($root . '/app/Controllers/ReportsController.php'));
-(str_contains($repView, 'chTrend') && str_contains($repCtrl, "Metrics::activityTrend"))
-    ? ok('«حجم العمليات» اشتغل في التقارير (ماركب + بيانات)')
+/* ⚠️ الفحص كان بيدوّر على `chTrend` — وده **id بتاع canvas بتاع Chart.js**
+   اتشال في المرحلة ٢ (٢٠٠KB مع كل فتحة). الرسم لسه شغّال بس بـ`mini_bars`
+   (SVG/CSS على الخادم). الفحص بقى على **المعنى**: البيانات بتتجاب والرسم
+   بيترسم — مش على ماركب بعينه. */
+(str_contains($repView, "حجم العمليات") && str_contains($repView, "partial('mini_bars'")
+    && str_contains($repCtrl, "Metrics::activityTrend"))
+    ? ok('«حجم العمليات» اشتغل في التقارير (بيانات + رسم `mini_bars`)')
     : bad('«حجم العمليات» اتشال من الداشبورد ومش شغّال في التقارير');
+!str_contains($repView, 'chart.umd')
+    ? ok('⚠️ وChart.js اتشالت من التقارير — ٢٠٠KB كانت بتتحمّل مع كل فتحة')
+    : bad('Chart.js رجعت للتقارير');
 
 // المؤشرات نزلت من ٦
 preg_match_all("/\['(permits_open|ready|expenses|receipts|custody|reps)'/", $dashView, $km2);

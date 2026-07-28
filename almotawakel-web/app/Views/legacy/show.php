@@ -21,7 +21,7 @@ $fmt = function(string $type, $v) {
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('legacy') ?>">‹ رجوع للأرشيف</a>
   <span style="flex:1"></span>
-  <span class="pill" style="background:var(--gold-light);color:var(--navy);font-size:.9rem;padding:6px 16px">
+  <span class="pill" style="background:var(--gold-light);color:var(--navy);font-size:var(--fs-3);padding:6px 16px">
     <?= icon('inbox',15) ?> أرشيف قديم — للقراءة فقط
   </span>
 </div>
@@ -38,8 +38,8 @@ $fmt = function(string $type, $v) {
     <div class="grid-auto g4" style="gap:0">
       <?php foreach ($byGroup[$gk] as [$key, $label, $type]): ?>
         <div style="padding:11px 16px;border-bottom:1px solid var(--line);border-inline-start:1px solid var(--line)">
-          <div style="font-size:.76rem;color:var(--grey);font-weight:700;margin-bottom:3px"><?= e($label) ?></div>
-          <div style="font-weight:700;<?= $type==='money'?'color:var(--navy)':'' ?>"><?= $fmt($type, $key==='classification' ? container_norm($bill[$key] ?? '') : ($bill[$key] ?? '')) ?></div>
+          <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500;margin-bottom:3px"><?= e($label) ?></div>
+          <div style="font-weight:500;<?= $type==='money'?'color:var(--navy)':'' ?>"><?= $fmt($type, $key==='classification' ? container_norm($bill[$key] ?? '') : ($bill[$key] ?? '')) ?></div>
         </div>
       <?php endforeach; ?>
     </div>

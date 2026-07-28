@@ -20,27 +20,27 @@ $kindColor = function(string $k) use ($creditKinds): string {
 <style>
 .rep-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}
 .rep-hero .av{width:60px;height:60px;border-radius:50%;background:var(--navy);color:var(--gold);
-  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.4rem}
+  display:flex;align-items:center;justify-content:center;font-weight:600;font-size:var(--fs-6)}
 .rep-hero h2{margin:0;color:var(--navy)}
-.rep-hero .meta{color:var(--grey);font-size:.9rem}
+.rep-hero .meta{color:var(--grey);font-size:var(--fs-3)}
 .rep-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}
-.rep-sum .sc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 12px;text-align:center}
-.rep-sum .sc .l{font-size:.78rem;color:var(--grey);font-weight:700}
-.rep-sum .sc .v{font-size:1.3rem;font-weight:800;margin-top:4px;color:var(--navy)}
+.rep-sum .sc{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);padding:13px 12px;text-align:center}
+.rep-sum .sc .l{font-size:var(--fs-1);color:var(--grey);font-weight:500}
+.rep-sum .sc .v{font-size:var(--fs-6);font-weight:600;margin-top:4px;color:var(--navy)}
 .rep-sum .sc.bal{background:var(--navy)} .rep-sum .sc.bal .l{color:#dfe8f2} .rep-sum .sc.bal .v{color:var(--gold)}
 .rep-sum .sc .v.pos{color:var(--green)} .rep-sum .sc .v.neg{color:var(--red)}
 .entry-form{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
 .entry-form .field{margin:0}
-.st-settled{font-size:.72rem;background:#eef2f7;color:var(--navy);padding:1px 8px;border-radius:12px;font-weight:700}
+.st-settled{font-size:var(--fs-1);background:#eef2f7;color:var(--navy);padding:1px 8px;border-radius:var(--radius-2);font-weight:500}
 </style>
 
 <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap">
   <a class="btn ghost" href="<?= url('reps') ?>">‹ رجوع للمناديب</a>
   <div class="spacer" style="flex:1"></div>
-  <a class="btn" href="<?= url('reps/'.$rep['id'].'/edit') ?>">✏️ تعديل الكارت</a>
+  <a class="btn" href="<?= url('reps/'.$rep['id'].'/edit') ?>"><?= icon('edit', 14) ?> تعديل الكارت</a>
   <form method="post" action="<?= url('reps/'.$rep['id'].'/delete') ?>" class="confirm-delete" data-confirm="حذف المندوب وكل سجله نهائيًا؟" style="margin:0">
     <?= csrfField() ?>
-    <button class="btn ghost" type="submit" style="color:var(--red)">🗑️ حذف</button>
+    <button class="btn ghost" type="submit" style="color:var(--red)"><?= icon('trash', 14) ?> حذف</button>
   </form>
 </div>
 
@@ -48,7 +48,7 @@ $kindColor = function(string $k) use ($creditKinds): string {
   <span class="av"><?= e(initials($rep['name'])) ?></span>
   <div>
     <h2><?= e($rep['name']) ?>
-      <span class="rc-status <?= $rep['status']==='active'?'active':'inactive' ?>" style="font-size:.6em;vertical-align:middle;padding:2px 10px;border-radius:20px;<?= $rep['status']==='active'?'background:#e6f4ec;color:var(--green)':'background:#f1f1f4;color:var(--grey)' ?>"><?= $rep['status']==='active'?'شغّال':'موقوف' ?></span>
+      <span class="rc-status <?= $rep['status']==='active'?'active':'inactive' ?>" style="font-size:.6em;vertical-align:middle;padding:2px 10px;border-radius:var(--radius-4);<?= $rep['status']==='active'?'background:#e6f4ec;color:var(--green)':'background:#f1f1f4;color:var(--grey)' ?>"><?= $rep['status']==='active'?'شغّال':'موقوف' ?></span>
     </h2>
     <div class="meta">
       <?php if($rep['phone']): ?><bdi dir="ltr"><?= e($rep['phone']) ?></bdi> • <?php endif; ?>
@@ -73,6 +73,9 @@ $kindColor = function(string $k) use ($creditKinds): string {
   <?php if ($eErr !== ''): ?><div class="flash error" role="alert"><?= icon('alert',17) ?> <?= e($eErr) ?></div><?php endif; ?>
   <form method="post" action="<?= url('reps/'.$rep['id'].'/entry') ?>" class="entry-form">
     <?= csrfField() ?>
+    <?php /* رمز النموذج يمنع تسجيل نفس البند مرتين (ضغطتان / رجوع المتصفح ثم
+             إعادة إرسال). ⚠️ شيله = `claimForm` في الكنترولر هترفض كل حفظ. */ ?>
+    <?= formStateFields($entryState['token'], $entryState['back']) ?>
     <div class="field" style="width:150px">
       <label>التاريخ</label>
       <input type="date" name="entry_date" value="<?= e($eOld['entry_date'] ?? work_date()) ?>">
@@ -98,12 +101,12 @@ $kindColor = function(string $k) use ($creditKinds): string {
       <label>البيان / ملاحظة</label>
       <input type="text" name="note" value="<?= e($eOld['note'] ?? '') ?>" placeholder="اختياري">
     </div>
-    <label class="visa-toggle" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;padding-bottom:8px">
-      <input type="checkbox" name="is_visa" value="1" style="width:16px;height:16px;accent-color:var(--gold)">💳 فيزا
+    <label class="visa-toggle" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500;padding-bottom:8px">
+      <input type="checkbox" name="is_visa" value="1" style="width:16px;height:16px;accent-color:var(--gold)"><?= icon('credit-card', 14) ?> فيزا
     </label>
     <button class="btn gold" type="submit">إضافة</button>
   </form>
-  <div style="color:var(--grey);font-size:.8rem;margin-top:8px">
+  <div style="color:var(--grey);font-size:var(--fs-2);margin-top:8px">
     💡 «سُلفة» و«دفعة التسوية» بس هما اللي بيتخصموا من العهدة ويظهروا في المصروفات العامة. باقي البنود استحقاقات في الكشف بتتغطّى وقت التقفيل.
   </div>
 </div>
@@ -119,25 +122,25 @@ $kindColor = function(string $k) use ($creditKinds): string {
     </tr></thead>
     <tbody>
       <?php if(!$ledger): ?>
-        <tr><td colspan="7"><div class="empty"><div class="ic">📭</div>لا بنود في سجل المندوب بعد.</div></td></tr>
+        <tr><td colspan="7"><div class="empty"><div class="ic"><?= icon('inbox', 14) ?></div>لا بنود في سجل المندوب بعد.</div></td></tr>
       <?php else: foreach ($ledger as $r): $isCredit = in_array($r['kind'], $creditKinds, true); ?>
         <tr>
           <td><?= $r['d']?e(dfmt($r['d'])):'—' ?></td>
           <td>
             <span class="pill <?= $isCredit?'st-paid':'st-partial' ?>"><?= e($r['label']) ?></span>
-            <?php if(!empty($r['is_visa'])): ?><span class="st-settled">💳 فيزا</span><?php endif; ?>
+            <?php if(!empty($r['is_visa'])): ?><span class="st-settled"><?= icon('credit-card', 14) ?> فيزا</span><?php endif; ?>
           </td>
           <td style="text-align:right"><?= e($r['note'] ?: '—') ?>
             <?php if($r['settlement_id']): ?><span class="st-settled" title="اتحاسب في تقفيل">مُقفَل</span><?php endif; ?>
           </td>
           <td class="pos"><?= $isCredit?money($r['amount'],false):'—' ?></td>
           <td class="neg"><?= !$isCredit?money($r['amount'],false):'—' ?></td>
-          <td style="font-weight:700;color:<?= $r['running']<0?'var(--red)':'inherit' ?>"><?= money($r['running'],false) ?></td>
+          <td style="font-weight:500;color:<?= $r['running']<0?'var(--red)':'inherit' ?>"><?= money($r['running'],false) ?></td>
           <td style="white-space:nowrap">
             <?php if(!$r['settlement_id'] || $r['kind']!=='settlement'): ?>
               <form method="post" action="<?= url('reps/entry/'.$r['id'].'/delete') ?>" class="confirm-delete" data-confirm="حذف هذا البند؟" style="display:inline">
                 <?= csrfField() ?>
-                <button class="edit" type="submit" title="حذف" style="background:none;border:0;cursor:pointer">🗑️</button>
+                <button class="edit" type="submit" title="حذف" style="background:none;border:0;cursor:pointer"><?= icon('trash', 14) ?></button>
               </form>
             <?php endif; ?>
           </td>
@@ -154,29 +157,31 @@ $kindColor = function(string $k) use ($creditKinds): string {
     <?php if ($sErr !== ''): ?><div class="flash error" role="alert"><?= icon('alert',17) ?> <?= e($sErr) ?></div><?php endif; ?>
     <form method="post" action="<?= url('reps/'.$rep['id'].'/settle') ?>" class="confirm-financial" data-confirm="تقفيل حساب المندوب عن الفترة المحدّدة وتسجيل دفعة التسوية؟">
       <?= csrfField() ?>
+      <?php /* رمز النموذج يمنع تسجيل دفعة التسوية مرتين. ⚠️ اقرأ التعليق فوق. */ ?>
+      <?= formStateFields($settleState['token'], $settleState['back']) ?>
       <div class="form-grid two">
         <div class="field"><label>من تاريخ</label><input type="date" name="period_from" value="<?= e($sOld['period_from'] ?? '') ?>"></div>
         <div class="field"><label>إلى تاريخ</label><input type="date" name="period_to" value="<?= e($sOld['period_to'] ?? '') ?>"></div>
         <div class="field"><label>تاريخ الدفع</label><input type="date" name="pay_date" value="<?= e($sOld['pay_date'] ?? work_date()) ?>"></div>
         <div class="field">
           <label>طريقة الدفع</label>
-          <label class="visa-toggle" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;padding-top:8px">
-            <input type="checkbox" name="is_visa" value="1" style="width:16px;height:16px;accent-color:var(--gold)">💳 فيزا (لا يُخصم من العهدة)
+          <label class="visa-toggle" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500;padding-top:8px">
+            <input type="checkbox" name="is_visa" value="1" style="width:16px;height:16px;accent-color:var(--gold)"><?= icon('credit-card', 14) ?> فيزا (لا يُخصم من العهدة)
           </label>
         </div>
         <div class="field" style="grid-column:1/-1"><label>ملاحظة على التسوية</label><input type="text" name="note" value="<?= e($sOld['note'] ?? '') ?>" placeholder="اختياري"></div>
       </div>
-      <div style="color:var(--grey);font-size:.82rem;margin:6px 0 12px">
+      <div style="color:var(--grey);font-size:var(--fs-2);margin:6px 0 12px">
         سيبها فاضية عشان تحاسب على كل البنود غير المتحاسبة. الصافي = المستحقات − الخصومات − السُلف.
       </div>
-      <button class="btn gold" type="submit">🧾 تقفيل ودفع الصافي</button>
+      <button class="btn gold" type="submit"><?= icon('receipt', 14) ?> تقفيل ودفع الصافي</button>
     </form>
   </div>
 
   <div class="card" style="padding:16px 18px">
     <div class="section-head" style="margin:0 0 10px"><?= icon('receipt', 17) ?> تقفيلات سابقة</div>
     <?php if(!$settlements): ?>
-      <div class="empty" style="padding:20px"><div class="ic">🗂️</div>لسه مفيش تقفيلات.</div>
+      <div class="empty" style="padding:20px"><div class="ic"><?= icon('folder', 14) ?></div>لسه مفيش تقفيلات.</div>
     <?php else: ?>
       <div class="table-wrap"><table class="data">
         <thead><tr><th>التاريخ</th><th>الفترة</th><th>الصافي</th><th></th></tr></thead>
@@ -184,9 +189,9 @@ $kindColor = function(string $k) use ($creditKinds): string {
           <?php foreach ($settlements as $st): ?>
             <tr>
               <td><?= e(dfmt($st['pay_date'] ?: substr($st['settled_at'],0,10))) ?></td>
-              <td style="font-size:.85rem"><?= $st['period_from']||$st['period_to'] ? e(dfmt($st['period_from'])).' – '.e(dfmt($st['period_to'])) : 'الكل' ?></td>
-              <td style="font-weight:700"><?= money($st['net'],false) ?><?= $st['is_visa']?' 💳':'' ?></td>
-              <td><a class="btn ghost sm" href="<?= url('reps/'.$rep['id'].'/settlement/'.$st['id'].'/print') ?>" target="_blank">🖨️ طباعة</a></td>
+              <td style="font-size:var(--fs-2)"><?= $st['period_from']||$st['period_to'] ? e(dfmt($st['period_from'])).' – '.e(dfmt($st['period_to'])) : 'الكل' ?></td>
+              <td style="font-weight:500"><?= money($st['net'],false) ?><?= $st['is_visa']?' 💳':'' ?></td>
+              <td><a class="btn ghost sm" href="<?= url('reps/'.$rep['id'].'/settlement/'.$st['id'].'/print') ?>" target="_blank"><?= icon('file-text', 14) ?> طباعة</a></td>
             </tr>
           <?php endforeach; ?>
         </tbody>

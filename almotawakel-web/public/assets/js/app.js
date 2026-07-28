@@ -2,6 +2,32 @@
 (function () {
   'use strict';
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     تطبيع نص البحث — **نظير مطابق لـ`search_norm()` في helpers.php**
+     ⚠️ لازم الاتنين يفضلوا متطابقين: الخادم بيطبّع `data-search` والواجهة
+        بتطبّع اللي المستخدم بيكتبه، فلو اختلفوا البحث بيرجّع صفر نتائج لنص
+        موجود فعلاً. اتصادف في شاشة التقفيل: نثرية محفوظة «اكراميه أمن cma»
+        والبحث بـ«إكرامية» ما لقاهاش، فبان إن البند مش موجود وهو موجود ومحسوب.
+     ══════════════════════════════════════════════════════════════════════════ */
+  const AR_SEARCH_MAP = {
+    'أ': 'ا', 'إ': 'ا', 'آ': 'ا', 'ٱ': 'ا',
+    'ة': 'ه', 'ى': 'ي', 'ئ': 'ي', 'ؤ': 'و',
+    'ـ': '',
+    'ً': '', 'ٌ': '', 'ٍ': '', 'َ': '', 'ُ': '',
+    'ِ': '', 'ّ': '', 'ْ': '', 'ٓ': '', 'ٔ': '', 'ٕ': '',
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+  };
+  function searchNorm(value) {
+    let out = '';
+    const s = String(value == null ? '' : value).toLocaleLowerCase('ar');
+    for (const ch of s) { out += (ch in AR_SEARCH_MAP) ? AR_SEARCH_MAP[ch] : ch; }
+    return out.replace(/\s+/g, ' ').trim();
+  }
+  window.almSearchNorm = searchNorm;
+
   const focusableSelector = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   function activateDialog(container, preferred) {
     container.__returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -1369,6 +1395,89 @@
     });
   })();
 
+  // ================= أرقام الحاويات: خانة لكل حاوية =================
+  // «عدد الحاويات» = 2 ⇒ خانتين لرقم الحاوية، وهكذا. الرسم الابتدائي من الخادم
+  // (المكوّن `partials/container_nos.php`) وده بيزوّد/يقلّل حيًّا وقت الكتابة.
+  // ⚠️ الاستماع بالتفويض على `document` عن قصد: فورم البوليصة جوّه الإذن بيتحقن
+  //    بالـAJAX، فأي ربط مباشر وقت التحميل مش هيلاقيه.
+  (function () {
+    const MAX = 30;   // سقف دفاعي ضد رقم مكتوب بالغلط (999 حاوية)
+
+    function rowHtml(name, index, multi, label) {
+      const row = document.createElement('div');
+      row.className = 'cno-row';
+      const badge = document.createElement('span');
+      badge.className = 'cno-idx';
+      badge.setAttribute('aria-hidden', 'true');
+      badge.textContent = String(index + 1);
+      const input = document.createElement('input');
+      input.name = name + '[]';
+      input.autocomplete = 'off';
+      input.setAttribute('aria-label', label + ' ' + (index + 1));
+      input.placeholder = multi ? label + ' ' + (index + 1) : label;
+      row.appendChild(badge);
+      row.appendChild(input);
+      return row;
+    }
+
+    function sync(scope, want) {
+      const box = scope && scope.querySelector('[data-container-nos]');
+      if (!box) return;
+      const list = box.querySelector('.cno-list');
+      if (!list) return;
+      const name  = box.dataset.cnoName || 'container_no';
+      const label = (box.querySelector('label') ? box.querySelector('label').childNodes[0].textContent : '').trim() || 'رقم الحاوية';
+      const target = Math.max(1, Math.min(MAX, want || 1));
+
+      // التقليل بيشيل الخانات **الفاضية** من الآخر بس — رقم متكتب عمره ما يضيع
+      let rows = Array.from(list.querySelectorAll('.cno-row'));
+      while (rows.length > target) {
+        const last = rows[rows.length - 1];
+        const input = last.querySelector('input');
+        if (input && input.value.trim()) break;
+        last.remove();
+        rows.pop();
+      }
+      while (rows.length < target) {
+        const row = rowHtml(name, rows.length, true, label);
+        list.appendChild(row);
+        rows.push(row);
+      }
+
+      const multi = rows.length > 1;
+      list.classList.toggle('multi', multi);
+      box.classList.toggle('multi', multi);
+      rows.forEach((row, i) => {
+        const badge = row.querySelector('.cno-idx');
+        const input = row.querySelector('input');
+        if (badge) badge.textContent = String(i + 1);
+        if (input) {
+          input.placeholder = multi ? label + ' ' + (i + 1) : label;
+          input.setAttribute('aria-label', label + ' ' + (i + 1));
+        }
+      });
+      const counter = box.querySelector('label .cno-n');
+      if (multi && !counter) {
+        const span = document.createElement('span');
+        span.className = 'cno-n';
+        span.textContent = String(rows.length);
+        box.querySelector('label').appendChild(document.createTextNode(' '));
+        box.querySelector('label').appendChild(span);
+      } else if (counter) {
+        if (multi) counter.textContent = String(rows.length); else counter.remove();
+      }
+    }
+
+    function onCount(e) {
+      const el = e.target;
+      if (!el || el.name !== 'container_count') return;
+      const scope = (el.closest && (el.closest('form') || el.closest('.bill-form'))) || document;
+      sync(scope, parseInt(el.value, 10) || 0);
+    }
+    document.addEventListener('input', onCount);
+    document.addEventListener('change', onCount);
+  })();
+
   // ================= أدوات كل الجداول: ترتيب + إخفاء/إظهار أعمدة =================
   // تعمل تلقائيًا على الجداول الحالية وعلى أي جدول يُضاف لاحقًا عبر AJAX/Popup.
   (function () {
@@ -1543,6 +1652,8 @@
         });
         th.appendChild(btn);
       });
+
+      markNumericColumns(table, columns);
 
       const hideable = columns.filter((c) => c.hideable);
       if (!hideable.length && !columns.some((c) => c.sortable)) return;
@@ -1729,6 +1840,40 @@
       applyHidden(table, columns, hidden);
       saveAndLabel();
       setupClientPager(table, anchor, prefs, savePrefs);
+    }
+
+    /**
+     * محاذاة أعمدة الأرقام لليمين بأرقام جدولية.
+     *
+     * ⚠️ كل خانات `table.data` كانت **متوسّطة**، بما فيها المبالغ — يعني
+     * «12,000» و«9,200» و«0.00» تحت بعض بلا أي تراص، فمستحيل تقارنهم بالعين
+     * (وده الاستخدام الأساسي لشاشة فلوس). المحاذاة لليمين + `tabular-nums`
+     * بتخلّي خانة الآحاد تحت خانة الآحاد بالظبط.
+     *
+     * الكشف بيستخدم **نفس** `numberValue`/`dateValue` بتوع الترتيب — مفيش
+     * تعريف تاني لـ«ده رقم ولا لأ» ينفع يختلف عن ترتيب نفس العمود. والتواريخ
+     * **مستثناة عن قصد** (16/07/2026 بتتقرا كوحدة، ومحاذاتها للنص أوضح).
+     */
+    function markNumericColumns(table, columns) {
+      const bodyRows = [];
+      Array.from(table.tBodies).forEach((body) => Array.from(body.rows).forEach((r) => bodyRows.push(r)));
+      if (bodyRows.length < 2) return;
+      columns.forEach((col) => {
+        const cells = [];
+        let seen = 0;
+        for (const row of bodyRows) {
+          const cell = cellAt(row, col.index);
+          if (!cell || cell.hasAttribute('colspan')) continue;
+          cells.push(cell);
+          const v = cellValue(cell);
+          if (!v || v === '—' || v === '-') continue;
+          if (dateValue(v) !== null || numberValue(v) === null) return;  // تاريخ أو نص → سيبه
+          seen++;
+        }
+        if (seen < 2) return;
+        col.th.classList.add('tbl-num');
+        cells.forEach((c) => c.classList.add('tbl-num'));
+      });
     }
 
     function sortTable(table, columns, column, direction) {
@@ -1963,12 +2108,64 @@
   });
 
   /* ══════════════════════════════════════════════════════════════════════════
-     مركز الإشعارات — المرحلة ١
-     الجرس بيترسم فاضي من الخادم (صفر تكلفة على رندر أي صفحة) وبيتملّى من
-     /notifications/ping بعد التحميل وكل 60 ثانية والتطبيق مفتوح.
-     حالة «مقروء» في localStorage — **مفيش جدول ولا عمود «آخر مشاهدة»**،
-     نفس الطريقة الشغّالة في شارات «جديد» ببوابة المناديب.
+     مركز الإشعارات — المرحلة ٢ (docs/15)
+     ─────────────────────────────────────────────────────────────────────────
+     ⚠️ **حاجتان مختلفتان في لوحة واحدة، ومفصولتان بصريًّا عن قصد:**
+       ① «محتاج منك» = **حالات مستمرة** (٣ أيام مش متقفلة، أرقام سرية ضعيفة).
+          أرقام مجمَّعة محسوبة لحظيًّا، **بلا وقت وبلا سجل وما بترنّش**.
+       ② «آخر الأحداث» = **أحداث** من جدول v52. بند لكل واحد، بوقته وصاحبه،
+          و«مقروء» بتاعته **في القاعدة** فبتتزامن على كل أجهزة الشخص.
+     الخلط بينهم هو أصل «الإشعارات المضلِّلة» — **ممنوع تدمج القسمين**.
+
+     ⚠️ **حالة «مقروء» في `localStorage` اتشالت.** كانت تخصّ **المتصفح** لا
+        الشخص: تفتح من موبايل تلاقي كل حاجة جديدة، وتمسح بيانات المتصفح
+        تبتدي من الأول. المفتاح القديم بيتمسح مرّة واحدة تحت.
+
+     الأداء زي ما هو: الجرس بيترسم فاضي من الخادم (صفر تكلفة على رندر أي
+     صفحة)، والنداء بعد التحميل وكل ٦٠ ثانية، وبيقف لما التبويب يتخفي.
      ══════════════════════════════════════════════════════════════════════════ */
+
+  /** «من ٣ دقايق» — بتتحسب في المتصفح من ختم زمني بالثواني، بلا أي طلب للخادم. */
+  function notifRelTime(ts) {
+    const d = Math.floor(Date.now() / 1000) - ts;
+    if (d < 60)     return 'دلوقتي';
+    if (d < 3600)   return 'من ' + Math.floor(d / 60) + ' دقيقة';
+    if (d < 86400)  return 'من ' + Math.floor(d / 3600) + ' ساعة';
+    if (d < 604800) return 'من ' + Math.floor(d / 86400) + ' يوم';
+    const x = new Date(ts * 1000);
+    const p = (n) => String(n).padStart(2, '0');
+    return p(x.getDate()) + '/' + p(x.getMonth() + 1) + '/' + x.getFullYear();
+  }
+
+  /**
+   * تحديث كل الأوقات النسبية الظاهرة — **بيخدم الجرس وصفحة السجل مع بعض**.
+   * حالتان مقصودتان:
+   *   • العنصر نفسه `.js-rel` (بند الجرس) → بيتكتب فيه مباشرةً.
+   *   • العنصر غلاف بـ`data-ts` (صف الصفحة، `row_item` بيرسم جوّاه) →
+   *     بنكتب في `.d-feed-side b`. الغلاف هو المالك للختم لأن `row_item`
+   *     مكوّن مشترك وما بيقبلش سمات إضافية.
+   */
+  function paintNotifTimes(root) {
+    (root || document).querySelectorAll('[data-ts]').forEach((el) => {
+      const ts = parseInt(el.getAttribute('data-ts'), 10);
+      if (!ts) return;
+      const target = el.classList.contains('js-rel') ? el : el.querySelector('.d-feed-side b');
+      if (target) target.textContent = notifRelTime(ts);
+    });
+  }
+
+  /** تعليم إشعار كمقروء — الهوية من الجلسة على الخادم، مش من الطلب. */
+  function markNotifRead(id) {
+    if (!window.__NOTIF_READ || !id) return Promise.resolve();
+    const fd = new FormData();
+    fd.append('_csrf', window.__CSRF || '');
+    // `keepalive` عشان النداء يكمّل حتى لو الصفحة بدأت تتنقّل بعد الضغط
+    return fetch(window.__NOTIF_READ.replace('__ID__', String(id)), {
+      method: 'POST', body: fd, keepalive: true,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).catch(() => {});
+  }
+
   (function notifCenter() {
     const root  = document.getElementById('notifCenter');
     const btn   = document.getElementById('notifBtn');
@@ -1976,34 +2173,24 @@
     const list  = document.getElementById('notifList');
     const badge = document.getElementById('notifBadge');
     const count = document.getElementById('notifCount');
-    const at    = document.getElementById('notifAt');
     const mark  = document.getElementById('notifMark');
     if (!root || !btn || !panel || !list || !window.__NOTIF_PING) return;
 
-    const SEEN_KEY = 'almotawakel:notif-seen';
-    const POLL_MS  = 60000;
-    let items = [];
+    // مفتاح «مقروء» القديم (كان يخصّ المتصفح) — يتنسي بهدوء مرّة واحدة
+    try { localStorage.removeItem('almotawakel:notif-seen'); } catch (e) {}
+
+    const POLL_MS = 60000;
+    let events = [];      // أحداث (جدول v52)
+    let states = [];      // حالات مستمرة (محسوبة لحظيًّا)
+    let unread = 0;
     let timer = 0;
+    let tick  = 0;
 
-    const readSeen = () => {
-      try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
-      catch (e) { return new Set(); }
-    };
-    const writeSeen = (set) => {
-      // نخزّن بصمات البنود الحالية بس، فالمخزَّن ما يكبرش مع الوقت
-      try { localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(set))); } catch (e) {}
-    };
-
-    function unreadCount() {
-      const seen = readSeen();
-      return items.filter((i) => !seen.has(i.stamp)).length;
-    }
-
-    /* شارات القائمة الجانبية — من **نفس** نداء الـping بتاع الجرس، فمستحيل
-       الرقم اللي جنب «عهدة المناديب» يختلف عن اللي في الجرس. صفر تكلفة زيادة. */
+    /* شارات القائمة الجانبية — من **نفس** نداء الـping، فمستحيل الرقم اللي
+       جنب «عهدة المناديب» يختلف عن اللي في الجرس. صفر تكلفة زيادة. */
     function paintNavBadges() {
       const byKey = {};
-      items.forEach((i) => { byKey[i.key] = i; });
+      states.forEach((i) => { byKey[i.key] = i; });
       document.querySelectorAll('#primary-nav a[data-badge]').forEach((a) => {
         const cnt = a.querySelector('.nav-cnt');
         if (!cnt) return;
@@ -2019,13 +2206,12 @@
 
     function paintBadge() {
       paintNavBadges();
-      const n = unreadCount();
-      badge.textContent = n > 9 ? '+9' : String(n);
+      badge.textContent = unread > 9 ? '+9' : String(unread);
       const was = badge.classList.contains('on');
-      badge.classList.toggle('on', n > 0);
-      if (n > 0 && !was) { badge.classList.add('pulse'); setTimeout(() => badge.classList.remove('pulse'), 1200); }
-      btn.setAttribute('aria-label', n > 0 ? ('الإشعارات — ' + n + ' جديد') : 'الإشعارات');
-      if (mark) mark.disabled = n === 0;
+      badge.classList.toggle('on', unread > 0);
+      if (unread > 0 && !was) { badge.classList.add('pulse'); setTimeout(() => badge.classList.remove('pulse'), 1200); }
+      btn.setAttribute('aria-label', unread > 0 ? ('الإشعارات — ' + unread + ' غير مقروء') : 'الإشعارات');
+      if (mark) mark.disabled = unread === 0;
     }
 
     function svg(name) {
@@ -2034,48 +2220,130 @@
       s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor');
       s.setAttribute('stroke-width', '2'); s.setAttribute('stroke-linecap', 'round');
       s.setAttribute('stroke-linejoin', 'round'); s.setAttribute('aria-hidden', 'true');
-      // الأيقونات هنا بسيطة عن قصد: الخادم بيبعت اسم بس، والرسم عندنا
+      /* ⚠️ الخريطة دي لازم تغطّي **كل** أيقونة في `Notify::KINDS` وفي مصادر
+         `Notification`. الاسم الناقص بيقع على شكل افتراضي **بالسكوت** —
+         `bin/verify_notifications_ui.php` بيفشل لو اسم ناقص من هنا. */
       const paths = {
-        inbox:      '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+        inbox:      '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
         calculator: '<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
         receipt:    '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/>',
         clipboard:  '<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
         'map-pin':  '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
-        alert:      '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/>'
+        alert:      '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/>',
+        folder:     '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+        truck:      '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+        banknote:   '<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
+        wallet:     '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+        coins:      '<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>',
+        shuffle:    '<path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/>',
+        'check-circle': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>',
+        x:          '<path d="M18 6 6 18M6 6l12 12"/>',
+        send:       '<path d="M14.54 21.69a.5.5 0 0 0 .94-.02l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.02.94l7.93 3.18a2 2 0 0 1 1.11 1.11z"/><path d="m21.85 2.15-10.94 10.94"/>',
+        bell:       '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
+        // أيقونات أنواع المرحلة ٧ (التذكيرات والملخّص اليومي)
+        clock:      '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+        hourglass:  '<path d="M5 22h14M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.41L12 12l-4.41 4.42A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.41L12 12l4.41-4.42A2 2 0 0 0 17 6.17V2"/>',
+        'bar-chart':'<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>'
       };
       s.innerHTML = paths[name] || paths.alert;
       return s;
     }
 
+    function sectionHead(text, n) {
+      const h = document.createElement('div');
+      h.className = 'nc-sec';
+      const t = document.createElement('span'); t.textContent = text;
+      h.appendChild(t);
+      if (n) { const c = document.createElement('span'); c.className = 'nc-sec-n'; c.textContent = String(n); h.appendChild(c); }
+      return h;
+    }
+
+    /** النهاردة / إمبارح / الأسبوع ده / أقدم — تجميع **بصري بالتاريخ بس**. */
+    function dayBucket(ts) {
+      const d = new Date(ts * 1000);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const start = new Date(d); start.setHours(0, 0, 0, 0);
+      const diff = Math.round((today - start) / 86400000);
+      if (diff <= 0) return 'النهاردة';
+      if (diff === 1) return 'إمبارح';
+      if (diff < 7)  return 'الأسبوع ده';
+      return 'أقدم';
+    }
+
+    function stateNode(i) {
+      const a = document.createElement('a');
+      a.className = 'nc-item ' + (i.kind || 'info');
+      a.href = i.url;
+      const ic = document.createElement('span'); ic.className = 'nc-ic'; ic.appendChild(svg(i.icon));
+      const tx = document.createElement('div'); tx.className = 'nc-tx';
+      const b = document.createElement('b'); b.textContent = i.title;   // textContent — بلا حقن
+      const s = document.createElement('span'); s.textContent = i.body;
+      tx.appendChild(b); tx.appendChild(s);
+      const go = document.createElement('span'); go.className = 'nc-go'; go.textContent = '‹';
+      a.appendChild(ic); a.appendChild(tx); a.appendChild(go);
+      return a;
+    }
+
+    function eventNode(i) {
+      const hasUrl = !!i.url;
+      const a = document.createElement(hasUrl ? 'a' : 'div');
+      a.className = 'nc-item ev ' + (i.severity === 'urgent' ? 'err' : (i.severity === 'warn' ? 'warn' : 'info'))
+                  + (i.read ? '' : ' unread');
+      if (hasUrl) a.href = i.url;
+      a.title = i.kind_label + ' · ' + i.at_label;   // الوقت الكامل بساعة المستخدم
+      const ic = document.createElement('span'); ic.className = 'nc-ic'; ic.appendChild(svg(i.icon));
+      const tx = document.createElement('div'); tx.className = 'nc-tx';
+      const b = document.createElement('b'); b.textContent = i.title;   // textContent — بلا حقن
+      const s = document.createElement('span'); s.textContent = i.body;
+      const w = document.createElement('span');
+      w.className = 'nc-when js-rel'; w.setAttribute('data-ts', String(i.ts));
+      w.textContent = i.rel || notifRelTime(i.ts);
+      tx.appendChild(b); tx.appendChild(s); tx.appendChild(w);
+      a.appendChild(ic); a.appendChild(tx);
+      if (!i.read) { const dot = document.createElement('span'); dot.className = 'nc-dot'; a.appendChild(dot); }
+      // فتح البند = قراءته، والقراءة بتتخزّن في القاعدة فبتتزامن على كل الأجهزة
+      a.addEventListener('click', () => {
+        if (i.read) return;
+        i.read = true; unread = Math.max(0, unread - 1);
+        a.classList.remove('unread');
+        const d = a.querySelector('.nc-dot'); if (d) d.remove();
+        paintBadge();
+        markNotifRead(i.id);
+      });
+      return a;
+    }
+
     function paintList() {
       list.textContent = '';
-      if (count) count.textContent = items.length ? intfJs(items.length) + ' بند' : '';
-      if (at) at.textContent = '';
-      if (!items.length) {
+      if (count) count.textContent = unread > 0 ? intfJs(unread) + ' غير مقروء' : '';
+
+      if (states.length) {
+        list.appendChild(sectionHead('محتاج منك', states.length));
+        states.forEach((i) => list.appendChild(stateNode(i)));
+      }
+
+      if (events.length) {
+        list.appendChild(sectionHead('آخر الأحداث'));
+        let bucket = null;
+        events.forEach((i) => {
+          const b = dayBucket(i.ts);
+          if (b !== bucket) {
+            bucket = b;
+            const h = document.createElement('div'); h.className = 'nc-day'; h.textContent = b;
+            list.appendChild(h);
+          }
+          list.appendChild(eventNode(i));
+        });
+      }
+
+      if (!states.length && !events.length) {
         const box = document.createElement('div');
         box.className = 'nc-empty';
         const b = document.createElement('b'); b.textContent = 'كله تمام ✓';
         const s = document.createElement('span'); s.textContent = 'مفيش حاجة مستنياك دلوقتي.';
         box.appendChild(b); box.appendChild(s);
         list.appendChild(box);
-        return;
       }
-      const seen = readSeen();
-      items.forEach((i) => {
-        const a = document.createElement('a');
-        a.className = 'nc-item ' + (i.kind || 'info') + (seen.has(i.stamp) ? '' : ' unread');
-        a.href = i.url;
-        const ic = document.createElement('span'); ic.className = 'nc-ic'; ic.appendChild(svg(i.icon));
-        const tx = document.createElement('div'); tx.className = 'nc-tx';
-        const b = document.createElement('b'); b.textContent = i.title;      // textContent — بلا حقن
-        const s = document.createElement('span'); s.textContent = i.body;
-        tx.appendChild(b); tx.appendChild(s);
-        const go = document.createElement('span'); go.className = 'nc-go'; go.textContent = '‹';
-        a.appendChild(ic); a.appendChild(tx); a.appendChild(go);
-        // فتح البند = قراءته
-        a.addEventListener('click', () => { const set = readSeen(); set.add(i.stamp); writeSeen(set); });
-        list.appendChild(a);
-      });
     }
 
     function intfJs(n) { return new Intl.NumberFormat('en').format(n); }
@@ -2085,11 +2353,13 @@
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error('http'))))
         .then((d) => {
           if (!d || !d.ok) return;
-          items = Array.isArray(d.items) ? d.items : [];
-          // نظّف البصمات القديمة: بنسيب المقروء اللي لسه ظاهر بس
-          const live = new Set(items.map((i) => i.stamp));
-          const kept = new Set(Array.from(readSeen()).filter((s) => live.has(s)));
-          writeSeen(kept);
+          // التحديث الإجباري بيركب على نفس النداء ده — **صفر طلب زيادة**.
+          // (لو اتشال، وحدة التحديث بتسلّح نداءها الخاص بعد دقيقتين فما بتقفش،
+          //  بس بتبقى طلبًا زيادة كل دقيقة بلا داعي.)
+          if (window.AppUpdate && d.build) window.AppUpdate.seen(d.build);
+          events = (d.events && Array.isArray(d.events.items)) ? d.events.items : [];
+          unread = (d.events && d.events.unread) ? d.events.unread : 0;
+          states = (d.states && Array.isArray(d.states.items)) ? d.states.items : [];
           paintBadge();
           if (!panel.hidden) paintList();
         })
@@ -2116,19 +2386,82 @@
     });
     if (mark) {
       mark.addEventListener('click', () => {
-        const set = readSeen();
-        items.forEach((i) => set.add(i.stamp));
-        writeSeen(set);
-        paintBadge(); paintList();
+        if (!window.__NOTIF_READ_ALL) return;
+        const fd = new FormData(); fd.append('_csrf', window.__CSRF || '');
+        fetch(window.__NOTIF_READ_ALL, {
+          method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(() => {
+          events.forEach((i) => { i.read = true; });
+          unread = 0; paintBadge(); paintList();
+          document.querySelectorAll('.nl-item.unread').forEach((el) => el.classList.remove('unread'));
+        }).catch(() => {});
       });
     }
 
     // أول نداء بعد التحميل، وبعدين كل دقيقة — وبنوقف لما التبويب يتخفي
     refresh();
-    const start = () => { clearInterval(timer); timer = setInterval(refresh, POLL_MS); };
+    const start = () => {
+      clearInterval(timer);
+      timer = setInterval(refresh, POLL_MS);
+      clearInterval(tick);
+      // الوقت النسبي بيتحدّث لوحده **بلا أي طلب للخادم**
+      tick = setInterval(() => paintNotifTimes(), 60000);
+    };
     start();
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { clearInterval(timer); } else { refresh(); start(); }
+      if (document.hidden) { clearInterval(timer); clearInterval(tick); }
+      else { refresh(); paintNotifTimes(); start(); }
+    });
+  })();
+
+  /* صفحة السجل `/notifications` — نفس أدوات الجرس بالظبط:
+     الوقت النسبي بيتحدّث لوحده، والضغط على أي بند بيعلّمه مقروء في القاعدة. */
+  (function notifPage() {
+    if (!document.querySelector('.nl-item')) return;
+    paintNotifTimes();
+    setInterval(() => paintNotifTimes(), 60000);
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest) return;
+
+      /* ── تأجيل (المرحلة ٦) ──────────────────────────────────────────────
+         ⚠️ POST بتوكن حماية — مفيش أي إجراء بيغيّر حالة عبر GET، والمدّة
+            بتتفحص على الخادم من قائمة بيضا فالفورم مش مصدر ثقة. */
+      const sn = e.target.closest('.js-nl-snooze');
+      if (sn) {
+        e.preventDefault();
+        const row = sn.closest('.nl-item');
+        const fd = new FormData();
+        fd.append('_csrf', window.__CSRF || '');
+        fd.append('minutes', sn.getAttribute('data-min') || '60');
+        fetch((window.__NOTIF_SNOOZE || '').replace('__ID__', sn.getAttribute('data-id')), {
+          method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('http'))))
+          .then(() => {
+            if (row) row.remove();
+            if (window.AppUI && AppUI.toast) AppUI.toast('اتأجّل — هيرجع يظهر لوحده.', 'ok');
+          })
+          // ⚠️ الفشل لازم يبان: لو سكتنا، المستخدم يفتكر إنه أجّل وهو ما أجّلش
+          .catch(() => { if (window.AppUI && AppUI.toast) AppUI.toast('مقدرناش نأجّل البند ده.', 'err'); });
+        return;
+      }
+
+      // ── تعليم بند كمقروء بزرار صريح ──
+      const rd = e.target.closest('.js-nl-read');
+      if (rd) {
+        e.preventDefault();
+        const row = rd.closest('.nl-item');
+        if (row) row.classList.remove('unread');
+        rd.remove();
+        markNotifRead(rd.getAttribute('data-id'));
+        return;
+      }
+
+      // ── الضغط على البند نفسه = قراءته ──
+      const row = e.target.closest('.nl-item.unread');
+      if (!row) return;
+      row.classList.remove('unread');
+      markNotifRead(row.getAttribute('data-notif-id'));
     });
   })();
 
@@ -2243,6 +2576,29 @@
     });
     apply();
   })();
+
+  /* ═════════════════════════════════════════════════════════════════════
+     درج تعديل مستند طرف (v56) — `.js-pdoc-edit` / `.js-pdoc-cancel`
+     ─────────────────────────────────────────────────────────────────────
+     ⚠️ عايش في `app.js` **العام** مش في <style>/<script> محلي: نفس الماركب
+        بيترندر في بروفايل الشركة **و**بروفايل الوكيل. النسخة المحلية كانت
+        هتشتغل في شاشة وتفشل بالسكوت في التانية — نفس باج «إظهار الأرصدة».
+     ⚠️ الدرج `hidden` من الخادم فبيشتغل بلا جافاسكريبت كمان: لو الملف ما
+        اتحمّلش، الأزرار ما بتعملش حاجة والصفحة تفضل مقروءة.
+     ═════════════════════════════════════════════════════════════════════ */
+  document.addEventListener('click', (e) => {
+    const open = e.target.closest('.js-pdoc-edit');
+    const shut = e.target.closest('.js-pdoc-cancel');
+    if (!open && !shut) return;
+    const id = (open || shut).getAttribute('data-doc');
+    const form = document.getElementById('pdoc-edit-' + id);
+    if (!form) return;
+    form.hidden = !!shut;
+    if (open) {
+      const first = form.querySelector('select,input');
+      if (first) first.focus();
+    }
+  });
 })();
 
 /* ═══════════════════════════════════════════════════════════════════════

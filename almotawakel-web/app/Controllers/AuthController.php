@@ -29,7 +29,7 @@ class AuthController extends Controller
             if (Auth::freeEditMode()) {
                 Audit::log('login_free', 'users', (int)($_SESSION['uid'] ?? 0), null, null, 'تسجيل دخول بوضع التعديل الحر');
             }
-            unset($_SESSION['work_date']); // اسأل عن تاريخ العمل من جديد في كل دخول
+            unset($_SESSION['work_date'], $_SESSION['work_date_set']); // اسأل عن تاريخ العمل (وختمه) من جديد في كل دخول
             redirect('work-date');
         }
         $this->formFailure('auth.login', 'login', [

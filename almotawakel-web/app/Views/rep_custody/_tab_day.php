@@ -16,6 +16,7 @@ $kindOf = static function (array $r): array {
     return match ((string) ($r['src'] ?? 'permit')) {
         'misc'     => ['misc', 'نثرية', 'coins'],
         'handover' => ['handover', 'تسليم سائق', 'truck'],
+        'bill'     => ['bill', 'عهدة بوليصة', 'truck'],   // v60 — أضافها من موبايله
         'transfer' => ['transfer', 'تحويل لزميل', 'shuffle'],
         default    => ((string) ($r['stage_key'] ?? '') === 'receipts')
             ? ['receipts', 'إيصال', 'clipboard']
@@ -29,13 +30,30 @@ $eq = static function (string $label, $value, string $cls = '') {
 };
 ?>
 
+<?php /* ═══ ⓪ تصفية العهدة — الزرار اللي بيقفل الحساب بضغطة ═══
+   ⚠️ **كل يوم بيتقفل على تاريخه هو** (2026-07-27): زرار لليوم المعروض وزرار
+   لكل الأيام المفتوحة. مجموع أرصدة الأيام = التراكمي بالظبط، فتصفية كل الأيام
+   بتصفّر الاتنين مع بعض. الجزء مشترك مع تبويب «الحساب الكامل» فمستحيل الرقمين
+   يفترقوا. */ ?>
+<?php $back = 'rep-custody/' . $repId . '?tab=day';
+      include __DIR__ . '/_settle_zero.php'; ?>
+
 <?php /* ═══ ① معادلة عهدة اليوم — من فين لفين ═══ */ ?>
 <?php partial('panel', [
   'title' => 'عهدة يوم ' . dfmt($day),
   'icon'  => 'wallet',
-  'sub'   => 'بلا أي ترحيل من اليوم اللي قبله',
   'class' => 'mb',
-  'body'  => function () use ($dayB, $eq) { ?>
+  /* ⚠️ «بلا ترحيل» **تحذير وظيفي لازم يفضل** (قاعدة v49): من غيره المالك
+     يفتكر إن الرقم ده فيه الفاضل من إمبارح وياخد قرار غلط. اتقصّر من جملة
+     ١٢ كلمة لشارة، والتفصيل في `title` — `bin/verify_v49.php` بيحرسه. */
+  'badge' => ['text' => 'بلا ترحيل', 'tone' => 'navy'],
+  'body'  => function () use ($dayB, $pendingDaySum, $dayLeft, $eq) {
+    // ⚠️ «الفاضل معاه» بيخصم كمان اللي دفعه ولسه في صندوق المراجعة: فلوسه خرجت
+    //    من إيده فعلاً، والاعتماد إجراء مكتبي بيتأخّر. الرقمان محسوبان مرة واحدة
+    //    في `card.php` (الغلاف) فمستحيل الشريط فوق يقول رقمًا والمعادلة تقول غيره.
+    $pend = $pendingDaySum;
+    $left = $dayLeft;
+    ?>
     <div class="rc-eq">
       <?php $eq('نزل له', $dayB['deposits']); ?>
       <?php if (($dayB['transfer_in'] ?? 0) > 0): ?>
@@ -45,14 +63,27 @@ $eq = static function (string $label, $value, string $cls = '') {
       <?php if (($dayB['transfer_out'] ?? 0) > 0): ?>
         <span class="rc-eq-op">−</span><?php $eq('لزميل', $dayB['transfer_out']); ?>
       <?php endif; ?>
-      <?php if (($dayB['returned'] ?? 0) > 0): ?>
+      <?php /* سالب = تصفية رصيد سالب (المكتب دفع له) فبتتزاد مش بتتخصم */ ?>
+      <?php if (($dayB['returned'] ?? 0) > 0.005): ?>
         <span class="rc-eq-op">−</span><?php $eq('رجّع', $dayB['returned']); ?>
+      <?php elseif (($dayB['returned'] ?? 0) < -0.005): ?>
+        <span class="rc-eq-op">+</span><?php $eq('دفعناله', abs($dayB['returned'])); ?>
       <?php endif; ?>
-      <span class="rc-eq-op">=</span><?php $eq('فاضل من عهدة اليوم', $dayB['balance'], 'res'); ?>
+      <?php if ($pend > 0.005): ?>
+        <span class="rc-eq-op">−</span><?php $eq('دفعه ومستني اعتمادك', $pend, 'wait'); ?>
+      <?php endif; ?>
+      <span class="rc-eq-op">=</span><?php $eq('فاضل معاه', $left, 'res'); ?>
     </div>
-    <?php if ($dayB['balance'] < 0): ?>
+    <?php if ($pend > 0.005): ?>
       <div class="note" style="margin:0 18px 16px;font-size:var(--fs-1)">
-        <?= icon('alert', 14) ?> صرف أكتر من عهدة اليوم بـ<b><?= intf(abs($dayB['balance'])) ?></b> —
+        <?= icon('hourglass', 14) ?> فيه <b><?= intf($pend) ?></b> دفعهم فعلاً ولسه مستنيين اعتمادك —
+        متخصومين من «فاضل معاه» عشان الرقم يوصف اللي في إيده دلوقتي.
+        قبل خصمهم الرصيد <b><?= intf($dayB['balance']) ?></b>.
+      </div>
+    <?php endif; ?>
+    <?php if ($left < 0): ?>
+      <div class="note" style="margin:0 18px 16px;font-size:var(--fs-1)">
+        <?= icon('alert', 14) ?> صرف أكتر من عهدة اليوم بـ<b><?= intf(abs($left)) ?></b> —
         ده مسموح (بيغطّيها من فلوس يوم تاني أو من جيبه)، بس يفضل تنزّله عهدة تغطّي اليوم.
       </div>
     <?php endif; ?>
@@ -74,6 +105,7 @@ $eq = static function (string $label, $value, string $cls = '') {
         ['trending-down', 'مصروفات أذونات',     $act['expenses'], 'rep_expenses'],
         ['coins',         'نثريات',             $act['misc'],     'rep_misc'],
         ['truck',         'تسليم سائقين',       $act['handover'], 'rep_handover'],
+        ['truck',         'عهد بوالص',          $act['bill'],     'rep_bill'],
         ['shuffle',       'تحويلات لزملاء',     $act['transfer'], 'rep_transfer'],
       ];
       foreach ($chips as [$ic, $lbl, $box, $what]): ?>
@@ -114,7 +146,6 @@ $eq = static function (string $label, $value, string $cls = '') {
       partial('empty', [
         'emoji' => '🧾',
         'title' => 'ما صرفش حاجة في يوم ' . dfmt($day),
-        'note'  => 'البنود بتظهر هنا بعد ما تعتمدها من صندوق المراجعة.',
         'action' => ['label' => 'صندوق المراجعة', 'url' => url('rep-custody/inbox')],
       ]);
       return;
@@ -127,6 +158,10 @@ $eq = static function (string $label, $value, string $cls = '') {
       } elseif ($k === 'handover') {
         $meta[] = ['icon' => 'user', 'text' => $s['driver_name'] ?: '—'];
         if (!empty($s['bill_number'])) { $meta[] = ['icon' => 'truck', 'text' => 'بوليصة ' . $s['bill_number']]; }
+      } elseif ($k === 'bill') {
+        $meta[] = ['icon' => 'user', 'text' => $s['driver_name'] ?: '—'];
+        if (!empty($s['car_no'])) { $meta[] = ['icon' => 'truck', 'text' => $s['car_no']]; }
+        if (!empty($s['permit_no'])) { $meta[] = ['icon' => 'folder', 'text' => 'إذن ' . $s['permit_no']]; }
       } elseif ($k === 'transfer') {
         $meta[] = ['icon' => 'user', 'text' => 'لـ ' . ($s['other_name'] ?? '—')];
       } else {
@@ -221,8 +256,7 @@ $eq = static function (string $label, $value, string $cls = '') {
     'scroll' => true,
     'body'   => function () use ($dayDeposits, $repId) {
       if (!$dayDeposits) {
-        partial('empty', ['emoji' => '📥', 'title' => 'مفيش عهدة نزلت له في اليوم ده',
-                          'note' => 'استخدم فورم «نزّله عهدة» على الشمال.']);
+        partial('empty', ['emoji' => '📥', 'title' => 'مفيش عهدة نزلت له في اليوم ده',]);
         return;
       }
       foreach ($dayDeposits as $d) {

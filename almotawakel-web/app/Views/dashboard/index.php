@@ -37,12 +37,9 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
 <?php partial('day_bar', [
   'day'    => $date,
   'locked' => $locked,
-  'note'   => $locked
-      ? 'اليوم ده اتقفل — الأرقام مثبَّتة والكتابة عليه مرفوضة.'
-      : 'كل الأرقام والقوايم تحت عن اليوم ده.',
   'facts'  => [[
     'label' => 'خزنة المكتب',
-    'value' => money0($custody) . ' ' . $cur,
+    'value' => money0($custody),
     'tone'  => $custody < 0 ? 'neg' : '',
   ]],
   'actions' => static function () {
@@ -78,27 +75,47 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
 <?php /* ═══════════ ③ الأرقام — ٤ بس، وكلها عن اليوم ═══════════
    الرقم اللي مالوش تصرّف وراه = ضوضاء. «جاهز للفوترة» بقى صف في ②
    وقايمة في ④، و«أذونات مفتوحة» ليها لوحها هي كمان. */ ?>
-<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($daily, $custody, $rp, $cur, $date, $drill) { ?>
+<?php /* ⚠️ **المرحلة ج — الرقم لوحده مش بيقول كتير.** كل كارت بياخد مقارنة
+         باليوم اللي قبله + رسم آخر ١٤ يوم من `Metrics::dashContext` — وهو
+         بيقرا من **نفس** مصدر `dashDaily` فمستحيل الرسم يخالف الرقم. */ ?>
+<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($daily, $custody, $rp, $cur, $date, $drill, $ctx) { ?>
   <?php partial('stat', [
-    'label' => 'مصروفات اليوم', 'value' => money0($daily['expenses']), 'unit' => $cur,
+    'label' => 'مصروفات اليوم', 'value' => money0($daily['expenses'], false), 'unit' => $cur,
     'icon' => 'trending-down', 'tone' => 'red',
     'drill' => $drill('expenses'), 'title' => 'مصروفات ' . dfmt($date),
+    'trend' => $ctx['expenses']['delta'], 'spark' => $ctx['expenses']['spark'],
   ]); ?>
   <?php partial('stat', [
     'label' => 'إيصالات اليوم', 'value' => intf($daily['receipts_cnt']), 'unit' => 'إيصال',
     'icon' => 'clipboard', 'tone' => 'gold',
     'drill' => $drill('receipts'), 'title' => 'إيصالات ' . dfmt($date),
+    'trend' => $ctx['receipts']['delta'], 'spark' => $ctx['receipts']['spark'],
   ]); ?>
   <?php partial('stat', [
-    'label' => 'خزنة المكتب', 'value' => money0($custody), 'unit' => $cur,
+    'label' => 'خزنة المكتب', 'value' => money0($custody, false), 'unit' => $cur,
     'icon' => 'briefcase', 'tone' => 'purple', 'secret' => true,
     'drill' => $drill('custody'), 'title' => 'حركة خزنة المكتب',
+    'trend' => $ctx['custody']['delta'], 'spark' => $ctx['custody']['spark'],
   ]); ?>
   <?php if ($rp['available']): ?>
+    <?php
+      /* ⚠️ **يوم واحد بس** (قرار المالك 2026-07-27): عهدة المناديب يومية بلا
+         ترحيل (v49)، فالرقم التراكمي «برّه مع المناديب» كان بيدّي صورة غلط في
+         شاشة كل أرقامها عن يوم العمل. الرقم دلوقتي = **الفاضل من عهدة اليوم**
+         (نزل − صرف − اللي دفعوه ومستني اعتماد)، والتراكمي مكانه `/rep-custody`.
+         كله من `totals` المحسوبة أصلاً — بلا أي استعلام زيادة. */
+      $rpDay = $rp['totals'];
+      $rpTrend = ($rpDay['day_deposits'] > 0 || $rpDay['day_spent'] > 0)
+        ? ['dir' => $rpDay['day_deposits'] >= $rpDay['day_spent'] ? 'up' : 'down', 'tone' => 'mute',
+           'text' => 'نزل ' . money0($rpDay['day_deposits'], false)
+                   . ' · صرفوا ' . money0($rpDay['day_spent'], false)]
+        : ['dir' => 'flat', 'tone' => 'mute', 'text' => 'مفيش حركة عهدة في اليوم ده'];
+    ?>
     <?php partial('stat', [
-      'label' => 'برّه مع المناديب', 'value' => money0($rp['totals']['outstanding']), 'unit' => $cur,
+      'label' => 'فاضل مع المناديب', 'value' => money0($rpDay['day_pocket'], false), 'unit' => $cur,
       'icon' => 'users', 'tone' => 'sader', 'secret' => true,
-      'drill' => $drill('reps'), 'title' => 'عهدة المناديب — مندوبًا مندوبًا',
+      'drill' => $drill('reps'), 'title' => 'عهدة المناديب في اليوم ده',
+      'trend' => $rpTrend,
     ]); ?>
   <?php else: ?>
     <?php partial('stat', [
@@ -108,6 +125,73 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
     ]); ?>
   <?php endif; ?>
 <?php }]); ?>
+
+<?php /* ═══════════ ④ حركة اليوم — طلب المالك (2026-07-27) ═══════════
+
+   «محتاج أفهم اليوم ده: الأذونات اللي اتضاف لها إيصالات أو مصروفات من النظام
+    أو المندوب **حتى لو لم يتم اعتمادها** · الأذونات الجديدة اللي اتفتحت ·
+    كل مندوب له عهدة كام اليوم ده. **مش عايز حسابات تراكمية ولا مجمّعة.**»
+
+   ⚠️ التلات لوحات دي **كلها عن يوم العمل وبس** — ولا رقم فيها تراكمي.
+      البند المستنّي بيتعدّ **لوحده** عشان المالك يعرف إيه اللي لسه محتاج قراره. */ ?>
+<div class="d-sec-head">
+  <?= icon('zap', 17) ?><span>حركة يوم <?= e(dfmt($date)) ?></span>
+</div>
+
+<div class="d-grid2 mb">
+  <?php partial('panel', [
+    'title' => 'أذونات اتحرّك عليها', 'icon' => 'folder', 'scroll' => true,
+    'badge' => $touched ? ['text' => intf(count($touched)), 'tone' => 'navy'] : null,
+    'action' => $touched ? ['label' => 'الكل', 'drill' => $drill('touched'), 'title' => 'أذونات اتحرّك عليها في ' . dfmt($date)] : null,
+    'body' => function () use ($touched) {
+      if (!$touched) { partial('empty', ['icon' => 'folder', 'title' => 'مفيش إيصالات ولا مصروفات النهاردة']); return; }
+      foreach (array_slice($touched, 0, 8) as $t) { dash_touched_row($t); }
+    },
+  ]); ?>
+
+  <?php partial('panel', [
+    'title' => 'أذونات اتفتحت', 'icon' => 'plus', 'scroll' => true,
+    'badge' => $opened ? ['text' => intf(count($opened)), 'tone' => 'navy'] : null,
+    'action' => $opened ? ['label' => 'الكل', 'drill' => $drill('opened'), 'title' => 'أذونات اتفتحت في ' . dfmt($date)] : null,
+    'body' => function () use ($opened) {
+      if (!$opened) { partial('empty', ['icon' => 'folder', 'title' => 'مفيش إذن اتفتح النهاردة']); return; }
+      foreach (array_slice($opened, 0, 8) as $o) { dash_opened_row($o); }
+    },
+  ]); ?>
+</div>
+
+<?php if ($rp['available'] ?? false): ?>
+  <?php
+  /* ⚠️ **كارتان إجماليان لليوم — طلب المالك (2026-07-28):** «يتضاف كارت
+     إجمالي نزل عهدة كام وإجمالي اللي اتصرف كام، ولما يتضغط يظهر كل مندوب
+     نزله كام وصرف كام». الاتنين **مجموع صفوف اليوم** اللي تحتهم بالظبط —
+     محسوبين من نفس المصفوفة، فمستحيل الكارت يقول رقمًا والقايمة تقول غيره. */
+  $rdDep = 0.0; $rdSp = 0.0;
+  foreach ($repsDay as $__r) { $rdDep += (float) ($__r['deposits'] ?? 0); $rdSp += (float) ($__r['spent'] ?? 0); }
+  $rdStats = [
+    ['label' => 'نزل عهدة النهاردة', 'value' => money0($rdDep, false), 'unit' => $cur,
+     'icon' => 'wallet', 'tone' => 'gold', 'secret' => true,
+     'drill' => $drill('reps_day'), 'title' => 'عهدة كل مندوب في ' . dfmt($date)],
+    ['label' => 'اللي اتصرف النهاردة', 'value' => money0($rdSp, false), 'unit' => $cur,
+     'icon' => 'trending-down', 'tone' => 'red', 'secret' => true,
+     'drill' => $drill('reps_day'), 'title' => 'صرف كل مندوب في ' . dfmt($date)],
+  ];
+  partial('stat_grid', ['items' => 2, 'class' => 'mb', 'body' => function () use ($rdStats) {
+      foreach ($rdStats as $st) { partial('stat', $st); }
+  }]);
+  ?>
+
+  <?php partial('panel', [
+    'title' => 'عهدة المناديب النهاردة', 'icon' => 'users', 'class' => 'mb', 'scroll' => true,
+    'badge' => $repsDay ? ['text' => intf(count($repsDay)), 'tone' => 'navy'] : null,
+    'action' => ['label' => 'إدارة العهدة', 'url' => url('rep-custody')],
+    'body' => function () use ($repsDay, $repNames) {
+      if (!$repsDay) { partial('empty', ['icon' => 'users', 'title' => 'مفيش عهدة نزلت ولا اتصرفت النهاردة',
+                                         'action' => ['label' => 'نزّل عهدة', 'url' => url('rep-custody')]]); return; }
+      dash_rep_rows($repsDay, $repNames);
+    },
+  ]); ?>
+<?php endif; ?>
 
 <?php /* ═══════════ ④ الشغل الجاري — متابعة مش إنذار ═══════════ */ ?>
 <div class="d-sec-head">
@@ -125,7 +209,7 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
     'action' => ['label' => 'عرض التفاصيل', 'drill' => $drill('ready'), 'title' => 'الأذونات الجاهزة للفوترة'],
     'body' => function () use ($ready) {
       if (!$ready) {
-        partial('empty', ['emoji' => '✅', 'title' => 'تمام!', 'note' => 'مفيش أذونات مُغلقة مستنية فاتورة.']);
+        partial('empty', ['emoji' => '✅', 'title' => 'تمام!',]);
         return;
       }
       foreach (array_slice($ready, 0, 8) as $p) { dash_permit_row($p, true); }
@@ -139,7 +223,6 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
       if (!$openList) {
         partial('empty', [
           'emoji' => '📁', 'title' => 'مفيش أذونات مفتوحة',
-          'note' => 'افتح إذنًا جديدًا من شاشة الأذونات.',
           'action' => ['label' => 'الأذونات والشهادات', 'url' => url('permits')],
         ]);
         return;
@@ -152,13 +235,11 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
 <div class="d-grid-feed mb">
   <?php partial('panel', [
     'title' => 'فلوس ' . dfmt($date), 'icon' => 'trending-down', 'scroll' => true,
-    'sub' => 'المصروفات والإيصالات على تاريخ العمل',
     'action' => ['label' => 'سجل المصروفات', 'url' => url('expenses')],
     'body' => function () use ($feed, $date) {
       if (!$feed) {
         partial('empty', [
           'emoji' => '💸', 'title' => 'مفيش حركة فلوس في ' . dfmt($date),
-          'note' => 'مفيش مصروفات ولا إيصالات على التاريخ ده.',
         ]);
         return;
       }
@@ -171,7 +252,7 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
     <div class="d-card-head"><h3><?= icon('file-text', 18) ?> ملاحظات</h3><span class="chip"><?= intf($pending) ?><?php if (count($notes) > $pending): ?> / <?= intf(count($notes)) ?><?php endif; ?></span></div>
     <form class="d-note-form no-confirm" method="post" action="<?= url('notes') ?>">
       <?= csrfField() ?>
-      <textarea name="body" rows="2" maxlength="500" placeholder="اكتب تذكير أو ملاحظة سريعة…" required></textarea>
+      <textarea name="body" rows="2" maxlength="500" placeholder="ملاحظة…" required></textarea>
       <div class="d-note-tools">
         <div class="d-note-colors">
           <?php foreach (['gold','navy','green','red','teal','purple'] as $ci): ?>
@@ -229,7 +310,7 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
 <!-- ═══════════════ الإدخال السريع الجماعي ═══════════════ -->
 <style>
 .qe-restore{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
-  background:#fdf3e0;border:1px solid #f0dca6;color:#7a5e12;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:.9rem}
+  background:#fdf3e0;border:1px solid #f0dca6;color:#7a5e12;border-radius:var(--radius-2);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-3)}
 .qe-restore b{color:#5a4310}
 .qe-restore-btns{display:flex;gap:8px;flex-shrink:0}
 </style>
@@ -239,16 +320,16 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
     <div class="qe-head">
       <div><span class="qe-kicker">إدخال جماعي آمن</span><h2 id="qeTitle">الإيصالات والمصاريف</h2></div>
       <div class="qe-steps"><span class="active" data-qe-dot="edit">1 · الإدخال</span><i></i><span data-qe-dot="review">2 · المراجعة</span></div>
-      <button type="button" class="qe-x" data-qe-close aria-label="إغلاق">✕</button>
+      <button type="button" class="qe-x" data-qe-close aria-label="إغلاق"><?= icon('x', 14) ?></button>
     </div>
     <aside class="qe-permit-browser" id="qePermitBrowser" hidden aria-label="اختيار الإذن">
       <button type="button" class="qe-browser-back" data-qe-browser-close aria-label="إغلاق"></button>
       <div class="qe-browser-sheet">
         <div class="qe-browser-head">
           <div><span>اختيار الإذن</span><b>ميّزه بالشركة والحاويات</b></div>
-          <button type="button" data-qe-browser-close aria-label="إغلاق">✕</button>
+          <button type="button" data-qe-browser-close aria-label="إغلاق"><?= icon('x', 14) ?></button>
         </div>
-        <label class="qe-browser-search"><span aria-hidden="true">⌕</span><input type="search" id="qePermitSearch" placeholder="ابحث برقم الإذن، الشركة، العميل أو تصنيف الحاويات…" autocomplete="off"></label>
+        <label class="qe-browser-search"><span aria-hidden="true">⌕</span><input type="search" id="qePermitSearch" placeholder="بحث" autocomplete="off"></label>
         <div class="qe-permit-results" id="qePermitResults"></div>
         <div class="qe-browser-empty" id="qePermitEmpty" hidden>لا يوجد إذن مطابق للبحث.</div>
       </div>
@@ -258,7 +339,7 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
       <div class="qe-browser-sheet">
         <div class="qe-browser-head">
           <div><span>اختيار الحركة</span><b id="qeMovementPermitTitle">حركات الإذن</b></div>
-          <button type="button" data-qe-movement-close aria-label="إغلاق">✕</button>
+          <button type="button" data-qe-movement-close aria-label="إغلاق"><?= icon('x', 14) ?></button>
         </div>
         <div class="qe-movement-guide">اختر الحركة من بطاقتها. إذا كانت حركة واحدة فقط يختارها السيستم تلقائيًا.</div>
         <div class="qe-permit-results qe-movement-results" id="qeMovementResults"></div>
@@ -344,7 +425,7 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
     if(oldCount)return;const draft=loadDraft();if(!draft)return;
     pendingRestore=true;
     const b=document.createElement('div');b.className='qe-restore';
-    b.innerHTML=`<span>📝 <b>لقينا بيانات لم تُطبَّق</b> من آخر مرة (${draft.rows.length} صف · ${draftTimeLabel(draft.t)}). عايز ترجّعها؟</span>`+
+    b.innerHTML=`<span>✏ <b>لقينا بيانات لم تُطبَّق</b> من آخر مرة (${draft.rows.length} صف · ${draftTimeLabel(draft.t)}). عايز ترجّعها؟</span>`+
       `<span class="qe-restore-btns"><button type="button" class="btn gold sm" data-qe-restore>استرجاع البيانات</button><button type="button" class="btn ghost sm" data-qe-fresh>ابدأ من جديد</button></span>`;
     rowsEl.parentNode.insertBefore(b,rowsEl);restoreBanner=b;
     b.querySelector('[data-qe-restore]').addEventListener('click',()=>doRestore(draft));
@@ -360,12 +441,12 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
   function containerChips(p){return String(p?.container_label||'بدون حاويات مسجلة').split('،').map(x=>`<span>${esc(x.trim())}</span>`).join('');}
   function permitButtonHtml(p){return p
     ? `<span class="qe-pick-top"><b>${esc(p.type)} ${esc(p.no)}</b><em>${p.status==='closed'?'مغلق':'جارٍ'}</em></span><span class="qe-pick-company">الشركة: <strong>${esc(p.company)}</strong></span><span class="qe-pick-containers">${containerChips(p)}</span>`
-    : `<span class="qe-pick-placeholder"><b>اختر الإذن / الشهادة</b><small>ستظهر الشركة وتصنيف الحاويات هنا</small></span>`;}
+    : `<span class="qe-pick-placeholder"><b>اختر الإذن / الشهادة</b></span>`;}
   function paintPermitButton(row){const input=row.querySelector('[name="permit_id[]"]'),p=permitMap.get(String(input.value)),btn=row.querySelector('.qe-permit-pick');btn.innerHTML=permitButtonHtml(p);btn.classList.toggle('selected',!!p);btn.classList.remove('invalid');}
   function movementDetail(m){const parts=[];if(+m?.container_count>0)parts.push(`${m.container_count} حاوية`);if(m?.container_type)parts.push(m.container_type);return parts;}
   function movementButtonHtml(p,m){return m
     ? `<span class="qe-pick-top"><b>الحركة ${m.seq}</b>${p?.movements?.length===1?'<em>اختيار تلقائي</em>':''}</span><span class="qe-movement-chips">${movementDetail(m).map(x=>`<span>${esc(x)}</span>`).join('')||'<span>بدون حاويات محددة</span>'}</span>${m.note?`<small>${esc(m.note)}</small>`:''}`
-    : `<span class="qe-pick-placeholder"><b>اختر الحركة</b><small>ستظهر الحاويات وملاحظات الحركة هنا</small></span>`;}
+    : `<span class="qe-pick-placeholder"><b>اختر الحركة</b></span>`;}
   function paintMovementButton(row){const p=permitMap.get(String(row.querySelector('[name="permit_id[]"]').value)),input=row.querySelector('[name="movement_id[]"]'),m=p?.movements?.find(x=>String(x.id)===String(input.value)),btn=row.querySelector('.qe-movement-pick');btn.innerHTML=movementButtonHtml(p,m);btn.classList.toggle('selected',!!m);btn.classList.remove('invalid');}
   function cardOptions(selected){return '<option value="">اختر الكارت…</option>'+cards.map(c=>`<option value="${c.id}" ${String(c.id)===String(selected)?'selected':''}>${esc(c.label)}</option>`).join('');}
   function rowData(row){const q=s=>row.querySelector(s);return {

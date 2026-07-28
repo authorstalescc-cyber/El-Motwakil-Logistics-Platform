@@ -32,6 +32,7 @@ $navRaw = [
     ['__sec', 'الشغل اليومي', null, null, null],
     ['permits',     'الأذونات والشهادات', 'folder',   'PermitController@index',      null],
     ['bawalis',     'البوالص',       'truck',         'CrudController@index',        null],
+    ['cars',        'سيارات المكتب', 'truck',         'OfficeCarController@index',   null],
     ['tracking',    'تتبع الشحنات',  'map-pin',       'TrackController@index',       'track_stale'],
     ['closing',     'التقفيل اليومي','calculator',    'DailyClosingController@index','closing_open'],
 
@@ -58,9 +59,11 @@ $navRaw = [
     ['legacy',      'أرشيف البوالص القديمة', 'inbox', 'LegacyController@index',      null],
     ['takhlis',     'التخليص',       'clipboard',     'TakhlisController@index',     null],
     ['generators',  'المولدات',      'cpu',           'GeneratorsController@index',  null],
+    ['ops',         'تقارير التشغيل','package',       'OpsReportController@index',   null],
     ['reports',     'التقارير',      'bar-chart',     'ReportsController@index',     null],
     ['audit',       'سجل العمليات',  'clipboard',     'AuditController@index',       null],
     ['push',        'إشعارات التطبيق','bell',         'PushController@index',        null],
+    ['quality',     'تنظيف البيانات','clipboard',     'QualityController@index',     'data_quality'],
     ['security',    'المراقبة الأمنية','alert',       'SecurityController@index',    'failed_logins'],
     ['settings',    'الإعدادات',     'settings',      'SettingsController@index',    'weak_pins'],
 ];
@@ -175,7 +178,7 @@ $nav = $clean;
           </div>
           <div class="nc-foot">
             <button type="button" class="nc-mark" id="notifMark">تعليم الكل كمقروء</button>
-            <span class="nc-count" id="notifAt"></span>
+            <a class="nc-all" href="<?= url('notifications') ?>">كل الإشعارات <?= icon('chevron', 14) ?></a>
           </div>
         </div>
       </div>
@@ -289,8 +292,8 @@ $nav = $clean;
   </div>
 </div>
 <style>
-.free-edit-banner{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;border:1px solid #df9b76;border-radius:11px;background:#fff0e8;color:#873b25}
-.free-edit-banner b{font-weight:900}.free-edit-banner span{font-size:.82rem;font-weight:700}
+.free-edit-banner{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;border:1px solid #df9b76;border-radius:var(--radius-2);background:#fff0e8;color:#873b25}
+.free-edit-banner b{font-weight:700}.free-edit-banner span{font-size:var(--fs-2);font-weight:500}
 </style>
 
 <!-- لوحة البحث السريع (Command Palette) — تُفتح بـ Ctrl+K أو / -->
@@ -299,7 +302,7 @@ $nav = $clean;
   <div class="cmdk-panel" role="dialog" aria-modal="true" aria-label="بحث سريع">
     <div class="cmdk-head">
       <span class="cmdk-ico"><?= icon('search', 20) ?></span>
-      <input type="search" class="cmdk-input" id="cmdk-input" placeholder="ابحث أو انتقل… (بوليصة، إذن، حاوية، سائق، عميل) — أو اكتب اسم صفحة" autocomplete="off" spellcheck="false" aria-label="بحث">
+      <input type="search" class="cmdk-input" id="cmdk-input" placeholder="ابحث أو انتقل…" autocomplete="off" spellcheck="false" aria-label="بحث">
       <kbd class="cmdk-esc">Esc</kbd>
     </div>
     <div class="cmdk-filter" id="cmdk-filter">
@@ -367,12 +370,14 @@ $cmdSyn = [
     'payments'=> 'تحصيلات العملاء سداد دفعات قبض',
     'custody' => 'عهدة رصيد خزنة محفظة رصيد العهدة خزنه المكتب درج',
     'office'  => 'فيزا كارت كروت رصيد المكتب بنك كروت الفيزا',
+    'cars'    => 'سيارة سيارات عربية عربيات لوري تريلا اسطول سولار بنزين اصلاح كاوتش اداء السيارة',
     'reps'    => 'مندوب مناديب مرتب مرتبات رواتب سلفة خصم',
     'rep-custody' => 'عهدة مناديب مندوب سلفة تنزيل تسوية مراجعة بنود صندوق',
     'expenses'=> 'مصروف مصروفات صرف',
     'directory' => 'وكلاء عملاء شركات جهات دليل',
     'legacy'  => 'ارشيف بوالص قديمة',
     'reports' => 'تقرير تقارير احصائيات',
+    'ops'     => 'تقرير تشغيل حاويات موانئ ميناء شركات عهد عهدة يومي اسبوعي شهري تداول',
     'audit'   => 'سجل عمليات محذوفات حذف تدقيق',
     'security'=> 'امن امان مراقبة دخول محاولات اختراق',
     'settings'=> 'اعدادات ضبط تهيئة نسخة احتياطية باك اب',
@@ -420,12 +425,12 @@ foreach ($cmdCreate as [$label, $seg, $ic, $kw]) {
   <div class="d-modal-card">
     <div class="d-modal-head">
       <h3 id="uiDrillTitle"></h3>
-      <button type="button" class="d-modal-x" data-close aria-label="إغلاق">✕</button>
+      <button type="button" class="d-modal-x" data-close aria-label="إغلاق"><?= icon('x', 14) ?></button>
     </div>
     <div class="d-modal-body" id="uiDrillBody"></div>
   </div>
 </div>
-<script>window.__SEARCH_API = <?= js_json(url('search/api')) ?>; window.__SEARCH_PAGE = <?= js_json(url('search')) ?>; window.__CMD_NAV = <?= js_json($cmdNav) ?>; window.__NAME_SUGGEST_API = <?= js_json(url('suggest/names')) ?>; window.__BILL_NUMBER_CHECK_API = <?= js_json(url('bawalis/check-number')) ?>; window.__TOASTS = <?= js_json($__toasts) ?>; window.__NOTIF_PING = <?= js_json(url('notifications/ping')) ?>;</script>
+<script>window.__SEARCH_API = <?= js_json(url('search/api')) ?>; window.__SEARCH_PAGE = <?= js_json(url('search')) ?>; window.__CMD_NAV = <?= js_json($cmdNav) ?>; window.__NAME_SUGGEST_API = <?= js_json(url('suggest/names')) ?>; window.__BILL_NUMBER_CHECK_API = <?= js_json(url('bawalis/check-number')) ?>; window.__TOASTS = <?= js_json($__toasts) ?>; window.__NOTIF_PING = <?= js_json(url('notifications/ping')) ?>; window.__NOTIF_READ = <?= js_json(url('notifications/read/__ID__')) ?>; window.__NOTIF_READ_ALL = <?= js_json(url('notifications/read-all')) ?>; window.__NOTIF_SNOOZE = <?= js_json(url('notifications/snooze/__ID__')) ?>; window.__NOTIF_PREFS = <?= js_json(url('notifications/prefs')) ?>; window.__CSRF = <?= js_json(Auth::csrf()) ?>;</script>
 <?php $appJs = \App\Core\App::basePath('public/assets/js/app.js'); $appJsV = is_file($appJs) ? filemtime($appJs) : 1; ?>
 <?php $rsJs = \App\Core\App::basePath('public/assets/js/resume-scroll.js'); $rsJsV = is_file($rsJs) ? filemtime($rsJs) : 1; ?>
 <?php /* الرجوع لنفس المكان بعد الحفظ — ملف مشترك مع بوابة المندوب (مش جوّه app.js

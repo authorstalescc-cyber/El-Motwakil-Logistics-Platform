@@ -204,6 +204,20 @@
 | POST | `/office/deposit/{depId}/delete` | OfficeController@deleteDeposit |
 | POST | `/office/{id}` | OfficeController@update (بعد مسارات `/office/{id}/*`) |
 | GET | `/office/{id}` | OfficeController@card (الجشع أخيرًا) |
+| GET | `/cars` | OfficeCarController@index (سيارات المكتب — v54) |
+| GET | `/cars/new` | OfficeCarController@create |
+| GET | `/cars/drill/{what}` | OfficeCarController@drill (تفاصيل الأرقام — حرفي قبل الجشع) |
+| POST | `/cars` | OfficeCarController@store |
+| POST | `/cars/expense/{eid}/delete` | OfficeCarController@deleteExpense (حرفي قبل الجشع) |
+| GET | `/cars/{id}/edit` | OfficeCarController@edit |
+| GET | `/cars/{id}/report` | OfficeCarController@report (تقرير أداء A4) |
+| POST | `/cars/{id}/expense` | OfficeCarController@storeExpense |
+| POST | `/cars/{id}/delete` | OfficeCarController@destroy |
+| POST | `/cars/{id}` | OfficeCarController@update (بعد مسارات `/cars/{id}/*`) |
+| GET | `/cars/{id}` | OfficeCarController@card (الجشع أخيرًا) |
+| GET | `/ops` | OpsReportController@index (تقارير التشغيل — حاويات/موانئ/شركات/عهد) |
+| GET | `/ops/print` | OpsReportController@printable (تقرير A4 · `?detail=1` يضيف كل البوالص — حرفي قبل الجشع) |
+| GET | `/ops/drill/{what}` | OpsReportController@drill (تفاصيل الأرقام) |
 | GET | `/debts` | DebtController@index |
 | POST | `/debts/visa` | DebtController@storeVisa |
 | POST | `/debts/account` | DebtController@storeAccount |

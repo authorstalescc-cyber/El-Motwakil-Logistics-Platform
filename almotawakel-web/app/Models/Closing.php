@@ -92,7 +92,7 @@ class Closing
         [$w1, $p1] = self::whereDate('s.entry_date', $gt, $gte, $lt, $eq);
         $stage = (float) Database::scalar(
             "SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s
-             WHERE $expSql AND s.is_visa = 0 AND $w1", $p1);
+             WHERE $expSql AND " . Permit::cashOutSql('s') . " AND $w1", $p1);
         [$w2, $p2] = self::whereDate('exp_date', $gt, $gte, $lt, $eq);
         $manual = (float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM manual_expenses WHERE is_visa = 0 AND $w2", $p2);
@@ -147,7 +147,8 @@ class Closing
         [$dedSql, $dp] = Custody::deductionSql('custody', 'car_no');
         [$w, $p] = self::whereDate('bill_date', $gt, $gte, $lt, $eq);
         // is_legacy=0: البوالص المُرحَّلة من الأرشيف (v26) لا تدخل رصيد العهدة إطلاقًا
-        $sql = "SELECT COALESCE(SUM($dedSql),0) FROM bawalis WHERE is_legacy = 0 AND custody > 0 AND $w";
+        $sql = "SELECT COALESCE(SUM($dedSql),0) FROM bawalis WHERE is_legacy = 0 AND custody > 0"
+             . RepBillCustody::officeExcludeSql() . " AND $w";
         $params = array_merge($dp, $p);
         if ($excludeBill > 0) { $sql .= " AND id <> ?"; $params[] = $excludeBill; }
         return round((float) Database::scalar($sql, $params), 2);
@@ -172,7 +173,8 @@ class Closing
 
         $expenseParts = []; $expenseParams = [];
         [$w, $p] = self::whereDate('s.entry_date', $gt, $gte, $lt, $eq);
-        $expenseParts[] = "SELECT s.amount FROM permit_stages s WHERE " . Permit::expenseSql('s') . " AND s.is_visa=0 AND $w";
+        $expenseParts[] = "SELECT s.amount FROM permit_stages s WHERE " . Permit::expenseSql('s')
+                        . " AND " . Permit::cashOutSql('s') . " AND $w";
         array_push($expenseParams, ...$p);
         [$w, $p] = self::whereDate('exp_date', $gt, $gte, $lt, $eq);
         $expenseParts[] = "SELECT amount FROM manual_expenses WHERE is_visa=0 AND $w";
@@ -191,7 +193,8 @@ class Closing
 
         [$dedSql, $dedParams] = Custody::deductionSql('custody', 'car_no');
         [$w, $p] = self::whereDate('bill_date', $gt, $gte, $lt, $eq);
-        $driverSql = "SELECT $dedSql amount FROM bawalis WHERE is_legacy=0 AND custody>0 AND $w";
+        $driverSql = "SELECT $dedSql amount FROM bawalis WHERE is_legacy=0 AND custody>0"
+                   . RepBillCustody::officeExcludeSql() . " AND $w";
         $driverParams = array_merge($dedParams, $p);
         if ($excludeBill > 0) { $driverSql .= ' AND id <> ?'; $driverParams[] = $excludeBill; }
         $append('driver', $driverSql, $driverParams);
@@ -238,6 +241,33 @@ class Closing
     }
 
     // ───────────────────────────────────────────── الأرصدة
+
+    /**
+     * أرصدة نهاية آخر N يوم متقفل — للرسم الصغير جوّه كارت «خزنة المكتب».
+     *
+     * ⚠️ بتقرا **الرصيد المثبَّت** من `daily_closings` (استعلام واحد رخيص) مش
+     *    بتعيد حساب أي يوم. إعادة الحساب كانت هتبقى N استدعاء لـ`openingFor`
+     *    (كل واحد فيه anchor + تجميع حركة) على **كل** فتحة للداشبورد.
+     * ⚠️ الأيام المفتوحة مالهاش صف — فالسلسلة دي «آخر الأيام المتقفلة» مش
+     *    «آخر N يوم بالتقويم»، والواجهة بتقول كده صراحةً. الرصيد الحالي
+     *    (اللي في الكارت) بيتضاف كآخر نقطة من `currentBalance()` نفسه.
+     *
+     * @return list<array{d:string, v:float}>
+     */
+    public static function balanceSeries(int $days = 14): array
+    {
+        if (!self::available()) { return []; }
+        $days = max(2, min(60, $days));
+        $rows = Database::all(
+            "SELECT close_date d, closing_balance v FROM daily_closings
+             ORDER BY close_date DESC LIMIT " . (int) $days
+        );
+        $out = [];
+        foreach (array_reverse($rows) as $r) {
+            $out[] = ['d' => (string) $r['d'], 'v' => round((float) $r['v'], 2)];
+        }
+        return $out;
+    }
 
     /** رصيد بداية يوم $date (قبل حركة اليوم نفسه). */
     public static function openingFor(string $date): float
@@ -377,11 +407,13 @@ class Closing
         [$w, $p] = self::whereDate('cust_date', $afterClosed, false, $beforeDate, null);
         if (Database::scalar("SELECT COUNT(*) FROM manual_custody WHERE $w", $p)) { return true; }
         [$w, $p] = self::whereDate('s.entry_date', $afterClosed, false, $beforeDate, null);
-        if (Database::scalar("SELECT COUNT(*) FROM permit_stages s WHERE $expSql AND s.is_visa=0 AND $w", $p)) { return true; }
+        if (Database::scalar("SELECT COUNT(*) FROM permit_stages s WHERE $expSql AND "
+            . Permit::cashOutSql('s') . " AND $w", $p)) { return true; }
         [$w, $p] = self::whereDate('exp_date', $afterClosed, false, $beforeDate, null);
         if (Database::scalar("SELECT COUNT(*) FROM manual_expenses WHERE is_visa=0 AND $w", $p)) { return true; }
         [$w, $p] = self::whereDate('bill_date', $afterClosed, false, $beforeDate, null);
-        if (Database::scalar("SELECT COUNT(*) FROM bawalis WHERE is_legacy=0 AND custody>0 AND $w", $p)) { return true; }
+        if (Database::scalar("SELECT COUNT(*) FROM bawalis WHERE is_legacy=0 AND custody>0"
+            . RepBillCustody::officeExcludeSql() . " AND $w", $p)) { return true; }
         if (self::tableExists('rep_entries')) {
             $cash = Rep::cashKindsList();
             [$w, $p] = self::whereDate('entry_date', $afterClosed, false, $beforeDate, null);
@@ -507,7 +539,8 @@ class Closing
             Database::scalar("SELECT MIN(cust_date) FROM manual_custody"),
             Database::scalar("SELECT MIN(s.entry_date) FROM permit_stages s"),
             Database::scalar("SELECT MIN(exp_date) FROM manual_expenses"),
-            Database::scalar("SELECT MIN(bill_date) FROM bawalis WHERE is_legacy = 0 AND custody > 0"),
+            Database::scalar("SELECT MIN(bill_date) FROM bawalis WHERE is_legacy = 0 AND custody > 0"
+                . RepBillCustody::officeExcludeSql()),
             self::tableExists('rep_entries')
                 ? Database::scalar("SELECT MIN(entry_date) FROM rep_entries WHERE kind IN (" . Rep::cashKindsList() . ")")
                 : null,

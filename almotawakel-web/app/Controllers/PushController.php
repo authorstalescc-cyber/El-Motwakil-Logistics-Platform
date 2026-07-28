@@ -41,6 +41,9 @@ class PushController extends Controller
             'log'      => PushNotify::recent(30),
             'reps'     => Rep::all('', 'active'),
             'pubKey'   => WebPush::publicKey(),
+            // صحة الإشعارات (المرحلة ٥) + تحليلات القراءة (المرحلة ٧) — قراءة فقط
+            'health'   => PushNotify::health(7),
+            'readStats'=> \App\Models\NotifyWatch::readStats(30),
         ]);
     }
 

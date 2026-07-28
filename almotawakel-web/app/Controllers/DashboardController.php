@@ -10,6 +10,7 @@ use App\Models\Metrics;
 use App\Models\Note;
 use App\Models\Lookup;
 use App\Models\PermitQuickEntry;
+use App\Models\Rep;
 use App\Models\RepCustody;
 use App\Models\VisaCard;
 
@@ -33,8 +34,13 @@ class DashboardController extends Controller
            `custodyDay` وتصفية مصروفات/إيصالات اليوم — كلها بقت في المسار
            الكسول، فالصفحة ما بتدفعش تكلفتها إلا لو المالك فتح التفاصيل. */
         $custodyBalance = $profile('dashboard.custody', fn() => Custody::balance());
-        $readyData = $profile('dashboard.ready', fn() => Metrics::readyToInvoiceDashboard(8));
-        $timeline = $profile('dashboard.feed', fn() => Metrics::expenseReceiptFeed($date, 40));
+        /* ⚠️ `$date` = احترام يوم العمل: ما ينفعش المالك وهو على يوم ٢٦ يشوف إذنًا
+   تاريخه ٢٨ (بلاغ المالك 2026-07-28). المتأخرات بتفضل، المستقبل بس بيتشال. */
+        $readyData = $profile('dashboard.ready', fn() => Metrics::readyToInvoiceDashboard(8, $date));
+        /* ⚠️ `true` = **اليوم ده بالظبط**. بلاغ المالك: لوح «فلوس اليوم» كان بياخد
+   السجل التراكمي (`entry_date <= $date`) بلا فلترة، فكان بيعرض بنود ٢٦
+   على إنها بتاعة ٢٧. التاريخ لازم يتحترم ١٠٠٪. */
+        $timeline = $profile('dashboard.feed', fn() => Metrics::expenseReceiptFeed($date, 40, true));
         $quickOld = $_SESSION['_quick_entry_old'] ?? [];
         unset($_SESSION['_quick_entry_old']);
         // إشارة النجاح لمرة واحدة (تُستهلك هنا) → الواجهة تمسح المسودة المحفوظة
@@ -51,9 +57,23 @@ class DashboardController extends Controller
             'counters' => $profile('dashboard.counters', fn() => Metrics::counters()),
             'permits'  => $profile('dashboard.permits', fn() => Metrics::permitsSummary()),
             'custody'  => $custodyBalance,
+            /* سياق كروت الأرقام (المرحلة ج): مقارنة بامبارح + رسم آخر ١٤ يوم.
+               ⚠️ استعلامان مجمَّعان بس — مقيس ~3ms، مقابل الرسوم الأربعة اللي
+               اتشالت في المرحلة ٤ (36.5ms). ومصدره **نفس** مصدر `dashDaily`. */
+            'ctx'      => $profile('dashboard.context', fn() => Metrics::dashContext($date, $custodyBalance)),
             'ready'    => $readyData['rows'],
             'readySum' => $readyData['summary'],
-            'openList' => $profile('dashboard.open_permits', fn() => Metrics::openPermitsList(8)),
+            'openList' => $profile('dashboard.open_permits', fn() => Metrics::openPermitsList(8, $date)),
+            /* ⚠️ **طلب المالك (2026-07-27) — الداشبورد بعدسة اليوم بلا أي تراكمي:**
+                 ① الأذونات اللي اتضاف لها إيصال/مصروف النهاردة — **ومعاها اللي
+                    لسه مستنّي اعتماد** (المندوب بعته وما اتراجعش).
+                 ② الأذونات اللي اتفتحت النهاردة.
+                 ③ عهدة كل مندوب **في اليوم ده** (مش رصيده التراكمي).
+               التلاتة بيقروا من مصادر قايمة — مفيش تعريف جديد لأي رقم. */
+            'touched'  => $profile('dashboard.touched', fn() => Metrics::permitsTouched($date)),
+            'opened'   => $profile('dashboard.opened',  fn() => Metrics::permitsOpened($date)),
+            'repsDay'  => $profile('dashboard.reps_day', fn() => RepCustody::dayTotalsByRep($date)),
+            'repNames' => $profile('dashboard.rep_names', fn() => Rep::all('', 'active')),
             'feed'     => array_slice($timeline, 0, 12),
             'locked'   => Closing::isLocked($date),
             /* عهدة المناديب — الرقم بس؛ الكروت والمدخلات مكانها `/rep-custody`
@@ -85,7 +105,8 @@ class DashboardController extends Controller
     public function drill(string $what): void
     {
         $this->requireAuth();
-        if (!in_array($what, ['expenses', 'receipts', 'custody', 'reps', 'ready', 'permits_open', 'activity'], true)) {
+        if (!in_array($what, ['expenses', 'receipts', 'custody', 'reps', 'ready', 'permits_open', 'activity',
+                              'touched', 'opened', 'reps_day'], true)) {
             $this->notFound('نوع التفاصيل ده مش موجود.');
         }
         $date = Auth::workDate();
@@ -96,10 +117,21 @@ class DashboardController extends Controller
             case 'receipts':
                 $wantReceipt = ($what === 'receipts');
                 $data['rows'] = array_values(array_filter(
-                    Metrics::expenseReceiptFeed($date, 300),
-                    static fn ($row) => $row['d'] === $date && (bool) $row['is_receipt'] === $wantReceipt
+                    Metrics::expenseReceiptFeed($date, 300, true),
+                    static fn ($row) => (bool) $row['is_receipt'] === $wantReceipt
                 ));
                 $data['daily'] = Metrics::dashDaily($date);
+                break;
+            case 'touched':
+                /* الأذونات اللي اتحرّك عليها فلوس النهاردة — معتمد ومستنّي. */
+                $data['rows'] = Metrics::permitsTouched($date);
+                break;
+            case 'opened':
+                $data['rows'] = Metrics::permitsOpened($date);
+                break;
+            case 'reps_day':
+                $data['rows']  = RepCustody::dayTotalsByRep($date);
+                $data['names'] = Rep::all('', 'active');
                 break;
             case 'custody':
                 $balance = Custody::balance();
@@ -110,12 +142,12 @@ class DashboardController extends Controller
                 $data['reps'] = RepCustody::dashboard($date, 1, 12);
                 break;
             case 'ready':
-                $ready = Metrics::readyToInvoiceDashboard(40);
+                $ready = Metrics::readyToInvoiceDashboard(40, $date);
                 $data['rows'] = $ready['rows'];
                 $data['summary'] = $ready['summary'];
                 break;
             case 'permits_open':
-                $data['rows'] = Metrics::openPermitsList(40);
+                $data['rows'] = Metrics::openPermitsList(40, $date);
                 $data['permits'] = Metrics::permitsSummary();
                 break;
             default:   // activity

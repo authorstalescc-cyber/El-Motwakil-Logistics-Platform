@@ -34,7 +34,7 @@ $wdToday = $wd === $today;
 <div class="m-bar">
   <a href="<?= url('m?tab=entries') ?>" class="out">→ رجوع</a>
   <span class="sp"></span>
-  <span class="who">🧷 <?= $editing ? 'تعديل نثرية' : 'نثرية جديدة' ?></span>
+  <span class="who"><?= icon('anchor', 14) ?> <?= $editing ? 'تعديل نثرية' : 'نثرية جديدة' ?></span>
 </div>
 
 <div class="net-state" id="netState" role="status" aria-live="polite" hidden>
@@ -64,7 +64,7 @@ $wdToday = $wd === $today;
     </div>
 
     <div class="entry-context misc-context">
-      <b>🧷 نثرية</b>
+      <b><?= icon('anchor', 14) ?> نثرية</b>
       <span>مصروف عام مش على إذن</span>
     </div>
 
@@ -150,7 +150,7 @@ $wdToday = $wd === $today;
         </div>
       <?php endif; ?>
       <label class="shot" id="shotBtn">
-        <span id="shotTxt">📷 صوّر أو اختار صورة</span>
+        <span id="shotTxt"><?= icon('search', 14) ?> صوّر أو اختار صورة</span>
         <input type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" id="shot"
                aria-describedby="photoHint err-photo">
       </label>

@@ -46,7 +46,7 @@
   </div>
 
   <div class="form-actions">
-    <button class="btn gold" type="submit" data-primary-submit>💾 <?= $isEdit?'حفظ التعديلات':'حفظ الكارت' ?></button>
+    <button class="btn gold" type="submit" data-primary-submit><?= icon('download', 14) ?> <?= $isEdit?'حفظ التعديلات':'حفظ الكارت' ?></button>
     <a class="btn ghost" href="<?= url($back ?? 'office') ?>">إلغاء</a>
   </div>
 </form>

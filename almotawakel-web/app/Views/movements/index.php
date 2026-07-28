@@ -25,12 +25,12 @@
     </tr></thead>
     <tbody>
       <?php if(!$rows): ?>
-        <tr><td colspan="13"><div class="empty"><div class="ic">📭</div><b>مفيش حركات</b><span>الحركات بتتعمل من جوّه الإذن نفسه، مش من هنا.</span><a class="btn sm" href="<?= url('permits') ?>">افتح الأذونات</a></div></td></tr>
+        <tr><td colspan="13"><div class="empty"><div class="ic"><?= icon('inbox', 14) ?></div><b>مفيش حركات</b><span>الحركات بتتعمل من جوّه الإذن نفسه، مش من هنا.</span><a class="btn sm" href="<?= url('permits') ?>">افتح الأذونات</a></div></td></tr>
       <?php else: $i=0; foreach($rows as $r): $i++; ?>
         <tr>
           <td><?= $i ?></td>
           <td><?= dfmt($r['movement_date']) ?></td>
-          <td style="font-weight:700"><?= e($r['bill_number'] ?: '—') ?></td>
+          <td style="font-weight:500"><?= e($r['bill_number'] ?: '—') ?></td>
           <td style="text-align:right"><?= e($r['company'] ?: '') ?></td>
           <td><?= e($r['driver']) ?></td>
           <td><?= e($r['car_owner']) ?></td>
@@ -41,9 +41,9 @@
           <td class="pos"><?= money($r['total_receipt'],false) ?></td>
           <td><?= money($r['total_discount'],false) ?></td>
           <td><div class="actions">
-            <a class="edit" href="<?= url('movements/'.$r['id'].'/edit') ?>" title="تعديل">✏️</a>
+            <a class="edit" href="<?= url('movements/'.$r['id'].'/edit') ?>" title="تعديل"><?= icon('edit', 14) ?></a>
             <form class="confirm-delete" method="post" action="<?= url('movements/'.$r['id'].'/delete') ?>" style="margin:0">
-              <?= csrfField() ?><button class="del" type="submit" title="حذف">🗑️</button>
+              <?= csrfField() ?><button class="del" type="submit" title="حذف"><?= icon('trash', 14) ?></button>
             </form>
           </div></td>
         </tr>

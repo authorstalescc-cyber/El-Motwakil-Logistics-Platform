@@ -86,7 +86,56 @@ if (in_array('--js', $argv ?? [], true)) {
     exit(0);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ⚠️ البحث الحيّ: تطبيع عربي على الطرفين — بلاغ المالك 2026-07-26
+   نثرية محفوظة بـ«اكراميه أمن cma» والبحث بـ«إكرامية» كان بيرجّع صفر نتائج،
+   فبان إن البند مش موجود في التقفيل وهو موجود ومحسوب. الفحص بيحرس حاجتين:
+     (١) `search_norm` PHP بتوحّد كل تهجئات الحرف.
+     (٢) جدول التطبيع في `app.js` **مطابق** للي في PHP (لو اتفرقوا يرجع الباج).
+   ══════════════════════════════════════════════════════════════════════════ */
+$hay = search_norm('نثرية مندوب نثريات بدر محمد اكراميه أمن cma');
+foreach (['إكرامية', 'اكراميه', 'اكرامية', 'إكراميه', 'إكرامية أمن', 'CMA', 'cma'] as $q) {
+    if (!str_contains($hay, search_norm($q))) {
+        throw new RuntimeException("search_norm ما لقتش «{$q}» جوّه نص محفوظ بتهجئة تانية.");
+    }
+}
+if (search_norm('  إكرامِيَّة   ـأمن ') !== 'اكراميه امن') {
+    throw new RuntimeException('search_norm مش بتشيل التشكيل/التطويل/المسافات الزايدة صح: '
+        . search_norm('  إكرامِيَّة   ـأمن '));
+}
+
+$appJs = (string) @file_get_contents(dirname(__DIR__) . '/public/assets/js/app.js');
+if (!str_contains($appJs, 'window.almSearchNorm')) {
+    throw new RuntimeException('almSearchNorm مش مُصدَّر من app.js — البحث هيرجع بلا تطبيع بالسكوت.');
+}
+// كل تحويل حرف في PHP لازم يكون في جدول الجافاسكريبت كمان
+foreach ([['أ','ا'], ['إ','ا'], ['آ','ا'], ['ة','ه'], ['ى','ي'], ['ئ','ي'], ['ؤ','و']] as [$from, $to]) {
+    if (!preg_match('~[\'"]' . preg_quote($from, '~') . '[\'"]\s*:\s*[\'"]' . preg_quote($to, '~') . '[\'"]~u', $appJs)) {
+        throw new RuntimeException("جدول تطبيع البحث في app.js ناقص «{$from}»→«{$to}» — الخادم والواجهة هيختلفوا.");
+    }
+}
+if (!str_contains($openHtml, 'almSearchNorm')) {
+    throw new RuntimeException('شاشة التقفيل مش بتستخدم almSearchNorm في الفلترة.');
+}
+if (str_contains($openHtml, "mb_strtolower(\$search)")
+    || preg_match('~data-search="[^"]*"[^>]*>\s*<label class="rv-pick"~', '')) {
+    throw new RuntimeException('data-search لسه بيتطبّع بـmb_strtolower بدل search_norm.');
+}
+
+/* ⚠️ عنوان البند = بيانه المكتوب. كان مقصورًا على بنود الأذونات (`stage`)، فنثرية
+   المندوب كانت بتظهر باسم نوعها («نثريات») والبيان اللي كتبه ما يظهرش خالص —
+   فبندان بنفس المبلغ في نفس اليوم يبانوا متطابقين. */
+$viewSrc = (string) @file_get_contents(dirname(__DIR__) . '/app/Views/closing/index.php');
+if (preg_match('~\$headline\s*=[^;]*\$it\[.type.\]\s*===\s*.stage~s', $viewSrc)) {
+    throw new RuntimeException('عنوان بند التقفيل رجع مقصورًا على type=stage — بيان النثريات هيختفي تاني.');
+}
+if (!preg_match('~\$headline\s*=\s*trim\(\(string\)\s*\$it\[.note.\]\)\s*!==\s*..\s*\?~', $viewSrc)) {
+    throw new RuntimeException('عنوان بند التقفيل مش بياخد `note` كأول أولوية.');
+}
+
 $items = substr_count($html, 'class="rv-item');
 echo "✓ رندر شاشة مراجعة التقفيل اكتمل ليوم $day ($items بند)\n";
 echo "✓ معادلة الرصيد وأقسام المراجعة والإقفال ظهرت\n";
 echo "✓ مفيش أثر للمطابقة اليدوية القديمة ولا معرفات HTML مكررة\n";
+echo "✓ البحث بيطبّع العربي على الطرفين (PHP + app.js متطابقين)\n";
+echo "✓ عنوان كل بند = بيانه المكتوب مش نوعه\n";

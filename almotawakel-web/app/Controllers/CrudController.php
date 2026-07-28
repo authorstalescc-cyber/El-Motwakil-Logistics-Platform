@@ -148,6 +148,10 @@ abstract class CrudController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $ent = $this->entity();
+        // ⚠️ قبل `collect` — الحارس بيوحّد التهجئة في `$_POST` نفسها
+        if ($err = $this->nameGuardError($this->nameGuardMap($ent))) {
+            $this->formFailure('crud.' . $ent['route'] . '.create', $ent['route'] . '/new', $_POST, ['_form' => $err], $ent['route']);
+        }
         $data = $this->collect($ent);
         $data = Calc::apply($ent['calc'], $data);
         $data = $this->prepareSaveData($data, null);
@@ -200,6 +204,11 @@ abstract class CrudController extends Controller
         $this->requireCsrf();
         $ent = $this->entity();
         $before = Database::row("SELECT * FROM `{$ent['table']}` WHERE id = ?", [(int)$id]);
+        // ⚠️ قبل `collect` — الحارس بيوحّد التهجئة في `$_POST` نفسها
+        if ($err = $this->nameGuardError($this->nameGuardMap($ent), $before ?? [])) {
+            $this->formFailure('crud.' . $ent['route'] . '.edit.' . (int) $id,
+                $ent['route'] . '/' . (int) $id . '/edit', $_POST, ['_form' => $err], $ent['route']);
+        }
         $data = $this->collect($ent);
         $data = Calc::apply($ent['calc'], $data);
         $data = $this->prepareSaveData($data, (int)$id);
@@ -339,6 +348,30 @@ abstract class CrudController extends Controller
         $out = [];
         foreach ($data as $k => $v) { $out[':' . $k] = $v; }
         return $out;
+    }
+
+    /**
+     * حقول الشاشة اللي أسماؤها بتتحرس — **مشتقّة من `Schema` نفسها** لا مكتوبة بالإيد،
+     * فأي حقل جديد مربوط بقائمة منسدلة بياخد الحراسة تلقائيًّا بلا ما حد يفتكر.
+     *
+     * ⚠️ شاشة `/bawalis` كانت **بلا أي حارس خالص** — بتروح من `collect()` للحفظ على طول
+     *    وبعدين `learnLookups()` بتحقن أي غلط في القائمة المنسدلة. وهي أكبر مصدر إدخال
+     *    في النظام (١٨٢٢ بوليصة)، فدي كانت أوسع ثغرة.
+     */
+    protected function nameGuardMap(array $ent): array
+    {
+        $map = [];
+        foreach ($ent['fields'] as $f) {
+            if (!empty($f['lookup']) && isset(Lookup::TYPES[$f['lookup']])) {
+                $map[$f['key']] = $f['lookup'];
+            }
+        }
+        // حقول اسم حرّة (بلا قائمة منسدلة) لكن ليها نوع اقتراح معروف
+        static $extra = ['bawalis' => ['declaration_owner' => 'owner']];
+        foreach ($extra[$ent['table']] ?? [] as $field => $type) {
+            if (array_key_exists($field, $_POST)) { $map[$field] = $type; }
+        }
+        return $map;
     }
 
     /** يضيف القيم الجديدة تلقائياً إلى القوائم المنسدلة */

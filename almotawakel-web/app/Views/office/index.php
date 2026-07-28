@@ -13,7 +13,7 @@ $od = static fn (string $what): string => url('office/drill/' . $what);
 <div class="toolbar">
   <div class="section-head" style="margin:0"><?= icon('credit-card', 18) ?> رصيد المكتب — كروت الفيزا</div>
   <div class="spacer"></div>
-  <button type="button" class="btn ghost secret-toggle" aria-pressed="false">👁 إظهار الأرصدة</button>
+  <button type="button" class="btn ghost secret-toggle" aria-pressed="false"><?= icon('search', 14) ?> إظهار الأرصدة</button>
   <a class="btn gold" href="<?= url('office/new') ?>?back=<?= urlencode(current_app_path() ?: 'office') ?>"><?= icon('plus', 15) ?> إضافة كارت</a>
 </div>
 
@@ -48,7 +48,6 @@ $od = static fn (string $what): string => url('office/drill/' . $what);
     if (!$cards) {
       partial('empty', [
         'emoji' => '💳', 'title' => 'مفيش كروت فيزا',
-        'note'  => 'ضيف أول كارت عشان تتابع رصيده ومدفوعاته.',
         'action' => ['label' => 'إضافة كارت', 'url' => url('office/new')],
       ]);
       return;
@@ -64,7 +63,6 @@ $od = static fn (string $what): string => url('office/drill/' . $what);
       partial('entity_card', [
         'name'  => $c['name'],
         'url'   => url('office/' . (int) $c['id']),
-        'sub'   => $c['owner'] ?: 'كارت فيزا',
         'value' => money($c['balance'], false),
         'value_label' => 'الرصيد المتاح',
         'value_tone'  => $c['balance'] < 0 ? 'neg' : 'pos',

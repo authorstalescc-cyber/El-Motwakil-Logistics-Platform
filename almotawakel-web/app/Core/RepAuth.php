@@ -118,6 +118,7 @@ class RepAuth
         $_SESSION['rep_check'] = time();
         // تاريخ العمل الافتراضي = النهاردة؛ المندوب بيسأله من `/m/work-date` عقب الدخول.
         $_SESSION['rep_work_date'] = date('Y-m-d');
+        $_SESSION['rep_work_date_set'] = date('Y-m-d');
 
         Database::exec(
             "UPDATE rep_users SET failed_tries = 0, locked_until = NULL, last_login_at = NOW() WHERE id = ?",
@@ -268,12 +269,28 @@ class RepAuth
      * ⚠️ مفتاح منفصل عن `work_date` بتاع المكتب عن قصد: جلسة المندوب ما فيهاش
      *    `uid`، والخلط بين المفتاحين ممكن يخلط تاريخ عمل الاتنين لو حد فتح
      *    النظامين على نفس الموبايل.
+     *
+     * ⚠️ **الاختيار صالح ليوم واحد بس — اليوم اللي اتّخذ فيه** (إصلاح 2026-07-26،
+     *    نفس منطق `Auth::workDate`). ده أخطر عند المندوب من المكتب: التطبيق
+     *    مثبَّت على الموبايل وبيفضل مفتوح أيامًا، والجلسة بتتمدّد مع كل فتحة
+     *    (`rep_seen`) — فكان اليوم اللي دخل بيه بيتجمّد، والشاشة تعرض «فاضل من
+     *    عهدة اليوم» وهي **عهدة يوم فات**، وأي بند يسجّله يتكتب على اليوم القديم.
+     *    ده بالظبط اللي بلّغ عنه المالك: «باقي العهدة لسه بيحسب من يوم سابق».
      */
     public static function workDate(): string
     {
+        $today = date('Y-m-d');
         $d = (string) ($_SESSION['rep_work_date'] ?? '');
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) { return $d; }
-        return date('Y-m-d');
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) { return $today; }
+        if ($d === $today) { return $today; }
+
+        $setOn = (string) ($_SESSION['rep_work_date_set'] ?? '');
+        if ($setOn !== $today) {
+            // اختيار من يوم فات ⇒ باطل، ويُمسح عشان الشاشة ما تفضلش تكدب عليه.
+            unset($_SESSION['rep_work_date'], $_SESSION['rep_work_date_set']);
+            return $today;
+        }
+        return $d;
     }
 
     /** يحفظ تاريخ العمل بعد التحقق من الصيغة ومنع المستقبل (زي max=today في الفورم). */
@@ -283,6 +300,8 @@ class RepAuth
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) { return false; }
         if ($date > date('Y-m-d')) { return false; }
         $_SESSION['rep_work_date'] = $date;
+        // ختم اليوم الحقيقي اللي الاختيار اتّخذ فيه (بيه بنعرف إنه بطل بعد نص الليل)
+        $_SESSION['rep_work_date_set'] = date('Y-m-d');
         return true;
     }
 

@@ -90,7 +90,23 @@ foreach ($checksBySource as [$source, $needle, $message]) {
 }
 
 $check(!preg_match('/<style\b/i', $login), 'شاشة الدخول لا تعيد CSS داخل القالب');
-$check(!preg_match('/<script(?!\s+src=)[^>]*>/i', $login), 'شاشة الدخول لا تعيد JavaScript داخل القالب');
+
+/* ⚠️ استثناء واحد موثَّق (2026-07-27): سكربت **ضبط وضع العرض** لازم يفضل
+   inline في `<head>` **قبل** ملف التصميم — بالظبط زي `layout.php`. لو اتنقل
+   لملف خارجي بيبقى طلب حاجز زيادة على أول صفحة بيشوفها المستخدم، ولو اتأخّر
+   لآخر الصفحة (زي `login.js`) الشاشة **بتلمع أبيض ثم تغمق** عند اللي مختار
+   الوضع الغامق. القاعدة نفسها لسه سارية: أي سكربت inline **تاني** بيفشل.
+   (نفس نمط الاستثناء المؤرَّخ لـ`AuthController::login` في verify_ux.) */
+preg_match_all('~<script(?!\s+src=)[^>]*>(.*?)</script>~is', $login, $inlineScripts);
+$themeInit = "document.documentElement.setAttribute('data-theme',t)";
+$other = array_values(array_filter(
+    $inlineScripts[0],
+    static fn(string $block): bool => !str_contains($block, $themeInit)
+));
+$check(str_contains($login, $themeInit),
+    'شاشة الدخول بتضبط وضع العرض قبل أول رسمة (مفيش لمعة بيضا)');
+$check($other === [],
+    'شاشة الدخول لا تعيد JavaScript داخل القالب (غير سكربت وضع العرض الموثَّق)');
 $check(!preg_match('/\sstyle\s*=/i', $expense), 'نموذج المصروف لا يعيد CSS inline داخل القالب');
 $check(!preg_match('/<script(?!\s+src=)[^>]*>/i', $expense), 'نموذج المصروف لا يعيد JavaScript داخل القالب');
 

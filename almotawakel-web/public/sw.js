@@ -11,7 +11,7 @@
  * ⚠️ لازم تزوّد VERSION مع أي تعديل هنا أو في صفحات «مفيش نت»، وإلا الأجهزة
  *    المثبَّت عليها التطبيق هتفضل شغّالة بالنسخة القديمة من الكاش.
  */
-const VERSION = 'alm-v3';
+const VERSION = 'alm-v5';
 const STATIC_CACHE = 'alm-static-' + VERSION;
 const OFFLINE_M = '/assets/m-offline.html';        // بوابة المندوب (غامقة)
 const OFFLINE_OFFICE = '/assets/offline.html';     // نظام المكتب (بلوجو الشركة)
@@ -19,6 +19,9 @@ const PRECACHE = [
   OFFLINE_M, OFFLINE_OFFICE,
   '/assets/img/logo.png',
   '/assets/img/pwa/icon-192.png',
+  '/assets/img/pwa/office/icon-192.png',
+  // ⚠️ صفحتا «مفيش نت» مستقلتان وبتعلنا الخط بنفسهما — لازم يتكاش معاهم
+  '/assets/fonts/cairo-arabic.woff2',
 ];
 
 self.addEventListener('install', (event) => {

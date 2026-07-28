@@ -43,7 +43,7 @@ $printedAt = dfmt(work_date());
 
     <!-- بيانات الإذن -->
     <div class="sec">
-      <div class="sec-h">📄 بيانات الإذن</div>
+      <div class="sec-h"><?= icon('file-text', 14) ?> بيانات الإذن</div>
       <div class="info">
         <?php
         $cells = [
@@ -69,7 +69,7 @@ $printedAt = dfmt(work_date());
 
     <!-- الملخّص المالي -->
     <div class="sec">
-      <div class="sec-h">📊 الملخّص المالي</div>
+      <div class="sec-h"><?= icon('bar-chart', 14) ?> الملخّص المالي</div>
       <div class="tiles">
         <div class="tile"><span class="tl">عدد الحركات</span><span class="tv"><?= intf(count($movements)) ?></span></div>
         <div class="tile"><span class="tl">عدد البوالص</span><span class="tv"><?= intf($totals['bills']) ?></span></div>
@@ -91,7 +91,7 @@ $printedAt = dfmt(work_date());
     $autoPF    = (!$pfReal && !$pfNone && ($pd['containers'] ?? 0) > 0 && !empty($pd['rates_set']));
     if ($pfReal || $pfNone || $autoPF): ?>
     <div class="sec">
-      <div class="sec-h">🪙 الرسوم الأولية (الكشف والضمان)</div>
+      <div class="sec-h"><?= icon('coins', 14) ?> الرسوم الأولية (الكشف والضمان)</div>
       <?php if ($pfReal): [$html,,] = $stageTable($pfReal, false, false); echo $html;
       elseif ($autoPF): ?>
         <div class="auto">
@@ -101,14 +101,14 @@ $printedAt = dfmt(work_date());
           <div class="ar tot"><span>الإجمالي</span><span></span><b><?= money($pd['total'],false) ?></b></div>
         </div>
       <?php else: ?>
-        <div class="none-note">🚫 معلَّمة «لا يوجد».</div>
+        <div class="none-note"><?= icon('x', 14) ?> معلَّمة «لا يوجد».</div>
       <?php endif; ?>
     </div>
     <?php endif; ?>
 
     <!-- الحركات -->
     <div class="sec">
-      <div class="sec-h">🔀 الحركات <span class="cnt"><?= intf(count($movements)) ?> حركة</span></div>
+      <div class="sec-h"><?= icon('shuffle', 14) ?> الحركات <span class="cnt"><?= intf(count($movements)) ?> حركة</span></div>
 
       <?php if (!$movements): ?>
         <div class="empty-row">لا حركات مسجّلة على هذا الإذن.</div>
@@ -126,21 +126,21 @@ $printedAt = dfmt(work_date());
       ?>
         <div class="mv">
           <div class="mv-head">
-            <span class="seq">🔀 حركة #<?= intf($mv['seq']) ?></span>
+            <span class="seq"><?= icon('shuffle', 14) ?> حركة #<?= intf($mv['seq']) ?></span>
             <?php if($mv['note']): ?><span class="note"><?= e($mv['note']) ?></span><?php endif; ?>
-            <?php if($mvCtLbl!==''): ?><span class="ct">📦 <?= e($mvCtLbl) ?></span><?php endif; ?>
+            <?php if($mvCtLbl!==''): ?><span class="ct"><?= icon('package', 14) ?> <?= e($mvCtLbl) ?></span><?php endif; ?>
             <span class="st">
-              <span>🚛 <span class="v"><?= intf(count($mvBills)) ?></span></span>
-              <span>💰 <span class="v"><?= money($mvCust,false) ?></span></span>
-              <span>💸 <span class="v"><?= money($mvExp,false) ?></span></span>
-              <?php if($mvCharged>0): ?><span>👤 <span class="v"><?= money($mvCharged,false) ?></span></span><?php endif; ?>
+              <span><?= icon('truck', 14) ?> <span class="v"><?= intf(count($mvBills)) ?></span></span>
+              <span><?= icon('coins', 14) ?> <span class="v"><?= money($mvCust,false) ?></span></span>
+              <span><?= icon('trending-down', 14) ?> <span class="v"><?= money($mvExp,false) ?></span></span>
+              <?php if($mvCharged>0): ?><span><?= icon('user', 14) ?> <span class="v"><?= money($mvCharged,false) ?></span></span><?php endif; ?>
             </span>
           </div>
           <div class="mv-body">
 
             <!-- البوالص -->
             <div class="blk">
-              <div class="blk-h">🚛 البوالص <span class="n"><?= intf(count($mvBills)) ?></span></div>
+              <div class="blk-h"><?= icon('truck', 14) ?> البوالص <span class="n"><?= intf(count($mvBills)) ?></span></div>
               <?php if ($mvBills): ?>
                 <table class="grid">
                   <thead><tr>
@@ -153,7 +153,7 @@ $printedAt = dfmt(work_date());
                     $tCust+=(float)$bl['custody']; ?>
                     <tr>
                       <td class="mut"><?= $bi ?></td>
-                      <td class="num" style="font-weight:700"><?= e($bl['bill_number'] ?: '—') ?></td>
+                      <td class="num" style="font-weight:500"><?= e($bl['bill_number'] ?: '—') ?></td>
                       <td class="num"><?= dfmt($bl['bill_date']) ?></td>
                       <td><?= e($bl['driver'] ?: '—') ?></td>
                       <td class="num"><?= e($bl['car_no'] ?: '—') ?></td>
@@ -176,11 +176,11 @@ $printedAt = dfmt(work_date());
             $rcReal = array_filter($rc, fn($e)=>($e['status']??'')!=='none');
             if ($rcReal): ?>
               <div class="blk">
-                <div class="blk-h">🧾 الإيصالات <span class="n"><?= intf(count($rcReal)) ?></span></div>
+                <div class="blk-h"><?= icon('receipt', 14) ?> الإيصالات <span class="n"><?= intf(count($rcReal)) ?></span></div>
                 <?php [$html,,] = $stageTable(array_values($rcReal), true, false); echo $html; ?>
               </div>
             <?php elseif (isset($mvStagesG['receipts'])): ?>
-              <div class="blk"><div class="blk-h">🧾 الإيصالات</div><div class="none-note">🚫 معلَّمة «لا يوجد».</div></div>
+              <div class="blk"><div class="blk-h"><?= icon('receipt', 14) ?> الإيصالات</div><div class="none-note"><?= icon('x', 14) ?> معلَّمة «لا يوجد».</div></div>
             <?php endif; ?>
 
             <!-- المصاريف الإضافية -->
@@ -189,7 +189,7 @@ $printedAt = dfmt(work_date());
             $csReal = array_filter($cs, fn($e)=>($e['status']??'')!=='none');
             if ($csReal): ?>
               <div class="blk">
-                <div class="blk-h">➕ مصروفات / بنود إضافية <span class="n"><?= intf(count($csReal)) ?></span></div>
+                <div class="blk-h"><?= icon('plus', 14) ?> مصروفات / بنود إضافية <span class="n"><?= intf(count($csReal)) ?></span></div>
                 <?php [$html,,] = $stageTable(array_values($csReal), true, true); echo $html; ?>
               </div>
             <?php endif; ?>
@@ -202,7 +202,7 @@ $printedAt = dfmt(work_date());
     <!-- المولدات (على مستوى رقم الإذن) -->
     <?php if (!empty($generators)): ?>
     <div class="sec">
-      <div class="sec-h">⚙️ المولدات <span class="cnt"><?= intf(count($generators)) ?></span></div>
+      <div class="sec-h"><?= icon('settings', 14) ?> المولدات <span class="cnt"><?= intf(count($generators)) ?></span></div>
       <table class="grid">
         <thead><tr><th style="width:30px">م</th><th style="width:90px">التاريخ</th><th class="r">الشركة</th>
           <th style="width:60px">العدد</th><th style="width:120px">النولون</th><th style="width:120px">المتبقّي</th></tr></thead>

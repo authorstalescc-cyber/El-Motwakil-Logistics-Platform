@@ -28,7 +28,7 @@ $br = $summary['by_route'];
     'count' => count($rows),
     'total' => ['label' => $totalLabel, 'value' => money($totalValue, false)],
     'more'  => ['label' => 'سجل التحصيلات', 'url' => url('payments')],
-    'empty' => ['title' => 'مفيش تحصيلات في النطاق ده', 'note' => 'غيّر الفلاتر أو سجّل تحصيلًا جديدًا.'],
+    'empty' => ['title' => 'مفيش تحصيلات في النطاق ده'],
     'body'  => function () use ($rows, $cardName) {
         foreach ($rows as $pm) {
             [$ic, $routeTxt] = match ($pm['route']) {

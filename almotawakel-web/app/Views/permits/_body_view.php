@@ -49,17 +49,17 @@ $roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0
         <?php if ($st['dir']===Permit::DIR_EXPENSE): ?><span class="tl-dir neg">مصروف</span>
         <?php elseif ($st['dir']===Permit::DIR_REVENUE): ?><span class="tl-dir pos">محصّل</span><?php endif; ?>
         <span style="flex:1"></span>
-        <?php if ($isNone): ?><span class="ss-none" title="مُعلَّم: لا يوجد بند لهذه المرحلة">🚫 لا يوجد</span>
+        <?php if ($isNone): ?><span class="ss-none" title="مُعلَّم: لا يوجد بند لهذه المرحلة"><?= icon('x', 14) ?> لا يوجد</span>
         <?php elseif (count($entries)): ?><span class="ss-count"><?= intf(count($entries)) ?></span>
         <?php elseif ($autoPrimary): ?><span class="ss-count" title="محسوبة تلقائيًا">تلقائي</span><?php endif; ?>
         <?php if ($showTotal): ?><span class="ss-amt <?= $st['dir']===Permit::DIR_EXPENSE?'neg':'pos' ?>"><?= money($headTotal,false) ?></span><?php endif; ?>
-        <a class="ss-act" href="<?= $manageUrl($key,$mid) ?>" title="تعديل سريع" onclick="event.stopPropagation()">✏️</a>
-        <a class="ss-act add" href="<?= $manageUrl($key,$mid) ?>" title="إضافة بند" onclick="event.stopPropagation()">➕</a>
+        <a class="ss-act" href="<?= $manageUrl($key,$mid) ?>" title="تعديل سريع" onclick="event.stopPropagation()"><?= icon('edit', 14) ?></a>
+        <a class="ss-act add" href="<?= $manageUrl($key,$mid) ?>" title="إضافة بند" onclick="event.stopPropagation()"><?= icon('plus', 14) ?></a>
         <span class="ss-chev">▾</span>
       </summary>
       <div class="stage-body">
         <?php if ($isNone): ?>
-          <div class="tl-none"><span>🚫 هذه المرحلة معلَّمة <b>«لا يوجد»</b> ومحسوبة كمكتملة.</span></div>
+          <div class="tl-none"><span><?= icon('x', 14) ?> هذه المرحلة معلَّمة <b>«لا يوجد»</b> ومحسوبة كمكتملة.</span></div>
         <?php elseif ($entries): ?>
           <div class="table-wrap"><table class="data">
             <thead><tr><th class="g-identity">التاريخ</th><th class="g-result">المبلغ</th>
@@ -73,18 +73,18 @@ $roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0
                 <td><?= dfmt($en['entry_date']) ?></td>
                 <td class="<?= $amtCls ?>"><?= money($en['amount'],false) ?>
                   <?php $eqty=max(1,(int)($en['qty']??1)); if($eqty>1): ?><span class="te-qty" title="الكمية × سعر الوحدة"><?= intf($eqty) ?> × <?= money(round((float)$en['amount']/$eqty,2),false) ?></span><?php endif; ?>
-                  <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge">💳 فيزا</span><?php endif; ?></td>
-                <?php if($key!=='primary_fees'): ?><td style="font-weight:700;color:var(--navy)"><?= (isset($en['actual_amount'])&&$en['actual_amount']!==null&&$en['actual_amount']!=='') ? money($en['actual_amount'],false) : '—' ?></td><?php endif; ?>
+                  <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge"><?= icon('credit-card', 14) ?> فيزا</span><?php endif; ?></td>
+                <?php if($key!=='primary_fees'): ?><td style="font-weight:500;color:var(--navy)"><?= (isset($en['actual_amount'])&&$en['actual_amount']!==null&&$en['actual_amount']!=='') ? money($en['actual_amount'],false) : '—' ?></td><?php endif; ?>
                 <td style="text-align:right"><?= e($en['note'] ?: '—') ?></td>
                 <td><?= e($en['ref_no'] ?: '—') ?></td>
                 <td><?= $statusBadge($en['status']) ?></td>
-                <td><?php if($en['attachment']): ?><a href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank">📎</a><?php else: ?>—<?php endif; ?></td>
+                <td><?php if($en['attachment']): ?><a href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank"><?= icon('file-text', 14) ?></a><?php else: ?>—<?php endif; ?></td>
               </tr>
             <?php endforeach; ?>
             </tbody></table></div>
         <?php elseif ($autoPrimary): ?>
           <div class="tl-auto">
-            <div class="tl-auto-h">🪙 رسوم أولية محسوبة تلقائيًا من حاويات الإذن (<?= intf($primaryDef['containers']) ?> حاوية):</div>
+            <div class="tl-auto-h"><?= icon('coins', 14) ?> رسوم أولية محسوبة تلقائيًا من حاويات الإذن (<?= intf($primaryDef['containers']) ?> حاوية):</div>
             <div class="tl-auto-row"><span>الكشف</span><span><?= intf($primaryDef['containers']) ?> × <?= money($primaryDef['inspection_rate'],false) ?></span><b><?= money($primaryDef['inspection'],false) ?></b></div>
             <div class="tl-auto-row"><span>الضمان</span><span><?= intf($primaryDef['containers']) ?> × <?= money($primaryDef['guarantee_rate'],false) ?></span><b><?= money($primaryDef['guarantee'],false) ?></b></div>
             <div class="tl-auto-row tot"><span>الإجمالي</span><span></span><b><?= money($primaryDef['total'],false) ?></b></div>
@@ -110,7 +110,7 @@ $rows = [
 ];
 $rows = array_values(array_filter($rows, fn($r)=>$r[1]!==null));
 if ($rows): ?>
-<div class="sec-head"><span>📄 تفاصيل إضافية</span></div>
+<div class="sec-head"><span><?= icon('file-text', 14) ?> تفاصيل إضافية</span></div>
 <div class="card mb detail-grid">
   <?php foreach ($rows as [$lbl, $val]): ?>
     <div class="detail-cell">
@@ -133,17 +133,17 @@ if ($permitMoney):
     if($real||$none||$autoP) $doneS[$key]=$st; else $pendS[$key]=$st;
   }
   $orderedPermit = $doneS + $pendS; ?>
-  <div class="sec-head"><span>🪙 رسوم الإذن</span></div>
+  <div class="sec-head"><span><?= icon('coins', 14) ?> رسوم الإذن</span></div>
   <div class="stages mb">
     <?php foreach ($orderedPermit as $key=>$st){ echo $roStage($key, $st, $permitStages[$key] ?? [], $natNum[$key]); } ?>
   </div>
 <?php endif; ?>
 
 <!-- ===== الحركات (قراءة) ===== -->
-<div class="sec-head"><span>🔀 الحركات (<?= intf(count($movements)) ?>)</span></div>
+<div class="sec-head"><span><?= icon('shuffle', 14) ?> الحركات (<?= intf(count($movements)) ?>)</span></div>
 
 <?php if (!$movements): ?>
-  <div class="card"><div class="empty" style="padding:32px"><div class="ic">🔀</div>لا حركات مسجّلة على هذا الإذن.</div></div>
+  <div class="card"><div class="empty" style="padding:32px"><div class="ic"><?= icon('shuffle', 14) ?></div>لا حركات مسجّلة على هذا الإذن.</div></div>
 <?php else: ?>
   <?php $mvNo=0; foreach ($movements as $mv): $mid=(int)$mv['id']; $mvNo++;
     $mvBills = $mv['bills']; $mvStagesG = $mv['stages'];
@@ -160,10 +160,10 @@ if ($permitMoney):
         <?php if($mv['note']): ?><span class="mv-note"><?= e($mv['note']) ?></span><?php endif; ?>
         <span style="flex:1"></span>
         <span class="mv-stats">
-          <span title="عدد البوالص">🚛 <?= intf(count($mvBills)) ?></span>
-          <span class="pos" title="العهدة">💰 <?= money($mvCust,false) ?></span>
-          <span class="neg" title="المصروفات">💸 <?= money($mvExp,false) ?></span>
-          <?php if($mvCharged>0): ?><span class="chg" title="إجمالي السعر الفعلي (للعميل)">👤 <?= money($mvCharged,false) ?></span><?php endif; ?>
+          <span title="عدد البوالص"><?= icon('truck', 14) ?> <?= intf(count($mvBills)) ?></span>
+          <span class="pos" title="العهدة"><?= icon('coins', 14) ?> <?= money($mvCust,false) ?></span>
+          <span class="neg" title="المصروفات"><?= icon('trending-down', 14) ?> <?= money($mvExp,false) ?></span>
+          <?php if($mvCharged>0): ?><span class="chg" title="إجمالي السعر الفعلي (للعميل)"><?= icon('user', 14) ?> <?= money($mvCharged,false) ?></span><?php endif; ?>
         </span>
         <span class="ss-chev">▾</span>
       </summary>
@@ -190,8 +190,8 @@ if ($permitMoney):
                 <span class="ss-ic <?= $bills?'ok':'' ?>"><?= $bills?'✓':'🚛' ?></span>
                 <span class="ss-num"><?= $si ?></span><span class="ss-name">البوالص</span><span style="flex:1"></span>
                 <?php if (count($bills)): ?><span class="ss-count"><?= intf(count($bills)) ?></span><?php endif; ?>
-                <a class="ss-act" href="<?= $manageUrl('bills',$mid) ?>" title="تعديل البوالص" onclick="event.stopPropagation()">✏️</a>
-                <a class="ss-act add" href="<?= $manageUrl('bills',$mid) ?>" title="إضافة بوليصة" onclick="event.stopPropagation()">➕</a>
+                <a class="ss-act" href="<?= $manageUrl('bills',$mid) ?>" title="تعديل البوالص" onclick="event.stopPropagation()"><?= icon('edit', 14) ?></a>
+                <a class="ss-act add" href="<?= $manageUrl('bills',$mid) ?>" title="إضافة بوليصة" onclick="event.stopPropagation()"><?= icon('plus', 14) ?></a>
                 <span class="ss-chev">▾</span>
               </summary>
               <div class="stage-body">
@@ -205,7 +205,7 @@ if ($permitMoney):
                     </tr></thead><tbody>
                     <?php foreach ($bills as $bl): ?>
                       <tr>
-                        <td style="font-weight:700"><?= e($bl['bill_number'] ?: '—') ?></td>
+                        <td style="font-weight:500"><?= e($bl['bill_number'] ?: '—') ?></td>
                         <td><?= dfmt($bl['bill_date']) ?></td>
                         <td><?= e($bl['driver']) ?></td>
                         <td><?= e($bl['car_no']) ?></td>
@@ -216,8 +216,8 @@ if ($permitMoney):
                         <td class="<?= $bl['remaining']>0?'neg':'pos' ?>"><?= money($bl['remaining'],false) ?></td>
                         <td><span class="pill st-<?= e($bl['pay_status']) ?>"><?= e(Bill::STATUS_LABELS[$bl['pay_status']] ?? '') ?></span></td>
                         <td><div class="actions">
-                          <a class="edit" href="<?= url('bawalis/'.$bl['id']) ?>" title="تفاصيل">🔎</a>
-                          <a class="edit" href="<?= url('settlements/'.$bl['id']) ?>" title="سداد">💵</a>
+                          <a class="edit" href="<?= url('bawalis/'.$bl['id']) ?>" title="تفاصيل"><?= icon('search', 14) ?></a>
+                          <a class="edit" href="<?= url('settlements/'.$bl['id']) ?>" title="سداد"><?= icon('banknote', 14) ?></a>
                         </div></td>
                       </tr>
                     <?php endforeach; ?>
@@ -229,7 +229,7 @@ if ($permitMoney):
             $has = !empty($generators);
             if ($has): ?>
             <details class="stage has">
-              <summary class="stage-sum"><span class="ss-ic ok">✓</span><span class="ss-num"><?= $si ?></span>
+              <summary class="stage-sum"><span class="ss-ic ok"><?= icon('check', 14) ?></span><span class="ss-num"><?= $si ?></span>
                 <span class="ss-name">المولدات</span><span style="flex:1"></span>
                 <span class="ss-count"><?= intf(count($generators)) ?></span><span class="ss-chev">▾</span></summary>
               <div class="stage-body"><div class="table-wrap"><table class="data">

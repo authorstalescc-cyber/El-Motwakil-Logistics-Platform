@@ -14,11 +14,11 @@ if (!$g['items']) { return; }
 ?>
 <div class="rcp-guide" id="rcp-guide">
   <div class="rg-head">
-    <span class="rg-title">🧾 مرشد الإيصالات
+    <span class="rg-title"><?= icon('receipt', 14) ?> مرشد الإيصالات
       <span class="rg-note">استرشادي — يفكّرك بس، مايلزمكش بأي حاجة</span>
     </span>
     <?php if ($missCount === 0): ?>
-      <span class="rg-ok">كل المتوقّع موجود ✓</span>
+      <span class="rg-ok">كل المتوقّع موجود <?= icon('check', 14) ?></span>
     <?php else: ?>
       <span class="rg-badge"><?= (int)$missCount ?> متوقّع وناقص</span>
     <?php endif; ?>
@@ -27,7 +27,7 @@ if (!$g['items']) { return; }
   <div class="rg-chips">
     <?php foreach ($g['items'] as $it): ?>
       <?php if ($it['present']): ?>
-        <span class="have-chip" title="<?= e($it['hint']) ?>">✓ <?= e($it['label']) ?></span>
+        <span class="have-chip" title="<?= e($it['hint']) ?>"><?= icon('check', 14) ?> <?= e($it['label']) ?></span>
       <?php elseif ($it['dismissed']): ?>
         <span class="rg-dismissed" title="أشّرت إنه مش محتاج">
           <?= e($it['label']) ?> · متجاهَل
@@ -35,7 +35,7 @@ if (!$g['items']) { return; }
             <?= csrfField() ?>
             <input type="hidden" name="label" value="<?= e($it['label']) ?>">
             <input type="hidden" name="back" value="<?= e($back) ?>">
-            <button type="submit" class="rg-x" title="رجّعه للقائمة">↩</button>
+            <button type="submit" class="rg-x" title="رجّعه للقائمة"><?= icon('undo', 14) ?></button>
           </form>
         </span>
       <?php elseif (!empty($it['optional'])): ?>
@@ -47,7 +47,7 @@ if (!$g['items']) { return; }
             <?= csrfField() ?>
             <input type="hidden" name="label" value="<?= e($it['label']) ?>">
             <input type="hidden" name="back" value="<?= e($back) ?>">
-            <button type="submit" class="rg-x" title="مش محتاجه في الإذن ده">✕</button>
+            <button type="submit" class="rg-x" title="مش محتاجه في الإذن ده"><?= icon('x', 14) ?></button>
           </form>
         </span>
       <?php endif; ?>
@@ -55,7 +55,7 @@ if (!$g['items']) { return; }
   </div>
 
   <details class="rg-chk">
-    <summary>⚙️ ظبط بيانات الإذن للمرشد</summary>
+    <summary><?= icon('settings', 14) ?> ظبط بيانات الإذن للمرشد</summary>
     <form method="post" action="<?= url('permits/'.$pid.'/checklist') ?>" class="rg-form">
       <?= csrfField() ?>
       <label class="rg-fld">

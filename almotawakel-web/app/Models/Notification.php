@@ -91,6 +91,7 @@ class Notification
             [self::class, 'staleTrackLinks'],
             [self::class, 'weakRepPins'],
             [self::class, 'failedLogins'],
+            [self::class, 'dataQuality'],
         ];
     }
 
@@ -117,6 +118,23 @@ class Notification
     }
 
     /* ═══════════════════ المصادر ═══════════════════ */
+
+    /**
+     * مسميات مكرَّرة محتاجة تنظيف — **حالة مستمرة** مش حدث (مش بترنّ ولا بتدخل السجل).
+     * ⚠️ بيقرا `DataQuality::badgeCount()` **المكاش** لا الحساب الكامل: الحساب
+     *    ١٤٠ مللي ثانية والجرس بينادي كل ٦٠ ثانية لكل مستخدم.
+     */
+    private static function dataQuality(): ?array
+    {
+        $n = DataQuality::badgeCount();
+        if ($n < 1) { return null; }
+        return self::item(
+            'data_quality', 'info', 'clipboard',
+            intf($n) . ' مجموعة مسميات مكرَّرة',
+            'نفس الشيء متسجّل بأكتر من تهجئة — وحّدهم عشان التقارير ما تتفتّتش.',
+            'quality', $n, 'QualityController@index'
+        );
+    }
 
     /** بنود المناديب المستنية المراجعة — `RepInbox::pendingCount()` (COUNT واحد). */
     private static function repPending(): ?array

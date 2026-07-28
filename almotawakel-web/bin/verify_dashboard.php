@@ -70,9 +70,15 @@ chk(str_contains($idxC, 'Notification::feed()'), '② محتاج منك: من م
 chk(str_contains($idxC, "partial('stat_grid'"), '③ الأرقام: شبكة `stat_grid`');
 /* خمس استدعاءات لأن الرابع فرعان (عهدة المناديب / أذونات مفتوحة حسب توفّر
    الوحدة) — العدد **المرسوم** أربعة، والفحص عليه في القسم ⑥. */
-chk(substr_count($idxC, "partial('stat',") === 5, 'أربع أرقام مرسومة (خمس استدعاءات بفرعين)');
+/* ٤ أرقام الطبقة ③ (٥ استدعاءات بفرعين) + كارتا إجمالي عهدة المناديب
+   اللي طلبهم المالك (نزل / اتصرف) = ٦ استدعاءات. */
+chk(substr_count($idxC, "partial('stat',") === 6, 'ست بطاقات رقم (٤ للطبقة ③ + كارتا عهدة المناديب)');
 chk(str_contains($idxC, 'الشغل الجاري'), '④ الشغل الجاري: قسم واحد للمتابعة');
-chk(substr_count($idxC, "partial('panel'") === 3, 'وفيه تلات لوحات (جاهز للفوترة · مفتوحة · فلوس اليوم)');
+/* ⚠️ اتزادوا ٣ لوحات في «حركة اليوم» (طلب المالك 2026-07-27): أذونات
+   اتحرّك عليها · أذونات اتفتحت · عهدة المناديب النهاردة. */
+chk(substr_count($idxC, "partial('panel'") === 6,
+    'وفيه ست لوحات (٣ للشغل الجاري + ٣ لحركة اليوم)');
+chk(str_contains($idxC, 'حركة يوم'), '④ حركة اليوم: قسم بعدسة اليوم بلا أي تراكمي');
 
 // ═══ ② اللي اتشال عن قصد
 sec('② اللي اتشال — والسبب');
@@ -92,8 +98,10 @@ chk(!str_contains($idxC, 'Chart') && !str_contains($idxC, 'chart.js'), 'ومفي
 
 // ═══ ③ ⚠️ ممنوع رقم أصمّ
 sec('③ ⚠️ ممنوع رقم أصمّ (قاعدة المالك الدائمة)');
-chk(substr_count($idxC, "'drill' =>") === substr_count($idxC, "partial('stat',") + 2,
-    'كل رقم معاه مصدر تفاصيل (+ لوحتان بنافذة تفاصيل)');
+/* ٥ أرقام + ٤ لوحات ليها نافذة تفاصيل (جاهز للفوترة · فلوس اليوم ·
+   أذونات اتحرّك · أذونات اتفتحت) = ٩. */
+chk(substr_count($idxC, "'drill' =>") === substr_count($idxC, "partial('stat',") + 5,
+    'كل رقم معاه مصدر تفاصيل (+ خمس لوحات/أزرار بنافذة تفاصيل)');
 chk(!preg_match('/class="d-kpi(?![^>]*data-drill)/', $idxC), 'مفيش رقم مرسوم بالإيد بلا تفاصيل');
 chk(str_contains($idxC, 'data-drill=') && str_contains($idxC, 'd-sec-act'),
     'وحتى «آخر ما اتسجّل» بقى نافذة تفاصيل مش قسم');
@@ -106,10 +114,132 @@ sec('④ مفيش تعريف تاني لأي رقم ولا لأي شكل');
 chk(str_contains($idx, "require __DIR__ . '/_rows.php'") &&
     str_contains($drillV, "require __DIR__ . '/_rows.php'"),
     '⚠️ الصفحة والنافذة بيستخدموا **نفس** مُصيّر الصف (`_rows.php`)');
+/* ══════════════════════════════════════════════════════════════════════
+   ⚠️ قسم «حركة اليوم» — طلب المالك بالحرف (2026-07-27):
+   «اليوم ده الأذونات اللي اتضاف لها إيصالات أو مصروفات من النظام أو المندوب
+    **حتى لو لم يتم اعتمادها** · الأذونات الجديدة اللي اتفتحت · كل مندوب له
+    عهدة كام اليوم ده. **مش عايز حسابات تراكمية أو مجمعة.**»
+   ══════════════════════════════════════════════════════════════════════ */
+sec('④ب حركة اليوم — بعدسة اليوم بلا أي تراكمي');
+
+$metrics = php_code((string) file_get_contents($root . '/app/Models/Metrics.php'));
+
+/* ① البند المستنّي **لازم** يتعدّ — لو الاتحاد اتشال، المالك يفتكر إن مفيش
+   حاجة مستنية قراره وهي موجودة. */
+chk(str_contains($metrics, 'rep_submissions') && str_contains($metrics, "b.status = 'pending'"),
+    '⚠️ `permitsTouched` بتضم البنود **المستنّية** كمان (طلب المالك: حتى لو مش معتمدة)');
+chk(str_contains($metrics, "s.entry_date = ?"),
+    'وبتفلتر بـ`entry_date` — يوم صرف البند مش يوم تسجيله (قاعدة v29)');
+chk(str_contains($rowsV, 'مستنّي اعتمادك'),
+    'والصف بيفرّق المستنّي بشارة لوحده — مش مخلوط بالمعتمَد');
+
+/* ② التاريخ من `audit_logs.work_date` — `created_at` غلط لسببين موثَّقين. */
+chk(str_contains($metrics, "a.entity = 'permits' AND a.action = 'create' AND a.work_date = ?"),
+    '⚠️ `permitsOpened` بتقرا `audit_logs.work_date` — مش `permits.created_at`');
+chk(!preg_match("~permitsOpened.*?DATE\(p\.created_at\)~s", $metrics),
+    'ومفيش أي اعتماد على `created_at` (توقيت السيرفر UTC — فرق ٣ ساعات، قاعدة v48)');
+
+/* ③ عهدة المناديب: يومية، ومن **نفس** دالة شاشة العهدة. */
+chk(str_contains($ctrl, 'RepCustody::dayTotalsByRep($date)'),
+    '⚠️ عهدة المناديب من `dayTotalsByRep($day)` — نفس دالة `/rep-custody` فمستحيل الرقمان يختلفوا');
+chk(!str_contains($ctrl, 'RepCustody::totalOutstanding'),
+    'ومفيش رقم تراكمي للمناديب في الداشبورد (التراكمي مكانه `/rep-custody`)');
+chk(str_contains($rowsV, "\$r['pocket']") || str_contains($rowsV, "'pocket'"),
+    'والرقم المعروض `pocket` (بيخصم المستنّي) مش `balance`');
+
+/* ══════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ **احترام التاريخ ١٠٠٪ — بلاغ المالك (2026-07-28):**
+   «جدول فلوس ٢٧ بيعرض بنود من ٢٦ … ضرورة احترام التاريخ ١٠٠٪ والأذونات أيضًا».
+   تلات تسريبات اتصادوا فعليًّا واتقفلوا هنا.
+   ══════════════════════════════════════════════════════════════════════ */
+sec('④ج ⚠️ احترام يوم العمل — صفر تسريب من أيام تانية');
+
+$day = date('Y-m-d');
+
+/* ① لوح «فلوس اليوم»: كان بياخد السجل التراكمي (`entry_date <= $date`) بلا
+   فلترة، فكان بيعرض بنود أيام فاتت. متحقَّق: ٤٠ بند منهم ٥ من أيام تانية. */
+chk(str_contains($ctrl, 'Metrics::expenseReceiptFeed($date, 40, true)'),
+    '⚠️ لوح «فلوس اليوم» بياخد **اليوم ده بالظبط** (`$exactDay = true`)');
+$leak = 0;
+foreach (\App\Models\Metrics::expenseReceiptFeed($day, 60, true) as $r) {
+    if (($r['d'] ?? null) !== $day) { $leak++; }
+}
+chk($leak === 0, "ولا بند من يوم تاني في سجل اليوم (لقينا {$leak})");
+$loose = 0;
+foreach (\App\Models\Metrics::expenseReceiptFeed($day, 60, false) as $r) {
+    if (($r['d'] ?? null) !== $day) { $loose++; }
+}
+chk(true, "  ⓘ الوضع التراكمي لسه شغّال للسجل العام ({$loose} بند من أيام قبلها)");
+
+/* ② الأذونات: ما ينفعش المالك وهو على يوم ٢٦ يشوف إذنًا تاريخه ٢٨. */
+chk(str_contains($ctrl, 'Metrics::openPermitsList(8, $date)')
+    && str_contains($ctrl, 'Metrics::readyToInvoiceDashboard(8, $date)'),
+    '⚠️ قائمتا الأذونات بتاخدا يوم العمل حدًّا أعلى');
+$fut = 0;
+foreach (\App\Models\Metrics::openPermitsList(60, $day) as $r) {
+    if (($r['permit_date'] ?? '') > $day) { $fut++; }
+}
+chk($fut === 0, "ولا إذن مفتوح تاريخه بعد يوم العمل (لقينا {$fut})");
+$fut2 = 0;
+foreach (\App\Models\Metrics::readyToInvoiceDashboard(60, $day)['rows'] as $r) {
+    if (($r['permit_date'] ?? '') > $day) { $fut2++; }
+}
+chk($fut2 === 0, "ولا إذن جاهز للفوترة تاريخه بعد يوم العمل (لقينا {$fut2})");
+
+/* ③ كارتا إجمالي عهدة المناديب — طلب المالك، ومجموعهما = مجموع الصفوف. */
+chk(str_contains($idxC, 'نزل عهدة النهاردة') && str_contains($idxC, 'اللي اتصرف النهاردة'),
+    '⚠️ فيه كارتا إجمالي «نزل عهدة» و«اللي اتصرف» لليوم');
+$rd = \App\Models\RepCustody::dayTotalsByRep($day);
+$sumDep = 0.0; $sumSp = 0.0;
+foreach ($rd as $r) { $sumDep += (float) ($r['deposits'] ?? 0); $sumSp += (float) ($r['spent'] ?? 0); }
+chk(true, '  ⓘ إجمالي اليوم: نزل ' . number_format($sumDep, 2) . ' · اتصرف ' . number_format($sumSp, 2)
+        . ' من ' . count($rd) . ' مندوب');
+chk(str_contains($idxC, "\$drill('reps_day')"),
+    'والكارتان بيفتحوا تفصيل كل مندوب (نزله كام وصرف كام)');
+
+/* ⚠️ **فحص سلوكي مش فحص نص:** بنزرع بند مندوب **غير معتمَد** ونتأكد إنه
+   بيظهر في الداشبورد فورًا — ده جوهر طلب المالك «حتى لو لم يتم اعتمادها».
+   كله جوّه transaction وبيترجع، فما بيسيبش أي أثر. */
+if (class_exists('\App\Models\Metrics') && \App\Core\Database::scalar(
+        "SELECT COUNT(*) FROM information_schema.tables
+          WHERE table_schema = DATABASE() AND table_name = 'rep_submissions'")) {
+    $db = \App\Core\Database::conn();
+    $db->beginTransaction();
+    try {
+        $pid = (int) \App\Core\Database::scalar('SELECT id FROM permits ORDER BY id DESC LIMIT 1');
+        $rid = (int) \App\Core\Database::scalar("SELECT id FROM reps WHERE status = 'active' LIMIT 1");
+        if ($pid > 0 && $rid > 0) {
+            $day  = date('Y-m-d');
+            $seen = static function (int $pid, string $day): array {
+                foreach (\App\Models\Metrics::permitsTouched($day) as $r) {
+                    if ((int) $r['id'] === $pid) { return [$r['pend_cnt'], (float) $r['pend_val']]; }
+                }
+                return [0, 0.0];
+            };
+            [$b0] = $seen($pid, $day);
+            \App\Core\Database::exec(
+                "INSERT INTO rep_submissions (rep_id, permit_id, kind, note, qty, unit_amount, amount,
+                                              entry_date, status, created_at)
+                 VALUES (?, ?, 'receipt', 'بند فحص', 1, 777, 777, ?, 'pending', NOW())",
+                [$rid, $pid, $day]);
+            [$b1, $v1] = $seen($pid, $day);
+            chk($b1 === $b0 + 1 && abs($v1 - 777.0) < 0.01,
+                '⚠️ **بند مندوب غير معتمَد بيظهر في الداشبورد فورًا** (زرع حقيقي + rollback)');
+        } else {
+            echo "  ⓘ مفيش إذن أو مندوب نشط — فحص البند المستنّي اتخطّى\n";
+        }
+    } finally {
+        $db->rollBack();
+    }
+    chk((int) \App\Core\Database::scalar(
+        "SELECT COUNT(*) FROM rep_submissions WHERE note = 'بند فحص'") === 0,
+        'والزرع اترجع بالكامل — الفحص ما بيسيبش أثر');
+}
+
 chk(str_contains($rowsV, 'function_exists'),
     'والمُصيّر محروس بـfunction_exists (الملفان بيتحمّلوا في نفس الطلب)');
 chk(!str_contains($rowsV, '<table'), 'الصفوف بمكوّن `row_item` — مفيش جدول خام');
-chk(substr_count($drillV, "partial('drill'") === 7, 'كل نوع تفاصيل بيستخدم مكوّن `drill` الموحّد');
+chk(substr_count($drillV, "partial('drill'") === 10, 'كل نوع تفاصيل بيستخدم مكوّن `drill` الموحّد');
 $feedNow = Notification::feed();
 chk(is_array($feedNow) && array_key_exists('count', $feedNow) && array_key_exists('items', $feedNow),
     'مجمّع الإشعارات بيرد بنفس الشكل اللي الداشبورد بتقراه');
@@ -117,7 +247,7 @@ chk(is_array($feedNow) && array_key_exists('count', $feedNow) && array_key_exist
 // ═══ ⑤ ⚠️ مسار التفاصيل — محصور وبيمرّ على الصلاحيات
 sec('⑤ ⚠️ مسار التفاصيل مش عام');
 chk(str_contains($routes, "\$r->get('/dashboard/drill/{what}'"), 'المسار مسجَّل');
-chk(preg_match("/in_array\(\\\$what, \['expenses', 'receipts', 'custody', 'reps', 'ready', 'permits_open', 'activity'\], true\)/", $ctrl) === 1,
+chk(preg_match("/in_array\(\\\$what, \['expenses', 'receipts', 'custody', 'reps', 'ready', 'permits_open', 'activity',\s*'touched', 'opened', 'reps_day'\], true\)/s", $ctrl) === 1,
     'النوع محصور في قائمة بيضا — مش اسم جدول جاي من المستخدم');
 chk(str_contains($ctrl, 'headers_sent()'),
     '⚠️ محروس بـheaders_sent — من غيره Warning بيتلزق جوّه جسم الرد ويبوّظ النافذة (باج v50)');
@@ -153,7 +283,9 @@ if ($html === '') {
     $noPhpError($html, 'الداشبورد');
     chk(str_contains($html, 'class="day-bar'), 'شريط اليوم اتطبع');
     chk(str_contains($html, 'محتاج منك'), 'قسم «محتاج منك» اتطبع');
-    chk(substr_count($html, 'class="d-kpi ') === 4, 'أربعة أرقام اتطبعوا فعلاً');
+    /* الرقم المرسوم فعلاً: ٤ للطبقة ③ + كارتا عهدة المناديب (بيظهروا لو
+       وحدة المناديب متاحة — وهي متاحة على كل تثبيت فيه v35). */
+    chk(substr_count($html, 'class="d-kpi ') === 6, 'ستة أرقام اتطبعوا فعلاً');
     chk(substr_count($html, 'data-drill=') >= 5, 'وكلهم + «آخر ما اتسجّل» ليهم مصدر تفاصيل');
     chk(!str_contains($html, 'ممنوع رقم أصمّ'),
         '⚠️ مفيش رقم اترفض رندره (المكوّن بيسيب أثرًا في المصدر لو حصل)');
@@ -162,7 +294,8 @@ if ($html === '') {
 
 // ═══ ⑦ رندر كل نافذة تفاصيل
 sec('⑦ نوافذ التفاصيل السبعة بترندر فعليًّا');
-foreach (['expenses', 'receipts', 'custody', 'reps', 'ready', 'permits_open', 'activity'] as $what) {
+foreach (['expenses', 'receipts', 'custody', 'reps', 'ready', 'permits_open', 'activity',
+          'touched', 'opened', 'reps_day'] as $what) {
     $out = $render(static fn () => (new DashboardController())->drill($what));
     if ($out === '') { bad("نافذة `$what` ما رندرتش"); continue; }
     $noPhpError($out, "نافذة `$what`");

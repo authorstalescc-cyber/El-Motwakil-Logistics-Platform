@@ -26,9 +26,7 @@ $num = fn($v) => number_format((float) $v, 0);
 
 <div class="hf-top">
   <header class="hf-bar">
-    <a href="<?= url('m') ?>" class="hf-back" aria-label="رجوع">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </a>
+    <?php $backTo = 'm'; require __DIR__ . '/_back.php'; ?>
     <span class="hf-title">تحويل عهدة لمندوب</span>
   </header>
 
@@ -41,6 +39,10 @@ $num = fn($v) => number_format((float) $v, 0);
 
 <form method="post" action="<?= url('m/transfer') ?>" id="f" novalidate>
   <?= csrfField() ?>
+  <?php /* ⚠️ رمز لمرة واحدة يستهلكه `claimForm` في transferStore — تحويل مكرر
+           بيخصم من عهدة المُرسِل مرتين ويزوّد عهدة الزميل مرتين.
+           شيل السطر ده = كل تحويل هيترفض. */ ?>
+  <input type="hidden" name="_form_token" value="<?= e($formToken ?? '') ?>">
 
   <main class="hf-sheet">
     <span class="hm-grab" aria-hidden="true"></span>
@@ -56,7 +58,7 @@ $num = fn($v) => number_format((float) $v, 0);
     <?php endif; ?>
 
     <?php if (!$mates): ?>
-      <div class="hm-empty"><span class="ic">🧑‍💼</span><b>مفيش مناديب تانيين</b>
+      <div class="hm-empty"><span class="ic"><?= icon('user', 14) ?>‍<?= icon('briefcase', 14) ?></span><b>مفيش مناديب تانيين</b>
         <p>لازم يكون فيه مندوب تاني نشط عشان تحوّل له.</p></div>
     <?php else: ?>
 
@@ -100,10 +102,10 @@ $num = fn($v) => number_format((float) $v, 0);
     <?php endif; ?>
 
     <?php if ($recent): ?>
-      <h3 class="hm-group" style="margin-top:22px">آخر تحويلاتك</h3>
+      <h3 class="hm-group" style="margin-top:22px">تحويلاتك في اليوم ده</h3>
       <?php foreach ($recent as $t): ?>
         <article class="hm-slip">
-          <span class="hm-slip-ic" aria-hidden="true">🔁</span>
+          <span class="hm-slip-ic" aria-hidden="true"><?= icon('shuffle', 14) ?></span>
           <div class="hm-slip-mid">
             <b><?= e($t['other_name']) ?></b>
             <div class="hm-slip-meta">

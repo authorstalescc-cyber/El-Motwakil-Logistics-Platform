@@ -69,7 +69,7 @@ $receiptForm = function(string $key, ?array $en, int $mid) use ($pid, $visaField
           <input type="number" step="0.01" name="amount" value="<?= $isEdit ? e($en['amount']) : '' ?>" placeholder="0" required></label>
         <label class="ms-fld"><span>الفعلي (للعميل)</span>
           <input type="number" step="0.01" name="actual_amount" value="<?= $isEdit ? e($en['actual_amount'] ?? '') : '' ?>" placeholder="0"></label>
-        <button class="btn gold sm" type="submit">💾 <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
+        <button class="btn gold sm" type="submit"><?= icon('download', 14) ?> <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
         <button type="button" class="btn ghost sm ms-more-btn">المزيد ▾</button>
       </div>
       <div class="ms-more" hidden>
@@ -84,8 +84,9 @@ $receiptForm = function(string $key, ?array $en, int $mid) use ($pid, $visaField
           </select></label>
         <label class="ms-fld wide"><span>البيان</span>
           <input name="note" value="<?= $isEdit ? e($en['note']) : '' ?>"></label>
-        <label class="ms-pay"><input type="checkbox" name="is_visa" value="1" <?= $isEdit && !empty($en['is_visa']) ? 'checked' : '' ?>> 💳 مدفوع بالفيزا</label>
+        <label class="ms-pay"><input type="checkbox" name="is_visa" value="1" <?= $isEdit && !empty($en['is_visa']) ? 'checked' : '' ?>> <?= icon('credit-card', 14) ?> مدفوع بالفيزا</label>
         <?= $visaField($en) ?>
+        <label class="ms-pay" title="اتحاسب من برّه الخزنة وبرّه عهدة المندوب — بيتسجّل على الإذن وبيتفوتر للعميل عادي"><input type="checkbox" name="unpaid" value="1" <?= $isEdit && !empty($en['unpaid']) ? 'checked' : '' ?>> <?= icon('info', 14) ?> غير مدفوع</label>
         <label class="ms-fld wide"><span>مرفق (صورة / PDF)</span>
           <input type="file" name="attachment" accept="image/*,application/pdf"></label>
       </div>
@@ -117,7 +118,7 @@ $receiptEntryForm = function(string $key, ?array $en, int $mid, bool $hidden = f
         <label class="ms-fld"><span>الفعلي للوحدة (للعميل)</span>
           <input type="number" step="0.01" name="actual_amount" value="<?= e($unitActual) ?>" placeholder="0"></label>
         <span class="rc-total">الإجمالي: <b class="js-rc-total neg">0</b></span>
-        <button class="btn gold sm" type="submit">💾 <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
+        <button class="btn gold sm" type="submit"><?= icon('download', 14) ?> <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
         <button type="button" class="btn ghost sm ms-more-btn">المزيد ▾</button>
       </div>
       <div class="ms-more" hidden>
@@ -128,8 +129,9 @@ $receiptEntryForm = function(string $key, ?array $en, int $mid, bool $hidden = f
             <option value="done" <?= $isEdit && $en['status']==='done' ? 'selected' : '' ?>>تمّت</option>
             <option value="pending" <?= $isEdit && $en['status']==='pending' ? 'selected' : '' ?>>ناقصة</option>
           </select></label>
-        <label class="ms-pay"><input type="checkbox" name="is_visa" value="1" <?= $isEdit && !empty($en['is_visa']) ? 'checked' : '' ?>> 💳 مدفوع بالفيزا</label>
+        <label class="ms-pay"><input type="checkbox" name="is_visa" value="1" <?= $isEdit && !empty($en['is_visa']) ? 'checked' : '' ?>> <?= icon('credit-card', 14) ?> مدفوع بالفيزا</label>
         <?= $visaField($en) ?>
+        <label class="ms-pay" title="اتحاسب من برّه الخزنة وبرّه عهدة المندوب — بيتسجّل على الإذن وبيتفوتر للعميل عادي"><input type="checkbox" name="unpaid" value="1" <?= $isEdit && !empty($en['unpaid']) ? 'checked' : '' ?>> <?= icon('info', 14) ?> غير مدفوع</label>
         <label class="ms-fld wide"><span>مرفق (صورة / PDF)</span><input type="file" name="attachment" accept="image/*,application/pdf"></label>
       </div>
     </form>
@@ -148,16 +150,17 @@ $receiptRow = function(string $key, array $st, array $S, int $mid) use ($receipt
         <?php elseif ($st['dir']===Permit::DIR_REVENUE): ?><span class="tl-dir pos">محصّل</span><?php endif; ?>
         <span class="ms-sp"></span>
         <?php if ($S['none']): ?>
-          <span class="ss-none">🚫 لا يوجد</span>
-          <form class="js-ajax" method="post" action="<?= url('permits/stage/'.$S['noneRow']['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" type="submit" title="إلغاء التعليم">↩️</button></form>
+          <span class="ss-none"><?= icon('x', 14) ?> لا يوجد</span>
+          <form class="js-ajax" method="post" action="<?= url('permits/stage/'.$S['noneRow']['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" type="submit" title="إلغاء التعليم"><?= icon('undo', 14) ?></button></form>
         <?php elseif ($S['real']): $en = $S['real'][0]; ?>
           <b class="ms-amt <?= $dirCls ?>"><?= money($en['amount'],false) ?></b>
-          <?php if (isset($en['actual_amount']) && $en['actual_amount']!==null && $en['actual_amount']!==''): ?><span class="te-actual" title="السعر الفعلي (للعميل)">👤 <?= money($en['actual_amount'],false) ?></span><?php endif; ?>
-          <?php if (!empty($en['is_visa'])): ?><span class="tl-visa-badge">💳 فيزا</span><?php endif; ?>
-          <?php if ($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank" title="المرفق">📎</a><?php endif; ?>
+          <?php if (isset($en['actual_amount']) && $en['actual_amount']!==null && $en['actual_amount']!==''): ?><span class="te-actual" title="السعر الفعلي (للعميل)"><?= icon('user', 14) ?> <?= money($en['actual_amount'],false) ?></span><?php endif; ?>
+          <?php if (!empty($en['is_visa'])): ?><span class="tl-visa-badge"><?= icon('credit-card', 14) ?> فيزا</span><?php endif; ?>
+          <?php if (!empty($en['unpaid'])): ?><span class="tl-unpaid-badge" title="اتحاسب من برّه الخزنة والعهدة"><?= icon('info', 14) ?> غير مدفوع</span><?php endif; ?>
+          <?php if ($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank" title="المرفق"><?= icon('file-text', 14) ?></a><?php endif; ?>
           <?= $statusBadge($en['status']) ?>
-          <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل">✏️</button>
-          <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit" title="حذف">🗑️</button></form>
+          <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل"><?= icon('edit', 14) ?></button>
+          <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit" title="حذف"><?= icon('trash', 14) ?></button></form>
         <?php endif; ?>
       </div>
       <?php if ($S['real']): ?>
@@ -170,7 +173,7 @@ $receiptRow = function(string $key, array $st, array $S, int $mid) use ($receipt
             <input type="hidden" name="stage_key" value="<?= e($key) ?>">
             <input type="hidden" name="movement_id" value="<?= $mid ?>">
             <input type="hidden" name="mark_none" value="1">
-            <button class="btn ghost xs" type="submit" title="علّم كمكتمل بلا بند">🚫 لا يوجد</button>
+            <button class="btn ghost xs" type="submit" title="علّم كمكتمل بلا بند"><?= icon('x', 14) ?> لا يوجد</button>
           </form>
         </div>
       <?php endif; ?>
@@ -197,14 +200,15 @@ $customForm = function(string $key, ?array $en, int $mid, bool $hidden = false) 
         <label class="ms-fld"><span>المبلغ</span><input type="number" step="0.01" name="amount" value="<?= $isEdit ? e($en['amount']) : '' ?>" placeholder="0" required></label>
         <label class="ms-fld"><span>الفعلي</span><input type="number" step="0.01" name="actual_amount" value="<?= $isEdit ? e($en['actual_amount'] ?? '') : '' ?>" placeholder="0"></label>
         <label class="ms-fld wide"><span>اسم البند</span><input list="dl_mv_expense" name="note" value="<?= $isEdit ? e($en['note']) : '' ?>" placeholder="أرضية / غرامة / عمولة"></label>
-        <button class="btn gold sm" type="submit">💾 <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
+        <button class="btn gold sm" type="submit"><?= icon('download', 14) ?> <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
         <button type="button" class="btn ghost sm ms-more-btn">المزيد ▾</button>
       </div>
       <div class="ms-more" hidden>
         <label class="ms-fld"><span>التاريخ</span><input type="date" name="entry_date" value="<?= $isEdit ? e($en['entry_date']) : work_date() ?>"></label>
         <label class="ms-fld"><span>رقم مرجعي</span><input name="ref_no" value="<?= $isEdit ? e($en['ref_no']) : '' ?>"></label>
-        <label class="ms-pay"><input type="checkbox" name="is_visa" value="1" <?= $isEdit && !empty($en['is_visa']) ? 'checked' : '' ?>> 💳 فيزا</label>
+        <label class="ms-pay"><input type="checkbox" name="is_visa" value="1" <?= $isEdit && !empty($en['is_visa']) ? 'checked' : '' ?>> <?= icon('credit-card', 14) ?> فيزا</label>
         <?= $visaField($en) ?>
+        <label class="ms-pay" title="اتحاسب من برّه الخزنة وبرّه عهدة المندوب — بيتسجّل على الإذن وبيتفوتر للعميل عادي"><input type="checkbox" name="unpaid" value="1" <?= $isEdit && !empty($en['unpaid']) ? 'checked' : '' ?>> <?= icon('info', 14) ?> غير مدفوع</label>
         <label class="ms-fld wide"><span>مرفق</span><input type="file" name="attachment" accept="image/*,application/pdf"></label>
       </div>
     </form>
@@ -221,7 +225,7 @@ $customBlock = function(string $key, array $st, array $S, int $mid) use ($status
         <span class="ms-name"><?= e($st['label']) ?></span>
         <span class="ms-sp"></span>
         <?php if ($real): ?><span class="ss-count"><?= intf(count($real)) ?></span><?php endif; ?>
-        <button type="button" class="btn ghost xs ms-add-btn" title="إضافة بند">➕</button>
+        <button type="button" class="btn ghost xs ms-add-btn" title="إضافة بند"><?= icon('plus', 14) ?></button>
       </div>
       <div class="ms-body">
         <?php if ($real): ?>
@@ -232,13 +236,13 @@ $customBlock = function(string $key, array $st, array $S, int $mid) use ($status
                   <span class="te-date"><?= dfmt($en['entry_date']) ?></span>
                   <b class="ms-amt <?= $eDir==='revenue'?'pos':'neg' ?>"><?= money($en['amount'],false) ?></b>
                   <span class="tl-dir <?= $eDir==='revenue'?'pos':'neg' ?>"><?= $eDir==='revenue'?'محصّل':'مصروف' ?></span>
-                  <?php if(isset($en['actual_amount'])&&$en['actual_amount']!==null&&$en['actual_amount']!==''): ?><span class="te-actual">👤 <?= money($en['actual_amount'],false) ?></span><?php endif; ?>
-                  <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge">💳</span><?php endif; ?>
+                  <?php if(isset($en['actual_amount'])&&$en['actual_amount']!==null&&$en['actual_amount']!==''): ?><span class="te-actual"><?= icon('user', 14) ?> <?= money($en['actual_amount'],false) ?></span><?php endif; ?>
+                  <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge"><?= icon('credit-card', 14) ?></span><?php endif; ?><?php if(!empty($en['unpaid'])): ?><span class="tl-unpaid-badge" title="غير مدفوع — اتحاسب من برّه الخزنة والعهدة"><?= icon('info', 14) ?></span><?php endif; ?>
                   <?php if($en['note']): ?><span class="te-note"><?= e($en['note']) ?></span><?php endif; ?>
-                  <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank">📎</a><?php endif; ?>
+                  <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank"><?= icon('file-text', 14) ?></a><?php endif; ?>
                   <span class="ms-sp"></span>
-                  <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل البند">✏️</button>
-                  <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit">🗑️</button></form>
+                  <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل البند"><?= icon('edit', 14) ?></button>
+                  <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit"><?= icon('trash', 14) ?></button></form>
                 </div>
                 <div class="ms-edit-wrap" hidden><?= $customForm($key, $en, $mid) ?></div>
               </div>
@@ -263,7 +267,7 @@ $receiptsBlock = function(string $key, array $st, array $S, int $mid) use ($stat
         <span class="ms-sp"></span>
         <?php if ($real): ?><span class="ss-count"><?= intf(count($real)) ?></span>
           <b class="ms-amt neg"><?= money(array_sum(array_map(fn($x)=>(float)$x['amount'],$real)),false) ?></b><?php endif; ?>
-        <button type="button" class="btn gold xs ms-add-btn" title="إضافة إيصال">➕ إيصال</button>
+        <button type="button" class="btn gold xs ms-add-btn" title="إضافة إيصال"><?= icon('plus', 14) ?> إيصال</button>
       </div>
       <div class="ms-body">
         <?php if ($real): ?>
@@ -275,11 +279,11 @@ $receiptsBlock = function(string $key, array $st, array $S, int $mid) use ($stat
                   <b class="te-name"><?= e($en['note'] ?: 'إيصال') ?></b>
                   <?php if($eq>1): ?><span class="te-qty" title="الكمية × سعر الوحدة"><?= intf($eq) ?> × <?= money(round((float)$en['amount']/$eq,2),false) ?></span><?php endif; ?>
                   <b class="ms-amt neg"><?= money($en['amount'],false) ?></b>
-                  <?php if(isset($en['actual_amount'])&&$en['actual_amount']!==null&&$en['actual_amount']!==''): ?><span class="te-actual" title="السعر الفعلي (للعميل)">👤 <?= money($en['actual_amount'],false) ?></span><?php endif; ?>
-                  <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge">💳</span><?php endif; ?>
+                  <?php if(isset($en['actual_amount'])&&$en['actual_amount']!==null&&$en['actual_amount']!==''): ?><span class="te-actual" title="السعر الفعلي (للعميل)"><?= icon('user', 14) ?> <?= money($en['actual_amount'],false) ?></span><?php endif; ?>
+                  <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge"><?= icon('credit-card', 14) ?></span><?php endif; ?><?php if(!empty($en['unpaid'])): ?><span class="tl-unpaid-badge" title="غير مدفوع — اتحاسب من برّه الخزنة والعهدة"><?= icon('info', 14) ?></span><?php endif; ?>
                   <?php if($en['ref_no']): ?><span class="te-ref">#<?= e($en['ref_no']) ?></span><?php endif; ?>
                   <?= $statusBadge($en['status']) ?>
-                  <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank" title="المرفق">📎</a><?php endif; ?>
+                  <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank" title="المرفق"><?= icon('file-text', 14) ?></a><?php endif; ?>
                   <span class="ms-sp"></span>
                   <?php if($canMoveReceipts): ?><button type="button" class="btn ghost xs receipt-transfer-btn"
                     data-transfer-action="<?= url('permits/stage/'.$en['id'].'/move') ?>"
@@ -287,8 +291,8 @@ $receiptsBlock = function(string $key, array $st, array $S, int $mid) use ($stat
                     data-receipt-date="<?= e(dfmt($en['entry_date'])) ?>"
                     data-receipt-amount="<?= e(money($en['amount'],false)) ?>"
                     title="نقل الإيصال إلى إذن آخر">⇄ نقل</button><?php endif; ?>
-                  <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل الإيصال">✏️</button>
-                  <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit" title="حذف الإيصال">🗑️</button></form>
+                  <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل الإيصال"><?= icon('edit', 14) ?></button>
+                  <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit" title="حذف الإيصال"><?= icon('trash', 14) ?></button></form>
                 </div>
                 <div class="ms-edit-wrap" hidden><?= $receiptEntryForm($key, $en, $mid) ?></div>
               </div>
@@ -318,7 +322,7 @@ $billGrid = function(?array $bl, array $p) {
     <div class="bill-form">
       <!-- بيانات البوليصة -->
       <section class="bf-sec">
-        <div class="bf-head"><span class="bf-ic">📄</span> بيانات البوليصة</div>
+        <div class="bf-head"><span class="bf-ic"><?= icon('file-text', 14) ?></span> بيانات البوليصة</div>
         <div class="bf-grid">
           <div class="bf-fld field">
             <label>رقم البوليصة</label>
@@ -339,7 +343,7 @@ $billGrid = function(?array $bl, array $p) {
 
       <!-- السائق والسيارة -->
       <section class="bf-sec">
-        <div class="bf-head"><span class="bf-ic">🚚</span> السائق والسيارة</div>
+        <div class="bf-head"><span class="bf-ic"><?= icon('truck', 14) ?></span> السائق والسيارة</div>
         <div class="bf-grid">
           <div class="bf-fld">
             <label>السائق</label>
@@ -361,26 +365,28 @@ $billGrid = function(?array $bl, array $p) {
 
       <!-- الحاويات -->
       <section class="bf-sec">
-        <div class="bf-head"><span class="bf-ic">📦</span> الحاويات</div>
+        <div class="bf-head"><span class="bf-ic"><?= icon('package', 14) ?></span> الحاويات</div>
         <div class="bf-grid">
-          <div class="bf-fld">
-            <label>رقم الحاوية</label>
-            <input name="container_no" value="<?= $v('container_no') ?>" autocomplete="off" placeholder="رقم الحاوية">
-          </div>
-          <div class="bf-fld">
-            <label>تصنيف الحاويات</label>
-            <input list="dl_ctype" data-smart-name="container_type" name="container_type" value="<?= $bl ? e($bl['container_type'] ?? '') : e($p['container_type'] ?? '') ?>" autocomplete="off" placeholder="40 قدم / 20 قدم">
-          </div>
           <div class="bf-fld">
             <label>عدد الحاويات</label>
             <input type="number" min="0" name="container_count" value="<?= $bl ? e($bl['container_count']) : '' ?>" placeholder="0">
           </div>
+          <div class="bf-fld">
+            <label>تصنيف الحاويات</label>
+            <?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','value'=>$bl ? ($bl['container_type'] ?? '') : ($p['container_type'] ?? '')]); ?>
+          </div>
+          <?php // خانة لكل حاوية — بتتزوّد لوحدها لما «عدد الحاويات» يتغيّر
+          partial('container_nos', [
+            'value' => $bl['container_no'] ?? '',
+            'count' => (int) ($bl['container_count'] ?? 0),
+            'wrap'  => 'bf-fld',
+          ]); ?>
         </div>
       </section>
 
       <!-- القيم المالية -->
       <section class="bf-sec bf-money">
-        <div class="bf-head"><span class="bf-ic">💰</span> القيم المالية <span class="bf-cur">(ج.م)</span></div>
+        <div class="bf-head"><span class="bf-ic"><?= icon('coins', 14) ?></span> القيم المالية <span class="bf-cur">(ج.م)</span></div>
         <div class="bf-grid bf-grid-money">
           <div class="bf-fld"><label>النولون</label><input type="number" step="0.01" name="freight" value="<?= $bl ? e($bl['freight']) : '' ?>" placeholder="0"></div>
           <div class="bf-fld"><label>العهدة</label><input type="number" step="0.01" name="custody" value="<?= $bl ? e($bl['custody']) : '' ?>" placeholder="0"></div>
@@ -411,8 +417,8 @@ $billsBlock = function(int $mid, array $bills) use ($pid, $p, $type, $ctTotal, $
         <span class="ms-name">البوليصة</span>
         <span class="ms-sp"></span>
         <?php if ($bills): ?><span class="ss-count"><?= intf(count($bills)) ?></span><?php endif; ?>
-        <span class="ct-pill">📦 <?= intf($ctA) ?>/<?= intf($ctT) ?> · متبقّي <b class="<?= $ctLeft<0?'neg':'pos' ?>"><?= intf($ctLeft) ?></b></span>
-        <button type="button" class="btn gold xs ms-add-btn" title="إنشاء بوليصة">➕ بوليصة</button>
+        <span class="ct-pill"><?= icon('package', 14) ?> <?= intf($ctA) ?>/<?= intf($ctT) ?> · متبقّي <b class="<?= $ctLeft<0?'neg':'pos' ?>"><?= intf($ctLeft) ?></b></span>
+        <button type="button" class="btn gold xs ms-add-btn" title="إنشاء بوليصة"><?= icon('plus', 14) ?> بوليصة</button>
       </div>
       <div class="ms-body">
         <?php if ($bills): ?>
@@ -426,7 +432,7 @@ $billsBlock = function(int $mid, array $bills) use ($pid, $p, $type, $ctTotal, $
             </tr></thead><tbody>
             <?php foreach ($bills as $bl): ?>
               <tr>
-                <td style="font-weight:700"><?= e($bl['bill_number'] ?: '—') ?></td>
+                <td style="font-weight:500"><?= e($bl['bill_number'] ?: '—') ?></td>
                 <td><?= dfmt($bl['bill_date']) ?></td>
                 <td><?= e($bl['driver']) ?></td>
                 <td><?= e($bl['car_no']) ?></td>
@@ -438,11 +444,11 @@ $billsBlock = function(int $mid, array $bills) use ($pid, $p, $type, $ctTotal, $
                 <td class="<?= $bl['remaining']>0?'neg':'pos' ?>"><?= money($bl['remaining'],false) ?></td>
                 <td><span class="pill st-<?= e($bl['pay_status']) ?>"><?= e(Bill::STATUS_LABELS[$bl['pay_status']] ?? '') ?></span></td>
                 <td><div class="actions">
-                  <a class="edit" href="<?= url('settlements/'.$bl['id']) ?>" title="سداد">💵</a>
-                  <button type="button" class="btn ghost xs ms-bill-edit-btn" data-billedit="billedit-<?= (int)$bl['id'] ?>-<?= $mid ?>" title="تعديل البوليصة">✏️</button>
+                  <a class="edit" href="<?= url('settlements/'.$bl['id']) ?>" title="سداد"><?= icon('banknote', 14) ?></a>
+                  <button type="button" class="btn ghost xs ms-bill-edit-btn" data-billedit="billedit-<?= (int)$bl['id'] ?>-<?= $mid ?>" title="تعديل البوليصة"><?= icon('edit', 14) ?></button>
                   <form method="post" action="<?= url('permits/'.$pid.'/delete-bill') ?>" class="js-ajax confirm-delete" style="margin:0" data-confirm="حذف البوليصة <?= e($bl['bill_number'] ?: '') ?> نهائياً؟">
                     <?= csrfField() ?><input type="hidden" name="bill_id" value="<?= (int)$bl['id'] ?>">
-                    <button class="del" type="submit" title="حذف نهائياً">🗑️</button>
+                    <button class="del" type="submit" title="حذف نهائياً"><?= icon('trash', 14) ?></button>
                   </form>
                 </div></td>
               </tr>
@@ -458,7 +464,7 @@ $billsBlock = function(int $mid, array $bills) use ($pid, $p, $type, $ctTotal, $
                 <input type="hidden" name="lock_version" value="<?= (int)($bl['lock_version'] ?? 1) ?>">
                 <input type="hidden" name="movement_id" value="<?= $mid ?>">
                 <?= $billGrid($bl, $p) ?>
-                <div class="ms-form-actions"><button class="btn gold sm" type="submit">💾 حفظ التعديل</button></div>
+                <div class="ms-form-actions"><button class="btn gold sm" type="submit"><?= icon('download', 14) ?> حفظ التعديل</button></div>
               </form>
             </div>
           <?php endforeach; ?>
@@ -469,11 +475,11 @@ $billsBlock = function(int $mid, array $bills) use ($pid, $p, $type, $ctTotal, $
             <?= csrfField() ?><input type="hidden" name="movement_id" value="<?= $mid ?>">
             <?= $billGrid(null, $p) ?>
             <div class="ms-form-actions">
-              <button class="btn gold sm" type="submit">➕ إنشاء وربط</button>
+              <button class="btn gold sm" type="submit"><?= icon('plus', 14) ?> إنشاء وربط</button>
               <span class="bill-link-inline">
                 أو
                 <input class="bill-link-no" form="linkbill-<?= $mid ?>" name="bill_number" placeholder="رقم بوليصة موجودة" autocomplete="off">
-                <button class="btn ghost sm" type="submit" form="linkbill-<?= $mid ?>">🔗 ربط</button>
+                <button class="btn ghost sm" type="submit" form="linkbill-<?= $mid ?>"><?= icon('external', 14) ?> ربط</button>
               </span>
             </div>
           </form>
@@ -493,9 +499,9 @@ $generatorsBlock = function(array $generators, int $mid) {
     ob_start(); ?>
     <div class="mstage has" id="stage-generators-<?= $mid ?>">
       <div class="ms-head">
-        <span class="ms-ic ok">✓</span><span class="ms-name">المولدات</span>
+        <span class="ms-ic ok"><?= icon('check', 14) ?></span><span class="ms-name">المولدات</span>
         <span class="ms-sp"></span><span class="ss-count"><?= intf(count($generators)) ?></span>
-        <button type="button" class="btn ghost xs ms-add-btn" title="عرض">👁</button>
+        <button type="button" class="btn ghost xs ms-add-btn" title="عرض"><?= icon('search', 14) ?></button>
       </div>
       <div class="ms-body" hidden>
         <div class="table-wrap"><table class="data">
@@ -506,7 +512,7 @@ $generatorsBlock = function(array $generators, int $mid) {
               <td><?= intf($g['gen_count']) ?></td><td class="pos"><?= money($g['freight'],false) ?></td>
               <td class="<?= $g['remaining']>0?'neg':'pos' ?>"><?= money($g['remaining'],false) ?></td></tr>
           <?php endforeach; ?></tbody></table></div>
-        <a class="btn ghost sm" href="<?= url('generators') ?>" style="margin-top:8px">⚙️ إدارة المولدات</a>
+        <a class="btn ghost sm" href="<?= url('generators') ?>" style="margin-top:8px"><?= icon('settings', 14) ?> إدارة المولدات</a>
       </div>
     </div>
     <?php return ob_get_clean();
@@ -520,15 +526,15 @@ $generatorsBlock = function(array $generators, int $mid) {
     <span style="flex:1"></span>
     <span class="mv-stats">
       <?php if ($mvCtTotal > 0 || $mvCtType !== ''): ?>
-        <span title="حاويات الحركة">📦 <?= $mvCtTotal>0 ? intf($mvCtTotal) : '' ?><?= ($mvCtTotal>0 && $mvCtType!=='') ? ' · ' : '' ?><?= $mvCtType!=='' ? e($mvCtType) : '' ?></span>
+        <span title="حاويات الحركة"><?= icon('package', 14) ?> <?= $mvCtTotal>0 ? intf($mvCtTotal) : '' ?><?= ($mvCtTotal>0 && $mvCtType!=='') ? ' · ' : '' ?><?= $mvCtType!=='' ? e($mvCtType) : '' ?></span>
       <?php endif; ?>
-      <span title="عدد البوالص">🚛 <?= intf(count($mvBills)) ?></span>
-      <span class="pos" title="العهدة">💰 <?= money($mvCust,false) ?></span>
-      <span class="neg" title="المصروفات">💸 <?= money($mvExp,false) ?></span>
-      <?php if ($mvCharged>0): ?><span class="chg" title="إجمالي السعر الفعلي (للعميل)">👤 <?= money($mvCharged,false) ?></span><?php endif; ?>
+      <span title="عدد البوالص"><?= icon('truck', 14) ?> <?= intf(count($mvBills)) ?></span>
+      <span class="pos" title="العهدة"><?= icon('coins', 14) ?> <?= money($mvCust,false) ?></span>
+      <span class="neg" title="المصروفات"><?= icon('trending-down', 14) ?> <?= money($mvExp,false) ?></span>
+      <?php if ($mvCharged>0): ?><span class="chg" title="إجمالي السعر الفعلي (للعميل)"><?= icon('user', 14) ?> <?= money($mvCharged,false) ?></span><?php endif; ?>
     </span>
     <form method="post" action="<?= url('permits/movement/'.$mid.'/delete') ?>" class="js-ajax confirm-delete mv-del" style="margin:0" onclick="event.stopPropagation()">
-      <?= csrfField() ?><button class="btn ghost xs" type="submit" style="color:#ffb4a8" title="حذف الحركة">🗑️</button>
+      <?= csrfField() ?><button class="btn ghost xs" type="submit" style="color:#ffb4a8" title="حذف الحركة"><?= icon('trash', 14) ?></button>
     </form>
     <span class="ss-chev">▾</span>
   </summary>
@@ -538,12 +544,12 @@ $generatorsBlock = function(array $generators, int $mid) {
           style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:10px 4px 14px;border-bottom:1px dashed var(--line2);margin-bottom:12px">
       <?= csrfField() ?>
       <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted,#667)">عدد الحاويات
-        <input type="number" min="0" name="container_count" value="<?= $mvCtTotal>0 ? intf($mvCtTotal) : '' ?>" placeholder="0" style="width:120px;border:1px solid var(--line2);border-radius:8px;padding:7px" autocomplete="off"></label>
+        <input type="number" min="0" name="container_count" value="<?= $mvCtTotal>0 ? intf($mvCtTotal) : '' ?>" placeholder="0" style="width:120px;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px" autocomplete="off"></label>
       <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted,#667)">تصنيف الحاويات
-        <input list="dl_ctype" name="container_type" value="<?= e($mvCtType) ?>" placeholder="40 قدم / 20 قدم" style="width:150px;border:1px solid var(--line2);border-radius:8px;padding:7px" autocomplete="off"></label>
+        <?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','value'=>$mvCtType,'attrs'=>'style="width:150px;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px"']); ?></label>
       <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted,#667);flex:1;min-width:160px">ملاحظة الحركة
-        <input name="note" value="<?= e($mv['note'] ?? '') ?>" placeholder="ملاحظة اختيارية" style="border:1px solid var(--line2);border-radius:8px;padding:7px" autocomplete="off"></label>
-      <button class="btn ghost sm" type="submit" title="حفظ بيانات الحركة">💾 حفظ</button>
+        <input name="note" value="<?= e($mv['note'] ?? '') ?>" placeholder="ملاحظة اختيارية" style="border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px" autocomplete="off"></label>
+      <button class="btn ghost sm" type="submit" title="حفظ بيانات الحركة"><?= icon('download', 14) ?> حفظ</button>
     </form>
     <!-- شريط المراحل الأفقي -->
     <div class="stepper">

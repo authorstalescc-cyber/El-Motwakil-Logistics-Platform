@@ -29,7 +29,7 @@ $hasBase = $base !== '';
 <form method="get" action="<?= url('tracking/new') ?>" class="card" style="padding:12px;margin-bottom:12px">
   <div style="display:flex;gap:8px">
     <input type="search" name="q" value="<?= e($q) ?>" style="flex:1"
-           placeholder="دوّر بالبوليصة، السائق، السيارة، الحاوية، الوجهة، العميل…" autofocus>
+           placeholder="بحث" autofocus>
     <button class="btn primary" type="submit"><?= icon('search', 15) ?> بحث</button>
     <?php if ($q !== ''): ?><a class="btn ghost" href="<?= url('tracking/new') ?>">مسح</a><?php endif; ?>
   </div>
@@ -39,7 +39,7 @@ $hasBase = $base !== '';
   <div class="card empty-state" style="text-align:center;padding:40px 20px">
     <div style="color:var(--grey);opacity:.45;margin-bottom:10px"><?= icon('truck', 40) ?></div>
     <h3 style="color:var(--navy);margin-bottom:6px">مفيش بوالص مطابقة</h3>
-    <p style="color:var(--grey);font-size:.87rem">
+    <p style="color:var(--grey);font-size:var(--fs-3)">
       <?= $q !== '' ? 'جرّب كلمة بحث تانية.' : 'كل البوالص الحديثة ليها رابط تتبع نشط بالفعل.' ?>
     </p>
   </div>
@@ -79,7 +79,7 @@ $hasBase = $base !== '';
     </tbody>
   </table>
 </div>
-<p style="font-size:.78rem;color:var(--grey);margin-top:8px">
+<p style="font-size:var(--fs-1);color:var(--grey);margin-top:8px">
   الرقم اختياري — من غيره الرابط هيتولّد وتقدر تنسخه وتبعته بإيدك.
   لو كتبته، النظام هيفتكره للسائق ده في المرات الجاية.
 </p>

@@ -26,7 +26,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 <div class="dir-hero">
   <div class="dir-hero-avatar"><?= e(initials($agent['name'])) ?></div>
   <div class="dir-hero-info">
-    <span class="role">👤 وكيل — عميلنا الفعلي</span>
+    <span class="role"><?= icon('user', 14) ?> وكيل — عميلنا الفعلي</span>
     <h1><?= e($agent['name']) ?></h1>
     <p>ينوب عن <b><?= intf(count($companies)) ?></b> شركة، وتُصدَر الأذونات لصالحها.</p>
   </div>
@@ -39,10 +39,10 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 </div>
 
 <div class="stat-strip mb">
-  <div class="stat-item"><div class="si-ic teal">🏢</div><div><b><?= intf(count($companies)) ?></b><span>الشركات التابعة</span></div></div>
-  <div class="stat-item"><div class="si-ic navy">🗂️</div><div><b><?= intf($p['cnt']) ?></b><span><?= intf($p['open_cnt']) ?> جارٍ · <?= intf($p['closed_cnt']) ?> مقفول</span></div></div>
-  <div class="stat-item"><div class="si-ic gold">🧾</div><div><b><?= money($st['charges'],false) ?></b><span>إجمالي المطلوب (فواتير)</span></div></div>
-  <div class="stat-item"><div class="si-ic green">💵</div><div><b><?= money($st['paid'],false) ?></b><span>إجمالي المدفوع</span></div></div>
+  <div class="stat-item"><div class="si-ic teal"><?= icon('building', 14) ?></div><div><b><?= intf(count($companies)) ?></b><span>الشركات التابعة</span></div></div>
+  <div class="stat-item"><div class="si-ic navy"><?= icon('folder', 14) ?></div><div><b><?= intf($p['cnt']) ?></b><span><?= intf($p['open_cnt']) ?> جارٍ · <?= intf($p['closed_cnt']) ?> مقفول</span></div></div>
+  <div class="stat-item"><div class="si-ic gold"><?= icon('receipt', 14) ?></div><div><b><?= money($st['charges'],false) ?></b><span>إجمالي المطلوب (فواتير)</span></div></div>
+  <div class="stat-item"><div class="si-ic green"><?= icon('banknote', 14) ?></div><div><b><?= money($st['paid'],false) ?></b><span>إجمالي المدفوع</span></div></div>
 </div>
 
 <!-- كشف حساب العميل -->
@@ -72,11 +72,15 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 <!-- التحصيلات + التخصيص والتوجيه للعهدة -->
 <div class="card cp-wrap mb">
   <div class="section-head" style="padding:18px 20px 0;margin:0"><?= icon('credit-card', 17) ?> تحصيلات العميل
-    <span style="color:var(--grey);font-weight:600">(<?= count($payments) ?>)</span></div>
+    <span style="color:var(--grey);font-weight:400">(<?= count($payments) ?>)</span></div>
 
   <div class="cp-form-box">
     <form method="post" action="<?= url('directory/agent/'.$agent['id'].'/pay') ?>" id="cpForm">
       <?= csrfField() ?>
+      <?php /* رمز النموذج يمنع تسجيل نفس دفعة السداد مرتين — والدفعة الموجَّهة
+               «كاش» بتنشئ إضافة عهدة، فتكرارها بيزوّد الخزنة بمبلغ ما دخلش.
+               ⚠️ شيله = `claimForm` في الكنترولر هترفض كل حفظ. */ ?>
+      <?= formStateFields($payState['token'], $payState['back']) ?>
       <div class="cp-form-grid">
         <div class="field" style="margin:0;width:150px">
           <label>التاريخ</label>
@@ -94,8 +98,8 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
       <div class="cp-route">
         <span class="cp-route-lbl">توجيه الدفعة:</span>
         <label class="cp-route-opt"><input type="radio" name="route" value="none" checked onchange="cpRoute()"> <span>بدون توجيه</span></label>
-        <label class="cp-route-opt"><input type="radio" name="route" value="cash" onchange="cpRoute()"> <span>💵 عهدة نقدية (تُضاف لعهدة اليوم)</span></label>
-        <label class="cp-route-opt"><input type="radio" name="route" value="visa" onchange="cpRoute()"> <span>💳 شحن كارت فيزا</span></label>
+        <label class="cp-route-opt"><input type="radio" name="route" value="cash" onchange="cpRoute()"> <span><?= icon('banknote', 14) ?> عهدة نقدية (تُضاف لعهدة اليوم)</span></label>
+        <label class="cp-route-opt"><input type="radio" name="route" value="visa" onchange="cpRoute()"> <span><?= icon('credit-card', 14) ?> شحن كارت فيزا</span></label>
         <span id="cpVisaBox" class="cp-visa-box" style="display:none"><?= visa_card_select() ?></span>
       </div>
       <div class="cp-form-actions">
@@ -117,12 +121,12 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
       <?php else: foreach($payments as $pm): ?>
         <tr>
           <td><?= $pm['pay_date'] ? e(dfmt($pm['pay_date'])) : '—' ?></td>
-          <td class="pos" style="font-weight:800"><?= money($pm['amount'],false) ?></td>
+          <td class="pos" style="font-weight:600"><?= money($pm['amount'],false) ?></td>
           <td>
             <?php if($pm['route']==='cash'): ?>
-              <span class="pill st-paid">💵 عهدة نقدية</span>
+              <span class="pill st-paid"><?= icon('banknote', 14) ?> عهدة نقدية</span>
             <?php elseif($pm['route']==='visa'): ?>
-              <span class="pill st-partial">💳 <?= e($cardName[(int)$pm['visa_card_id']] ?? 'فيزا') ?></span>
+              <span class="pill st-partial"><?= icon('credit-card', 14) ?> <?= e($cardName[(int)$pm['visa_card_id']] ?? 'فيزا') ?></span>
             <?php else: ?>
               <span class="pill" style="background:var(--bg);color:var(--grey)">بدون توجيه</span>
             <?php endif; ?>
@@ -134,7 +138,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
             <?php if($pm['status']==='posted'): ?><form method="post" action="<?= url('directory/agent/'.$agent['id'].'/payment/'.$pm['id'].'/delete') ?>"
                   style="display:inline" data-danger="1" data-confirm="عكس هذا التحصيل مع بقاء سجله؟">
               <?= csrfField() ?>
-              <input name="reason" required placeholder="سبب العكس" style="width:100px"><button class="edit" type="submit" title="عكس" style="background:none;border:0;cursor:pointer">↩️</button>
+              <input name="reason" required placeholder="سبب العكس" style="width:100px"><button class="edit" type="submit" title="عكس" style="background:none;border:0;cursor:pointer"><?= icon('undo', 14) ?></button>
             </form><?php endif; ?>
           </td>
         </tr>
@@ -142,9 +146,9 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
     </tbody>
     <?php if($payments): ?>
     <tfoot><tr>
-      <td style="background:var(--gold-light);font-weight:800;text-align:left">الإجمالي</td>
-      <td style="background:var(--gold-light);font-weight:800"><?= money($st['paid'],false) ?></td>
-      <td colspan="5" style="background:var(--gold-light);font-weight:600;text-align:right;color:var(--grey)">
+      <td style="background:var(--gold-light);font-weight:600;text-align:left">الإجمالي</td>
+      <td style="background:var(--gold-light);font-weight:600"><?= money($st['paid'],false) ?></td>
+      <td colspan="5" style="background:var(--gold-light);font-weight:400;text-align:right;color:var(--grey)">
         نقدي <?= money($paidCash,false) ?> · فيزا <?= money($paidVisa,false) ?> · بدون توجيه <?= money($paidNone,false) ?>
       </td>
     </tr></tfoot>
@@ -153,7 +157,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 </div>
 
 <div class="card" style="padding:20px;margin-bottom:16px">
-  <div class="section-head"><?= icon('home', 17) ?> الشركات التي يمثّلها هذا الوكيل <span style="color:var(--grey);font-weight:600">(<?= count($companies) ?>)</span></div>
+  <div class="section-head"><?= icon('home', 17) ?> الشركات التي يمثّلها هذا الوكيل <span style="color:var(--grey);font-weight:400">(<?= count($companies) ?>)</span></div>
   <?php if($companies): ?>
     <div class="co-grid">
       <?php foreach($companies as $c): ?>
@@ -170,7 +174,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 </div>
 
 <div class="card" style="margin-bottom:16px">
-  <div class="section-head" style="padding:18px 20px 0"><?= icon('folder', 17) ?> الأذونات لصالح شركات هذا الوكيل <span style="color:var(--grey);font-weight:600">(<?= count($permits) ?>)</span></div>
+  <div class="section-head" style="padding:18px 20px 0"><?= icon('folder', 17) ?> الأذونات لصالح شركات هذا الوكيل <span style="color:var(--grey);font-weight:400">(<?= count($permits) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">النوع</th><th class="g-identity">الرقم</th><th class="g-identity">التاريخ</th>
@@ -182,8 +186,8 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
       <?php else: foreach($permits as $r): $invoiced = isset($invoicedPermitIds[(int)$r['id']]); ?>
         <tr onclick="location.href='<?= url('permits/'.$r['id']) ?>'" style="cursor:pointer" class="<?= $invoiced?'perm-invoiced':'' ?>">
           <td><span class="pill pill-<?= e($r['permit_type']) ?>"><?= $r['permit_type']==='warid'?'شهادة':'إذن' ?></span></td>
-          <td style="font-weight:800"><?= e($r['permit_no'] ?: '#'.$r['id']) ?>
-            <?php if($invoiced): ?><span class="perm-inv-badge">🧾 مصدر له فاتورة</span><?php endif; ?>
+          <td style="font-weight:600"><?= e($r['permit_no'] ?: '#'.$r['id']) ?>
+            <?php if($invoiced): ?><span class="perm-inv-badge"><?= icon('receipt', 14) ?> مصدر له فاتورة</span><?php endif; ?>
           </td>
           <td><?= dfmt($r['permit_date']) ?></td>
           <td style="text-align:right"><?= e($r['company'] ?: '—') ?></td>
@@ -197,7 +201,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 
 <?php if($invoices): ?>
 <div class="card">
-  <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير شامل <span style="color:var(--grey);font-weight:600">(<?= count($invoices) ?>)</span></div>
+  <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير شامل <span style="color:var(--grey);font-weight:400">(<?= count($invoices) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">التاريخ</th><th class="g-identity">رقم الفاتورة</th><th class="g-identity">لصالح شركة</th>
@@ -207,7 +211,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
       <?php foreach($invoices as $r): ?>
         <tr>
           <td><?= dfmt($r['invoice_date']) ?></td>
-          <td style="font-weight:800"><?= e($r['invoice_no'] ?: '#'.$r['id']) ?></td>
+          <td style="font-weight:600"><?= e($r['invoice_no'] ?: '#'.$r['id']) ?></td>
           <td style="text-align:right"><?= e($r['company'] ?: '—') ?></td>
           <td class="pos"><?= money($r['invoice_total'],false) ?></td>
           <td><?= money($r['payments'],false) ?></td>
@@ -222,7 +226,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 <?php $pinv = $permitInvoices ?? []; if($pinv): ?>
 <div class="card" style="margin-top:16px">
   <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير الأذونات
-    <span style="color:var(--grey);font-weight:600">(<?= count($pinv) ?> — إجمالي <?= money($permitInvSum['total'] ?? 0,false) ?>)</span></div>
+    <span style="color:var(--grey);font-weight:400">(<?= count($pinv) ?> — إجمالي <?= money($permitInvSum['total'] ?? 0,false) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">رقم المستند</th><th class="g-identity">النوع</th><th class="g-identity">التاريخ</th>
@@ -232,13 +236,13 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
     <tbody>
       <?php foreach($pinv as $iv): ?>
         <tr>
-          <td style="font-weight:800"><?= e($iv['doc_no'] ?: '#'.$iv['id']) ?></td>
+          <td style="font-weight:600"><?= e($iv['doc_no'] ?: '#'.$iv['id']) ?></td>
           <td><span class="pill <?= $iv['doc_kind']==='statement'?'st-partial':'st-paid' ?>"><?= e(\App\Models\PermitInvoice::kindLabel($iv['doc_kind'])) ?><?= $iv['taxable']?' • ضريبية':'' ?></span></td>
           <td><?= dfmt($iv['invoice_date']) ?></td>
           <td><?php if($iv['permit_id']): ?><a href="<?= url('permits/'.$iv['permit_id']) ?>"><?= e($iv['permit_no'] ?: '#'.$iv['permit_id']) ?></a><?php else: ?><?= e($iv['permit_no'] ?: '—') ?><?php endif; ?></td>
           <td><?= e($iv['internal_no'] ?: '—') ?></td>
-          <td class="pos" style="font-weight:800"><?= money($iv['total'],false) ?></td>
-          <td><a class="edit" href="<?= url('permits/invoice/'.$iv['id']) ?>" target="_blank" title="طباعة">🖨️</a></td>
+          <td class="pos" style="font-weight:600"><?= money($iv['total'],false) ?></td>
+          <td><a class="edit" href="<?= url('permits/invoice/'.$iv['id']) ?>" target="_blank" title="طباعة"><?= icon('file-text', 14) ?></a></td>
         </tr>
       <?php endforeach; ?>
     </tbody>
@@ -246,39 +250,42 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 </div>
 <?php endif; ?>
 
+<?php /* مستندات الطرف (v56) — جزء مشترك مع بروفايل الشركة */ ?>
+<?php include __DIR__ . '/_docs.php'; ?>
+
 <style>
 /* بروفايل العميل — كشف الحساب والدفعات */
 .dir-hero-bal{display:flex;flex-direction:column;align-items:center;justify-content:center;
-  background:var(--navy-dark);border-radius:14px;padding:14px 22px;min-width:150px}
-.dir-hero-bal span{font-size:.78rem;color:#cdd6e2;font-weight:700}
-.dir-hero-bal b{font-size:1.7rem;font-weight:800;color:#fff;line-height:1.1;margin:2px 0}
+  background:var(--navy-dark);border-radius:var(--radius-2);padding:14px 22px;min-width:150px}
+.dir-hero-bal span{font-size:var(--fs-1);color:#cdd6e2;font-weight:500}
+.dir-hero-bal b{font-size:var(--fs-7);font-weight:600;color:#fff;line-height:1.1;margin:2px 0}
 .dir-hero-bal b.neg{color:#ffb4b4}.dir-hero-bal b.pos{color:#a9e6bd}
-.dir-hero-bal small{font-size:.72rem;color:#9fb0c4}
+.dir-hero-bal small{font-size:var(--fs-1);color:#9fb0c4}
 .cp-stmt{display:flex;align-items:stretch;gap:12px;flex-wrap:wrap}
-.cp-stmt-cell{flex:1;min-width:170px;background:var(--bg);border:1px solid var(--line2);border-radius:12px;
+.cp-stmt-cell{flex:1;min-width:170px;background:var(--bg);border:1px solid var(--line2);border-radius:var(--radius-2);
   padding:14px 16px;display:flex;flex-direction:column;gap:3px}
-.cp-stmt-cell span{font-size:.82rem;color:var(--grey);font-weight:700}
-.cp-stmt-cell b{font-size:1.5rem;font-weight:800;color:var(--navy)}
-.cp-stmt-cell small{font-size:.74rem;color:var(--grey)}
-.cp-op{display:flex;align-items:center;font-size:1.5rem;font-weight:800;color:var(--grey)}
+.cp-stmt-cell span{font-size:var(--fs-2);color:var(--grey);font-weight:500}
+.cp-stmt-cell b{font-size:var(--fs-6);font-weight:600;color:var(--navy)}
+.cp-stmt-cell small{font-size:var(--fs-1);color:var(--grey)}
+.cp-op{display:flex;align-items:center;font-size:var(--fs-6);font-weight:600;color:var(--grey)}
 .cp-result.is-due{background:var(--red-lt);border-color:#e6b8b8}.cp-result.is-due b{color:var(--red)}
 .cp-result.is-credit{background:var(--green-lt);border-color:#bfe0c9}.cp-result.is-credit b{color:var(--green)}
 .cp-result.is-zero{background:var(--gold-light);border-color:#e6d9a8}
 .cp-form-box{padding:14px 20px 18px;border-bottom:1px solid var(--line2);background:linear-gradient(180deg,#fafbfd,#fff)}
 .cp-form-grid{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:12px}
 .cp-route{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:12px}
-.cp-route-lbl{font-weight:800;color:var(--navy);font-size:.88rem}
-.cp-route-opt{display:flex;align-items:center;gap:6px;font-size:.86rem;font-weight:600;cursor:pointer}
+.cp-route-lbl{font-weight:600;color:var(--navy);font-size:var(--fs-3)}
+.cp-route-opt{display:flex;align-items:center;gap:6px;font-size:var(--fs-2);font-weight:400;cursor:pointer}
 .cp-visa-box{display:flex;align-items:center}
-.cp-visa-box select{padding:7px 10px;border:1px solid var(--line2);border-radius:8px;font-family:inherit}
+.cp-visa-box select{padding:7px 10px;border:1px solid var(--line2);border-radius:var(--radius-1);font-family:inherit}
 .cp-form-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.cp-hint{font-size:.78rem;color:var(--grey)}
+.cp-hint{font-size:var(--fs-1);color:var(--grey)}
 /* إذن صُدِرت له فاتورة — تمييز بلون */
 tr.perm-invoiced td{background:var(--green-lt)!important}
 tr.perm-invoiced:hover td{background:#d5ecdd!important}
 tr.perm-invoiced td:first-child{box-shadow:inset 3px 0 0 var(--green)}
-.perm-inv-badge{display:inline-block;margin-inline-start:6px;font-size:.68rem;font-weight:800;
-  color:var(--green);background:#fff;border:1px solid #bfe0c9;border-radius:20px;padding:1px 8px;vertical-align:middle}
+.perm-inv-badge{display:inline-block;margin-inline-start:6px;font-size:var(--fs-1);font-weight:600;
+  color:var(--green);background:#fff;border:1px solid #bfe0c9;border-radius:var(--radius-4);padding:1px 8px;vertical-align:middle}
 @media(max-width:640px){.cp-op{display:none}}
 </style>
 <script>

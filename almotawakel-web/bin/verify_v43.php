@@ -77,18 +77,21 @@ try {
     $seen = [];
     foreach (RepPortal::myPermits($repId) as $p) { $seen[(int) $p['id']] = $p; }
     is('إذن مفتوح غير منزّل → ظاهر على موبايل المندوب', isset($seen[$openId]), true);
-    is('وبلا شارة «منزّل لك»', (bool) ($seen[$openId]['mine'] ?? true), false);
 
     try { RepPortal::assertAssigned($repId, $openId); ok('والكتابة عليه مسموحة'); }
     catch (\Throwable $e) { bad('✗ الكتابة على إذن مفتوح اترفضت: ' . $e->getMessage()); }
 
-    // نفس الإذن بعد التنزيل: لازم ياخد الشارة ويطلع فوق
+    /* ⚠️ 2026-07-28 — التنزيل اتشال خالص من شاشة المندوب (قرار المالك):
+       مكانش فاضل منه غير شارة وترتيب، وده كان بيوهم المندوب إن فيه أذونات
+       «بتاعته». الفحص اتقلب: التنزيل المفروض **ما يغيّرش أي حاجة** في اللي
+       بيشوفه المندوب — لا مفتاح `mine` ولا ترتيب مختلف. */
+    $before = array_map(fn($p) => (int) $p['id'], RepPortal::myPermits($repId));
     RepAssignment::assign($openId, $repId, '__v43');
-    $list = RepPortal::myPermits($repId);
-    $mine = null; $rank = -1;
-    foreach ($list as $i => $p) { if ((int) $p['id'] === $openId) { $mine = $p; $rank = $i; } }
-    is('بعد التنزيل → شارة «منزّل لك»', (bool) ($mine['mine'] ?? false), true);
-    is('والمنزّل بيطلع فوق في الترتيب', $rank === 0, true);
+    $after = RepPortal::myPermits($repId);
+    is('التنزيل ما بيضيفش أي مفتاح `mine` للحزمة',
+        array_key_exists('mine', $after[0] ?? []), false);
+    is('والتنزيل ما بيغيّرش ترتيب القايمة (التاريخ هو الترتيب الوحيد)',
+        array_map(fn($p) => (int) $p['id'], $after), $before);
 
     // ── الحد الحقيقي الوحيد: القفل
     Database::exec("UPDATE permits SET status='closed' WHERE id=?", [$openId]);
@@ -114,11 +117,20 @@ try {
     if (\App\Models\Rep::permitPermReady()) { \App\Models\Rep::setCanCreatePermit($repId, true); }
     else { skip('عمود الصلاحية مش موجود — شغّل migrate_v44'); }
 
+    /* ⚠️ الميناء **لازم يتقرا من القائمة المعتمدة وقت التشغيل** لا يتكتب حرفيًّا:
+       v58 خلّت `port` قائمة مقفولة، وقوائم المرجع بتختلف بين المحلي والإنتاج
+       (اتصادف فعليًّا: «الدخيلة» موجودة محليًّا ومتشالة من الإنتاج لصالح «ميناء
+       الدخيلة»، فالفحص كان بيفشل على السيرفر بس بإنذار كاذب). نفس المنطق ينطبق
+       على أي حقل قائمة مقفولة يتضاف للفحص بعدين. */
+    $ports = \App\Models\Lookup::ofType('port');
+    if (!$ports) { skip('مفيش موانئ في القائمة المعتمدة — شغّل migrate_v58'); }
+    $port = (string) $ports[0];
+
     $no = '__v43_' . substr(bin2hex(random_bytes(4)), 0, 8);
     $res = RepPortal::createPermit($repId, [
         'permit_type' => 'sader', 'permit_no' => $no, 'permit_date' => date('Y-m-d'),
         'company' => '__v43 شركة الاختبار', 'client' => '__v43 وكيل الاختبار',
-        'destination' => '__v43 وجهة', 'port' => 'الدخيلة',
+        'destination' => '__v43 وجهة', 'port' => $port,
         'containers' => 3, 'container_type' => '2*40', 'note' => 'من الفحص',
     ]);
     $newId = (int) $res['id'];
@@ -129,7 +141,12 @@ try {
     is('اترصد عليه أول حركة جاهزة',
         (int) Database::scalar('SELECT COUNT(*) FROM permit_movements WHERE permit_id=?', [$newId]), 1);
     is('ظاهر في قايمة المندوب فورًا', (bool) RepPortal::myPermit($repId, $newId), true);
-    is('واتنزّل عليه تلقائيًا (شارة منزّل لك)', (bool) RepPortal::myPermit($repId, $newId)['mine'], true);
+    // التنزيل التلقائي لسه بيتسجّل كسجل مكتب (كارت المندوب)، بس **مالوش أي أثر**
+    // على شاشة المندوب بعد قرار 2026-07-28.
+    is('واتسجّل تنزيل تلقائي (سجل مكتب بلا أثر على شاشة المندوب)',
+        (int) Database::scalar(
+            "SELECT COUNT(*) FROM permit_assignments WHERE permit_id=? AND rep_id=? AND status='active'",
+            [$newId, $repId]), 1);
 
     // ⚠️ أهم فحصين: مفيش أرقام مالية من المندوب
     is('inspection_rate فاضي (شغل المكتب)', $row['inspection_rate'], null);

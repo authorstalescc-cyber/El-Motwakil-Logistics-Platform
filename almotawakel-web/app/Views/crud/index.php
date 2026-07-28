@@ -72,10 +72,10 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
   </form>
   <div class="spacer"></div>
   <span class="count-badge"><?= intf($total) ?> سجل</span>
-  <?php if ($bulkBills): ?><button class="btn ghost" type="button" id="openBillPaste">📋 لصق من Excel</button><?php endif; ?>
-  <?php if (!empty($ent['has_legacy'])): ?><a class="btn ghost" href="<?= url('bawalis/new-legacy?back=' . rawurlencode($returnPath)) ?>">🗂️ إضافة بوليصة قديمة</a><?php endif; ?>
+  <?php if ($bulkBills): ?><button class="btn ghost" type="button" id="openBillPaste"><?= icon('clipboard', 14) ?> لصق من Excel</button><?php endif; ?>
+  <?php if (!empty($ent['has_legacy'])): ?><a class="btn ghost" href="<?= url('bawalis/new-legacy?back=' . rawurlencode($returnPath)) ?>"><?= icon('folder', 14) ?> إضافة بوليصة قديمة</a><?php endif; ?>
   <?php $newQuery = array_filter(['source'=>(!empty($ent['has_source']) ? $source : ''),'back'=>$returnPath], fn($v)=>$v!==''); ?>
-  <a class="btn gold" href="<?= url($ent['route'].'/new?'.http_build_query($newQuery)) ?>">➕ إضافة<?= !empty($ent['has_legacy'])?' بوليصة حالية':'' ?></a>
+  <a class="btn gold" href="<?= url($ent['route'].'/new?'.http_build_query($newQuery)) ?>"><?= icon('plus', 14) ?> إضافة<?= !empty($ent['has_legacy'])?' بوليصة حالية':'' ?></a>
 </div>
 
 <?php if ($bulkBills) { require __DIR__ . '/../bawalis/_bulk_actions.php'; } ?>
@@ -84,6 +84,10 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
 <div class="bulk-modal" id="billPasteModal" hidden<?= ($pasteState['errors']['rows'] ?? '') !== '' ? ' data-reopen="1"' : '' ?>><div class="bulk-modal-card" role="dialog" aria-modal="true" aria-labelledby="billPasteTitle">
   <div class="bulk-modal-head"><b id="billPasteTitle">إضافة بوالص بسرعة من Excel</b><button type="button" class="bulk-close" aria-label="إغلاق">×</button></div>
   <form method="post" action="<?= url('bawalis/bulk-paste') ?>" class="no-confirm" style="padding:18px"><?= csrfField() ?>
+    <?php /* ⚠️ رمز النموذج يمنع إضافة نفس دفعة الـ٢٠٠ بوليصة مرتين. العملية
+             كاملة (كلها أو ولا واحدة)، فالتكرار كان بينتج نسخة تانية من كل صف.
+             شيله = `claimForm` في bulkPaste هترفض كل لصق. */ ?>
+    <?= formStateFields($pasteState['token'], $pasteState['back']) ?>
     <p class="bulk-hint">انسخ العناوين والصفوف من Excel كما هي. العملية كاملة: إذا أخطأ صف واحد فلن تُضاف أي بوليصة.</p>
     <div class="paste-template">رقم البوليصة &nbsp; التاريخ &nbsp; النوع &nbsp; صاحب البيان &nbsp; التصنيف &nbsp; الشركة &nbsp; الجهة &nbsp; الحاوية &nbsp; تصنيف الحاوية &nbsp; عدد الحاويات &nbsp; السيارة &nbsp; السائق &nbsp; صاحب السيارة &nbsp; النولون &nbsp; العهدة &nbsp; تحويلة &nbsp; خصم &nbsp; بياتة</div>
     <?php /* إعادة التعبئة بعد الفشل — اللصق كله كان بيضيع ويضطر ينسخ من أول وجديد */
@@ -91,13 +95,13 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
     <?php if ($pasteErr !== ''): ?>
       <div class="flash error" role="alert" style="margin-top:10px"><?= icon('alert',17) ?> <?= e($pasteErr) ?></div>
     <?php endif; ?>
-    <textarea name="rows" rows="12" required spellcheck="false" dir="rtl" placeholder="الصق هنا من Excel…" style="width:100%;margin-top:10px;padding:12px;border:1px solid var(--line2);border-radius:10px;font-family:inherit;white-space:pre"><?= e($pasteState['old']['rows'] ?? '') ?></textarea>
+    <textarea name="rows" rows="12" required spellcheck="false" dir="rtl" placeholder="الصق هنا من Excel…" style="width:100%;margin-top:10px;padding:12px;border:1px solid var(--line2);border-radius:var(--radius-2);font-family:inherit;white-space:pre"><?= e($pasteState['old']['rows'] ?? '') ?></textarea>
     <div id="billPastePreview" class="paste-preview" hidden></div>
-    <div class="bulk-modal-actions"><button class="btn ghost" type="button" id="previewBillPaste">👁 معاينة</button><button class="btn gold" type="submit" id="submitBillPaste" disabled>➕ إضافة الصفوف المعاينة</button><button class="btn ghost bulk-close" type="button">إلغاء</button></div>
+    <div class="bulk-modal-actions"><button class="btn ghost" type="button" id="previewBillPaste"><?= icon('search', 14) ?> معاينة</button><button class="btn gold" type="submit" id="submitBillPaste" disabled><?= icon('plus', 14) ?> إضافة الصفوف المعاينة</button><button class="btn ghost bulk-close" type="button">إلغاء</button></div>
   </form>
 </div></div>
 <script>(function(){var b=document.getElementById('openBillPaste'),m=document.getElementById('billPasteModal');if(!b||!m)return;var ta=m.querySelector('textarea'),preview=document.getElementById('billPastePreview'),submit=document.getElementById('submitBillPaste');function close(){m.hidden=true;document.body.style.overflow=''}b.addEventListener('click',function(){m.hidden=false;document.body.style.overflow='hidden';setTimeout(function(){ta.focus()},20)});m.querySelectorAll('.bulk-close').forEach(function(x){x.addEventListener('click',close)});m.addEventListener('click',function(e){if(e.target===m)close()});ta.addEventListener('input',function(){submit.disabled=true;preview.hidden=true});if(m.dataset.reopen==='1'){m.hidden=false;document.body.style.overflow='hidden';setTimeout(function(){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length)},20);}document.getElementById('previewBillPaste').addEventListener('click',function(){var lines=ta.value.trim().split(/\r?\n/).filter(Boolean),rows=lines.map(function(l){return l.split('\t')});if(lines.length<2){preview.hidden=false;preview.innerHTML='<b class="neg">الصق صف العناوين وصف بيانات واحدًا على الأقل.</b>';return}var max=Math.min(6,rows.length),html='<b>سيتم إرسال '+(rows.length-1)+' صف. معاينة أول '+(max-1)+':</b><div class="table-wrap"><table class="data"><tbody>';for(var i=0;i<max;i++){html+='<tr>'+rows[i].slice(0,8).map(function(v){return '<'+(i?'td':'th')+'>'+v.replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})+'</'+(i?'td':'th')+'>'}).join('')+'</tr>'}preview.innerHTML=html+'</tbody></table></div>';preview.hidden=false;submit.disabled=false});})();</script>
-<style>.paste-template{direction:rtl;padding:9px 11px;border:1px dashed #c9a227;border-radius:9px;background:#fff9e8;color:#6d5510;font-size:.76rem;line-height:1.8}.paste-preview{margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;max-height:230px;overflow:auto}.paste-preview table{margin-top:8px;font-size:.72rem}</style>
+<style>.paste-template{direction:rtl;padding:9px 11px;border:1px dashed #c9a227;border-radius:var(--radius-1);background:#fff9e8;color:#6d5510;font-size:var(--fs-1);line-height:1.8}.paste-preview{margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:var(--radius-2);background:#f8fafc;max-height:230px;overflow:auto}.paste-preview table{margin-top:8px;font-size:var(--fs-1)}</style>
 <?php endif; ?>
 
 <div class="card">
@@ -116,7 +120,7 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
       <tbody>
         <?php if (!$rows): ?>
           <tr><td colspan="<?= count($fields)+2+($bulkBills?1:0) ?>">
-            <div class="empty"><div class="ic">📭</div>لا توجد بيانات — اضغط «إضافة» لبدء الإدخال.</div>
+            <div class="empty"><div class="ic"><?= icon('inbox', 14) ?></div>لا توجد بيانات — اضغط «إضافة» لبدء الإدخال.</div>
           </td></tr>
         <?php else: $i = ($page-1)*50; foreach ($rows as $row): $i++; ?>
           <?php $isLegacyRow = !empty($ent['has_legacy']) && (int)($row['is_legacy'] ?? 0) === 1; ?>
@@ -130,13 +134,13 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
             <?php endforeach; ?>
             <td>
               <div class="actions">
-                <?php if ($detail): ?><a href="<?= url($ent['route'].'/'.$row['id']) ?>" title="تفاصيل">👁️</a><?php endif; ?>
-                <?php if (!empty($ent['invoice'])): ?><a href="<?= url($ent['route'].'/'.$row['id'].'/invoice') ?>" target="_blank" title="فاتورة (طباعة / PDF)">🧾</a><?php endif; ?>
-                <a class="edit" href="<?= url($ent['route'].'/'.$row['id'].'/edit?back=' . rawurlencode($returnPath)) ?>" title="تعديل">✏️</a>
+                <?php if ($detail): ?><a href="<?= url($ent['route'].'/'.$row['id']) ?>" title="تفاصيل"><?= icon('search', 14) ?></a><?php endif; ?>
+                <?php if (!empty($ent['invoice'])): ?><a href="<?= url($ent['route'].'/'.$row['id'].'/invoice') ?>" target="_blank" title="فاتورة (طباعة / PDF)"><?= icon('receipt', 14) ?></a><?php endif; ?>
+                <a class="edit" href="<?= url($ent['route'].'/'.$row['id'].'/edit?back=' . rawurlencode($returnPath)) ?>" title="تعديل"><?= icon('edit', 14) ?></a>
                 <form class="confirm-delete" method="post" action="<?= url($ent['route'].'/'.$row['id'].'/delete') ?>" style="margin:0">
                   <?= csrfField() ?>
                   <?= formStateFields(FormState::token(), $returnPath) ?>
-                  <button class="del" type="submit" title="حذف">🗑️</button>
+                  <button class="del" type="submit" title="حذف"><?= icon('trash', 14) ?></button>
                 </form>
               </div>
             </td>
@@ -171,7 +175,7 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
 <style>
 tr.rowlink{cursor:pointer}tr.rowlink:hover{background:var(--gold-light)!important}
 tr.legacy-row{background:#fff9e8}tr.legacy-row:hover{background:#fff1c6!important}
-.legacy-pill{display:block;width:max-content;margin:4px auto 0;padding:2px 7px;border-radius:999px;background:#7a5f0e;color:#fff;font-size:.66rem;font-weight:800}
+.legacy-pill{display:block;width:max-content;margin:4px auto 0;padding:2px 7px;border-radius:999px;background:#7a5f0e;color:#fff;font-size:var(--fs-1);font-weight:600}
 .server-sort{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.server-sort:hover{text-decoration:underline}
 </style>
 <script>

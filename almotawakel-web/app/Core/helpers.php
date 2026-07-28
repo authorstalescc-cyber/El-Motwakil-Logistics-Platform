@@ -44,6 +44,34 @@ function ar2en_digits($s): string
 }
 
 /**
+ * تطبيع نص للبحث الحيّ في الشاشات — **المصدر الوحيد** لهذا التحويل في PHP،
+ * وله نظير مطابق في `app.js` باسم `window.almSearchNorm`.
+ *
+ * ⚠️ ليه لازم: المدخلات بتتكتب بتهجئات مختلفة للحرف نفسه («اكراميه» / «إكرامية»)،
+ *    فالبحث بـ`indexOf` الخام بيرجّع **صفر نتائج** لنص موجود فعلاً — وده اتصادف
+ *    في شاشة التقفيل: نثرية محفوظة بـ«اكراميه أمن cma» والبحث بـ«إكرامية» ما
+ *    لقاهاش، فظهر إن البند «مش موجود» وهو موجود ومحسوب.
+ *
+ * بيوحّد: الألف بأشكالها · التاء المربوطة · الياء والألف المقصورة · الهمزات ·
+ *         التطويل والتشكيل · الأرقام العربية · الحروف الكبيرة · المسافات.
+ *
+ * ⚠️ **مش بديل لـ`Maintenance::normkey()`**: دي بتشيل المسافات تمامًا لأنها
+ *    مفتاح مطابقة كيانات، ودي بتحافظ على المسافات لأنها نص بحث جزئي.
+ */
+function search_norm($s): string
+{
+    $s = mb_strtolower(ar2en_digits((string) ($s ?? '')), 'UTF-8');
+    $s = strtr($s, [
+        'أ'=>'ا','إ'=>'ا','آ'=>'ا','ٱ'=>'ا',
+        'ة'=>'ه', 'ى'=>'ي', 'ئ'=>'ي', 'ؤ'=>'و',
+        'ـ'=>'',                                  // التطويل
+        // التشكيل
+        'َ'=>'', 'ُ'=>'', 'ِ'=>'', 'ّ'=>'', 'ْ'=>'', 'ً'=>'', 'ٌ'=>'', 'ٍ'=>'', 'ٓ'=>'', 'ٔ'=>'', 'ٕ'=>'',
+    ]);
+    return trim((string) preg_replace('/\s+/u', ' ', $s));
+}
+
+/**
  * توحيد كل الأرقام الواردة في الطلب لتكون إنجليزية دائمًا — حتى لو كتبها
  * المستخدم بالعربية. يمشي على $_POST/$_GET/$_REQUEST بشكل تكراري ويحوّل
  * الأرقام في القيم النصية فقط. يستثني حقول كلمات السر/المفاتيح السرّية
@@ -80,10 +108,17 @@ function money($v, bool $withCurrency = true): string
     return $withCurrency ? $s . ' ' . App::setting('currency', 'ج.م') : $s;
 }
 
-/** تنسيق مبلغ بدون كسور */
-function money0($v): string
+/**
+ * تنسيق مبلغ بدون كسور.
+ *
+ * ⚠️ بترجّع العملة جوّه النص. لو المكان بيعرض العملة بنفسه (مكوّن `stat`
+ * بمعامل `unit`، أو حقيقة في `day_bar`) استخدم `money0(..., false)` وإلا
+ * تطلع «245,050 ج.م ج.م» — اتصادف فعليًا في لوحة التحكم (2026-07-26).
+ */
+function money0($v, bool $withCurrency = true): string
 {
-    return number_format((float)$v, 0, '.', ',') . ' ' . App::setting('currency', 'ج.م');
+    $s = number_format((float)$v, 0, '.', ',');
+    return $withCurrency ? $s . ' ' . App::setting('currency', 'ج.م') : $s;
 }
 
 /** تنسيق عدد صحيح */
@@ -147,6 +182,86 @@ function containerLabel($type, $count): string
     return number_format($count, 0) . ' ' . ($count === 1 ? 'حاوية' : 'حاوية');
 }
 
+/**
+ * أرقام الحاويات في بوليصة واحدة — تفكيك نص العمود إلى أرقام منفصلة.
+ * ------------------------------------------------------------------
+ * العمود `bawalis.container_no` نصّ واحد، وصاحب المشروع بيكتب فيه أكتر من رقم
+ * لما البوليصة عليها أكتر من حاوية (المخزَّن فعليًّا: «286911/9-137074/2»).
+ * الدالة دي بتفكّه لأرقام مستقلة عشان كل رقم ياخد خانته في النموذج.
+ *
+ * ⚠️ رقم الحاوية نفسه ممكن يحتوي شرطة قبل خانة التحقّق («171502-9») —
+ * عشان كده الشرطة المجرّدة تُقسَم **فقط** لو كل الأجزاء الناتجة طولها ≥ 4.
+ * غير كده الرقم يُعاد كما هو. لا تبسّط القاعدة دي وإلا الأرقام القديمة تتقطّع.
+ *
+ * @param int $min أقل عدد خانات مطلوب (عدد الحاويات) — يُكمَّل بخانات فاضية.
+ */
+function container_nos_split($raw, int $min = 0): array
+{
+    $s = trim((string) ($raw ?? ''));
+    $parts = [];
+    if ($s !== '') {
+        // فواصل صريحة لا لبس فيها: فاصلة/فاصلة عربية/منقوطة/شرطة رأسية/زائد/سطر جديد/شرطة بمسافات
+        foreach (preg_split('/\s*[,،؛;|+\r\n]+\s*|\s+-\s+|\s{2,}/u', $s) as $piece) {
+            $piece = trim((string) $piece);
+            if ($piece === '') { continue; }
+            // شرطة مجرّدة: تُقسَم فقط لو كل الأجزاء تبدو أرقام حاويات (طول ≥ 4)
+            if (strpos($piece, '-') !== false) {
+                $sub = array_map('trim', explode('-', $piece));
+                $ok  = count($sub) > 1;
+                foreach ($sub as $one) { if (mb_strlen($one, 'UTF-8') < 4) { $ok = false; break; } }
+                if ($ok) { foreach ($sub as $one) { $parts[] = $one; } continue; }
+            }
+            $parts[] = $piece;
+        }
+    }
+    // نكمّل خانات فاضية لحد عدد الحاويات، وما نقصّش أي رقم متكتب فعلاً
+    $want = max(1, $min, count($parts));
+    for ($i = count($parts); $i < $want; $i++) { $parts[] = ''; }
+    return $parts;
+}
+
+/**
+ * تجميع أرقام الحاويات في نص عمود واحد — يتجاهل الفاضي، ويرجّع null لو مفيش ولا رقم.
+ *
+ * ⚠️ الفاصل `-` بلا مسافات عن قصد: ده الشكل المخزَّن فعلاً في القاعدة، فالبوليصة
+ *    القديمة لما تتفتح وتتحفظ تطلع **بنفس النص بالحرف** (تفكيك ثم تجميع بلا خسارة).
+ *    الاستثناء الوحيد: لو جزء قصير (< 4 حروف) نستخدم « - » بمسافات عشان
+ *    `container_nos_split()` تعرف تفكّه تاني ولا تخلطه برقم فيه خانة تحقّق.
+ */
+function container_nos_join($parts): ?string
+{
+    if (!is_array($parts)) { $parts = [$parts]; }
+    $clean = [];
+    foreach ($parts as $one) {
+        if (is_array($one)) { continue; }
+        $one = trim((string) $one);
+        if ($one !== '') { $clean[] = $one; }
+    }
+    if (!$clean) { return null; }
+    $short = false;
+    foreach ($clean as $one) { if (mb_strlen($one, 'UTF-8') < 4) { $short = true; break; } }
+    return implode($short ? ' - ' : '-', $clean);
+}
+
+/**
+ * تطبيع `container_no[]` القادم من النماذج إلى نصّ عمود واحد — **قبل** أي كنترولر.
+ * نفس نمط `ar2en_normalize_request()`: نقطة واحدة في `bootstrap.php` بتغطّي كل
+ * مسارات الكتابة (البوليصة من داخل الإذن + `/bawalis` + أي مسار جديد)، فمفيش
+ * كنترولر محتاج يعرف إن الحقل بقى متعدّد.
+ */
+function container_nos_normalize_request(): void
+{
+    $walk = function (array &$arr) use (&$walk): void {
+        foreach ($arr as $k => &$v) {
+            if ($k === 'container_no' && is_array($v)) { $v = container_nos_join($v); }
+            elseif (is_array($v)) { $walk($v); }
+        }
+        unset($v);
+    };
+    if (!empty($_POST)    && is_array($_POST))    { $walk($_POST); }
+    if (!empty($_REQUEST) && is_array($_REQUEST)) { $walk($_REQUEST); }
+}
+
 /** تنسيق نسبة مئوية */
 function pct($v): string
 {
@@ -172,6 +287,15 @@ function dfmt($v): string
     } catch (Exception $e) {
         return (string)$v;
     }
+}
+
+/** حجم ملف للعرض — «١٫٢ ميجا». وصفي بحت (مستندات الأطراف v56). */
+function sizef(int $bytes): string
+{
+    if ($bytes <= 0) { return ''; }
+    if ($bytes < 1024) { return $bytes . ' بايت'; }
+    if ($bytes < 1024 * 1024) { return round($bytes / 1024) . ' كيلو'; }
+    return number_format($bytes / (1024 * 1024), 1) . ' ميجا';
 }
 
 /* ملحوظة: دالة `old()` القديمة اتشالت في المرحلة ٠ — كانت بتقرا `$_SESSION['_old']`
@@ -477,6 +601,7 @@ function icon(string $name, int $size = 20, string $class = ''): string
         'credit-card' => '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
         'briefcase'   => '<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/>',
         'trending-down'=> '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
+        'trending-up' => '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
         'coins'       => '<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>',
         'users'       => '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
         'bar-chart'   => '<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>',
@@ -512,6 +637,18 @@ function icon(string $name, int $size = 20, string $class = ''): string
         'check-circle'=> '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>',
         'undo'        => '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>',
         'download'    => '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+        /* ⚠️ زرار وضع العرض كان بيرسم **دايرة فاضية** في النظام كله: `layout.php`
+           بينادي `monitor`/`sun`/`moon` من يوم المرحلة ١٥ وهُمّ **مش في الخريطة
+           دي أصلاً**، فبيقعوا على الشكل الافتراضي بالسكوت (نفس عائلة باج
+           `.table-mobile-scroll`). أي أيقونة جديدة تتنادى لازم تتضاف هنا. */
+        'monitor'     => '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
+        'sun'         => '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+        'moon'        => '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+        // شاشة الدخول (2026-07-27)
+        'lock'        => '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+        'eye'         => '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
+        'eye-off'     => '<path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="m2 2 20 20"/>',
+        'shield'      => '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
     ];
     $body = $paths[$name] ?? '<circle cx="12" cy="12" r="9"/>';
     $cls  = 'ico' . ($class ? ' ' . $class : '');

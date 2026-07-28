@@ -41,10 +41,6 @@ $officePhone = trim((string) \App\Core\App::setting('company_phone', ''));
 $officeWa  = wa_phone($officePhone);
 $officeTel = preg_replace('/[^\d+]/', '', ar2en_digits($officePhone));
 
-// الأذونات المنزّلة له بتتفصل في مجموعة لوحدها
-$mine = $others = [];
-foreach ($permits as $p) { if (!empty($p['mine'])) { $mine[] = $p; } else { $others[] = $p; } }
-
 $num = fn($v) => number_format((float) $v, 0);
 
 /** كارت الإذن — كعب إذن ورقي: تعريف فوق، إحصائيات، تفاصيل مطويّة، إجراء تحت. */
@@ -75,7 +71,7 @@ $permitCard = function (array $p) use ($num) {
           <div class="hm-chips">
             <?php foreach ($p['container_parts'] as $part): ?>
               <?php /* bdi dir=ltr إلزامي: من غيرها «8×20 قدم» بتتعرض «20×8 قدم» */ ?>
-              <span class="hm-chip">📦 <bdi dir="ltr"><?= e($part) ?></bdi></span>
+              <span class="hm-chip"><?= icon('package', 14) ?> <bdi dir="ltr"><?= e($part) ?></bdi></span>
             <?php endforeach; ?>
           </div>
         <?php endif; ?>
@@ -101,13 +97,20 @@ $permitCard = function (array $p) use ($num) {
             <?php endif; ?>
             <?php if ($drivers): ?>
               <div class="hm-drivers">
-                <span class="hm-drivers-lbl">🚚 السائقين</span>
+                <span class="hm-drivers-lbl"><?= icon('truck', 14) ?> السائقين</span>
                 <?php foreach ($drivers as $d): ?><span class="hm-driver"><?= e($d) ?></span><?php endforeach; ?>
               </div>
             <?php endif; ?>
           </details>
         <?php endif; ?>
       </div>
+
+      <?php /* مستندات الأطراف (v56) — بتظهر بس لو فيه مستندات فعلاً، مفيش رابط ميت */ ?>
+      <?php if (!empty($p['has_docs'])): ?>
+        <a class="hm-stub-docs" href="<?= url('m/permit/' . $p['id'] . '/docs') ?>">
+          <?= icon('folder', 14) ?> مستندات الشركة (بطاقة ضريبية · سجل تجاري)
+        </a>
+      <?php endif; ?>
 
       <a class="hm-stub-go" href="<?= url('m/permit/' . $p['id']) ?>">
         <span>سجّل بند</span>
@@ -140,6 +143,11 @@ $permitCard = function (array $p) use ($num) {
       <small>أهلاً</small>
       <b><?= e($repName) ?></b>
     </span>
+    <?php /* جرس المندوب (المرحلة ٦ من docs/15) — العدّاد بيتملّى من نفس نداء
+             `/notifications/ping` بتاع المكتب، فمستحيل يقول رقمًا تانيًا. */ ?>
+    <a class="nt-bell" href="<?= url('m/notifications') ?>" id="repBell" aria-label="الإشعارات">
+      <?= icon('bell', 14) ?><span class="nt-dot" id="repBellDot" hidden></span>
+    </a>
     <form method="post" action="<?= url('m/logout') ?>" id="logoutForm">
       <?= csrfField() ?>
       <button type="submit" aria-label="خروج">خروج</button>
@@ -150,20 +158,26 @@ $permitCard = function (array $p) use ($num) {
   <button type="button" class="hm-install" id="installBtn" hidden>
     <span class="ic">⬇️</span>
     <span>ثبّت التطبيق على شاشتك — يفتح أسرع وزي أبليكيشن</span>
-    <span class="x" id="installDismiss" role="button" aria-label="إخفاء">✕</span>
+    <span class="x" id="installDismiss" role="button" aria-label="إخفاء"><?= icon('x', 14) ?></span>
   </button>
 
   <!-- تفعيل الإشعارات (v51) — بيظهر بس لو الجهاز يقدر ولسه مش مفعّلها -->
   <button type="button" class="hm-install" id="pushBtn" hidden>
-    <span class="ic">🔔</span>
+    <span class="ic"><?= icon('bell', 14) ?></span>
     <span id="pushBtnTxt">فعّل الإشعارات — عشان يوصلك قرار بنودك فورًا</span>
-    <span class="x" id="pushDismiss" role="button" aria-label="إخفاء">✕</span>
+    <span class="x" id="pushDismiss" role="button" aria-label="إخفاء"><?= icon('x', 14) ?></span>
   </button>
 
   <!-- عهدة يوم العمل: الرقم الوحيد اللي بيسحب منه؛ الباقي جوّه «التفاصيل» -->
+  <?php /* ⚠️ العنوان لازم يقول **اسم اليوم** لو مش النهاردة. قبل الإصلاح كان
+           بيقول «عهدة اليوم» على طول، فالمندوب اللي يوم عمله لسه على أمس كان
+           بيقرا رقم يوم فات وكأنه اللي معاه دلوقتي. */ ?>
   <section class="hm-balance <?= $owed ? 'is-owed' : '' ?>">
     <div class="hm-balance-head">
-      <span><?= $owed ? 'صرفت أكتر من عهدة اليوم' : 'فاضل من عهدة اليوم' ?></span>
+      <span><?php
+        $wdWhen = $wdToday ? 'اليوم' : 'يوم ' . dfmt($workDate);
+        echo e($owed ? 'صرفت أكتر من عهدة ' . $wdWhen : 'فاضل من عهدة ' . $wdWhen);
+      ?></span>
       <button type="button" class="hm-toggle" id="detailsBtn" aria-expanded="false" aria-controls="balanceMore">
         التفاصيل
       </button>
@@ -177,8 +191,8 @@ $permitCard = function (array $p) use ($num) {
         <i class="wait" style="width:<?= round($waitPct, 1) ?>%"></i>
       </div>
       <dl class="hm-dl">
-        <div><dt>نزل لك اليوم</dt><dd><?= $num($pocket['deposits']) ?></dd></div>
-        <div><dt>صرفت اليوم</dt><dd><?= $num($pocket['spent']) ?></dd></div>
+        <div><dt>نزل لك <?= e($wdWhen) ?></dt><dd><?= $num($pocket['deposits']) ?></dd></div>
+        <div><dt>صرفت <?= e($wdWhen) ?></dt><dd><?= $num($pocket['spent']) ?></dd></div>
         <?php if ($pocket['pending'] > 0): ?>
           <div><dt>مستني مراجعة</dt><dd><?= $num($pocket['pending']) ?></dd></div>
         <?php endif; ?>
@@ -188,8 +202,11 @@ $permitCard = function (array $p) use ($num) {
         <?php if (($pocket['transfer_out'] ?? 0) > 0): ?>
           <div><dt>حوّلت لزميل</dt><dd><?= $num($pocket['transfer_out']) ?></dd></div>
         <?php endif; ?>
-        <?php if ($pocket['returned'] > 0): ?>
+        <?php /* سالب = المكتب دفع لك (تصفية رصيد سالب) */ ?>
+        <?php if ($pocket['returned'] > 0.005): ?>
           <div><dt>رجّعت</dt><dd><?= $num($pocket['returned']) ?></dd></div>
+        <?php elseif ($pocket['returned'] < -0.005): ?>
+          <div><dt>المكتب دفعلك</dt><dd><?= $num(abs($pocket['returned'])) ?></dd></div>
         <?php endif; ?>
       </dl>
     </div>
@@ -211,6 +228,25 @@ $permitCard = function (array $p) use ($num) {
       <span><?= e((string) $pocket['lock_reason']) ?></span>
       <a class="hm-locked-btn" href="<?= url('m/work-date') ?>">اختار يوم تاني</a>
     </div>
+  <?php elseif (!$wdToday): ?>
+    <?php /* ⚠️ تحذير صريح: الرقم فوق **مش** عهدة النهاردة. كان مكتوب «مش
+             النهاردة» بخط صغير جوّه شريحة التاريخ وبس، فالمندوب ما بيلاحظهاش
+             ويفتكر الرقم هو اللي معاه دلوقتي. */ ?>
+    <div class="hm-pastday" role="alert">
+      <b>انت شغّال على يوم <?= e(dfmt($workDate)) ?> مش النهاردة</b>
+      <span>الرقم فوق عهدة اليوم ده، وأي بند تسجّله هيتكتب عليه.</span>
+      <a class="hm-pastday-btn" href="<?= url('m/work-date') ?>">رجّعني للنهاردة</a>
+    </div>
+  <?php endif; ?>
+
+  <?php if (!$wdLocked && $pocket['deposits'] <= 0 && ($pocket['transfer_in'] ?? 0) <= 0): ?>
+    <?php /* مفيش عهدة نزلت في اليوم ده خالص: الرقم سالب أو صفر مش لأن عهدته
+             خلصت، لكن لأن المكتب ما نزّلش عهدة على اليوم ده. من غير السطر ده
+             المندوب يقرا «صرفت أكتر من عهدة اليوم» ويفتكر إنه غلط. */ ?>
+    <div class="hm-nodep">
+      <b>ماحدش نزّل لك عهدة على اليوم ده</b>
+      <span>سجّل عادي — والمكتب لما ينزّل العهدة على نفس اليوم الرقم يتظبط لوحده.</span>
+    </div>
   <?php endif; ?>
 
   <?php if ($lowCustody): ?>
@@ -227,26 +263,28 @@ $permitCard = function (array $p) use ($num) {
 
   <?php /* بانر «جديد» — بيتملّى بالـJS من مقارنة localStorage بأختام الأذونات/العهدة */ ?>
   <div class="hm-fresh" id="freshBanner" hidden>
-    <span class="hm-fresh-ic">🔔</span>
+    <span class="hm-fresh-ic"><?= icon('bell', 14) ?></span>
     <span class="hm-fresh-txt" id="freshText"></span>
     <button type="button" class="hm-fresh-ok" id="freshOk">تمام</button>
   </div>
 
   <?php /* إجراءات مش على إذن — صف واحد مضغوط عشان الأذونات تفضل هي البطل. */ ?>
   <nav class="hm-actions" aria-label="إجراءات سريعة">
-    <a href="<?= url('m/misc') ?>"><span class="ic">🧷</span>نثرية</a>
-    <?php if (\App\Models\RepDriverHandover::available()): ?>
-      <a href="<?= url('m/handover') ?>"><span class="ic">🚚</span>تسليم سائق</a>
-    <?php endif; ?>
+    <a href="<?= url('m/misc') ?>"><span class="ic"><?= icon('anchor', 14) ?></span>نثرية</a>
+    <?php /* v60 — «تسليم سائق» اتشال ومكانه «بوليصة جديدة»: المندوب بيضيف
+             البوليصة نفسها وبيكتب عهدة السائق جوّاها، والعهدة بتتخصم من محفظته. */ ?>
+    <a href="<?= url('m/bill/new') ?>"><span class="ic"><?= icon('truck', 14) ?></span>بوليصة جديدة</a>
     <?php if (\App\Models\RepTransfer::available()): ?>
-      <a href="<?= url('m/transfer') ?>"><span class="ic">🔁</span>حوّل لمندوب</a>
+      <a href="<?= url('m/transfer') ?>"><span class="ic"><?= icon('shuffle', 14) ?></span>حوّل لمندوب</a>
     <?php endif; ?>
+    <?php /* تصفية العهدة مع المكتب — بتقفل الحساب كله ويرجع صفر */ ?>
+    <a href="<?= url('m/settle') ?>"><span class="ic">🤝</span>صفّي العهدة</a>
     <?php if (!empty($canAddPermit)): ?>
-      <a href="<?= url('m/permit/new') ?>"><span class="ic">📄</span>إذن جديد</a>
+      <a href="<?= url('m/permit/new') ?>"><span class="ic"><?= icon('file-text', 14) ?></span>إذن جديد</a>
     <?php endif; ?>
     <?php /* v47 — للمشرف بس: متابعة باقي المناديب (عرض فقط) */ ?>
     <?php if (!empty($canWatchTeam)): ?>
-      <a href="<?= url('m/team') ?>"><span class="ic">👀</span>المناديب</a>
+      <a href="<?= url('m/team') ?>"><span class="ic"><?= icon('search', 14) ?></span>المناديب</a>
     <?php endif; ?>
   </nav>
 
@@ -272,32 +310,30 @@ $permitCard = function (array $p) use ($num) {
 
     <?php if (count($permits) > 5): ?>
       <div class="hm-search">
-        <input type="search" id="permitSearch" placeholder="دوّر برقم الإذن أو الشركة أو السائق"
+        <input type="search" id="permitSearch" placeholder="بحث"
                autocomplete="off" aria-label="بحث في الأذونات">
       </div>
     <?php endif; ?>
 
     <?php if (!$permits): ?>
       <div class="hm-empty">
-        <span class="ic">📋</span>
+        <span class="ic"><?= icon('clipboard', 14) ?></span>
         <b>مفيش أذونات مفتوحة</b>
         <p><?= !empty($canAddPermit)
               ? 'لو فتحت إذن جديد سجّله من «إذن جديد» فوق.'
               : 'المكتب هو اللي بيفتح الأذونات.' ?></p>
       </div>
     <?php else: ?>
-      <?php if ($mine): ?>
-        <h3 class="hm-group">منزّل لك <span><?= count($mine) ?></span></h3>
-        <?php foreach ($mine as $p) { $permitCard($p); } ?>
-      <?php endif; ?>
-      <?php if ($others): ?>
-        <h3 class="hm-group"><?= $mine ? 'أذونات تانية' : 'كل الأذونات المفتوحة' ?> <span><?= count($others) ?></span></h3>
-        <?php foreach ($others as $p) { $permitCard($p); } ?>
-      <?php endif; ?>
+      <?php /* ⚠️ قايمة واحدة — التقسيم لـ«منزّل لك» و«أذونات تانية» اتشال
+               (2026-07-28، قرار المالك). التنزيل ما بقاش بيفرق في أي حاجة
+               من v43، فالتقسيم كان بيوهم المندوب إن فيه أذونات «بتاعته»
+               وأذونات مش بتاعته وهو بيشتغل على أي إذن مفتوح. */ ?>
+      <h3 class="hm-group">كل الأذونات المفتوحة <span><?= count($permits) ?></span></h3>
+      <?php foreach ($permits as $p) { $permitCard($p); } ?>
     <?php endif; ?>
 
     <div class="hm-empty" id="permitNoResults" hidden>
-      <span class="ic">🔎</span><b>مفيش إذن مطابق</b>
+      <span class="ic"><?= icon('search', 14) ?></span><b>مفيش إذن مطابق</b>
     </div>
 
   <?php else: ?>
@@ -314,7 +350,7 @@ $permitCard = function (array $p) use ($num) {
     </div>
 
     <?php if (!$submissions): ?>
-      <div class="hm-empty"><span class="ic">🧾</span><b>مفيش بنود في يوم <?= e(dfmt($workDate)) ?></b>
+      <div class="hm-empty"><span class="ic"><?= icon('receipt', 14) ?></span><b>مفيش بنود في يوم <?= e(dfmt($workDate)) ?></b>
         <p>اختار إذن من «أذوناتي» وسجّل أول بند، أو <a href="<?= url('m/work-date') ?>">غيّر اليوم</a> لو بتدوّر على بند يوم تاني.</p></div>
     <?php else: foreach ($submissions as $s): ?>
       <?php $isMisc = \App\Models\RepPortal::isMisc((string) $s['kind']); ?>
@@ -327,8 +363,8 @@ $permitCard = function (array $p) use ($num) {
             <?php /* النثرية مالهاش إذن — من غير الفحص ده كانت هتعرض «#0» (v39) */ ?>
             <span>· <?= $isMisc ? 'نثرية' : e($s['permit_no'] ?: '#' . $s['permit_id']) ?></span>
             <?php if ((int) $s['qty'] > 1): ?><span>· <?= (int) $s['qty'] ?>×<?= $num($s['unit_amount']) ?></span><?php endif; ?>
-            <?php if (!empty($s['is_visa'])): ?><span>· 💳</span><?php endif; ?>
-            <?php if ($s['photo']): ?><span>· 📷</span><?php endif; ?>
+            <?php if (!empty($s['is_visa'])): ?><span>· <?= icon('credit-card', 14) ?></span><?php endif; ?>
+            <?php if ($s['photo']): ?><span>· <?= icon('search', 14) ?></span><?php endif; ?>
           </div>
         </div>
         <div class="hm-slip-end">
@@ -591,6 +627,8 @@ $permitCard = function (array $p) use ($num) {
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d) { return; }
+        // التحديث الإجباري بيركب على نفس النداء ده — صفر طلب زيادة
+        if (window.AppUpdate && d.build) { window.AppUpdate.seen(d.build); }
         var pAt = ms(d.permit_at), cAt = ms(d.deposit_at);
         if (pAt > maxCardTime) { maxCardTime = pAt; }
         if (cAt > seenC) {
@@ -603,6 +641,29 @@ $permitCard = function (array $p) use ($num) {
   }
   setInterval(poll, 60000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) { poll(); } });
+
+  /* ── عدّاد جرس المندوب (المرحلة ٦ من docs/15) ─────────────────────────
+     ⚠ بيقرا من **نفس** `/notifications/ping` بتاع المكتب — مصدر واحد فمستحيل
+        الرقم هنا يخالف اللي في الشاشة. الحارس `requireAnySession` بيقبل
+        جلسة المندوب، و`Notify::me()` بترجّع هويته فبيشوف بتاعه هو بس. */
+  (function repBell() {
+    var dot = document.getElementById('repBellDot');
+    if (!dot) { return; }
+    function refresh() {
+      if (document.hidden) { return; }
+      fetch('<?= url('notifications/ping') ?>', {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin'
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          var n = (d && d.events && d.events.unread) ? d.events.unread : 0;
+          dot.hidden = n < 1;
+          dot.textContent = n > 9 ? '+9' : String(n);
+        }).catch(function () { /* الشبكة وقعت — الجرس يفضل بآخر حالة معروفة */ });
+    }
+    refresh();
+    setInterval(refresh, 60000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); } });
+  })();
 
   // ── سحب للتحديث ──────────────────────────────────────
   var ptr = document.getElementById('ptr'), startY = 0, pulling = false, THRESH = 80;

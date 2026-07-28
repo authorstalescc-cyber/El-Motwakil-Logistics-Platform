@@ -2,14 +2,14 @@
 /**
  * أجسام نوافذ التفاصيل لعهدة المناديب.
  *
- * ⚠️ بترندر **بلا layout** وبترجع HTML للنافذة العامة (`#uiDrill`). كل صف
+ * ⚠ بترندر **بلا layout** وبترجع HTML للنافذة العامة (`#uiDrill`). كل صف
  *    بيستخدم مكوّن `row_item` نفسه بتاع الصفحة، فالتفاصيل شكلها زي القوايم.
  *
  * متغيّرات: $what $day $rows (+ $rep للأنواع اللي على مندوب واحد)
  */
 $dayTxt = dfmt($day);
 
-/* ⚠️ صفّا «صرف مندوب» و«تنزيل» مشتركان بين الشاشة العامة وكارت المندوب —
+/* <?= icon('alert', 14) ?> صفّا «صرف مندوب» و«تنزيل» مشتركان بين الشاشة العامة وكارت المندوب —
    نسخة واحدة عشان الشكل ما يفترقش بين النافذتين. */
 $spendRow = static function (array $s, bool $withRep = true): void {
     $src = $s['src'] ?? 'permit';
@@ -17,6 +17,7 @@ $spendRow = static function (array $s, bool $withRep = true): void {
     [$ic, $kind] = match ($src) {
         'misc'     => ['coins', 'نثرية'],
         'handover' => ['truck', 'تسليم سائق'],
+        'bill'     => ['truck', 'عهدة بوليصة'],   // v60
         'transfer' => ['shuffle', 'تحويل لزميل'],
         default    => $isReceipt ? ['clipboard', 'إيصال'] : ['trending-down', 'مصروف إذن'],
     };
@@ -196,7 +197,7 @@ case 'deposits':
         'count' => count($rows),
         'total' => ['label' => 'نزل اليوم', 'value' => money(array_sum(array_column($rows, 'amount')), false)],
         'more'  => ['label' => 'كل المناديب', 'url' => url('rep-custody')],
-        'empty' => ['title' => 'مفيش عهدة نزلت في ' . $dayTxt, 'note' => 'نزّل عهدة لأي مندوب من كارته.'],
+        'empty' => ['title' => 'مفيش عهدة نزلت في ' . $dayTxt],
         'body'  => function () use ($rows) {
             foreach ($rows as $r) {
                 partial('row_item', [
@@ -218,7 +219,7 @@ case 'spent':
         'count' => count($rows),
         'total' => ['label' => 'صرفوا اليوم', 'value' => money(array_sum(array_column($rows, 'amount')), false)],
         'more'  => ['label' => 'سجل المصروفات', 'url' => url('expenses')],
-        'empty' => ['title' => 'مفيش صرف في ' . $dayTxt, 'note' => 'البنود بتظهر هنا بعد اعتمادها من صندوق المراجعة.'],
+        'empty' => ['title' => 'مفيش صرف في ' . $dayTxt],
         'body'  => function () use ($rows, $spendRow) {
             foreach ($rows as $s) { $spendRow($s, true); }
         },
@@ -231,7 +232,7 @@ case 'pending':
         'count' => count($rows),
         'total' => ['label' => 'مستني مراجعتك', 'value' => money(array_sum(array_column($rows, 'amount')), false)],
         'more'  => ['label' => 'صندوق المراجعة', 'url' => url('rep-custody/inbox')],
-        'empty' => ['title' => 'مفيش بنود معلّقة في ' . $dayTxt, 'note' => 'كل اللي بعتوه اتراجع.'],
+        'empty' => ['title' => 'مفيش بنود معلّقة في ' . $dayTxt],
         'body'  => function () use ($rows) {
             foreach ($rows as $p) {
                 $kind = match ((string) $p['kind']) {
@@ -257,25 +258,29 @@ case 'pending':
 
 default:   // balance — الفاضل من عهدة اليوم، مندوبًا مندوبًا
     partial('drill', [
-        'how'   => 'الفاضل من عهدة يوم ' . $dayTxt . ' = اللي نزل في اليوم ده − اللي اتصرف فيه. كل يوم عهدة مستقلة: الفاضل من إمبارح ما بيترحّلش على النهاردة.',
+        'how'   => 'الفاضل من عهدة يوم ' . $dayTxt . ' = اللي نزل في اليوم ده − اللي اتصرف فيه − اللي دفعه ولسه مستني اعتماد (فلوسه خرجت من إيده فعلاً). كل يوم عهدة مستقلة: الفاضل من إمبارح ما بيترحّلش على النهاردة.',
         'count' => count($rows),
-        'total' => ['label' => 'فاضل من عهدة اليوم', 'value' => money(array_sum(array_column($rows, 'balance')), false)],
+        'total' => ['label' => 'فاضل معاهم من عهدة اليوم', 'value' => money(array_sum(array_column($rows, 'pocket')), false)],
         'more'  => ['label' => 'كل المناديب', 'url' => url('rep-custody')],
-        'empty' => ['title' => 'مفيش حركة عهدة في ' . $dayTxt, 'note' => 'مفيش مندوب نزلت له أو صرف في اليوم ده.'],
+        'empty' => ['title' => 'مفيش حركة عهدة في ' . $dayTxt],
         'body'  => function () use ($rows, $day) {
             foreach ($rows as $r) {
+                $meta = [
+                    ['icon' => 'wallet', 'text' => 'نزل ' . money($r['deposits'], false)],
+                    ['icon' => 'trending-down', 'text' => 'صرف ' . money($r['spent'], false)],
+                ];
+                if ((float) $r['pending'] > 0) {
+                    $meta[] = ['icon' => 'hourglass', 'text' => 'مستني ' . money($r['pending'], false)];
+                    $meta[] = ['icon' => 'briefcase', 'text' => 'قبل خصم المستني ' . money($r['balance'], false)];
+                }
                 partial('row_item', [
                     'title'  => $r['name'],
                     'icon'   => 'briefcase',
                     'url'    => url('rep-custody/' . (int) $r['id'] . '?tab=day'),
-                    'meta'   => [
-                        ['icon' => 'wallet', 'text' => 'نزل ' . money($r['deposits'], false)],
-                        ['icon' => 'trending-down', 'text' => 'صرف ' . money($r['spent'], false)],
-                        ['icon' => 'hourglass', 'text' => 'مستني ' . money($r['pending'], false)],
-                    ],
-                    'amount' => money($r['balance'], false),
-                    'amount_tone' => $r['balance'] < 0 ? 'neg' : 'pos',
-                    'sub'    => $r['balance'] < 0 ? 'صرف أكتر من عهدة اليوم' : null,
+                    'meta'   => $meta,
+                    'amount' => money($r['pocket'], false),
+                    'amount_tone' => $r['pocket'] < 0 ? 'neg' : 'pos',
+                    'sub'    => $r['pocket'] < 0 ? 'صرف أكتر من عهدة اليوم' : null,
                 ]);
             }
         },

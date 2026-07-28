@@ -12,26 +12,26 @@ $permitTypes = ['sader'=>'إذن','warid'=>'شهادة'];
 <style>
 @page{size:A4;margin:14mm}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI','Tahoma',sans-serif;color:var(--ink);direction:rtl;font-size:12px;line-height:1.5}
+body{font-family:var(--font);color:var(--ink);direction:rtl;font-size:12px;line-height:1.5}
 .head{text-align:center;border-bottom:3px solid var(--gold);padding-bottom:12px;margin-bottom:18px}
-.head h1{color:var(--navy);font-size:22px} .head .g{color:var(--gold);font-weight:700}
+.head h1{color:var(--navy);font-size:22px} .head .g{color:var(--gold);font-weight:500}
 .head p{color:var(--muted);font-size:12px;margin-top:3px}
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
-.kpi{border:1px solid #D5DBE2;border-radius:8px;padding:10px 12px;border-top:3px solid var(--navy)}
-.kpi .l{font-size:11px;color:var(--muted);font-weight:700} .kpi .v{font-size:16px;font-weight:800;color:var(--navy);margin-top:3px}
+.kpi{border:1px solid #D5DBE2;border-radius:var(--radius-1);padding:10px 12px;border-top:3px solid var(--navy)}
+.kpi .l{font-size:11px;color:var(--muted);font-weight:500} .kpi .v{font-size:16px;font-weight:600;color:var(--navy);margin-top:3px}
 h2{color:var(--navy);font-size:14px;margin:18px 0 8px;border-right:4px solid var(--gold);padding-right:8px}
 table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:11px}
 th{background:var(--navy);color:#fff;padding:7px 6px;text-align:center;border:1px solid #0E2440}
 td{padding:6px;text-align:center;border:1px solid #D5DBE2}
 tr:nth-child(even) td{background:#F7F9FB}
-tfoot td{background:var(--navy);color:var(--gold);font-weight:800}
-.neg{color:#9B2C2C;font-weight:700}
+tfoot td{background:var(--navy);color:var(--gold);font-weight:600}
+.neg{color:#9B2C2C;font-weight:500}
 .foot{margin-top:20px;text-align:center;color:var(--muted);font-size:10px;border-top:1px solid #D5DBE2;padding-top:8px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media print{.noprint{display:none}}
 </style></head><body onload="window.print()">
 <div class="noprint" style="text-align:center;margin-bottom:14px">
-  <button onclick="window.print()" style="padding:8px 20px;background:var(--gold);border:none;border-radius:8px;font-weight:700;cursor:pointer">🖨️ طباعة</button>
+  <button onclick="window.print()" style="padding:8px 20px;background:var(--gold);border:none;border-radius:var(--radius-1);font-weight:500;cursor:pointer"><?= icon('file-text', 14) ?> طباعة</button>
 </div>
 <div class="head">
   <h1>شركة <span class="g"><?= e(str_replace('شركة ','',$company)) ?></span></h1>

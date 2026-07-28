@@ -2,7 +2,10 @@
 namespace App\Models;
 
 use App\Core\Access;
+use App\Core\Auth;
+use App\Core\Clock;
 use App\Core\Database;
+use App\Core\RepAuth;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -58,6 +61,59 @@ class Notify
         'submission.rejected'   => ['rep',    null],
         'custom'                => ['both',   null],
         'test'                  => ['both',   null],
+
+        /* ── أنواع المرحلة ٣ (docs/15 §٣.٤) ────────────────────────────────
+           كلها للمكتب، وكلها بتمرّ على معالِج صفحتها فالممنوع ما بياخدهاش. */
+        'invoice.new'           => ['office', 'InvoiceController@index'],
+        'client.payment'        => ['office', 'PaymentController@index'],
+        'rep.settlement'        => ['office', 'RepCustodyController@index'],
+        'rep.deposit'           => ['office', 'RepCustodyController@index'],
+        'bill.linked'           => ['office', 'PermitController@index'],
+        'permit.closed'         => ['office', 'PermitController@index'],
+        'driver.handover'       => ['office', 'RepCustodyController@index'],
+        'rep.transfer'          => ['office', 'RepCustodyController@index'],
+
+        /* ── أنواع المرحلة ٧ (تلقائية — بيولّدها العامل مش المستخدم) ────────
+           ⚠️ كلها بتعدّي على `Notify::emitOnce` فمستحيل تتكرّر كل ٥ دقايق. */
+        'remind.submissions'    => ['office', 'RepCustodyController@inbox'],
+        'remind.closing'        => ['office', 'DailyClosingController@index'],
+        'alert.permit_idle'     => ['office', 'PermitController@index'],
+        'alert.rep_custody'     => ['office', 'RepCustodyController@index'],
+        'digest.daily'          => ['office', null],
+    ];
+
+    /**
+     * وصف كل نوع للعرض — **المصدر الوحيد** لاسم النوع وأيقونته في الجرس
+     * وصفحة السجل وفلترتها.
+     *
+     * ⚠️ اسم الأيقونة لازم يكون موجود في **الاتنين**: `icon()` في
+     *    `helpers.php` (للصفحة) و**خريطة الأيقونات في `app.js`** (للجرس).
+     *    `bin/verify_notifications_ui.php` بيفشل لو اسم ناقص من أي واحدة فيهم
+     *    — الأيقونة الناقصة بتقع على شكل افتراضي **بالسكوت**.
+     */
+    public const KINDS = [
+        'permit.new'          => ['label' => 'إذن أو شهادة جديدة', 'icon' => 'folder'],
+        'permit.closed'       => ['label' => 'إذن اتقفل',           'icon' => 'check-circle'],
+        'day.closed'          => ['label' => 'تقفيل يوم',           'icon' => 'calculator'],
+        'submission.new'      => ['label' => 'بند مندوب جديد',      'icon' => 'inbox'],
+        'submission.approved' => ['label' => 'بند اتعمد',           'icon' => 'check-circle'],
+        'submission.rejected' => ['label' => 'بند اترفض',           'icon' => 'x'],
+        'bill.new'            => ['label' => 'بوليصة جديدة',        'icon' => 'truck'],
+        'bill.linked'         => ['label' => 'بوليصة على إذن',      'icon' => 'truck'],
+        'invoice.new'         => ['label' => 'مستند اتصدر',         'icon' => 'receipt'],
+        'client.payment'      => ['label' => 'تحصيل من عميل',       'icon' => 'banknote'],
+        'rep.deposit'         => ['label' => 'عهدة نزلت لمندوب',    'icon' => 'wallet'],
+        'rep.settlement'      => ['label' => 'تسوية مندوب',         'icon' => 'check-circle'],
+        'rep.transfer'        => ['label' => 'تحويل بين مناديب',    'icon' => 'shuffle'],
+        'driver.handover'     => ['label' => 'تسليم عهدة لسائق',    'icon' => 'coins'],
+        'custom'              => ['label' => 'إشعار مكتوب',         'icon' => 'send'],
+        'test'                => ['label' => 'تجربة',               'icon' => 'bell'],
+        // المرحلة ٧ — تلقائية
+        'remind.submissions'  => ['label' => 'تذكير: بنود مستنية',  'icon' => 'clock'],
+        'remind.closing'      => ['label' => 'تذكير: يوم مش متقفل', 'icon' => 'clock'],
+        'alert.permit_idle'   => ['label' => 'إذن ساكن',            'icon' => 'hourglass'],
+        'alert.rep_custody'   => ['label' => 'عهدة مندوب قربت تخلص','icon' => 'wallet'],
+        'digest.daily'        => ['label' => 'ملخّص اليوم',          'icon' => 'bar-chart'],
     ];
 
     /** بيتقفل في الفحوصات لو احتجنا نمنع أي كتابة. */
@@ -141,12 +197,30 @@ class Notify
             // ⚠️ الحالة الابتدائية بتيجي من القناة نفسها: في سطر الأوامر بتبقى
             //    `skipped` فالعامل ما يعيدش إرسال حاجة اتولّدت من سكربت استيراد.
             $state = PushNotify::initialState();
+            $hasPrefs = NotifyPref::available();
             foreach ($parties as $p) {
+                /* ⚠️ **التفضيل بيتطبّق هنا — وقت التسجيل مش وقت العرض** (v53).
+                   لو اتطبّق وقت العرض، تغيير التفضيل كان هيخفي أحداثًا قديمة
+                   من السجل بأثر رجعي، والسجل المفروض يفضل شاهدًا على اللي حصل.
+
+                   ⚠️ والتفضيل بيجي **بعد** فلترة `Access` في `recipientsFor` —
+                   مستحيل حد يفتح لنفسه إشعارًا عن صفحة ممنوعة بعلامة صح. */
+                $inApp    = true;
+                $wantPush = true;
+                if ($hasPrefs) {
+                    $inApp    = NotifyPref::allows($p['type'], $p['key'], $kind, 'in_app');
+                    $wantPush = NotifyPref::allows($p['type'], $p['key'], $kind, 'push');
+                }
+                // قافل القناتين = مش عايز الحدث ده خالص، فما بنسجّلش له صفًّا
+                if (!$inApp && !$wantPush) { continue; }
+
                 Database::exec(
                     "INSERT IGNORE INTO notification_recipients
-                        (notification_id, party_type, party_key, push_state)
-                     VALUES (?,?,?,?)",
-                    [$id, $p['type'], $p['key'], $state]
+                        (notification_id, party_type, party_key, push_state" . ($hasPrefs ? ', in_app' : '') . ")
+                     VALUES (?,?,?,?" . ($hasPrefs ? ',?' : '') . ")",
+                    $hasPrefs
+                        ? [$id, $p['type'], $p['key'], $wantPush ? $state : 'skipped', $inApp ? 1 : 0]
+                        : [$id, $p['type'], $p['key'], $state]
                 );
             }
 
@@ -215,33 +289,292 @@ class Notify
             "SELECT * FROM notification_recipients WHERE notification_id = ?", [$notificationId]);
     }
 
+    /* ═══════════════════════════════════════════════ القراءة (المرحلة ٢)
+       الجرس وصفحة `/notifications` بيقروا من هنا. **صفر كتابة** غير «مقروء».
+       ═══════════════════════════════════════════════════════════════════ */
+
     /**
-     * صندوق وارد شخص (للجرس وصفحة السجل — بيتفعّل عرضه في المرحلة ٢).
+     * مين «أنا» دلوقتي؟ — جلسة مكتب (`user` + اسم المستخدم) أو جلسة مندوب
+     * (`rep` + رقمه)، ونفس المفاتيح اللي `recipientsFor()` بتكتب بيها بالظبط.
+     *
+     * ⚠️ جلسة المندوب **ما فيهاش `uid`** (v35) فـ`Auth::check()` بترجّع false
+     *    لها — عشان كده بنسأل عن جلسة المكتب الأول ثم المندوب.
+     *
+     * @return array{0:string,1:string} ['user'|'rep', المفتاح] أو ['', ''] لو مفيش جلسة
+     */
+    public static function me(): array
+    {
+        if (Auth::check()) { return ['user', (string) (Auth::user() ?? '')]; }
+        if (class_exists(RepAuth::class) && RepAuth::check()) {
+            return ['rep', (string) RepAuth::repId()];
+        }
+        return ['', ''];
+    }
+
+    /**
+     * شرط «البند ده يبان في جرس صاحبه دلوقتي؟» — **المصدر الوحيد**.
+     *
+     * ⚠️ لازم يتنادى من **كل** استعلام بيقرا صندوق وارد شخص (`inbox` ·
+     *    `unreadCount` · `listFor`). لو اتنسي في واحد منهم، البند المقفول أو
+     *    المؤجَّل يظهر في مكان ويختفي من التاني والعدّاد يخالف القايمة.
+     *
+     * ⚠️ **المقارنة الزمنية جوّه SQL** (قاعدة v48) — ساعة القاعدة UTC وPHP القاهرة.
+     */
+    private static function visibleSql(string $alias = 'r'): string
+    {
+        $sql = '';
+        if (self::hasCol('in_app'))        { $sql .= " AND {$alias}.in_app = 1"; }
+        if (self::hasCol('snoozed_until')) { $sql .= " AND ({$alias}.snoozed_until IS NULL OR {$alias}.snoozed_until <= NOW())"; }
+        return $sql;
+    }
+
+    /** أعمدة v53 موجودة؟ (النظام لازم يشتغل عادي قبل الترحيل) */
+    private static function hasCol(string $col): bool
+    {
+        static $cache = [];
+        if (isset($cache[$col])) { return $cache[$col]; }
+        return $cache[$col] = (bool) Database::scalar(
+            "SELECT COUNT(*) FROM information_schema.columns
+              WHERE table_schema = DATABASE() AND table_name = 'notification_recipients'
+                AND column_name = ?", [$col]);
+    }
+
+    /**
+     * صندوق وارد شخص — الصفوف الخام.
      * @return array<int,array<string,mixed>>
      */
     public static function inbox(string $partyType, string $partyKey, int $limit = 30, int $offset = 0): array
     {
-        if (!self::available()) { return []; }
+        if (!self::available() || $partyKey === '') { return []; }
         $limit = max(1, min(200, $limit));
         $offset = max(0, $offset);
+        $at = Clock::displayExpr('n.created_at');
+        $vis = self::visibleSql('r');
         return Database::all(
-            "SELECT n.*, r.read_at, r.id AS recipient_id
+            "SELECT n.*, $at AS at_disp, r.read_at, r.id AS recipient_id
                FROM notification_recipients r
                JOIN notifications n ON n.id = r.notification_id
-              WHERE r.party_type = ? AND r.party_key = ?
+              WHERE r.party_type = ? AND r.party_key = ? $vis
               ORDER BY n.id DESC
               LIMIT $limit OFFSET $offset",
             [$partyType, $partyKey]);
     }
 
+    /** صندوق الوارد **جاهزًا للعرض** (الجرس + الصفحة). */
+    public static function feed(string $partyType, string $partyKey, int $limit = 20, int $offset = 0): array
+    {
+        return array_map([self::class, 'shape'], self::inbox($partyType, $partyKey, $limit, $offset));
+    }
+
     /** عدد غير المقروء لشخص. */
     public static function unreadCount(string $partyType, string $partyKey): int
     {
-        if (!self::available()) { return 0; }
+        if (!self::available() || $partyKey === '') { return 0; }
+        $vis = self::visibleSql('notification_recipients');
         return (int) Database::scalar(
             "SELECT COUNT(*) FROM notification_recipients
-              WHERE party_type = ? AND party_key = ? AND read_at IS NULL",
+              WHERE party_type = ? AND party_key = ? AND read_at IS NULL $vis",
             [$partyType, $partyKey]);
+    }
+
+    /**
+     * تأجيل بند — «فكّرني بعدين» (المرحلة ٦).
+     * بيختفي من الجرس والصفحة ويرجع لوحده لما الوقت يعدّي.
+     *
+     * ⚠️ الحساب جوّه SQL (`DATE_ADD(NOW(), …)`) — قاعدة v48.
+     */
+    public static function snooze(string $partyType, string $partyKey, int $notificationId, int $minutes): bool
+    {
+        if (!self::available() || !self::hasCol('snoozed_until')) { return false; }
+        $minutes = max(5, min(10080, $minutes));           // من ٥ دقايق لأسبوع
+        return Database::exec(
+            "UPDATE notification_recipients
+                SET snoozed_until = DATE_ADD(NOW(), INTERVAL $minutes MINUTE)
+              WHERE party_type = ? AND party_key = ? AND notification_id = ?",
+            [$partyType, $partyKey, $notificationId]) > 0;
+    }
+
+    /** بنود مؤجَّلة لسه ما رجعتش — للعرض في الصفحة عشان ما تختفيش بالسكوت. */
+    public static function snoozedCount(string $partyType, string $partyKey): int
+    {
+        if (!self::available() || !self::hasCol('snoozed_until') || $partyKey === '') { return 0; }
+        return (int) Database::scalar(
+            "SELECT COUNT(*) FROM notification_recipients
+              WHERE party_type = ? AND party_key = ? AND snoozed_until > NOW()",
+            [$partyType, $partyKey]);
+    }
+
+    /**
+     * سجل مفلتر لصفحة `/notifications`.
+     *
+     * `scope = 'all'` بتقرا **كل أحداث النظام** بلا نظر للمستلم — للمالك بس،
+     * والكنترولر هو اللي بيفرض ده (قرار ٧.١).
+     *
+     * @param array{kind?:string,q?:string,from?:string,to?:string,unread?:bool,scope?:string} $f
+     * @return array{items:array<int,array<string,mixed>>, total:int}
+     */
+    public static function listFor(string $partyType, string $partyKey, array $f = [], int $limit = 40, int $offset = 0): array
+    {
+        if (!self::available()) { return ['items' => [], 'total' => 0]; }
+        $all = ($f['scope'] ?? 'mine') === 'all';
+        if (!$all && $partyKey === '') { return ['items' => [], 'total' => 0]; }
+
+        $where = [];
+        $args  = [];
+        if (!$all) {
+            // ⚠️ نفس شرط الرؤية بتاع الجرس بالحرف — من غيره الصفحة تقول رقمًا
+            //    والجرس يقول غيره (المقفول بالتفضيل والمؤجَّل).
+            $where[] = 'r.party_type = ? AND r.party_key = ?' . self::visibleSql('r');
+            $args[]  = $partyType;
+            $args[]  = $partyKey;
+        }
+        if (!empty($f['kind']) && isset(self::KINDS[$f['kind']])) {
+            $where[] = 'n.kind = ?';
+            $args[]  = $f['kind'];
+        }
+        if (!empty($f['q'])) {
+            $where[] = '(n.title LIKE ? OR n.body LIKE ? OR n.actor_name LIKE ?)';
+            $like    = '%' . $f['q'] . '%';
+            array_push($args, $like, $like, $like);
+        }
+        // ⚠️ الفلترة بالتاريخ على `created_at` **بساعة العرض** — بنزحزح الحدود
+        //    بنفس فرق `Clock` بدل ما نلفّ العمود، فالفهرس يفضل مستخدَمًا.
+        $shift = Clock::dbOffsetMinutes();
+        if (!empty($f['from'])) {
+            $where[] = 'n.created_at >= DATE_SUB(?, INTERVAL ' . $shift . ' MINUTE)';
+            $args[]  = $f['from'] . ' 00:00:00';
+        }
+        if (!empty($f['to'])) {
+            $where[] = 'n.created_at <= DATE_SUB(?, INTERVAL ' . $shift . ' MINUTE)';
+            $args[]  = $f['to'] . ' 23:59:59';
+        }
+        if (!empty($f['unread']) && !$all) { $where[] = 'r.read_at IS NULL'; }
+
+        $sql = $all
+            ? 'FROM notifications n'
+            : 'FROM notification_recipients r JOIN notifications n ON n.id = r.notification_id';
+        $sql .= $where ? ' WHERE ' . implode(' AND ', $where) : '';
+
+        $total = (int) Database::scalar("SELECT COUNT(*) $sql", $args);
+        $limit  = max(1, min(200, $limit));
+        $offset = max(0, $offset);
+        $at   = Clock::displayExpr('n.created_at');
+        $cols = $all ? "n.*, $at AS at_disp, NULL AS read_at" : "n.*, $at AS at_disp, r.read_at";
+        $rows = Database::all("SELECT $cols $sql ORDER BY n.id DESC LIMIT $limit OFFSET $offset", $args);
+
+        return ['items' => array_map([self::class, 'shape'], $rows), 'total' => $total];
+    }
+
+    /** الأنواع الموجودة فعلاً في السجل — لقائمة الفلترة (بلا أنواع فاضية). */
+    public static function kindsInUse(): array
+    {
+        if (!self::available()) { return []; }
+        $out = [];
+        foreach (Database::all("SELECT DISTINCT kind FROM notifications") as $r) {
+            $k = (string) $r['kind'];
+            if (isset(self::KINDS[$k])) { $out[$k] = self::KINDS[$k]['label']; }
+        }
+        return $out;
+    }
+
+    /** وصف نوع للعرض (بيرجّع افتراضيًّا آمنًا للأنواع القديمة/المجهولة). */
+    public static function kindMeta(string $kind): array
+    {
+        return self::KINDS[$kind] ?? ['label' => 'إشعار', 'icon' => 'bell'];
+    }
+
+    /** كل الأنواع المعروفة — قائمة بيضا لشاشة التفضيلات. */
+    public static function kindList(): array
+    {
+        return array_keys(self::KINDS);
+    }
+
+    /**
+     * تسجيل حدث **مرّة واحدة بس** في نافذة زمنية (المرحلة ٧).
+     *
+     * ⚠️ **ده اللي بيخلّي التذكيرات التلقائية ممكنة أصلاً.** العامل بيشتغل كل
+     *    ٥ دقايق، فبلاها كان «فيه بند مستنّي من ٤ ساعات» هيترنّ **٢٨٨ مرّة في
+     *    اليوم**. البصمة = النوع + الموضوع، والنافذة بتتقاس **جوّه SQL**
+     *    (قاعدة v48 — ساعة القاعدة مختلفة عن ساعة PHP).
+     *
+     * @return int رقم الحدث، أو 0 لو اتخطّى (موجود بالفعل في النافذة)
+     */
+    public static function emitOnce(string $kind, int $windowHours, array $d): int
+    {
+        if (!self::available()) { return 0; }
+        $w = max(1, min(8760, $windowHours));
+
+        $sql  = "SELECT COUNT(*) FROM notifications
+                  WHERE kind = ? AND created_at >= DATE_SUB(NOW(), INTERVAL $w HOUR)";
+        $args = [$kind];
+        // الموضوع جزء من البصمة: «إذن ٧ ساكن» غير «إذن ٩ ساكن»
+        if (isset($d['subject_type'], $d['subject_id'])) {
+            $sql .= ' AND subject_type = ? AND subject_id = ?';
+            $args[] = (string) $d['subject_type'];
+            $args[] = (int) $d['subject_id'];
+        } elseif (!empty($d['work_date'])) {
+            $sql .= ' AND work_date = ?';
+            $args[] = (string) $d['work_date'];
+        }
+
+        try {
+            if ((int) Database::scalar($sql, $args) > 0) { return 0; }
+        } catch (\Throwable $e) {
+            return 0;   // فشل الفحص = ما نبعتش، أهون من إننا نغرق المالك
+        }
+        return self::emit($kind, $d);
+    }
+
+    /**
+     * تحويل الصف الخام لبند عرض.
+     *
+     * ⚠️ **الوقت:** `at_disp` جاي من `Clock::displayExpr` يعني **بساعة الحيطة
+     *    عند المستخدم**، و`strtotime` بيفكّه بتوقيت PHP (القاهرة) — فالناتج
+     *    `ts` هو اللحظة الحقيقية بالثواني. الواجهة بتحسب «من ٣ دقايق» منه
+     *    لوحدها بلا أي طلب للخادم. **ممنوع تستخدم `ts` في أي مقارنة على
+     *    الخادم** — المقارنات مكانها جوّه SQL (قاعدة v48).
+     */
+    private static function shape(array $r): array
+    {
+        $kind = (string) $r['kind'];
+        $meta = self::kindMeta($kind);
+        $at   = (string) ($r['at_disp'] ?? $r['created_at'] ?? '');
+        $ts   = $at !== '' ? (strtotime($at) ?: time()) : time();
+
+        return [
+            'id'         => (int) $r['id'],
+            'kind'       => $kind,
+            'kind_label' => $meta['label'],
+            'icon'       => $meta['icon'],
+            'severity'   => (string) ($r['severity'] ?? 'info'),
+            'title'      => (string) ($r['title'] ?? ''),
+            'body'       => (string) ($r['body'] ?? ''),
+            'url'        => ($r['url'] ?? '') !== '' ? url((string) $r['url']) : '',
+            'actor'      => (string) ($r['actor_name'] ?? ''),
+            'work_date'  => $r['work_date'] ?? null,
+            'ts'         => $ts,
+            'rel'        => self::relLabel($ts),
+            'at_label'   => date('H:i', $ts) . ' · ' . dfmt(date('Y-m-d', $ts)),
+            'read'       => !empty($r['read_at']),
+        ];
+    }
+
+    /**
+     * «من ٣ دقايق» — النسخة الخادمية.
+     *
+     * الواجهة بتحدّثها كل دقيقة من `ts` بلا طلب للخادم، لكن **الرندر الأولي
+     * لازم يكون صحيحًا** عشان المستخدم بلا جافاسكريبت (والطباعة) يشوف وقتًا
+     * مفهومًا بدل خانة فاضية.
+     */
+    public static function relLabel(int $ts): string
+    {
+        $d = time() - $ts;
+        if ($d < 0)     { return 'دلوقتي'; }
+        if ($d < 60)    { return 'دلوقتي'; }
+        if ($d < 3600)  { $n = intdiv($d, 60);    return 'من ' . intf($n) . ' دقيقة'; }
+        if ($d < 86400) { $n = intdiv($d, 3600);  return 'من ' . intf($n) . ' ساعة'; }
+        if ($d < 604800){ $n = intdiv($d, 86400); return 'من ' . intf($n) . ' يوم'; }
+        return dfmt(date('Y-m-d', $ts));
     }
 
     /** تعليم بند كمقروء — بتخصّ الشخص فبتتزامن على كل أجهزته. */

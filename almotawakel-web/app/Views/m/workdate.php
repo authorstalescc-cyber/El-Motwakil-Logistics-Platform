@@ -42,7 +42,7 @@ $current   = $current ?? $today;
       <label for="wd">أو اختار يوم تاني</label>
       <input type="date" name="work_date" id="wd" value="<?= e($current) ?>" max="<?= e($today) ?>" required>
     </div>
-    <div class="wd-warn" id="wdWarn" hidden>⚠️ انتبه: انت هتشتغل بيوم سابق مش النهاردة.</div>
+    <div class="wd-warn" id="wdWarn" hidden><?= icon('alert', 14) ?> انتبه: انت هتشتغل بيوم سابق مش النهاردة.</div>
     <button class="btn gold" type="submit">ابدأ الشغل ←</button>
   </form>
 </div>
@@ -63,7 +63,7 @@ $current   = $current ?? $today;
 .wd-quick{display:flex;gap:10px;margin-bottom:14px}
 .wd-quick .wd-preset{flex:1;line-height:1.5;padding:12px 8px}
 .wd-quick .wd-preset small{opacity:.7;font-weight:400}
-.wd-warn{margin:-4px 0 14px;padding:9px 12px;border-radius:10px;background:#3a2a12;color:#ffcf8a;font-size:.85rem;line-height:1.6}
+.wd-warn{margin:-4px 0 14px;padding:9px 12px;border-radius:var(--radius-2);background:#3a2a12;color:#ffcf8a;font-size:var(--fs-2);line-height:1.6}
 </style>
 </body>
 </html>

@@ -151,6 +151,83 @@ class Controller
         exit;
     }
 
+    /**
+     * حوكمة الأسماء عند الحفظ (منع البيانات الرديئة / التكرار) — **نقطة الاختناق الوحيدة**.
+     *   - يوحِّد تهجئة كل اسم تلقائيًا في `$_POST` لو طابق مفتاحه اسمًا مخزّنًا (همزة/ألف/ة/مسافات).
+     *   - يُرجع رسالة خطأ لأول اسم متعارض غير مؤكَّد (stop-and-choose)، وإلا null.
+     *
+     * التأكيد يجي من العميل عبر الحقل المخفي `__newname_<field>=1` («ده اسم جديد فعلاً»)،
+     * واللي بيحطّه سكربت `smart-name` في `app.js` — فالخادم والعميل بيستخدموا نفس العقد.
+     *
+     * ⚠️ مكانها الكلاس الأساسي عن قصد: أي شاشة إدخال جديدة بتقدر تحرس أسماءها بسطر
+     *    واحد، وتعريفها ما يتفرّعش لنسختين تختلفوا مع الوقت. **لو ضفت دالة هنا، شغّل
+     *    `verify_ux` قبل الرفع** — تضييق مستوى الوصول في كنترولر وارث = خطأ قاتل
+     *    و`php -l` ما بيمسكوش (المصيدة الموثَّقة في `notFound()`).
+     *
+     * **القوائم المقفولة** (`Lookup::STRICT`) بتتفحص هنا كمان: القيمة لازم تكون من
+     * القائمة، و`__newname_` **ما بيتخطّاهاش** — ده بالظبط الفرق بين «قائمة مقفولة»
+     * و«حارس». الاستثناء الوحيد القيمة القديمة المتسجّلة على السجل نفسه (`$existing`).
+     *
+     * @param array<string,string> $map      حقل الإدخال ⇒ نوع الاقتراح (owner/driver/company/port…)
+     * @param array<string,mixed>  $existing صف السجل قبل التعديل — عشان القيمة القديمة تعدّي
+     */
+    protected function nameGuardError(array $map, array $existing = []): ?string
+    {
+        foreach ($map as $field => $type) {
+            $raw = trim((string) ($_POST[$field] ?? ''));
+            if ($raw === '') { continue; }
+
+            if (\App\Models\Lookup::isStrict($type)) {
+                if ($err = $this->strictListError($field, $type, $raw, $existing)) { return $err; }
+                continue;   // القائمة المقفولة مالهاش «قريب من» — إما من القائمة أو لأ
+            }
+
+            $g = \App\Models\NameSuggestion::resolve($type, $raw);
+            if ($g['conflict'] !== null && empty($_POST['__newname_' . $field])) {
+                $why = match ($g['reason'] ?? null) {
+                    'concept' => 'غالبًا هي نفسها «' . $g['conflict'] . '» المخزَّنة — نفس الاسم بصيغة تانية.',
+                    'subset'  => 'ناقصة أو زايدة كلمة عن «' . $g['conflict'] . '» المخزَّنة.',
+                    default   => 'قريبة جدًا من «' . $g['conflict'] . '» المخزَّنة.',
+                };
+                return 'القيمة «' . $raw . '» ' . $why
+                     . ' اختر الموجودة لتفادي التكرار، أو أكِّد أنها قيمة جديدة فعلاً.';
+            }
+            $_POST[$field] = $g['value']; // توحيد التهجئة المعتمدة (أو إبقاؤها كما هي)
+        }
+        return null;
+    }
+
+    /**
+     * فحص القائمة المقفولة لحقل واحد. بيوحّد التهجئة في `$_POST` لو القيمة موجودة
+     * بشكل مختلف، وبيرجّع رسالة لو مش موجودة خالص.
+     *
+     * ⚠️ **الفورم مش مصدر ثقة**: الشاشة بتعرض `<select>` لكن أي POST مباشر يقدر
+     *    يبعت أي نص، فالفحص هنا هو الحد الحقيقي مش شكل الخانة.
+     */
+    private function strictListError(string $field, string $type, string $raw, array $existing): ?string
+    {
+        $list = \App\Models\Lookup::ofType($type);
+        $key  = \App\Models\Maintenance::normkey($raw);
+
+        foreach ($list as $v) {
+            if (\App\Models\Maintenance::normkey($v) === $key) {
+                $_POST[$field] = $v;   // التهجئة المعتمدة من القائمة
+                return null;
+            }
+        }
+        // قيمة قديمة متسجّلة على السجل نفسه ⇒ تعدّي (وإلا تعديل أي حقل تاني
+        // في سجل قديم كان هيترفض أو يغيّر الميناء بالسكوت)
+        $old = trim((string) ($existing[$field] ?? ''));
+        if ($old !== '' && \App\Models\Maintenance::normkey($old) === $key) {
+            $_POST[$field] = $old;
+            return null;
+        }
+
+        $label = \App\Models\Lookup::TYPES[$type] ?? $type;
+        return 'القيمة «' . $raw . '» مش من قائمة ' . $label . ' المعتمدة. '
+             . 'اختر من القائمة، أو أضفها أول من الإعدادات ← القوائم المنسدلة.';
+    }
+
     /** PRG موحد لفشل validation مع عزل القيم والأخطاء لكل تبويب. */
     protected function formFailure(string $formId, string $path, array $old, array $errors, string $fallbackBack): never
     {

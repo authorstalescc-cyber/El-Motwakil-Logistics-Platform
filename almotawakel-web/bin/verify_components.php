@@ -158,7 +158,7 @@ $cases = [
     'page_head' => [
         'vars'   => ['title' => $XSS, 'sub' => 'وصف', 'back' => ['label' => 'رجوع', 'url' => '/x'],
                      'primary' => ['label' => 'جديد', 'url' => '/new']],
-        'expect' => ['class="page-head"', '<h1 class="page-h1"', 'page-sub', 'page-back', 'page-head-actions'],
+        'expect' => ['class="page-head"', '<h1 class="page-h1"', 'page-back', 'page-head-actions'],
     ],
     'count_note' => [
         'vars'   => ['shown' => 300, 'total' => 1240, 'unit' => 'صف'],
@@ -205,9 +205,10 @@ sec('4) عقد المرحلة ٧ — بلا أي تغيير مرئي');
       • `count_note` اتشال في الدفعة ٨ج — اتبنّى في `movements` و`audit`
         عشان قاعدة «مفيش قطع صامت».
       • `tabs` اتشال في المرحلة ٩ — اتبنّى في شريط «أصحاب البيان» الموحّد.
+      • `page_head` اتشال — اتبنّى في شاشتَي `/notifications` (القائمة والتفضيلات).
       أي مكوّن بيتبنّى لازم يتشال من هنا **في نفس الدفعة**، وإلا الفحص بيفشل
       صح وإحنا نظن إنه إنذار كاذب. */
-$newLook = ['page_head'];
+$newLook = [];
 $used = [];
 foreach ($views as $path => $src) {
     foreach ($newLook as $n) {
@@ -223,10 +224,10 @@ $used
 /* كل كلاس جديد بيطبعه أي مكوّن لازم يكون معرَّف في app.css — وإلا بيقع على
    الشكل الافتراضي بالسكوت (نفس باج `.btn.primary` و`.table-mobile-scroll`). */
 $newClasses = [
-    'card-head', 'card-head-sub', 'card-head-tools', 'kpi-note', 'kpi-grid.two',
+    'card-head', 'card-head-tools', 'kpi-note', 'kpi-grid.two',
     'toolbar-title', 'filter-form', 'filter-lbl', 'tab-ic', 'tab-lbl', 'tab-cnt',
-    'page-head', 'page-h1', 'page-sub', 'page-back', 'page-head-actions',
-    'count-note', 'count-note-hint',
+    'page-head', 'page-h1', 'page-back', 'page-head-actions',
+    'count-note',
 ];
 $undef = array_values(array_filter($newClasses, fn($c) => !str_contains($css, '.' . $c)));
 $undef

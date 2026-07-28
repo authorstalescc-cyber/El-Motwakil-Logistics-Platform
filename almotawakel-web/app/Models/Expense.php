@@ -69,12 +69,15 @@ class Expense
 
         // نثريات المناديب (v39) — '' قبل تشغيل migrate_v39 فتتخطّى بأمان
         $miscSql = RepMiscExpense::expenseUnionSql();
+        // v57: عمود «غير مدفوع» — البند بيفضل ظاهر في السجل بس موسوم، لأنه
+        // ما خرجش من الخزنة. باقي أرجل الاتحاد بتحطّ 0 ثابت.
+        $unpaidCol = Permit::unpaidReady() ? 's.unpaid' : '0';
 
         $sql = "
             SELECT 'manual' AS source, me.id AS ref_id, me.exp_date AS d,
                    COALESCE(NULLIF(me.category,''),'مصروف يدوي') AS category,
                    COALESCE(NULLIF(me.beneficiary,''),'') AS party,
-                   me.amount AS amount, me.note AS note, me.is_visa AS is_visa
+                   me.amount AS amount, me.note AS note, me.is_visa AS is_visa, 0 AS unpaid
             FROM manual_expenses me
 
             UNION ALL
@@ -82,7 +85,7 @@ class Expense
             SELECT 'permits', p.id, s.entry_date,
                    $stageCase,
                    COALESCE(NULLIF(p.company,''), NULLIF(p.client,''), '') ,
-                   s.amount, COALESCE(s.note, s.ref_no), s.is_visa
+                   s.amount, COALESCE(s.note, s.ref_no), s.is_visa, $unpaidCol
             FROM permit_stages s
             JOIN permits p ON p.id = s.permit_id
             WHERE $expSql AND s.amount <> 0
@@ -92,7 +95,7 @@ class Expense
             SELECT 'bawalis', m.bill_id, m.movement_date,
                    COALESCE(NULLIF(mi.category,''),'مصروف'),
                    COALESCE(NULLIF(b.company,''), NULLIF(b.declaration_owner,''), ''),
-                   mi.amount, COALESCE(mi.note, b.bill_number), mi.is_visa
+                   mi.amount, COALESCE(mi.note, b.bill_number), mi.is_visa, 0
             FROM movement_items mi
             JOIN movements m ON m.id = mi.movement_id
             LEFT JOIN bawalis b ON b.id = m.bill_id
@@ -103,7 +106,7 @@ class Expense
             SELECT 'takhlis', t.id, t.cert_date,
                    'مصروفات تخليص',
                    COALESCE(NULLIF(t.cert_name,''), ''),
-                   t.expenses, t.cert_number, 0
+                   t.expenses, t.cert_number, 0, 0
             FROM takhlis t
             WHERE t.expenses <> 0
 
@@ -112,7 +115,7 @@ class Expense
             SELECT 'shamil', sh.id, sh.invoice_date,
                    'مصروف فاتورة',
                    COALESCE(NULLIF(sh.client,''), NULLIF(sh.company,''), ''),
-                   sh.expense, sh.invoice_no, 0
+                   sh.expense, sh.invoice_no, 0, 0
             FROM shamil sh
             WHERE sh.expense <> 0
 
@@ -129,7 +132,7 @@ class Expense
                                 WHEN 'guarantee'  THEN 'سداد الضمان'
                                 ELSE 'سداد مديونية' END,
                    da.name,
-                   dp.amount, dp.note, dp.is_visa
+                   dp.amount, dp.note, dp.is_visa, 0
             FROM debt_payments dp
             JOIN debt_accounts da ON da.id = dp.account_id
             WHERE dp.amount <> 0
@@ -283,6 +286,49 @@ class Expense
             'permits_new'  => (int) ($row['permits_new'] ?? 0),
             'movements'    => (int) ($row['movements'] ?? 0),
         ];
+    }
+
+    /**
+     * سلسلة يومية لمصروفات وإيصالات آخر N يوم — للرسم الصغير جوّه كارت الرقم.
+     *
+     * ⚠️ **بتقرا من نفس مصدر `dashboardDay()` بالحرف** (نفس الاتحاد ونفس شرط
+     *    `source <> 'debt'`، ونفس شرط الإيصالات `stage_key='receipts'`) —
+     *    فمستحيل الرسم يقول اتجاهًا والرقم الكبير فوقه يقول غيره.
+     *    `bin/verify_kpi_context.php` بيقارن آخر نقطة في السلسلة برقم اليوم
+     *    **بالمليم** وبيفشل لو اختلفوا.
+     *
+     * ⚠️ استعلامان مجمَّعان بس (`GROUP BY`) مش N استعلام لكل يوم — الداشبورد
+     *    بتتفتح عشرات المرات في اليوم والفرق بيتراكم.
+     *
+     * @return array{days:list<string>, expenses:list<float>, receipts:list<int>}
+     */
+    public static function dashboardSeries(string $endDate, int $days = 14): array
+    {
+        $days  = max(2, min(60, $days));
+        $start = date('Y-m-d', strtotime($endDate . ' -' . ($days - 1) . ' day'));
+
+        [$union, $up] = self::unionSql();
+        $expRows = Database::all(
+            "SELECT t.d AS d, COALESCE(SUM(t.amount),0) AS v FROM ($union) t
+             WHERE t.source <> 'debt' AND t.d BETWEEN ? AND ? GROUP BY t.d",
+            array_merge($up, [$start, $endDate])
+        );
+        $rcpRows = Database::all(
+            "SELECT s.entry_date AS d, COUNT(*) AS v FROM permit_stages s
+             WHERE s.stage_key='receipts' AND s.entry_date BETWEEN ? AND ? GROUP BY s.entry_date",
+            [$start, $endDate]
+        );
+
+        $exp = array_column($expRows, 'v', 'd');
+        $rcp = array_column($rcpRows, 'v', 'd');
+        $out = ['days' => [], 'expenses' => [], 'receipts' => []];
+        for ($i = 0; $i < $days; $i++) {
+            $d = date('Y-m-d', strtotime($start . ' +' . $i . ' day'));
+            $out['days'][]     = $d;
+            $out['expenses'][] = round((float) ($exp[$d] ?? 0), 2);
+            $out['receipts'][] = (int) ($rcp[$d] ?? 0);
+        }
+        return $out;
     }
 
     /** السنوات المتاحة في السجل (لفلتر سريع) */

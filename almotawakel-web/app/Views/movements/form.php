@@ -18,9 +18,9 @@ $visaCards = \App\Models\VisaCard::all(true);
     <div class="field"><label>رقم البوليصة (اختياري)</label><input list="dl_bills" name="bill_number" value="<?= e($billNumber) ?>" placeholder="اربط ببوليصة" autocomplete="off"></div>
     <div class="field"><label>السائق</label><input list="dl_driver" name="driver" value="<?= e($mv['driver']) ?>" autocomplete="off"></div>
     <div class="field"><label>مالك السيارة</label><input list="dl_owner" name="car_owner" value="<?= e($mv['car_owner']) ?>" autocomplete="off"></div>
-    <div class="field"><label>شركة الشحن</label><input name="shipping_co" value="<?= e($mv['shipping_co']) ?>"></div>
-    <div class="field"><label>توكيل</label><input name="agency" value="<?= e($mv['agency']) ?>"></div>
-    <div class="field"><label>الميناء</label><input name="port" value="<?= e($mv['port']) ?>"></div>
+    <div class="field"><label>شركة الشحن</label><?php partial('lookup_select', ['name'=>'shipping_co','type'=>'shipping_co','value'=>$mv['shipping_co']]); ?></div>
+    <div class="field"><label>توكيل</label><?php partial('lookup_select', ['name'=>'agency','type'=>'agency','value'=>$mv['agency']]); ?></div>
+    <div class="field"><label>الميناء</label><?php partial('lookup_select', ['name'=>'port','type'=>'port','value'=>$mv['port']]); ?></div>
     <div class="field"><label>ملاحظة</label><input name="note" value="<?= e($mv['note']) ?>"></div>
   </div>
 
@@ -42,30 +42,30 @@ $visaCards = \App\Models\VisaCard::all(true);
           ob_start(); ?>
           <tr>
             <td>
-              <select name="it_type[]" style="width:100%;border:1px solid var(--line2);border-radius:8px;padding:7px">
+              <select name="it_type[]" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px">
                 <?php foreach (Movement::ITEM_TYPES as $k=>$lbl): ?>
                   <option value="<?= $k ?>" <?= $type===$k?'selected':'' ?>><?= $lbl ?></option>
                 <?php endforeach; ?>
               </select>
             </td>
-            <td><input list="dl_mvcat" name="it_category[]" value="<?= e($cat) ?>" style="width:100%;border:1px solid var(--line2);border-radius:8px;padding:7px" autocomplete="off"></td>
-            <td><input type="number" step="0.01" name="it_amount[]" value="<?= e($amt) ?>" placeholder="0" style="width:100%;border:1px solid var(--line2);border-radius:8px;padding:7px;text-align:center"></td>
+            <td><input list="dl_mvcat" name="it_category[]" value="<?= e($cat) ?>" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px" autocomplete="off"></td>
+            <td><input type="number" step="0.01" name="it_amount[]" value="<?= e($amt) ?>" placeholder="0" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px;text-align:center"></td>
             <td>
-              <select name="it_visa[]" title="طريقة الدفع" class="js-pay-sel" style="width:100%;border:1px solid var(--line2);border-radius:8px;padding:7px">
+              <select name="it_visa[]" title="طريقة الدفع" class="js-pay-sel" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px">
                 <option value="0" <?= (int)$visa===0?'selected':'' ?>>نقدي</option>
-                <option value="1" <?= (int)$visa===1?'selected':'' ?>>💳 فيزا</option>
+                <option value="1" <?= (int)$visa===1?'selected':'' ?>><?= icon('credit-card', 14) ?> فيزا</option>
               </select>
             </td>
             <td>
-              <select name="it_card[]" title="كارت الفيزا" class="js-card-sel" style="width:100%;border:1px solid var(--line2);border-radius:8px;padding:7px<?= (int)$visa===1?'':';display:none' ?>">
+              <select name="it_card[]" title="كارت الفيزا" class="js-card-sel" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px<?= (int)$visa===1?'':';display:none' ?>">
                 <option value="">— الكارت —</option>
                 <?php foreach ($visaCards as $vc): ?>
                   <option value="<?= (int)$vc['id'] ?>" <?= (int)$card===(int)$vc['id']?'selected':'' ?>><?= e($vc['name']) ?><?= $vc['owner']?' — '.e($vc['owner']):'' ?></option>
                 <?php endforeach; ?>
               </select>
             </td>
-            <td><input name="it_note[]" value="<?= e($note) ?>" style="width:100%;border:1px solid var(--line2);border-radius:8px;padding:7px"></td>
-            <td style="text-align:center"><button type="button" class="del rm-row" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--line2);background:#fff;cursor:pointer">🗑️</button></td>
+            <td><input name="it_note[]" value="<?= e($note) ?>" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px"></td>
+            <td style="text-align:center"><button type="button" class="del rm-row" style="width:30px;height:30px;border-radius:var(--radius-1);border:1px solid var(--line2);background:#fff;cursor:pointer"><?= icon('trash', 14) ?></button></td>
           </tr>
           <?php return ob_get_clean();
         };
@@ -74,8 +74,8 @@ $visaCards = \App\Models\VisaCard::all(true);
         ?>
       </tbody>
     </table>
-    <button type="button" class="btn ghost sm" id="addRow" style="margin-top:12px">➕ إضافة بند</button>
-    <div style="margin-top:14px;display:flex;gap:22px;flex-wrap:wrap;font-weight:700">
+    <button type="button" class="btn ghost sm" id="addRow" style="margin-top:12px"><?= icon('plus', 14) ?> إضافة بند</button>
+    <div style="margin-top:14px;display:flex;gap:22px;flex-wrap:wrap;font-weight:500">
       <span>مصروفات: <span id="sumExpense" style="color:var(--red)">0</span></span>
       <span>إيصالات: <span id="sumReceipt" style="color:var(--green)">0</span></span>
       <span>خصومات: <span id="sumDiscount" style="color:#8a6d10">0</span></span>
@@ -84,7 +84,7 @@ $visaCards = \App\Models\VisaCard::all(true);
   </div>
 
   <div class="form-actions">
-    <button class="btn gold" type="submit">💾 <?= $isEdit?'حفظ التعديلات':'حفظ الحركة' ?></button>
+    <button class="btn gold" type="submit"><?= icon('download', 14) ?> <?= $isEdit?'حفظ التعديلات':'حفظ الحركة' ?></button>
     <a class="btn ghost" href="<?= url('movements') ?>">إلغاء</a>
   </div>
 </form>

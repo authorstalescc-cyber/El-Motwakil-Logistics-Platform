@@ -21,11 +21,10 @@ use App\Core\FormState;
       <?php partial('empty', [
         'emoji' => '📭',
         'title' => 'مفيش أذونات مفتوحة متاحة للتنزيل',
-        'note'  => 'الإذن لازم يكون مفتوح وليه حركة عشان ينفع تنزّله.',
         'action' => ['label' => '📄 الأذونات والشهادات', 'url' => url('permits')],
       ]); ?>
     <?php else: ?>
-      <input type="search" class="asg-q" placeholder="🔍 دوّر برقم الإذن أو الشركة أو العميل أو الوجهة…"
+      <input type="search" class="asg-q" placeholder="بحث"
              autocomplete="off" aria-label="بحث في الأذونات المتاحة">
 
       <div class="asg-list">
@@ -45,19 +44,19 @@ use App\Core\FormState;
                 <strong><?= e(\App\Models\Permit::noLabel($p['permit_type'])) ?>
                         <?= e($p['permit_no'] ?: '#' . $p['id']) ?></strong>
                 <?php if ((int) $p['containers']): ?>
-                  <span class="pill st-partial">📦 <?= (int) $p['containers'] ?><?=
+                  <span class="pill st-partial"><?= icon('package', 14) ?> <?= (int) $p['containers'] ?><?=
                     $p['container_type'] ? ' × ' . e(container_norm($p['container_type'])) : '' ?></span>
                 <?php endif; ?>
                 <?php if ((int) $p['other_reps']): ?>
-                  <span class="pill st-partial" title="منزّل كمان لمندوب تاني">🧑‍💼 <?= (int) $p['other_reps'] ?></span>
+                  <span class="pill st-partial" title="منزّل كمان لمندوب تاني"><?= icon('user', 14) ?>‍<?= icon('briefcase', 14) ?> <?= (int) $p['other_reps'] ?></span>
                 <?php endif; ?>
               </span>
               <span class="asg-sub">
-                <?php if (!empty($p['company'])): ?><span>🏢 <?= e($p['company']) ?></span><?php endif; ?>
+                <?php if (!empty($p['company'])): ?><span><?= icon('building', 14) ?> <?= e($p['company']) ?></span><?php endif; ?>
                 <?php if (!empty($p['client']) && $p['client'] !== $p['company']): ?>
-                  <span>· 👤 <?= e($p['client']) ?></span><?php endif; ?>
-                <?php if (!empty($p['destination'])): ?><span>· 📍 <?= e($p['destination']) ?></span><?php endif; ?>
-                <span>· 📅 <?= e(dfmt($p['permit_date'])) ?></span>
+                  <span>· <?= icon('user', 14) ?> <?= e($p['client']) ?></span><?php endif; ?>
+                <?php if (!empty($p['destination'])): ?><span>· <?= icon('map-pin', 14) ?> <?= e($p['destination']) ?></span><?php endif; ?>
+                <span>· <?= icon('calendar', 14) ?> <?= e(dfmt($p['permit_date'])) ?></span>
                 <span>· <?= (int) $p['movs'] ?> حركة</span>
               </span>
             </span>
@@ -96,7 +95,6 @@ use App\Core\FormState;
       partial('empty', [
         'emoji' => '📋',
         'title' => 'مفيش أذونات منزّلة له',
-        'note'  => 'التنزيل بيرفع الإذن فوق في قايمته على الموبايل — وهو أصلاً شايف كل الأذونات المفتوحة.',
       ]);
       return;
     }
@@ -165,7 +163,7 @@ use App\Core\FormState;
 .asg-none{padding:22px 12px;text-align:center;color:var(--grey);font-size:var(--fs-2)}
 
 .asg-foot{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
-.asg-count{font-size:var(--fs-1);color:var(--grey);font-weight:700}
+.asg-count{font-size:var(--fs-1);color:var(--grey);font-weight:500}
 .asg-count.on{color:var(--green)}
 </style>
 

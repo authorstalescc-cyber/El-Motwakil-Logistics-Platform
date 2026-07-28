@@ -74,6 +74,9 @@ class BawalisController extends CrudController
             $this->pasteFailure($text, 'صف العناوين لازم يحتوي «رقم البوليصة» و«التاريخ». استخدم النموذج الظاهر في النافذة.');
         }
 
+        // بعد نجاح التحقّق وقبل الكتابة — لصق مكرر = نسخة تانية من كل صف
+        $this->claimForm('bawalis');
+
         $ent = $this->entity(); $inserted=[]; $pdo=Database::conn();
         try {
             $pdo->beginTransaction();
@@ -327,14 +330,12 @@ class BawalisController extends CrudController
             return 'رقم البوليصة «' . $billNo . '» مُستخدَم من قبل — لا يمكن تكراره. اختر رقمًا مختلفًا.';
         }
 
-        // (1) عهدة السائق لا تتجاوز رصيد عهدة المكتب المتاح (عهد البوالص المُرحَّلة تاريخية — تُستثنى).
+        // (1) سقف العهدة — الفحص كله في Custody::capError (المصدر الوحيد).
+        //     على التعديل بيتفحص **الفرق** بس، فتعديل التاريخ أو أي حقل بلا زيادة
+        //     في المبلغ ما بيترفضش. عهد البوالص المُرحَّلة تاريخية — تُستثنى.
         $custody = (float) ($data['custody'] ?? 0);
         if (!$isLegacy && $custody > 0) {
-            $available = Custody::availableForBill($id ?? 0);
-            if ($custody > $available + 0.005) {
-                return 'عهدة السائق (' . number_format($custody, 0) . ') تتجاوز رصيد عهدة المكتب المتاح ('
-                     . number_format($available, 0) . '). أضِف عهدة للرصيد أولاً من صفحة «رصيد العهدة».';
-            }
+            if ($err = Custody::capError($custody, $data['car_no'] ?? null, $id)) { return $err; }
         }
 
         // (2) عدد الحاويات لا يتجاوز سعة الحركة الظاهرة؛ الحركات القديمة بلا سعة
