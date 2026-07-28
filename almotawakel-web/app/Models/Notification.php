@@ -2,6 +2,7 @@
 namespace App\Models;
 
 use App\Core\Access;
+use App\Core\App;
 use App\Core\Auth;
 use App\Core\Database;
 
@@ -92,7 +93,47 @@ class Notification
             [self::class, 'weakRepPins'],
             [self::class, 'failedLogins'],
             [self::class, 'dataQuality'],
+            [self::class, 'staleBackup'],
         ];
+    }
+
+    /**
+     * النسخة الاحتياطية اليومية وقفت؟ — **للمالك والمدير بس**.
+     *
+     * ⚠️ ده أهم إشعار «صامت» في النظام: نسخة احتياطية بطّلت تشتغل **ما بتديش
+     *    أي خطأ** — الكرون بيفشل في السكوت والنظام بيشتغل عادي، ومحدش يكتشف
+     *    غير يوم ما يحتاجها فعلاً وساعتها يكون فات شهور. عشان كده بنقيس
+     *    **عمر آخر نسخة ناجحة** مش وجود الملف.
+     *
+     * العلامة بيكتبها `bin/backup_cron.sh` بعد ما يتأكد إن الـdump كمل
+     * (سطر `Dump completed`) — يعني نجاح حقيقي مش مجرّد ملف اتعمل.
+     */
+    private static function staleBackup(): ?array
+    {
+        if (!in_array(Auth::role(), ['owner', 'manager'], true)) { return null; }
+
+        $last = trim((string) App::setting('backup_last_ok', ''));
+        if ($last === '') {
+            return self::item(
+                'backup_never', 'warn', 'alert',
+                'النسخة الاحتياطية التلقائية مش مفعّلة',
+                'ظبّط المهمة اليومية من لوحة الاستضافة عشان بيانات النظام تبقى محفوظة.',
+                'settings', 1, 'SettingsController@index'
+            );
+        }
+
+        $ts = strtotime($last);
+        if ($ts === false) { return null; }
+        $days = (int) floor((time() - $ts) / 86400);
+        if ($days < 2) { return null; }          // نسخة النهاردة أو إمبارح = تمام
+
+        // يومان تحذير · أسبوع خطر (البيانات بقت في خطر حقيقي)
+        return self::item(
+            'backup_stale', $days >= 7 ? 'err' : 'warn', 'alert',
+            'آخر نسخة احتياطية من ' . intf($days) . ' يوم',
+            'المفروض تتاخد كل يوم — راجع المهمة اليومية على لوحة الاستضافة.',
+            'settings', $days, 'SettingsController@index'
+        );
     }
 
     /**
