@@ -310,6 +310,13 @@ table.pv-tbl thead th.tbl-num,table.pv-tbl tbody td.tbl-num{
 table.data td.calc{font-style:italic;background:rgba(237,242,248,.5)}
 table.data td.pos{color:var(--green);font-weight:500}
 table.data td.neg{color:var(--red);font-weight:500;background:var(--red-lt)}
+/* ⚠️ خانتان عامّتان بدل `style=` inline في الشاشات: نص محاذاته لليمين
+   (اسم شركة/عميل) ومرجع بارز (رقم بوليصة/مستند). كانوا مكتوبين
+   `style="text-align:right"` و`style="font-weight:500"` في ٣ شاشات.
+   ⚠️ **مش `.txt` وحدها** — دي معرَّفة جوّه `.permits-v2 .pv-tbl` و`.search-table`
+      بس، فاستعمالها على `table.data` كان بيقع بلا شكل بالسكوت. */
+table.data tbody td.txt{text-align:right}
+table.data tbody td.mv-ref{font-weight:500}
 table.data tfoot td{background:var(--navy);color:var(--gold);font-weight:600;padding:11px 10px;text-align:center;border-inline-start:1px solid rgba(255,255,255,.12)}
 .tbl-sortable{white-space:nowrap}
 .tbl-sort-btn{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;margin-inline-start:5px;
@@ -390,8 +397,13 @@ table.table-sticky-first tbody td:first-child{background:var(--card)}table.table
 .form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px 18px;padding:20px}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:var(--fs-2);font-weight:500;color:var(--grey)}
-.field input,.field select{border:1px solid var(--line2);border-radius:var(--radius-1);padding:9px 12px;background:var(--input);transition:.15s}
-.field input:focus,.field select:focus{outline:none;border-color:var(--gold);background:var(--card);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+/* ⚠️ `textarea` كان **ناقصًا من القاعدة دي** رغم إن `partials/field.php`
+   بيرندره — فكل `<textarea>` جوّه `.field` كان بياخد شكل المتصفح الافتراضي
+   (`push/index.php`) أو بيتنسّق `style=` inline في الشاشة (`settings/index.php`).
+   نفس عائلة `.table-mobile-scroll`: الماركب موجود والشكل ناقص فيفشل بالسكوت. */
+.field input,.field select,.field textarea{border:1px solid var(--line2);border-radius:var(--radius-1);padding:9px 12px;background:var(--input);transition:.15s}
+.field textarea{font-family:inherit;resize:vertical}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--gold);background:var(--card);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
 .field.calc input{background:#EDF2F8;font-style:italic;color:var(--navy-mid);font-weight:500}
 .field .hint{font-size:var(--fs-1);color:var(--grey)}
 .form-error-summary{margin-bottom:14px;padding:12px 15px;border:1px solid #e6b9b9;border-inline-start:5px solid var(--red);border-radius:var(--radius-2);background:var(--red-lt);color:var(--red);font-weight:600}
@@ -1633,38 +1645,6 @@ label.tl-visa input{width:18px;height:18px;accent-color:var(--gold)}
 }
 .permits-v2 .pv-new{box-shadow:0 2px 8px rgba(201,162,39,.30)}
 
-/* --- المؤشّرات التفاعلية (KPIs قابلة للنقر) --- */
-.permits-v2 .pv-kpis{
-  display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 20px
-}
-.permits-v2 .pv-kpi{
-  display:flex;align-items:center;gap:12px;text-align:start;
-  background:var(--card);border:1px solid var(--rule);border-radius:var(--radius-2);
-  padding:14px 16px;box-shadow:0 1px 2px rgba(16,36,64,.05);
-  cursor:pointer;text-decoration:none;font:inherit;width:100%;
-  transition:transform .16s cubic-bezier(.2,.7,.3,1),box-shadow .16s,border-color .16s;
-  position:relative;overflow:hidden
-}
-.permits-v2 .pv-kpi::before{content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:4px;
-  background:var(--rule-2);transition:background .16s}
-.permits-v2 .pv-kpi.k-total::before{background:var(--navy)}
-.permits-v2 .pv-kpi.k-open::before{background:#d69a1a}
-.permits-v2 .pv-kpi.k-closed::before{background:var(--green)}
-.permits-v2 .pv-kpi.k-inc.is-alert::before{background:var(--red)}
-.permits-v2 a.pv-kpi:hover,.permits-v2 button.pv-kpi:not([disabled]):hover{
-  ;box-shadow:var(--shadow-lg);border-color:color-mix(in srgb,var(--navy) 30%,var(--rule))}
-.permits-v2 button.pv-kpi[disabled]{cursor:default}
-.permits-v2 .pv-kpi.k-static{cursor:default;box-shadow:0 1px 2px rgba(16,36,64,.05)}
-.permits-v2 .pv-kpi-ic{
-  flex:none;width:42px;height:42px;border-radius:var(--radius-2);font-size:var(--fs-5);
-  display:flex;align-items:center;justify-content:center;
-  background:var(--zebra);border:1px solid var(--rule)
-}
-.permits-v2 .pv-kpi-tx{display:flex;flex-direction:column;gap:2px;min-width:0}
-.permits-v2 .pv-kpi-v{font-family:var(--mono);font-size:var(--fs-7);font-weight:500;color:var(--navy);line-height:1;font-feature-settings:"tnum" 1}
-.permits-v2 .pv-kpi-v.warn{color:#9a7a12} .permits-v2 .pv-kpi-v.good{color:var(--green)} .permits-v2 .pv-kpi-v.bad{color:var(--red)}
-.permits-v2 .pv-kpi-l{font-size:var(--fs-2);color:var(--ink-mut);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
 /* --- شريط أدوات المتابعة الحيّ (بحث/تصفية/ترتيب) --- */
 .permits-v2 .pv-ftools{
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;
@@ -1755,6 +1735,9 @@ label.tl-visa input{width:18px;height:18px;accent-color:var(--gold)}
   border:1px solid var(--rule);border-inline-start:4px solid var(--gold)
 }
 .permits-v2 .dkt-grid.is-grouped > .dkt-grp:first-child{margin-top:0}
+/* ⚠️ `.dg-ic` كان **مستعملًا وغير معرَّف** — أيقونة رأس مجموعة الشركة كانت
+   بتترسم بلا محاذاة ولا لون. نفس عائلة `.table-mobile-scroll`. */
+.permits-v2 .dg-ic{display:inline-flex;align-items:center;color:var(--gold-dark);flex:none}
 .permits-v2 .dg-nm{color:var(--navy);font-size:var(--fs-4)}
 .permits-v2 .dg-ct,.permits-v2 .dg-rem{font-size:var(--fs-2);font-weight:500;color:var(--ink-mut)}
 .permits-v2 .dg-rem b{color:var(--navy);font-family:var(--mono)}
@@ -2040,16 +2023,9 @@ label.tl-visa input{width:18px;height:18px;accent-color:var(--gold)}
 .permits-v2 .pv-empty .ic{font-size:var(--fs-8);margin-bottom:12px}
 
 /* --- استجابة --- */
-@media(max-width:900px){
-  .permits-v2 .pv-kpis{grid-template-columns:repeat(2,1fr)}
-}
 @media(max-width:640px){
   .permits-v2 .pv-sum{grid-template-columns:repeat(2,1fr)}
   .permits-v2 .pv-sum > div:nth-child(3){border-inline-start:0}
-  .permits-v2 .pv-kpis{grid-template-columns:repeat(2,1fr);gap:9px}
-  .permits-v2 .pv-kpi{padding:11px 12px;gap:9px}
-  .permits-v2 .pv-kpi-ic{width:36px;height:36px;font-size:var(--fs-5)}
-  .permits-v2 .pv-kpi-v{font-size:var(--fs-6)}
   .permits-v2 .dkt-grid{grid-template-columns:1fr}
 }
 
@@ -2858,6 +2834,9 @@ a.d-hchip:hover{background:rgba(255,255,255,.2)}
 /* ── لوحة التحكم: إضافات (بوب-أب + KPI أزرار + مراجع + عهدة) ── */
 .d-kpis.five{grid-template-columns:repeat(5,1fr)}
 button.d-kpi{width:100%;text-align:start;cursor:pointer;font-family:inherit;appearance:none}
+/* وضع الرابط في `stat` (المعامل `url`): الرقم بينقل لشاشته الكاملة المفلترة
+   بدل نافذة — أقوى لما البنود ليها شاشة فيها فلاتر وتصدير. نفس الشكل بالظبط. */
+a.d-kpi{color:inherit;cursor:pointer}
 .d-kpi-lbl{display:flex;align-items:center;gap:6px;justify-content:space-between}
 .d-kpi-eye{color:var(--grey);opacity:0;transition:.15s}
 .d-kpi:hover .d-kpi-eye{opacity:.7;color:var(--gold)}
@@ -3781,6 +3760,10 @@ button.d-hchip{cursor:pointer;font-family:inherit}
   .cars-pchips{width:100%;margin-inline-start:0}
   .cars-pchip{flex:1;justify-content:center}
 }
+/* ملاحظة صغيرة جنب عنوان مجموعة «المصروفات» في فورم البوليصة (سيارات المكتب). */
+.form-group-title .fg-note{font-weight:500;font-size:var(--fs-1);color:var(--grey);margin-inline-start:8px}
+/* نموذج المصروف وهو على وضع التعديل — إطار ذهبي عشان يبان إنه مش «إضافة». */
+.card.editing{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-light)}
 
 /* ══════════════════════════════════════════════════════════════════════════
    تقارير التشغيل (`/ops`)
@@ -3966,6 +3949,820 @@ a.mb-col:hover{background:var(--bg)}
 .ins-row.bad  svg{color:var(--red)}
 .ins-row.info svg{color:var(--navy-mid)}
 
+/* ══════════════════════════════════════════════════════════════════════
+   فورم إصدار المستند — `permits/invoice_form.php`
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ الشاشة دي كانت **أكبر تجمّع `style=` inline في النظام (٤٣ موضع)** +
+   بلوك `<style>` محلي. اتنقلت هنا لسببين:
+     • الـinline أقوى من الـstylesheet فبيدهس نقاط الكسر المتجاوبة **وبيمنع
+       الوضع الليلي** (اللون مكتوب في الماركب مش جاي من توكن).
+     • `.ct-chip` كان **مكرَّرًا حرفيًّا** في `<style>` محلي هنا وفي
+       `statements/form.php` بقيمتين مختلفتين — نفس درس `.cars-period` (v54).
+   ⚠️ النص هنا `--ink` مش `--navy`: ألوان الهوية ما بتتغيّرش في الليلي، فنص
+      كحلي على كارت غامق بيبقى شبه مقروء (باج موثَّق في شريط اليوم).
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* شارة تصنيف الحاوية — **مشتركة** بين فورم الفاتورة وفورم كشف الحساب */
+.ct-chip{display:inline-block;background:var(--bg);border:1px solid var(--line2);
+  color:var(--ink);border-radius:var(--radius-1);padding:2px 9px;
+  font-size:var(--fs-1);font-weight:500}
+
+/* ── بيانات الإذن: شبكة حقائق كثيفة (بيانات مش شرح) ── */
+.inv-facts{display:grid;grid-template-columns:repeat(5,1fr)}
+.inv-fact{padding:var(--space-2) var(--space-4);border-bottom:1px solid var(--line);
+  border-inline-start:1px solid var(--line);min-width:0}
+.inv-fact-l{display:block;font-size:var(--fs-1);color:var(--grey);font-weight:500;
+  margin-bottom:2px}
+.inv-fact-v{font-weight:500;color:var(--ink);overflow-wrap:anywhere}
+.inv-ct{padding:var(--space-2) var(--space-4);border-bottom:1px solid var(--line);
+  display:flex;gap:var(--space-2);flex-wrap:wrap;align-items:center}
+.inv-ct-l{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-1);
+  color:var(--grey);font-weight:500}
+
+/* ── اختيار نوع المستند / الضريبة ── */
+.inv-choice{display:flex;gap:var(--space-2);flex-wrap:wrap}
+.ichip{display:inline-flex;align-items:center;gap:var(--space-2);
+  padding:10px 18px;border:1.5px solid var(--line2);border-radius:var(--radius-2);
+  cursor:pointer;font-weight:500;user-select:none;color:var(--ink);
+  transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease)}
+.ichip.sm{padding:8px 14px}
+.ichip input{accent-color:var(--navy)}
+.ichip:has(input:checked){border-color:var(--gold);background:var(--gold-light);
+  box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+.inv-q{font-weight:500;color:var(--ink);margin-bottom:var(--space-2)}
+
+/* ── شبكات الحقول (**ممنوع `grid-template-columns` inline**) ── */
+.inv-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);
+  margin-top:var(--space-4)}
+.inv-grid.one{grid-template-columns:1fr}
+
+/* ── لوح «بيانات ناقصة في الإذن» — تحذير وظيفي: القيم هتتحفظ في الإذن ── */
+.inv-missing{border:1.5px dashed var(--gold);background:var(--gold-light)}
+.inv-missing-h{display:flex;align-items:center;gap:6px;font-weight:600;
+  color:var(--ink);margin-bottom:var(--space-1)}
+
+/* ── جدول البنود: إدخال شبكي (جدول حقيقي — مقارنة رقمية بين صفوف) ── */
+.inv-items td{vertical-align:top}
+.inv-items input{width:100%;padding:7px 9px;border:1px solid var(--line2);
+  border-radius:var(--radius-1);background:var(--input);font-family:inherit}
+.inv-items input:focus{outline:none;border-color:var(--gold);background:var(--card);
+  box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+.inv-items .i-label{font-weight:500}
+.inv-items .i-qty,.inv-items .i-price{text-align:center;font-variant-numeric:tabular-nums}
+.inv-items .i-total{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;
+  text-align:left;white-space:nowrap;padding-top:14px}
+.inv-items .col-qty{width:90px} .inv-items .col-price{width:140px}
+.inv-items .col-total{width:150px} .inv-items .col-del{width:44px}
+.freight-row{background:var(--gold-light)}
+.inv-items-foot{padding:var(--space-3) var(--space-4);border-top:1px solid var(--line)}
+/* ═══ مصاريف الإذن — لوح اختيار مطوي في فورم الفاتورة (2026-08-01) ═══
+   ⚠️ في `app.css` مش `<style>` محلي: الكلاسات دي بتترسم من الجافاسكريبت كمان
+      (`is-added` على الصف)، وأي كلاس بيتحقن بلا شكل بيقع على الافتراضي بالسكوت. */
+.inv-exp{border-top:1px solid var(--line)}
+.inv-exp>summary{display:flex;align-items:center;gap:var(--space-2);cursor:pointer;
+  padding:var(--space-3) var(--space-4);font-weight:var(--fw-bold);color:var(--navy)}
+.inv-exp>summary::-webkit-details-marker{display:none}
+.inv-exp>summary small{color:var(--grey);font-weight:var(--fw-normal);font-size:var(--fs-1)}
+.inv-exp-c{background:var(--zebra);border:1px solid var(--line);border-radius:var(--radius-pill);
+  padding:0 var(--space-2);font-size:var(--fs-1);font-variant-numeric:tabular-nums}
+.inv-exp-body{padding:0 var(--space-4) var(--space-3)}
+.inv-exp-row{display:flex;align-items:center;gap:var(--space-3);
+  padding:var(--space-2) 0;border-top:1px solid var(--line)}
+.inv-exp-main{flex:1 1 auto;min-width:0}
+.inv-exp-main b{display:block;font-size:var(--fs-2)}
+.inv-exp-meta{display:block;font-size:var(--fs-1);color:var(--grey)}
+.inv-exp-warn{color:var(--gold-dark)}
+.inv-exp-amt{font-variant-numeric:tabular-nums;color:var(--navy)}
+.inv-exp-row.is-added{opacity:.55}
+@media (max-width:640px){
+  .inv-exp-row{flex-wrap:wrap}
+  .inv-exp-main{flex:1 1 100%}
+}
+
+.i-hint{font-size:var(--fs-1);color:var(--grey);margin-top:var(--space-1)}
+.i-hint b{color:var(--ink)}
+.mini-btn{border:1px solid var(--line2);background:var(--card);color:var(--ink);
+  border-radius:var(--radius-1);padding:1px 8px;cursor:pointer;
+  font-size:var(--fs-1);font-weight:500;margin-inline-start:var(--space-1)}
+.mini-btn:hover{border-color:var(--gold);color:var(--gold-dark)}
+.row-del{border:none;background:var(--red-lt);color:var(--red);
+  border-radius:var(--radius-1);width:30px;height:30px;cursor:pointer;font-weight:600;
+  display:inline-flex;align-items:center;justify-content:center}
+
+/* ── تحذير وظيفي: الإصدار بيقفل الإذن ── */
+.close-opt{display:flex;align-items:center;gap:6px;margin-top:var(--space-4);
+  padding:var(--space-2) var(--space-3);border:1px dashed var(--gold);
+  border-radius:var(--radius-1);background:var(--gold-light);font-weight:500;
+  font-size:var(--fs-2);color:var(--ink);width:fit-content}
+
+/* ── المجموع ── */
+.inv-summary{margin-top:var(--space-4);max-width:360px;margin-inline-start:auto;
+  border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden}
+.inv-summary .r{display:flex;justify-content:space-between;gap:var(--space-3);
+  padding:var(--space-2) var(--space-4);font-size:var(--fs-3);
+  border-bottom:1px solid var(--line)}
+.inv-summary .r b{font-variant-numeric:tabular-nums;font-weight:500}
+.inv-summary .r.grand{background:var(--navy);color:var(--white);border:none;
+  font-size:var(--fs-5)}
+.inv-summary .r.grand b{color:var(--gold);font-weight:600}
+
+.inv-actions{display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-4)}
+
+/* إلغاء المستند: سبب مختصر جوّه صف الإجراءات */
+.inv-void{display:inline-flex;align-items:center;gap:6px}
+.inv-void input{width:112px}
+.inv-num{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+
+@media(max-width:900px){ .inv-facts{grid-template-columns:repeat(3,1fr)} }
+@media(max-width:700px){
+  .inv-facts{grid-template-columns:repeat(2,1fr)}
+  .inv-grid{grid-template-columns:1fr}
+  .inv-summary{max-width:none}
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   سجلّ الأذونات `permits/index.php` — الإجراءات الجماعية وتذييل الجدول
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ اتنقلت من `<style>` محلي: الألوان كانت مكتوبة بالإيد (`#fff` · `#b32020`
+   · `#0f2947`) فما كانتش بتشتغل في الوضع الليلي، والقواعد بتخصّ شاشة بتتفتح
+   كل يوم. القاعدة: أي CSS جديد يستعمل التوكنز.
+   ══════════════════════════════════════════════════════════════════════ */
+.permits-v2 .pv-sp{flex:1}
+.permits-v2 .pv-count.center{justify-content:center;margin-top:var(--space-3)}
+.permits-v2 .pv-rowlink{cursor:pointer}
+.actions form{margin:0}
+
+.pv-batchbar{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;
+  margin:0 0 var(--space-3);padding:9px 14px;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--radius-2)}
+.pv-batchbar .pbb-all{display:inline-flex;align-items:center;gap:7px;font-weight:500;
+  cursor:pointer;color:var(--ink)}
+.pv-batchbar .pbb-all input,.pv-tbl .pv-pick input{width:17px;height:17px;cursor:pointer;
+  accent-color:var(--gold)}
+.pv-batchbar .pbb-count{color:var(--grey);font-weight:500}
+.pv-batchbar .pv-bulk-btn:disabled{opacity:.45;cursor:not-allowed}
+.pv-batchbar .pv-bulk-btn.pv-danger{color:var(--red);border-color:var(--red-lt)}
+.pv-batchbar .pv-bulk-btn.pv-danger:not(:disabled):hover{background:var(--red-lt)}
+
+.pv-modal{position:fixed;inset:0;z-index:var(--z-modal);background:rgba(13,29,49,.58);
+  display:flex;align-items:center;justify-content:center;padding:var(--space-5)}
+.pv-modal-card{width:min(560px,96vw);max-height:88vh;overflow:auto;background:var(--card);
+  border-radius:var(--radius-3);box-shadow:var(--shadow-lg)}
+.pv-modal-head{display:flex;justify-content:space-between;align-items:center;
+  padding:15px 18px;background:var(--navy);color:var(--white)}
+.pv-modal-x{border:0;background:transparent;color:inherit;font-size:var(--fs-6);
+  cursor:pointer;line-height:1}
+.pv-modal-body{padding:18px}
+.pv-modal-body .pv-lbl{display:block;font-weight:600;color:var(--ink);
+  font-size:var(--fs-2);margin-top:var(--space-3)}
+/* ⚠️ `.pv-hint` وقعت مني وأنا بنقل البلوك من `<style>` المحلي — الفحص اللي
+   بيقارن «كل كلاس مطبوع بكل كلاس معرَّف» هو اللي مسكها. */
+.pv-hint{font-size:var(--fs-1);color:var(--grey);line-height:1.7;margin:0 0 6px}
+.pv-modal-body input[type=text]{display:block;width:100%;margin-top:6px;
+  border:1px solid var(--line2);border-radius:var(--radius-1);padding:9px 11px;
+  background:var(--input);color:var(--ink);font-family:inherit}
+.pv-modal-body input[type=text]:focus{outline:none;border-color:var(--gold);
+  box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+.pv-modal-actions{display:flex;gap:var(--space-2);justify-content:flex-end;margin-top:18px}
+
+.pv-tbl th.pv-pick,.pv-tbl td.pv-pick{width:38px;text-align:center;padding-inline:6px}
+/* ⚠️ التذييل بيفضل كحلي في الوضعين — ده سطح هوية (زي `.inv-summary .grand`)
+   مش سطح محتوى، فألوانه ثابتة ونصّه `--white` عن قصد. */
+.pv-tbl tfoot .pv-tot td{background:var(--navy);color:var(--white);font-weight:600;
+  padding:11px 12px;text-align:center;white-space:nowrap;border-top:2px solid var(--gold)}
+.pv-tbl tfoot .pv-tot td.txt{text-align:right}
+.pv-tbl tfoot .pv-tot td.num{font-family:var(--mono);font-feature-settings:"tnum" 1}
+.pv-tbl tfoot .pv-tot td.pos{color:#a7e9bf} .pv-tbl tfoot .pv-tot td.neg{color:#ffc4c4}
+.pv-tbl tfoot .pv-grand td{background:var(--navy-dark);border-top:2px solid var(--gold)}
+.pv-tbl tfoot .pv-grand td.txt{color:var(--gold)}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   الحركات — `movements/form.php` و`movements/index.php`
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ نمط حقول الجدول كان **مكرَّرًا حرفيًّا ٦ مرات** كـ`style=` inline في
+   نفس الملف (`width:100%;border:…;padding:7px`) — ولون `#fff` على زر الحذف
+   فما كانش بيشتغل في الوضع الليلي.
+   ══════════════════════════════════════════════════════════════════════ */
+.mv-items-wrap{padding:var(--space-4) var(--space-5)}
+.mv-items{white-space:normal}
+.mv-items input,.mv-items select{width:100%;border:1px solid var(--line2);
+  border-radius:var(--radius-1);padding:7px;background:var(--input);
+  color:var(--ink);font-family:inherit}
+.mv-items input:focus,.mv-items select:focus{outline:none;border-color:var(--gold);
+  background:var(--card);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+.mv-items input[type=number]{text-align:center;font-variant-numeric:tabular-nums}
+.mv-items .col-kind{width:130px} .mv-items .col-amt{width:130px}
+.mv-items .col-pay{width:110px}  .mv-items .col-card{width:150px}
+.mv-items .col-del{width:60px}
+.mv-items .rm-row{width:30px;height:30px;border-radius:var(--radius-1);
+  border:1px solid var(--line2);background:var(--card);color:var(--red);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center}
+.mv-items .rm-row:hover{background:var(--red);color:var(--white);border-color:var(--red)}
+
+.mv-sums{margin-top:var(--space-4);display:flex;gap:22px;flex-wrap:wrap;font-weight:500}
+.mv-sums .s-ex{color:var(--red)} .mv-sums .s-rc{color:var(--green)}
+.mv-sums .s-di{color:var(--gold-dark)} .mv-sums .s-all{color:var(--ink)}
+
+@media(max-width:640px){ .mv-items-wrap{padding:var(--space-3)} }
+
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   صفحة البوليصة — `bawalis/show.php`
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ كانت ٢١ `style=` inline + `<style>` محلي. الألوان كانت مكتوبة بالإيد
+   (`#7a5f0e` · `#fff9e8` · `#6d5510` · `#c9a227`) فما كانتش بتشتغل في الوضع
+   الليلي، وشبكة الحقائق كانت `style="gap:0;padding:0"` بتدهس المتجاوب.
+   ══════════════════════════════════════════════════════════════════════ */
+.bs-sp{flex:1}
+.bs-pill{font-size:var(--fs-3);padding:6px 16px}
+
+.bs-facts{display:grid;grid-template-columns:repeat(4,1fr)}
+.bs-fact{padding:11px 16px;border-bottom:1px solid var(--line);
+  border-inline-start:1px solid var(--line);min-width:0}
+.bs-fact-l{font-size:var(--fs-1);color:var(--grey);font-weight:500;margin-bottom:3px}
+.bs-fact-v{font-weight:500;color:var(--ink);overflow-wrap:anywhere}
+.bs-fact-v.num{color:var(--ink);font-variant-numeric:tabular-nums}
+
+.bs-k{color:var(--grey);font-weight:500}
+.bs-items{margin-bottom:var(--space-3)}
+.bs-debt{margin-top:var(--space-4);display:flex;justify-content:space-between;
+  gap:var(--space-3);flex-wrap:wrap;font-weight:600}
+.bs-debt-v{color:var(--ink)}
+
+.bill-permit-link{display:inline-flex;align-items:center;gap:6px;color:var(--teal);
+  font-weight:600;text-decoration:none;border-bottom:1px dashed currentColor}
+.bill-permit-link:hover{color:var(--navy)}
+.bill-permit-link:focus-visible{outline:2px solid var(--teal);outline-offset:4px;
+  border-radius:var(--radius-1)}
+
+@media(max-width:900px){ .bs-facts{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:560px){ .bs-facts{grid-template-columns:1fr} }
+
+/* ══════════════════════════════════════════════════════════════════════
+   البوالص — القائمة (`crud/index.php`) والفورم (`crud/form.php`)
+   ولوحة «بوليصة قديمة» المشتركة مع `bawalis/show.php`
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ **`.legacy-note` كان مكتوبًا `style=` inline بالحرف في ٣ مواضع** (لوحان
+   في الفورم + لوح في صفحة البوليصة)، و`.legacy-pill` كان في `<style>` محلي
+   في القائمة وبنفس ألوانه inline في صفحة البوليصة — يعني نفس المعنى بأربع
+   نسخ. كلها ألوان مكتوبة بالإيد (`#c9a227` · `#fff9e8` · `#6d5510` · `#7a5f0e`)
+   فما كانتش بتشتغل في الوضع الليلي. نفس درس `.ct-chip` و`.cars-period`.
+   ══════════════════════════════════════════════════════════════════════ */
+.legacy-note{margin-bottom:var(--space-4);padding:13px 16px;
+  border-inline-start:5px solid var(--gold);background:var(--gold-light);color:var(--ink)}
+.legacy-pill{display:block;width:max-content;margin:4px auto 0;padding:2px 7px;
+  border-radius:var(--radius-pill);background:var(--gold-dark);color:var(--white);
+  font-size:var(--fs-1);font-weight:600}
+
+/* الصف القابل للنقر — الخطّاف في `crud/index.php` وبيشتغل بالجافاسكريبت */
+tr.rowlink{cursor:pointer}
+tr.rowlink:hover{background:var(--gold-light)!important}
+tr.legacy-row{background:var(--gold-light)}
+tr.legacy-row:hover{background:var(--gold-light)!important}
+.server-sort{color:inherit;text-decoration:none;display:inline-flex;align-items:center;
+  gap:5px;white-space:nowrap}
+.server-sort:hover{text-decoration:underline}
+table.data th.col-pick{width:38px}
+
+/* لصق من إكسل */
+.paste-form{padding:18px}
+.paste-err{margin-top:var(--space-3)}
+.paste-box{width:100%;margin-top:var(--space-3);padding:var(--space-3);
+  border:1px solid var(--line2);border-radius:var(--radius-2);background:var(--input);
+  color:var(--ink);font-family:inherit;white-space:pre}
+.paste-box:focus{outline:none;border-color:var(--gold);background:var(--card);
+  box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+.paste-template{direction:rtl;padding:9px 11px;border:1px dashed var(--gold);
+  border-radius:var(--radius-1);background:var(--gold-light);color:var(--ink);
+  font-size:var(--fs-1);line-height:1.8}
+.paste-preview{margin-top:var(--space-3);padding:var(--space-3);border:1px solid var(--line);
+  border-radius:var(--radius-2);background:var(--zebra);max-height:230px;overflow:auto}
+.paste-preview table{margin-top:var(--space-2);font-size:var(--fs-1)}
+
+/* ══════════════════════════════════════════════════════════════════════
+   بلوك الحركة `permits/_movement.php` — كثافة وتوكنز
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ القالب ده **بيتعاد رسمه بالـAJAX** (`PermitController::ajaxMovement`
+   بيرندره ويرجّعه HTML، و`applyMovement` في `app.js` بيبدّل العنصر الجذر).
+   يعني جذره `<details class="movement card" id="movement-{id}">` **عقد** —
+   ممنوع تغييره ولا تغيير أي كلاس بيقرا منه الجافاسكريبت.
+   اللي اتغيّر هنا **شكل بحت**: ٢٠ `style=` inline بقوا كلاسات بتوكنز.
+   ⚠️ `.mv-meta-form` كان **مستعملًا وبلا أي CSS** — كل تخطيطه inline (الحارس
+      الجديد في `verify_ux` هو اللي بيمسك النوع ده).
+   ══════════════════════════════════════════════════════════════════════ */
+/* الفورمات الصغيرة جوّه الصفوف كانت كلها `style="margin:0"` */
+.movement form{margin:0}
+/* حالة الفراغ بتترسم من الخادم **ومن `app.js`** بعد حذف آخر حركة — نفس الكلاس
+   في الاتنين عشان الشكل ما يختلفش بين الحالتين. */
+.empty-mv-in{padding:32px}
+.movement .mv-sp{flex:1}
+/* فواصل مرنة وفورمات جوّه أجسام شاشة الإذن (`_body_view` · `_body_manage` ·
+   `_bar` · `_docs`) — كانت كلها `style="flex:1"` و`style="margin:0"`. */
+.ps-sp{flex:1}
+.stage-sum .ps-sp,.ss-head .ps-sp{flex:1}
+.permit-bar form,.stage-body form.ps-del-form{margin:0}
+.ps-del-form{margin:6px 0 0}
+.pdoc-flag-inline{margin-inline-start:var(--space-2)}
+
+/* فورم «حركة جديدة» — `.mv-add-form` كان **مستعملًا وبلا أي CSS** وكل تخطيطه
+   inline (نفس عائلة `.mv-meta-form`). */
+.mv-add-form{margin:0;display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap}
+.mv-add-form input,.mv-add-form select{border:1px solid var(--line2);
+  border-radius:var(--radius-1);padding:7px;background:var(--input);color:var(--ink);
+  font-family:inherit}
+.mv-add-form input:focus,.mv-add-form select:focus{outline:none;border-color:var(--gold);
+  background:var(--card);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+.mva-count{width:120px} .mva-type{width:130px}
+@media(max-width:640px){ .mva-count,.mva-type{width:100%} .mv-add-form{width:100%} }
+
+/* ⚠️ مُعدِّل الخطر للأزرار الصغيرة — كان `style="color:var(--red)"` مكرَّرًا
+   ٣ مرات. عام عشان أي زر حذف تاني يستعمله بدل ما يكتبه inline. */
+.btn.ghost.danger{color:var(--red)}
+.btn.ghost.danger:hover{background:var(--red);color:var(--white);border-color:var(--red)}
+/* زر حذف الحركة عايش في الترويسة الكحلي الغامق — لونه من عائلة `.mv-stats .neg`
+   (كان `#ffb4a8` مكتوبًا بالإيد) */
+.mv-del-btn{color:#ffb4a8}
+.mv-del-btn:hover{background:rgba(255,180,168,.16);color:#ffb4a8}
+
+.mv-qty{max-width:80px}
+.mv-gen-link{margin-top:var(--space-2)}
+
+/* بيانات الحركة الوصفية (عدد/تصنيف الحاويات + ملاحظة) — معزولة عن أي حساب */
+.mv-meta-form{display:flex;gap:var(--space-3);align-items:flex-end;flex-wrap:wrap;
+  padding:10px 4px 14px;border-bottom:1px dashed var(--line2);margin-bottom:var(--space-3)}
+.mvm-fld{display:flex;flex-direction:column;gap:3px;font-size:var(--fs-1);color:var(--grey)}
+.mvm-fld.grow{flex:1;min-width:160px}
+.mv-meta-form input,.mv-meta-form select{border:1px solid var(--line2);
+  border-radius:var(--radius-1);padding:7px;background:var(--input);color:var(--ink);
+  font-family:inherit}
+.mv-meta-form input:focus,.mv-meta-form select:focus{outline:none;border-color:var(--gold);
+  background:var(--card);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+.mvm-count{width:120px} .mvm-type{width:150px}
+
+@media(max-width:640px){
+  .mv-meta-form{gap:var(--space-2)}
+  .mvm-count,.mvm-type{width:100%}
+  .mvm-fld{flex:1 1 100%}
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   المديونيات — `debts/index.php` و`debts/account.php`
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ اتنقلت من بلوكَي `<style>` محليين + ٥٢ `style=` inline. الألوان كانت
+   مكتوبة بالإيد (`#f6f8ff` · `#c5cbf0` · `#e7f0fb` · `#efe7fb` · `#fbe7ec` ·
+   `#e7f6ef` · `#fdf0e3` · `#cfd9e6` · `#fff`) فما كانتش بتشتغل في الوضع
+   الليلي، و`.visa-badge` كان مكرَّرًا inline في `account.php`.
+   ══════════════════════════════════════════════════════════════════════ */
+.debts-tabs{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:6px 0 18px;
+  border-bottom:2px solid var(--line);padding-bottom:2px}
+.debts-tabs .tab-btn{background:transparent;border:0;padding:10px 18px;
+  border-radius:10px 10px 0 0;font-family:inherit;font-size:var(--fs-3);font-weight:500;
+  color:var(--grey);cursor:pointer;position:relative;top:2px}
+.debts-tabs .tab-btn.active{color:var(--ink);background:var(--card);
+  border:2px solid var(--line);border-bottom:2px solid var(--card)}
+/* ⚠️ `.tab-panel` معرَّفة **فوق** (سطر ~696 بـ`fadeIn`) وبتخدم `settings` كمان.
+   البلوك المحلي القديم في `debts` كان بيدهسها بنسخة تانية (`tp`) — تكرارها هنا
+   كان هيغيّر أنيميشن شاشة الإعدادات كمان. القاعدة الواحدة بتخدم الاتنين. */
+/* العناوين: ثبّت المحاذاة لليمين (تفادي تعارض space-between العام مع الشريط الذهبي) */
+.tab-panel .section-head,#tab-others .section-head{justify-content:flex-start}
+.tab-panel .section-head.spread{justify-content:space-between}
+
+.debt-figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:var(--space-3);margin-bottom:var(--space-4)}
+.debt-figs.tight{margin-bottom:var(--space-3)}
+.debt-figs .fig{background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius-2);padding:14px 12px;text-align:center;overflow:hidden}
+.debt-figs .fig .lbl{font-size:var(--fs-2);color:var(--grey);font-weight:500;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.debt-figs .fig .val{font-size:var(--fs-6);font-weight:600;margin-top:4px;color:var(--ink)}
+.debt-figs .fig .val.navy{color:var(--ink)}
+.debt-figs .fig .val.pos{color:var(--green)} .debt-figs .fig .val.neg{color:var(--red)}
+
+.note-line{background:var(--zebra);border:1px dashed var(--line2);
+  border-radius:var(--radius-2);padding:11px 15px;color:var(--ink);
+  font-size:var(--fs-2);line-height:1.7;margin-bottom:14px}
+
+.mini-owners{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+  gap:var(--space-3)}
+.mo-card{display:flex;flex-direction:column;gap:6px;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--radius-2);padding:14px;
+  box-shadow:var(--shadow);cursor:pointer;transition:border-color var(--dur-fast) var(--ease)}
+.mo-card:hover{border-color:var(--line2);background:var(--zebra)}
+.mo-card .nm{display:flex;align-items:center;gap:var(--space-2);font-weight:600;color:var(--ink)}
+.mo-card .nm .av{width:30px;height:30px;border-radius:50%;background:var(--gold-light);
+  color:var(--ink);display:flex;align-items:center;justify-content:center;
+  font-size:var(--fs-2);font-weight:600;flex-shrink:0}
+.mo-card .row{display:flex;justify-content:space-between;font-size:var(--fs-2)}
+.mo-card .row.sub{font-size:var(--fs-1);color:var(--grey)}
+.mo-card .row b.neg{color:var(--red)} .mo-card .row b.pos{color:var(--green)}
+
+.exp-cards{display:flex;flex-wrap:wrap;gap:var(--space-3);margin-bottom:var(--space-4)}
+/* ⚠️ اللوح ده سطح هوية (كحلي في الوضعين) زي `.inv-summary .grand` — نصّه `--white` عن قصد */
+.exp-grand{flex:1 1 220px;background:var(--navy);color:var(--white);
+  border-radius:var(--radius-2);padding:16px 20px}
+.exp-grand .lbl{font-size:var(--fs-2);opacity:.85}
+.exp-grand .val{font-size:var(--fs-7);font-weight:600;color:var(--gold);margin-top:4px}
+.exp-grand .sub{font-size:var(--fs-2);opacity:.8;margin-top:4px}
+.exp-src{flex:1 1 150px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius-2);padding:12px 16px}
+.exp-src .lbl{font-size:var(--fs-2);color:var(--grey)}
+.exp-src .val{font-size:var(--fs-5);font-weight:500;margin-top:4px;color:var(--ink)}
+.exp-src .cnt{font-size:var(--fs-1);color:var(--grey)}
+
+.src-pill{display:inline-block;padding:2px 10px;border-radius:var(--radius-pill);
+  font-size:var(--fs-2);font-weight:400;white-space:nowrap;
+  background:var(--bg);border:1px solid var(--line2);color:var(--ink)}
+.src-manual{color:var(--navy-mid)} .src-permits{color:var(--purple)}
+.src-bawalis{color:var(--red)}     .src-takhlis{color:var(--green)}
+.visa-badge{display:inline-block;background:var(--gold-light);color:var(--gold-dark);
+  border-radius:var(--radius-pill);padding:1px 8px;font-size:var(--fs-1);font-weight:500}
+
+/* عناصر صغيرة كانت `style=` inline مكرَّرة */
+.dbt-sub{font-size:var(--fs-1);color:var(--grey)}
+.dbt-none{color:var(--grey);font-weight:500}
+.dbt-tot{font-weight:600}
+.dbt-totlbl{text-align:left;font-weight:500}
+.dbt-tw{margin-top:var(--space-3)}
+.dbt-cut{padding:var(--space-3) 4px;color:var(--grey)}
+.dbt-amt{max-width:130px}
+.dbt-flbl{font-size:var(--fs-2);color:var(--grey)}
+.dbt-visa-lbl{display:flex;align-items:center;gap:6px;font-weight:500;
+  font-size:var(--fs-2);white-space:nowrap}
+.dbt-cbx{width:16px;height:16px;accent-color:var(--gold)}
+.dbt-filter{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.dba-k{background:var(--bg);font-weight:500}
+.dba-sec{margin-top:22px}
+
+/* مساعدات عامة اتولدت من الشاشة دي */
+.field.flush{margin:0}
+.form-actions.tight{margin-top:var(--space-3)}
+.form-card.flat{box-shadow:none;padding:0;border:0}
+.inline-form.wrap{flex-wrap:wrap}
+.page-actions.mb{margin-bottom:14px}
+
+/* ══════════════════════════════════════════════════════════════════════
+   أصحاب البيان — `settlements/index` · `owner` · `show` · `_bills`
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ اتنقلت من ٣ بلوكات `<style>` محلية + ٥٥ `style=` inline. الألوان كانت
+   مكتوبة بالإيد (`#fff7ed` · `#f4c150` · `#e0a500` · `#8a5a00` · `#ffe9b0` ·
+   `#e6c766` · `#cfd9e6` · `#e6d9a8` · `#7a5f0e` · `#fff`) فما كانتش بتشتغل
+   في الوضع الليلي. و`.legacy-settle` كان نسخة رابعة من `.legacy-pill`.
+   ══════════════════════════════════════════════════════════════════════ */
+.set-card{display:flex;flex-direction:column;gap:var(--space-3);background:var(--card);
+  border:1px solid var(--line);border-radius:var(--radius-3);padding:18px;
+  box-shadow:var(--shadow);transition:border-color var(--dur-fast) var(--ease);
+  position:relative;overflow:hidden;cursor:pointer}
+.set-card:hover{border-color:var(--line2);background:var(--zebra)}
+.set-card::before{content:'';position:absolute;top:0;inset-inline:0;height:4px;
+  background:linear-gradient(90deg,var(--green),var(--gold))}
+.set-card.due::before{background:linear-gradient(90deg,var(--red),var(--gold))}
+.settlement-view-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  margin:0 0 var(--space-4);padding:11px;border:1px solid var(--line);
+  border-radius:var(--radius-2);background:var(--card)}
+.set-figs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;
+  background:var(--zebra);border:1px solid var(--line);border-radius:var(--radius-2);
+  padding:11px 8px}
+.set-figs>div{display:flex;flex-direction:column;gap:3px}
+.set-figs span{font-size:var(--fs-1);color:var(--grey);font-weight:500}
+.set-figs b{font-size:var(--fs-4);font-weight:600;color:var(--ink)}
+.set-figs b.fig-navy{color:var(--ink)}
+.set-figs b.pos{color:var(--green)} .set-figs b.neg{color:var(--red)}
+.set-bar{height:7px;background:var(--line);border-radius:var(--radius-1);overflow:hidden}
+.set-bar span{display:block;height:100%;background:var(--green);border-radius:var(--radius-1)}
+
+/* تنبيه «فيه مديونية» — تحذير وظيفي بيوصّل لقايمة المستحقّين */
+.warn-box{display:flex;align-items:center;gap:var(--space-4);text-decoration:none;
+  color:inherit;background:var(--gold-light);border:2px solid var(--gold);
+  border-inline-start:6px solid var(--gold-dark);border-radius:var(--radius-2);
+  padding:16px 20px;margin:6px 0 18px;transition:border-color var(--dur-fast) var(--ease);
+  cursor:pointer}
+.warn-box:hover{border-color:var(--gold-dark)}
+.warn-ic{font-size:var(--fs-8);line-height:1;flex-shrink:0;color:var(--gold-dark)}
+.warn-txt{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+.warn-txt>b{font-size:var(--fs-4);color:var(--ink)}
+.warn-txt>span{font-size:var(--fs-3);color:var(--grey);line-height:1.7}
+.warn-cta{flex-shrink:0;font-weight:600;color:var(--gold-dark);background:var(--card);
+  border:1px solid var(--gold);border-radius:var(--radius-2);padding:9px 14px;white-space:nowrap}
+
+/* ⚠️ `.set-hero*` **معرَّفة فوق (سطر ~1561)** ومعاها المُعدِّل `.set-hero.warn`.
+   البلوك المحلي القديم في `owner.php` كان بيدهسها بنسخة تانية — تكرارها هنا
+   كان هيكسر مُعدِّل `.warn` و`margin:0` على العنوان. القاعدة الأصلية بتخدمها. */
+
+/* جدول البوالص + شريط الدفع اللاصق */
+table.data tr.bill-row.on{background:var(--gold-light)!important}
+table.data tr.bill-row.on td{border-color:var(--gold)}
+.pay-bar{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;
+  padding:14px 18px;border-top:2px solid var(--line2);background:var(--zebra);
+  position:sticky;bottom:0;z-index:var(--z-sticky)}
+.pay-bar-info{display:flex;gap:18px;font-weight:500;color:var(--ink)}
+.pay-bar-info b{font-size:var(--fs-4)}
+.pay-bar .btn[disabled]{opacity:.5;cursor:not-allowed}
+
+/* عناصر كانت `style=` inline */
+.toolbar.stack{flex-direction:column;align-items:stretch;gap:var(--space-3)}
+.st-form{width:100%}
+.dir-search.full{max-width:none;width:100%}
+.st-filters{display:flex;gap:var(--space-3);flex-wrap:wrap;align-items:center;width:100%}
+.st-lbl{color:var(--grey);font-weight:500}
+.st-grow{min-width:0;flex:1}
+.ct-alloc.mb{margin-bottom:14px}
+.st-void{opacity:.55}
+.st-ok{color:var(--green)}
+.st-pay-in{width:118px;border:1px solid var(--line2);border-radius:var(--radius-1);
+  padding:6px 8px;text-align:center;background:var(--input);color:var(--ink)}
+.st-note-in,.st-date-in{border:1px solid var(--line2);border-radius:var(--radius-1);
+  padding:8px 10px;background:var(--input);color:var(--ink);font-family:inherit}
+.st-pay-in:focus,.st-note-in:focus,.st-date-in:focus{outline:none;border-color:var(--gold);
+  background:var(--card);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+table.data th.col-pay{min-width:130px}
+.clip-150{max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.clip-170{max-width:170px;overflow:hidden;text-overflow:ellipsis}
+
+/* ══ توزيع أصحاب البيان `settlements/unassigned.php` ══
+   ⚠️ خانة «صاحب البيان» كانت `style=` inline **جوّه حلقة الصفوف** — ١٤ نمط
+   في الملف بقوا **٥٩٠ في الناتج** على ألف بوليصة. الكلاس بيحلّها من جذرها.
+   ملحوظة: `.pay-bar`/`.pay-bar-info` معرَّفين فوق في كتلة أصحاب البيان
+   (كانوا مكرَّرين في `<style>` الشاشتين بنفس القيم بالحرف). */
+.bulk-bar{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;
+  padding:14px 18px;margin-bottom:14px;background:var(--zebra);
+  border:1px solid var(--line2);border-radius:var(--radius-2)}
+.bulk-info{font-weight:500;color:var(--ink)}
+.bulk-info b{font-size:var(--fs-4)}
+table.data tr.un-row.sel{background:var(--gold-light)!important}
+table.data tr.un-row.filled td{background:var(--green-lt)}
+table.data th.col-owner{min-width:230px}
+.un-search{border:1px solid var(--line2);border-radius:var(--radius-1);padding:8px 12px;
+  min-width:220px;background:var(--input);color:var(--ink);font-family:inherit}
+.un-owner-in{width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);
+  padding:7px 10px;background:var(--input);color:var(--ink);font-family:inherit}
+.un-search:focus,.un-owner-in:focus{outline:none;border-color:var(--gold);
+  background:var(--card);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+
+/* ══ اختيار كارت الفيزا `visa_card_select()` ══
+   ⚠️ الدالة دي بتترندر في **٩ شاشات** (المديونيات · السداد · الأذونات ·
+   المصروفات · صندوق المراجعة …). كانت بتحقن `style=` inline في كل واحدة
+   منهم — والمعامل التالت اتحوّل من `style` لـ`class` عشان كده.
+   و`.visa-card-empty` كان كلاسًا **بلا أي CSS** وتنسيقه inline جوّه الدالة. */
+.visa-card-sel{background:var(--input);color:var(--ink);border:1px solid var(--line2);
+  border-radius:var(--radius-1);padding:7px 10px;font-family:inherit}
+.visa-card-sel:focus{outline:none;border-color:var(--gold);background:var(--card);
+  box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+.visa-card-sel.narrow{max-width:170px}
+.visa-card-empty{font-size:var(--fs-2);color:var(--grey);display:inline-flex;
+  align-items:center;gap:4px;flex-wrap:wrap}
+
+/* ══════════════════════════════════════════════════════════════════════
+   كارت الفيزا `office/card.php`
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ كانت **٦٧ `style=` inline** — أعلى ملف في النظام. وكانت فيها كمان
+   **نسخة محلية من معالج «إظهار الأرصدة»** رغم إن `app.js` بيعمله عام:
+   الاتنين بيسمعوا على `document` وبيقلبوا نفس المفتاح، فالضغطة كانت
+   بتتنفّذ مرتين والرصيد **ما بيتكشفش أبدًا**. نفس الباج الموثَّق في
+   `office/index.php` — اتشالت النسخة المحلية.
+   ══════════════════════════════════════════════════════════════════════ */
+.oc-hero{display:flex;flex-direction:column;justify-content:center;align-items:center;
+  padding:22px;text-align:center}
+.oc-hero-val{font-size:var(--fs-8)}
+.oc-toggle{margin-top:var(--space-2)}
+.oc-hero-meta{opacity:.85;font-size:var(--fs-2);margin-top:var(--space-2)}
+
+.oc-pad{padding:16px 18px}
+.oc-sec{margin:0 0 var(--space-3)}
+.oc-sec.wide{margin:0 0 var(--space-3)}
+.oc-sec-in{padding:16px 18px 0;margin:0}
+
+.oc-quick{display:flex;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3)}
+.oc-qbox{flex:1;min-width:140px;background:var(--bg);border-radius:var(--radius-2);
+  padding:10px 12px}
+.oc-sub-h{color:var(--grey);font-size:var(--fs-2);font-weight:500;margin-bottom:6px}
+.oc-rec{display:flex;align-items:center;gap:var(--space-2);padding:5px 0;
+  border-top:1px solid var(--line)}
+.oc-rec-d{font-size:var(--fs-1);color:var(--grey);min-width:74px}
+.oc-rec-l{flex:1;font-size:var(--fs-2)}
+.oc-rec-a{font-weight:500;font-size:var(--fs-2)}
+
+.oc-stats{display:flex;gap:var(--space-3);flex-wrap:wrap;margin-bottom:14px}
+.oc-stat{flex:1;min-width:130px}
+.oc-num{font-weight:600;font-size:var(--fs-5);color:var(--ink)}
+.oc-num.sm{font-size:var(--fs-4)}
+.oc-bar-row{display:flex;align-items:center;gap:var(--space-2)}
+.oc-bar{flex:1;height:8px;background:var(--bg);border-radius:var(--radius-pill);overflow:hidden}
+.oc-bar-fill{height:100%;background:var(--gold)}
+.oc-pct{font-size:var(--fs-2);color:var(--grey);min-width:34px}
+.oc-empty{padding:18px}
+
+/* سطر «= الرصيد المتاح» — سطح تمييز، بيفضل ذهبي فاتح في الوضعين */
+.oc-sum-k{background:var(--gold-light);font-weight:600}
+.oc-sum-v{background:var(--gold-light);font-weight:600}
+.oc-note{color:var(--grey);font-weight:400;font-size:var(--fs-2)}
+.oc-btn-bare{background:none;border:0;cursor:pointer}
+
+.oc-dep-form{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:end}
+.field.w150{width:150px} .field.w140{width:140px}
+.field.grow{flex:1;min-width:160px}
+.nowrap{white-space:nowrap}
+
+@media(max-width:640px){
+  .oc-dep-form .field.w150,.oc-dep-form .field.w140,.oc-dep-form .field.grow{width:100%;flex:1 1 100%}
+  .oc-stat,.oc-qbox{min-width:100%}
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   المرحلة ٥ — إعدادات المندوب `rep_custody/_tab_settings.php`
+   وبروفايل العميل `directory/agent.php`
+   ⚠️ ألوان كانت مكتوبة بالإيد: `#e5c86e` · `#fff8dc` · `#8a3b22` · `#25D366`.
+   ══════════════════════════════════════════════════════════════════════ */
+.rts-l{font-size:var(--fs-1);color:var(--grey);font-weight:500}
+.rts-hint{font-size:var(--fs-1);color:var(--grey);margin-top:3px}
+.rts-hint.center{text-align:center;margin-top:6px}
+.rts-head{padding:16px 18px 0;margin:0}
+.rts-body{padding:14px 18px 16px}
+.rts-body-t{padding:14px 18px 0}
+.rts-foot{padding:0 18px 16px}
+.rts-foot.mut{font-size:var(--fs-2);color:var(--grey)}
+.rts-grow{flex:1;min-width:180px}
+.rts-rule{border:0;border-top:1px solid var(--line);margin:0 0 var(--space-3)}
+.rts-rule.grow{flex:1;margin:0}
+.rts-row{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap}
+.rts-row.sp{margin:6px 0 var(--space-3)}
+.rts-row.tight{gap:var(--space-2)}
+.rts-row.wide{gap:22px;margin-bottom:var(--space-3)}
+/* تحذير وظيفي: بيانات الدخول بتتعرض مرّة واحدة بس */
+.rts-warn{margin:0 18px 14px;padding:11px 13px;border:1px solid var(--gold);
+  border-radius:var(--radius-3);background:var(--gold-light);font-size:var(--fs-2);
+  line-height:1.6;color:var(--ink)}
+.rts-warn-tx{color:var(--gold-dark)}
+.rts-note{margin-top:var(--space-2);font-size:var(--fs-2);font-weight:500}
+.rts-note.sader{color:var(--sader)} .rts-note.danger{color:var(--red);margin-top:var(--space-3)}
+.rts-pin{font-size:var(--fs-6);font-weight:700;letter-spacing:.15em}
+.rts-big{font-size:var(--fs-4);font-weight:600}
+.rts-sm{font-size:var(--fs-2)}
+.rts-click{cursor:pointer;font-size:var(--fs-2);font-weight:500}
+.rts-ok-box{border:2px solid var(--green);background:var(--green-lt)}
+/* لون واتساب — علامة تجارية، ثابت في الوضعين عن قصد */
+.btn-wa{background:#25D366;color:var(--white)}
+.btn-wa:hover{background:#1da851;color:var(--white)}
+
+.dag-head{padding:18px 20px 0;margin:0}
+.dag-head-p{padding:18px 20px 0}
+.dag-pad{padding:18px 20px}
+.dag-pad-lg{padding:20px}
+.dag-sec{margin:0 0 14px}
+.dag-tot{background:var(--gold-light);font-weight:600}
+.dag-tot.end{text-align:left}
+.dag-tot.mut{font-weight:400;color:var(--grey)}
+.dag-mut{color:var(--grey);font-weight:400}
+.dag-mut-cell{background:var(--bg);color:var(--grey)}
+
+.w-full{width:100%} .w100{width:100px}
+.mt-2{margin-top:var(--space-2)} .mt-3{margin-top:var(--space-3)}
+.mt-4{margin-top:var(--space-4)}
+
+/* ══ الإعدادات `settings/index.php` وتتبع الشحنة `tracking/show.php` (المرحلة ٥) ══ */
+.set-pad{padding:22px}
+.set-pad.narrow{max-width:760px}
+.set-mt-lg{margin-top:26px}
+.set-mt-xs{margin-top:6px}
+.set-mt-narrow{margin-top:14px;max-width:440px}
+.set-mb{margin-bottom:20px}
+.set-mb-lg{margin-bottom:22px}
+.set-my{margin:var(--space-3) 0}
+.set-lg{font-size:var(--fs-5)}
+.set-sub{font-size:var(--fs-2);color:var(--ink-mut);font-weight:500;margin:4px 0 14px}
+.set-p{color:var(--grey);line-height:1.9;margin:0 0 var(--space-3)}
+.set-row{display:flex;gap:var(--space-2)}
+.set-row.wide{flex-wrap:wrap;gap:var(--space-3);align-items:flex-end;padding:6px 2px}
+.set-chk{display:flex;align-items:center;gap:7px;padding:9px;border:1px solid var(--line);
+  border-radius:var(--radius-1)}
+.set-num{width:70px;border:1px solid var(--line2);border-radius:var(--radius-1);padding:6px;
+  text-align:center;background:var(--input);color:var(--ink)}
+.set-in{width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px;
+  background:var(--input);color:var(--ink);font-family:inherit}
+.set-num:focus,.set-in:focus{outline:none;border-color:var(--gold);background:var(--card);
+  box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+.set-cbx{width:18px;height:18px;accent-color:var(--gold)}
+.field.f160{flex:1 1 160px} .field.f140{flex:1 1 140px}
+.w120{width:120px} .w110{width:110px} .w90{width:90px} .w60{width:60px}
+.wrap-normal{white-space:normal}
+.end{text-align:left} .center{text-align:center}
+.dim{opacity:.6} .pointer{cursor:pointer} .bg-soft{background:var(--bg)}
+
+.tsh-empty{text-align:center;padding:40px 20px;margin-bottom:var(--space-3)}
+.tsh-pad{padding:14px} .tsh-pad-sm{padding:12px 14px}
+.tsh-scroll{max-height:420px;overflow-y:auto}
+.tsh-map{height:460px;width:100%}
+.tsh-note{font-size:var(--fs-1);color:var(--grey);margin-top:9px;line-height:1.7}
+.tsh-lbl{display:block;margin-bottom:var(--space-3);color:var(--ink)}
+.tsh-h{color:var(--ink);margin-bottom:6px}
+.tsh-dim{color:var(--grey);opacity:.45;margin-bottom:var(--space-3)}
+.tsh-mut-s{color:var(--grey);margin-inline-start:var(--space-2)}
+.tsh-mut-m{color:var(--grey);font-size:var(--fs-3)}
+.tsh-p{margin:0 0 var(--space-3);font-size:var(--fs-2)}
+.tsh-mb{margin-bottom:9px}
+.tsh-row{display:flex;gap:6px}
+.tsh-row.wrap{flex-wrap:wrap}
+.tsh-row.my{margin:9px 0}
+.tsh-xs{font-size:var(--fs-1);vertical-align:middle}
+
+/* ══════════════════════════════════════════════════════════════════════
+   المرحلة ٥ — الدفعة التانية: البوالص القديمة · كارت المندوب ·
+   سداد العملاء · الإشعارات · فورم كشف الحساب
+   ⚠️ ألوان كانت مكتوبة بالإيد (`#8a6d10`) بقت توكنز.
+   ══════════════════════════════════════════════════════════════════════ */
+.p5-pad{padding:14px 16px}
+.p5-pad-sm{padding:12px 16px}
+.p5-pad-16{padding:16px}
+.p5-pad-24{padding:24px}
+.p5-pad-28{padding:28px}
+.p5-pad-lg{padding:14px 18px 18px}
+.p5-pad-xl{padding:40px}
+.p5-head-20{padding:16px 20px 0;margin:0}
+.p5-mb{margin-bottom:var(--space-3)}
+.p5-mb-sm{margin:0 0 var(--space-2)}
+.p5-my{margin:14px 0 var(--space-2)}
+.p5-p-t{margin:6px 0 0;color:var(--grey)}
+.p5-p-mt{margin-top:var(--space-2);font-size:var(--fs-2);color:var(--grey)}
+.p5-p-sm{color:var(--grey);font-size:var(--fs-2);margin:6px 0 var(--space-3)}
+.p5-big{font-size:var(--fs-6);font-weight:600;color:var(--ink)}
+.p5-mid{font-size:var(--fs-4);font-weight:600;color:var(--ink)}
+.p5-h{font-weight:600;color:var(--ink);margin-bottom:var(--space-2)}
+.p5-h-inline{font-weight:600;color:var(--ink)}
+.p5-fs3{font-size:var(--fs-3)}
+.p5-start-mut{text-align:start;color:var(--grey)}
+.p5-row{display:flex;gap:var(--space-3);flex-wrap:wrap}
+.p5-row.tight{gap:var(--space-2)}
+.p5-row.wide{gap:var(--space-5)}
+.p5-row.end{align-items:end}
+.p5-mw340{min-width:340px} .p5-mw280{min-width:280px} .p5-mw200{min-width:200px}
+.p5-grow240{flex:1;min-width:240px}
+.field.grow200{flex:1;min-width:200px} .field.grow150{flex:1;min-width:150px}
+.p5-search{position:relative;flex:1;min-width:280px;max-width:420px}
+.p5-in{width:100%;padding:9px 12px;border:1px solid var(--line);
+  border-radius:var(--radius-1);background:var(--input);color:var(--ink);font-family:inherit}
+.p5-in-block{display:block;width:100%;margin-top:5px;padding:9px 12px;
+  border:1px solid var(--line);border-radius:var(--radius-1);background:var(--input);
+  color:var(--ink);font-family:inherit}
+.p5-in-block.auto{width:auto}
+.p5-in:focus,.p5-in-block:focus{outline:none;border-color:var(--gold);
+  background:var(--card);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+/* تنبيه وظيفي: بوليصة قديمة معزولة عن الحسابات */
+.p5-note{padding:14px 16px;margin-bottom:14px;border-inline-start:4px solid var(--gold)}
+.p5-gold-tx{color:var(--gold-dark)}
+.p5-chip-on{background:var(--gold-light);border-color:var(--gold);color:var(--ink)}
+.p5-edge-red{border-inline-start:4px solid var(--red)}
+.p5-edge-gold{border-inline-start:4px solid var(--gold)}
+.p5-chk{display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500}
+.p5-chk.pt{padding-top:var(--space-2)} .p5-chk.pb{padding-bottom:var(--space-2)}
+.danger-tx{color:var(--red)}
+.no-b{border-bottom:0}
+.bg-gold{background:var(--gold-light)}
+
+/* ══════════════════════════════════════════════════════════════════════
+   المرحلة ٥ — الدفعة التالتة (١٦ شاشة)
+   ⚠️ **حقل الفلترة `.p5-fin` كان النمط الأكتر تكرارًا عبر الشاشات** —
+   `padding:8px 11px;border:1px solid var(--line);border-radius:8px` مكتوب
+   بالإيد في ٦ شاشات (الفواتير · الكشوف · الاختيار · البحث). وألوان كانت
+   مكتوبة بالإيد (`#FBF3DC` · `#eef4fd` · `#cddff5` · `#1f5fa8` · `#cfe0f5`).
+   ══════════════════════════════════════════════════════════════════════ */
+.p5-fin{padding:8px 11px;border:1px solid var(--line);border-radius:var(--radius-1);
+  background:var(--input);color:var(--ink);font-family:inherit}
+.p5-fin.sm{padding:7px 10px} .p5-fin.sq{padding:8px}
+.p5-fin.w280{width:280px} .p5-fin.w300{width:300px} .p5-fin.w320{width:320px}
+.p5-fin:focus{outline:none;border-color:var(--gold);background:var(--card);
+  box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+
+.p5-pad-sm2{padding:12px} .p5-pad-xs{padding:6px} .p5-pad-18{padding:18px}
+.p5-pad-44{padding:44px}
+.p5-xscroll{overflow-x:auto}
+.p5-map{height:420px;width:100%}
+.p5-mb-10{margin-bottom:var(--space-3)}
+.p5-mt-20{margin-top:var(--space-5)}
+.p5-ib{display:inline-block}
+.p5-ib.m8{margin:var(--space-2)}
+.p5-mono{font-size:var(--fs-1);direction:ltr;text-align:left;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.p5-grow0{flex:1;min-width:0}
+.field.grow180{flex:1;min-width:180px}
+.field.mw220{min-width:220px} .field.mw150{min-width:150px}
+.field.w160{width:160px} .field.w130{width:130px}
+.w130{width:130px} .w90{width:90px} .w70{width:70px}
+.w12p{width:12%} .w14p{width:14%} .w18p{width:18%}
+.w20p{width:20%} .w26p{width:26%} .w30p{width:30%}
+.g0{gap:0} .nomb{margin-bottom:0} .ai-c{align-items:center}
+.p5-edge-gold-r{border-right:4px solid var(--gold)}
+/* وسوم حالة جودة البيانات */
+.p5-tag-red{background:var(--red-lt);color:var(--red)}
+.p5-tag-gold{background:var(--gold-light);color:var(--gold-dark)}
+.p5-info{background:var(--zebra);border:1px solid var(--line2);color:var(--ink)}
+/* نص على ترويسة كحلي — لون ثابت في الوضعين زي `.set-hero p` */
+.p5-on-navy{color:#cfe0f5}
+/* ⚠️ الألوان الشرطية اتحوّلت من `style=` inline لكلاسات شرطية — كانت بتترسم
+   **مع كل صف** (١٤١ صف في `statements/pick` = ١٤١ نمط في الصفحة الواحدة). */
+.p5-b7{font-weight:700}
+table.data tbody td.neg.dbt-tot,table.data tbody td.neg.mv-ref{background:transparent}
+
 /* ══ معدلات مشتقّة — شبكة أرقام صغيرة بلا drill (كلها مشتقة من أرقام فوقها) ══ */
 .rate-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line)}
 .rate-cell{background:var(--card);padding:12px 13px}
@@ -3997,6 +4794,8 @@ a.mb-col:hover{background:var(--bg)}
   border-top:1px solid var(--line);background:var(--bg);position:sticky;bottom:0}
 .drill-total{font-weight:700;color:var(--navy)}
 .drill-total b{font-size:var(--fs-4)}
+/* عدّاد بنود النافذة — كان `style=` inline جوّه `partials/drill.php` نفسه */
+.drill-count{color:var(--grey);font-size:var(--fs-1)}
 .drill-foot .btn{margin-inline-start:auto}
 
 /* ── شريط يوم العمل المشترك ──
@@ -4030,6 +4829,151 @@ a.mb-col:hover{background:var(--bg)}
   .day-bar-facts{width:100%;justify-content:space-between;gap:10px}
   .drill-foot .btn{margin-inline-start:0;width:100%}
 }
+
+/* ==========================================================================
+   رحلة الشحنة — تايم لاين حالة الإذن (v62)
+   ==========================================================================
+   ⚠️ الكلاسات كلها ببادئة `pj-` فما بتلمسش أي شاشة تانية، وكلها بتوكنز
+      النظام فبتشتغل في الوضع الليلي من غير ولا مُحدِّد إضافي (قاعدة المرحلة ١٥).
+   ⚠️ الملف ده لازم يفضل **قبل** مقطع الوضع الليلي آخر الملف — الإلحاق في
+      الآخر بيحطّه جوّه المقطع و`verify_dark_print` بيفشل صح.                */
+
+.pj{padding:0;overflow:hidden}
+.pj-head{display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;
+  padding:var(--space-4) var(--space-5);border-block-end:1px solid var(--line);
+  background:linear-gradient(180deg,var(--zebra),var(--card))}
+.pj-now{display:flex;align-items:center;gap:var(--space-3);flex:1 1 260px;min-width:0}
+.pj-now-ic{display:grid;place-items:center;width:42px;height:42px;flex:none;border-radius:var(--radius-3);
+  background:var(--navy);color:var(--white)}
+.pj[data-state="done"] .pj-now-ic{background:var(--green)}
+.pj[data-state="stale"] .pj-now-ic{background:var(--gold-dark)}
+.pj[data-state="idle"] .pj-now-ic{background:var(--grey)}
+.pj-now-tx{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.pj-now-l{font-size:var(--fs-1);color:var(--grey)}
+.pj-now-b{font-size:var(--fs-4);font-weight:var(--fw-bold);color:var(--ink)}
+.pj-now-s{font-size:var(--fs-1);color:var(--ink-mut)}
+.pj-badge{font-size:var(--fs-1);font-weight:var(--fw-bold);padding:3px 10px;
+  border-radius:var(--radius-pill);background:var(--zebra);color:var(--ink-mut);white-space:nowrap}
+.pj-badge.is-live{background:var(--zebra);color:var(--ink)}
+.pj-badge.is-done{background:var(--green-lt);color:var(--green)}
+.pj-badge.is-stale{background:var(--gold-light);color:var(--ink)}
+
+.pj-prog{display:flex;align-items:center;gap:var(--space-3);flex:0 1 220px;min-width:150px}
+.pj-prog-bar{flex:1;height:8px;border-radius:var(--radius-pill);background:var(--zebra);overflow:hidden}
+.pj-prog-bar span{display:block;height:100%;border-radius:var(--radius-pill);
+  background:linear-gradient(90deg,var(--navy),var(--gold));transition:width var(--dur-slow) var(--ease)}
+.pj[data-state="done"] .pj-prog-bar span{background:var(--green)}
+.pj-prog b{font-size:var(--fs-3);font-variant-numeric:tabular-nums;color:var(--ink)}
+
+.pj-next{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;
+  padding:var(--space-3) var(--space-5);background:var(--zebra);border-block-end:1px solid var(--line)}
+.pj-next-l{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-1);
+  color:var(--grey);font-weight:var(--fw-bold)}
+.pj-next-h{font-size:var(--fs-1);color:var(--ink-mut)}
+.pj-f{display:inline;margin:0}
+
+/* ── التايم لاين ───────────────────────────────────────────────────────── */
+.pj-track{list-style:none;margin:0;padding:var(--space-4) var(--space-5);position:relative}
+.pj-step{position:relative;display:flex;align-items:flex-start;gap:var(--space-3);
+  padding-block:var(--space-2);padding-inline-start:0}
+/* الخط الواصل — بيتوقف عند آخر خطوة فما بيدلدلش تحتها */
+.pj-step::before{content:"";position:absolute;inset-block-start:30px;inset-block-end:-8px;
+  inset-inline-start:13px;width:2px;background:var(--line)}
+.pj-step:last-child::before{display:none}
+.pj-step.is-done::before,.pj-step.is-current::before{background:var(--navy);opacity:.35}
+
+.pj-dot{position:relative;z-index:1;display:grid;place-items:center;width:28px;height:28px;flex:none;
+  border-radius:50%;background:var(--card);border:2px solid var(--line);color:var(--grey)}
+.pj-step.is-done .pj-dot{background:var(--navy);border-color:var(--navy);color:var(--white)}
+.pj-step.is-current .pj-dot{background:var(--gold);border-color:var(--gold);color:var(--navy-dark);
+  box-shadow:0 0 0 4px rgba(201,162,39,.22)}
+.pj-step.is-current.is-final .pj-dot,.pj-step.is-done.is-final .pj-dot{background:var(--green);
+  border-color:var(--green);color:var(--white);box-shadow:0 0 0 4px rgba(28,138,74,.18)}
+.pj-step.is-skipped .pj-dot{border-style:dashed;color:var(--grey)}
+.pj-step.is-pending .pj-dot{opacity:.55}
+
+.pj-body{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.pj-label{font-size:var(--fs-2);font-weight:var(--fw-bold);color:var(--ink)}
+.pj-step.is-current .pj-label{font-weight:var(--fw-black)}
+.pj-step.is-pending .pj-label{color:var(--ink-mut);font-weight:var(--fw-normal)}
+.pj-when{font-size:var(--fs-1);color:var(--ink-mut);font-variant-numeric:tabular-nums}
+.pj-time{color:var(--grey)}
+.pj-skip{color:var(--grey);font-style:normal}
+.pj-wait{color:var(--grey)}
+.pj-who{display:flex;flex-wrap:wrap;gap:6px;margin-block-start:2px}
+.pj-src{display:inline-flex;align-items:center;gap:3px;font-size:var(--fs-1);
+  padding:1px 7px;border-radius:var(--radius-pill);background:var(--zebra);color:var(--ink-mut)}
+/* ⚠️ «النظام» متميّز بحدّ متقطّع لا بلون هوية — نص navy على خلفية navy
+   شفافة بيبقى غامق على غامق في الوضع الليلي (ألوان الهوية ما بتتغيّرش). */
+.pj-src.is-sys{border:1px dashed var(--line2)}
+.pj-src.is-rep{background:var(--green-lt);color:var(--green)}
+.pj-src.is-bill{background:var(--gold-light);color:var(--ink)}
+.pj-note{font-size:var(--fs-1);color:var(--ink-mut);background:var(--zebra);
+  padding:4px 9px;border-radius:var(--radius-2);margin-block-start:3px;align-self:flex-start}
+
+.pj-act{flex:none;display:flex;align-items:center;gap:4px;opacity:0;transition:opacity var(--dur-base) var(--ease)}
+.pj-step:hover .pj-act,.pj-step:focus-within .pj-act{opacity:1}
+.pj-mark,.pj-undo{display:inline-flex;align-items:center;gap:4px;cursor:pointer;
+  font:inherit;font-size:var(--fs-1);padding:4px 9px;min-height:30px;
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--card);color:var(--ink-mut)}
+.pj-mark:hover{border-color:var(--navy);color:var(--navy)}
+.pj-undo:hover{border-color:var(--red);color:var(--red)}
+.pj-mark i{font-style:normal}
+
+/* ── رحلة كل عربية ─────────────────────────────────────────────────────── */
+.pj-bills,.pj-manual{border-block-start:1px solid var(--line)}
+.pj-bills>summary,.pj-manual>summary{display:flex;align-items:center;gap:6px;cursor:pointer;
+  padding:var(--space-3) var(--space-5);font-size:var(--fs-2);font-weight:var(--fw-bold);color:var(--ink)}
+.pj-bills>summary:hover,.pj-manual>summary:hover{background:var(--zebra)}
+.pj-cnt{font-size:var(--fs-1);background:var(--zebra);color:var(--ink-mut);
+  padding:1px 8px;border-radius:var(--radius-pill);font-variant-numeric:tabular-nums}
+.pj-bills-in{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:var(--space-3);padding:0 var(--space-5) var(--space-4)}
+.pj-bill{border:1px solid var(--line);border-radius:var(--radius-3);padding:var(--space-3);background:var(--card)}
+.pj-bill-h{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-block-end:8px}
+.pj-bill-no{font-weight:var(--fw-bold);font-size:var(--fs-2);color:var(--ink);font-variant-numeric:tabular-nums}
+.pj-bill-m{display:inline-flex;align-items:center;gap:3px;font-size:var(--fs-1);color:var(--ink-mut)}
+.pj-bill-st{margin-inline-start:auto;font-size:var(--fs-1);padding:2px 8px;
+  border-radius:var(--radius-pill);background:var(--zebra);color:var(--ink)}
+.pj-bill-st.is-done{background:var(--green-lt);color:var(--green)}
+.pj-mini{display:flex;gap:3px}
+.pj-mini-s{flex:1;height:6px;border-radius:var(--radius-pill);background:var(--zebra)}
+.pj-mini-s.is-done{background:var(--navy)}
+.pj-mini-s.is-current{background:var(--gold)}
+.pj-mini-s.is-skipped{background:var(--line)}
+.pj-bill-a{margin-block-start:8px}
+
+.pj-manual-f{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:var(--space-3);align-items:end;padding:0 var(--space-5) var(--space-4)}
+.pj-manual-f .btn{align-self:end}
+
+/* ⚠️ على الشاشة الواسعة الصف بيتقسم عمودين زي برامج التتبع: الاسم على
+   الابتداء والوقت/المسجِّل على الانتهاء — من غير كده نص الصف بيفضل فاضي.
+   في RTL العمود ١ = يمين والعمود ٢ = شمال (منطقية مش فيزيائية). */
+@media (min-width:760px){
+  .pj-body{display:grid;grid-template-columns:1fr auto;column-gap:var(--space-4);align-items:start}
+  .pj-label{grid-column:1;grid-row:1}
+  .pj-note{grid-column:1;grid-row:2;margin-block-start:4px;justify-self:start}
+  .pj-when{grid-column:2;grid-row:1;text-align:end}
+  .pj-who{grid-column:2;grid-row:2;justify-content:flex-end}
+}
+
+@media (max-width:640px){
+  .pj-head{padding:var(--space-3)}
+  .pj-track{padding:var(--space-3)}
+  .pj-next{padding:var(--space-3)}
+  .pj-bills>summary,.pj-manual>summary{padding:var(--space-3)}
+  .pj-bills-in,.pj-manual-f{padding-inline:var(--space-3)}
+  .pj-prog{flex-basis:100%}
+  /* على الموبايل مفيش hover — الأزرار لازم تفضل ظاهرة وإلا مفيش طريقة توصلها */
+  .pj-act{opacity:1}
+  .pj-manual-f{grid-template-columns:1fr}
+}
+
+.pv-trk{display:inline-flex;align-items:center;gap:4px;margin-block-start:4px;
+  font-size:var(--fs-1);padding:1px 7px;border-radius:var(--radius-pill);
+  background:var(--zebra);color:var(--ink);white-space:nowrap}
+.pv-trk.is-done{background:var(--green-lt);color:var(--green)}
 
 /* ==========================================================================
    ⚠️ الوضع الليلي — المرحلة ١٥ (2026-07-25)

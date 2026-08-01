@@ -60,6 +60,12 @@ $r->post('/notes/{id}',       'DashboardController@editNote');
 // شاشات الإدخال (CRUD) — نمط موحّد لكل كيان
 $r->post('/bawalis/bulk-freight', 'BawalisController@bulkFreight');
 $r->post('/bawalis/bulk-owner',   'BawalisController@bulkOwner');
+$r->get('/bawalis/excel-sync',    'ExcelSyncController@index');
+$r->get('/bawalis/excel-sync/review', 'ExcelSyncController@review');
+$r->post('/bawalis/excel-sync/confirm', 'ExcelSyncController@confirmSelection');
+$r->get('/bawalis/excel-sync/confirm', 'ExcelSyncController@confirm');
+$r->post('/bawalis/excel-sync/upload', 'ExcelSyncController@upload');
+$r->post('/bawalis/excel-sync/apply',  'ExcelSyncController@apply');
 $r->get('/bawalis/check-number',  'BawalisController@checkNumber');
 $r->post('/bawalis/bulk-paste',   'BawalisController@bulkPaste');
 $r->get('/bawalis/new-legacy',    'BawalisController@createLegacy');
@@ -115,6 +121,9 @@ $r->post('/permits/{id}/copy-bill',   'PermitController@copyBill');
 $r->post('/permits/{id}/close',       'PermitController@close');
 $r->post('/permits/{id}/checklist',   'PermitController@saveChecklist');    // حفظ إجابات مرشد الإيصالات (v32)
 $r->post('/permits/{id}/rcp-dismiss',  'PermitController@receiptDismiss');   // «مش محتاجه في الإذن ده» (v32)
+// رحلة الشحنة (v62) — تحديث الحالة التشغيلية. وصفي بحت بلا أي أثر مالي.
+$r->post('/permits/{id}/track',        'PermitController@trackStage');
+$r->post('/permits/{id}/track-undo',   'PermitController@trackUndo');
 $r->post('/permits/{id}/movement',    'PermitController@createMovement');
 $r->post('/permits/movement/{mid}/update','PermitController@updateMovement');
 $r->post('/permits/movement/{mid}/delete','PermitController@deleteMovement');
@@ -182,6 +191,12 @@ $r->post('/m/transfer/{tid}/delete', 'RepPortalController@transferDelete');
 // حرفية قبل الجشع `/m/permit/{id}` وقبل `/m/entry/{sid}` (تحذير 4).
 $r->get('/m/bill/new',  'RepPortalController@billForm');
 $r->post('/m/bill/new', 'RepPortalController@billStore');
+// «سلّمت السائق عهدته» على بوليصة **موجودة** (المرحلة ٣.٣ من docs/16):
+// المكتب بيكون سجّل البوليصة، والمندوب بيقول إنه هو اللي دفع عهدتها فتتشيل من
+// خزنة المكتب وتتحطّ على محفظته. **حرفي قبل `/m/bill/{bid}/...`** (تحذير 4).
+$r->get('/m/bill/custody',  'RepPortalController@billCustodyForm');
+$r->post('/m/bill/custody', 'RepPortalController@billCustodyStore');
+$r->post('/m/bill/{bid}/unclaim', 'RepPortalController@billCustodyUnclaim');
 $r->post('/m/bill/{bid}/delete', 'RepPortalController@billDelete');
 $r->get('/m/misc',    'RepPortalController@miscForm');   // نثرية عامة بلا إذن (v39)
 $r->post('/m/misc',   'RepPortalController@miscStore');
@@ -192,6 +207,9 @@ $r->get('/m/entry/{sid}/edit', 'RepPortalController@entryEditForm');
 $r->post('/m/entry/{sid}/delete', 'RepPortalController@entryDelete');
 $r->post('/m/entry/{sid}', 'RepPortalController@entryUpdate');
 $r->get('/m/permit/{id}/docs', 'RepPortalController@permitDocs');   // مستندات الأطراف (v56) — قبل الجشع
+// رحلة الشحنة (v62) — تحديث الحالة من الميدان. **حرفية قبل الجشع** (تحذير 4).
+$r->get('/m/permit/{id}/track',  'RepPortalController@trackForm');
+$r->post('/m/permit/{id}/track', 'RepPortalController@trackStore');
 $r->get('/m/permit/{id}',  'RepPortalController@entryForm');
 $r->post('/m/permit/{id}', 'RepPortalController@entryStore');
 $r->get('/m', 'RepPortalController@home');
@@ -215,6 +233,9 @@ $r->get('/closing/print',         'DailyClosingController@printable');
 $r->post('/closing/review',       'DailyClosingController@review');      // تعليم/إلغاء بند واحد
 $r->post('/closing/review-group', 'DailyClosingController@reviewGroup'); // تعليم/إلغاء قسم كامل
 $r->post('/closing/review-save',  'DailyClosingController@reviewSave');  // حفظ كل علامات الشاشة (بلا JS)
+// ⚠️ استلام كاش من مندوب وتصفير عهدة اليوم — بيمرّ على `RepCustody::settleZero`
+//    نفسها بتاعة كارت المندوب، فمفيش تعريف تاني لمبلغ الاستلام.
+$r->post('/closing/receive-rep',  'DailyClosingController@receiveRep');
 $r->post('/closing/close',        'DailyClosingController@close');    // اقفل اليوم (تثبيت الرصيد)
 $r->post('/closing/reopen',       'DailyClosingController@reopen');   // افتح الإقفال (آخر يوم فقط)
 
@@ -224,6 +245,8 @@ $r->post('/custody/topup',                'CustodyController@storeTopup');
 $r->get('/custody/topup/{id}/edit',       'CustodyController@editTopup');
 $r->post('/custody/topup/{id}/delete',    'CustodyController@deleteTopup');
 $r->post('/custody/topup/{id}',           'CustodyController@updateTopup');
+// نزّل عهدة لمندوب **من درج المكتب** (المصدر = office) — حرفي، بلا تعارض مع /custody/topup/{id}
+$r->post('/custody/rep-deposit',          'CustodyController@storeRepDeposit');
 
 // رصيد المكتب (كروت الفيزا) — المسارات الأخصّ قبل الجشعة /{id}
 $r->get('/office',                        'OfficeController@index');
@@ -244,8 +267,11 @@ $r->get('/cars',                          'OfficeCarController@index');
 $r->get('/cars/new',                      'OfficeCarController@create');
 // تفاصيل الأرقام (ممنوع رقم أصمّ) — حرفي قبل الجشع /cars/{id}
 $r->get('/cars/drill/{what}',             'OfficeCarController@drill');
+// فحص حيّ لفورم البوليصة: اللوحة سيارة مكتب؟ — حرفي قبل الجشع /cars/{id}
+$r->get('/cars/is-office',                'OfficeCarController@isOffice');
 $r->post('/cars',                         'OfficeCarController@store');
-// حذف مصروف + إخفاء لوحة «مش بتاعتنا» — حرفية قبل الجشع /cars/{id}
+// تعديل/حذف مصروف + إخفاء لوحة «مش بتاعتنا» — حرفية قبل الجشع /cars/{id}
+$r->post('/cars/expense/{eid}/update',    'OfficeCarController@updateExpense');
 $r->post('/cars/expense/{eid}/delete',    'OfficeCarController@deleteExpense');
 $r->post('/cars/ignore',                  'OfficeCarController@ignorePlate');
 $r->post('/cars/unignore',                'OfficeCarController@unignorePlate');
@@ -277,6 +303,7 @@ $r->get('/rep-custody/drill/{what}',               'RepCustodyController@drill')
 $r->post('/rep-custody/approve-many',              'RepCustodyController@approveMany');
 $r->post('/rep-custody/reject-many',               'RepCustodyController@rejectMany');
 $r->post('/rep-custody/bulk-edit',                 'RepCustodyController@bulkEdit');
+$r->post('/rep-custody/delete-many',               'RepCustodyController@deleteMany');   // حرفي قبل /{sid}
 $r->post('/rep-custody/deposit/{depId}/delete',    'RepCustodyController@deleteDeposit');
 $r->post('/rep-custody/settlement/{sid}/delete',   'RepCustodyController@deleteSettlement');
 $r->post('/rep-custody/assign/{aid}/done',         'RepCustodyController@assignDone');
@@ -286,7 +313,9 @@ $r->post('/rep-custody/{sid}/review-start',        'RepCustodyController@startRe
 $r->post('/rep-custody/{sid}/approve',             'RepCustodyController@approve');
 $r->post('/rep-custody/{sid}/reject',              'RepCustodyController@reject');
 $r->post('/rep-custody/{sid}/edit',                'RepCustodyController@editSubmission');
+$r->post('/rep-custody/{sid}/delete',              'RepCustodyController@deleteSubmission');   // حذف نهائي من الصندوق
 $r->post('/rep-custody/transfer/{tid}/delete',     'RepCustodyController@deleteTransfer');     // v46 — حرفي قبل /{id}
+$r->post('/rep-custody/transfer/{tid}/update',     'RepCustodyController@updateTransfer');     // تعديل تحويل — حرفي قبل /{id}
 $r->post('/rep-custody/{id}/permit-perm',          'RepCustodyController@togglePermitPerm');  // v44
 $r->post('/rep-custody/{id}/watch-perm',           'RepCustodyController@toggleWatchPerm');   // v47
 $r->post('/rep-custody/{id}/account/toggle',       'RepCustodyController@toggleAccount');

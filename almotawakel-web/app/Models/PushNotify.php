@@ -164,6 +164,30 @@ class PushNotify
         ]);
     }
 
+    /**
+     * بند اتشال من صندوق المراجعة — **للمندوب صاحبه بس**.
+     *
+     * ⚠️ لازم يتبعت: البند بيختفي من موبايل المندوب خالص (مش زي الرفض اللي
+     *    بيسيبه ظاهر بسببه)، فمن غير الإشعار ده بيفضل فاكر إنه سجّله وهو
+     *    مش موجود — ويسجّله تاني.
+     */
+    public static function submissionDeleted(int $repId, string $note, float $amount, string $permitNo = '', string $day = ''): void
+    {
+        if ($repId <= 0) { return; }
+        $bits = [$note, number_format($amount, 2) . ' ج'];
+        if (trim($permitNo) !== '') { $bits[] = 'إذن ' . trim($permitNo); }
+        if (trim($day) !== '')      { $bits[] = 'يوم ' . dfmt($day); }
+        Notify::emit('submission.deleted', [
+            'title'      => '🗑 اتشال بندك',
+            'body'       => implode(' · ', $bits) . ' — اتشال من المكتب. لو لسه محتاجه سجّله تاني.',
+            'url'        => 'm',
+            'audience'   => 'rep:' . $repId,
+            'severity'   => 'warn',
+            'actor_type' => 'user',
+            'work_date'  => $day !== '' ? $day : null,
+        ]);
+    }
+
     /** بوليصة جديدة — للمكتب. */
     public static function billCreated(int $billId, string $billNo, string $company, string $destination): void
     {
@@ -225,6 +249,26 @@ class PushNotify
             'actor_type'   => 'user',
             'subject_type' => 'permit',
             'subject_id'   => $permitId,
+        ]);
+    }
+
+    /**
+     * المندوب حدّث حالة رحلة الشحنة من الميدان — للمكتب (v62).
+     *
+     * ⚠️ **ولا مبلغ في الرسالة** — الحالة تشغيلية بحتة، والقاعدة إن أي رقم
+     *    بيخصّ العميل ممنوع يعدّي في مسار المندوب (v35).
+     */
+    public static function trackStage(int $permitId, string $permitNo, string $stageLabel, string $by): void
+    {
+        Notify::emit('track.stage', [
+            'title'        => '📍 ' . $stageLabel,
+            'body'         => 'إذن ' . ($permitNo !== '' ? $permitNo : '#' . $permitId) . ' · حدّثها ' . $by,
+            'url'          => 'permits/' . $permitId,
+            'actor_name'   => $by,
+            'actor_type'   => 'rep',
+            'subject_type' => 'permit',
+            'subject_id'   => $permitId,
+            'meta'         => ['stage' => $stageLabel],
         ]);
     }
 

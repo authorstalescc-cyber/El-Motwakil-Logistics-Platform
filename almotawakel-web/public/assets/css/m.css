@@ -1419,3 +1419,135 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 }
 @keyframes updIn{from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none}}
 @media(prefers-reduced-motion:reduce){.upd-bar{animation:none}}
+
+/* ═══ «سلّمت السائق عهدته» — قايمة اختيار بوليصة موجودة (المرحلة ٣.٣ من docs/16)
+   ⚠️ الكلاسات دي في `m.css` مش في `app.css` لأن بوابة `/m` **ما بتحمّلش app.css**
+      خالص — نفس درس `.table-mobile-scroll` (ماركب موجود وشكل ناقص = فشل صامت).
+   ⚠️ مساحة اللمس ≥44px في كل صف — الشاشة دي بتتفتح على موبايل بس. */
+.bc-find{margin:0 0 14px}
+.bc-find-lbl{display:flex;align-items:center;gap:7px;margin:0 0 7px;
+  font-size:.82rem;font-weight:500;color:var(--grey)}
+.bc-find input{width:100%;min-height:44px;box-sizing:border-box;padding:10px 12px;
+  border:1px solid var(--line);border-radius:12px;background:#fff;
+  font:inherit;font-size:.9rem;color:var(--ink,#102440)}
+.bc-list{display:grid;gap:10px;margin:0 0 6px}
+.bc-item{display:flex;align-items:flex-start;gap:11px;min-height:44px;
+  padding:11px 12px;border:1px solid var(--line);border-radius:14px;
+  background:#fff;cursor:pointer}
+.bc-item[hidden]{display:none}
+.bc-item.on{border-color:var(--navy);background:#F2F6FC}
+.bc-item > input{flex:none;inline-size:20px;block-size:20px;margin:2px 0 0;accent-color:var(--navy)}
+.bc-mid{flex:1;min-width:0;display:grid;gap:5px}
+.bc-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.bc-hd b{font-size:.92rem;font-weight:600;color:var(--ink,#102440)}
+.bc-day{font-size:.76rem;font-weight:500;color:var(--grey);font-variant-numeric:tabular-nums}
+.bc-meta{display:flex;flex-wrap:wrap;gap:4px 10px;
+  font-size:.79rem;font-weight:500;color:var(--grey);line-height:1.6}
+.bc-meta span{display:inline-flex;align-items:center;gap:4px}
+.bc-meta-2{font-size:.76rem}
+.bc-end{flex:none;display:grid;gap:2px;justify-items:end;text-align:end}
+.bc-end b{font-size:1rem;font-weight:700;color:var(--red);font-variant-numeric:tabular-nums}
+.bc-end small{font-size:.7rem;font-weight:500;color:var(--grey)}
+.bc-gross{font-variant-numeric:tabular-nums}
+.bc-none{margin:10px 0 0;font-size:.85rem;color:var(--grey);text-align:center}
+.bc-none[hidden]{display:none}
+.bc-mine-h{margin-top:22px}
+
+/* ══════════════════════════════════════════════════════════════════════
+   رحلة الشحنة على موبايل المندوب (v62)
+   ══════════════════════════════════════════════════════════════════════
+   ⚠️ الكلاسات هنا لأن بوابة `/m` **ما بتحمّلش `app.css`** — أي كلاس بيتطبع
+      في شاشات البوابة ومالوش تعريف هنا بيقع على الشكل الافتراضي **بالسكوت**
+      (درس `.table-mobile-scroll` الموثَّق).                                */
+
+/* شريحة الحالة على كارت الإذن في `/m` */
+.hm-stub-track{
+  display:flex; align-items:center; gap:8px; min-height:44px;
+  padding:9px 14px; text-decoration:none;
+  border-top:1px solid var(--hm-line); background:#F7F9FC;
+  color:var(--navy); font-size:.85rem;
+}
+.hm-stub-track .ic{display:inline-flex; color:var(--navy)}
+.hm-stub-track b{font-weight:700; font-size:.87rem}
+.hm-stub-track-m{margin-inline-start:auto; font-size:.76rem; font-weight:500; color:var(--grey)}
+.hm-stub-track.is-done{background:var(--green-lt)}
+.hm-stub-track.is-done .ic, .hm-stub-track.is-done b{color:var(--green)}
+.hm-stub-track:active{background:var(--gold-lt)}
+
+/* ── شاشة `/m/permit/{id}/track` ─────────────────────────────────── */
+.mt-now{
+  display:flex; align-items:center; gap:12px; margin:0 0 14px;
+  padding:14px; border-radius:16px; background:var(--navy); color:#fff;
+}
+.mt-now.is-done{background:var(--green)}
+.mt-now-ic{display:grid; place-items:center; width:44px; height:44px; flex:none;
+  border-radius:13px; background:rgba(255,255,255,.16)}
+.mt-now-tx{display:grid; gap:1px; min-width:0; line-height:1.35}
+.mt-now-tx span{font-size:.74rem; opacity:.8}
+.mt-now-tx b{font-size:1.05rem; font-weight:700}
+.mt-now-tx em{font-style:normal; font-size:.75rem; opacity:.8}
+.mt-pct{margin-inline-start:auto; font-size:1.25rem; font-weight:700;
+  font-variant-numeric:tabular-nums}
+
+.mt-next-f{margin:0 0 16px}
+.mt-next{
+  display:flex; align-items:center; gap:12px; width:100%; cursor:pointer;
+  min-height:var(--tap); padding:13px 14px; box-sizing:border-box;
+  border:0; border-radius:16px; background:var(--gold); color:var(--navy-dk);
+  font:inherit; text-align:start;
+}
+.mt-next:active{filter:brightness(.94)}
+.mt-next-ic{display:grid; place-items:center; width:40px; height:40px; flex:none;
+  border-radius:12px; background:rgba(255,255,255,.4)}
+.mt-next-tx{display:grid; gap:1px; min-width:0; flex:1}
+.mt-next-tx small{font-size:.72rem; font-weight:600; opacity:.75}
+.mt-next-tx b{font-size:1rem; font-weight:700}
+.mt-next-go{flex:none; display:inline-flex}
+.mt-fin{display:flex; align-items:center; gap:8px; margin:0 0 16px; padding:12px 14px;
+  border-radius:14px; background:var(--green-lt); color:var(--green);
+  font-size:.88rem; font-weight:600}
+
+.mt-track{list-style:none; margin:0 0 18px; padding:0}
+.mt-step{position:relative; display:flex; align-items:flex-start; gap:11px;
+  padding:9px 0 9px 0}
+.mt-step::before{content:""; position:absolute; top:28px; bottom:-9px;
+  inset-inline-start:12px; width:2px; background:var(--hm-line)}
+.mt-step:last-child::before{display:none}
+.mt-step.is-done::before, .mt-step.is-current::before{background:var(--navy); opacity:.3}
+.mt-dot{position:relative; z-index:1; display:grid; place-items:center;
+  width:26px; height:26px; flex:none; border-radius:50%;
+  background:#fff; border:2px solid var(--hm-line); color:var(--grey)}
+.mt-step.is-done .mt-dot{background:var(--navy); border-color:var(--navy); color:#fff}
+.mt-step.is-current .mt-dot{background:var(--gold); border-color:var(--gold);
+  color:var(--navy-dk); box-shadow:0 0 0 4px rgba(201,162,39,.24)}
+.mt-step.is-skipped .mt-dot{border-style:dashed}
+.mt-step.is-pending .mt-dot{opacity:.55}
+.mt-b{display:grid; gap:2px; min-width:0; flex:1; line-height:1.4}
+.mt-b b{font-size:.9rem; font-weight:600; color:var(--ink)}
+.mt-step.is-current .mt-b b{font-weight:700}
+.mt-step.is-pending .mt-b b{color:var(--grey); font-weight:500}
+.mt-b span{font-size:.76rem; color:var(--grey); font-variant-numeric:tabular-nums}
+.mt-b em{font-style:normal; font-size:.76rem; color:var(--grey);
+  background:var(--hm-sheet); padding:3px 8px; border-radius:8px; justify-self:start}
+.mt-skip, .mt-wait{color:var(--grey)}
+.mt-f{margin:0; flex:none}
+.mt-mark{display:grid; place-items:center; width:38px; height:38px; cursor:pointer;
+  border:1px solid var(--hm-line); border-radius:11px; background:#fff; color:var(--navy)}
+.mt-mark:active{background:var(--gold-lt)}
+
+.mt-bills{margin:0 0 8px}
+.mt-bills h2{display:flex; align-items:center; gap:6px; margin:0 0 4px;
+  font-size:.9rem; font-weight:700; color:var(--ink)}
+.mt-bills-h{margin:0 0 10px; font-size:.78rem; color:var(--grey)}
+.mt-bill{padding:11px 12px; margin-bottom:9px; border:1px solid var(--hm-line);
+  border-radius:14px; background:#fff}
+.mt-bill-h{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:8px}
+.mt-bill-h b{font-size:.88rem; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums}
+.mt-bill-h span{font-size:.76rem; color:var(--grey)}
+.mt-bill-h i{margin-inline-start:auto; font-style:normal; font-size:.74rem;
+  padding:2px 8px; border-radius:99px; background:var(--hm-sheet); color:var(--navy)}
+.mt-bill-btn{display:inline-flex; align-items:center; gap:6px; width:100%;
+  min-height:42px; box-sizing:border-box; padding:0 12px; cursor:pointer;
+  border:1px solid var(--navy); border-radius:11px; background:#F2F6FC;
+  color:var(--navy); font:inherit; font-size:.83rem; font-weight:600}
+.mt-bill-btn:active{background:var(--gold-lt)}

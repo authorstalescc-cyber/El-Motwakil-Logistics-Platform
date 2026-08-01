@@ -8,6 +8,7 @@ use App\Core\RepAuth;
 use App\Core\PrivateFile;
 use App\Models\PartyDoc;
 use App\Models\Permit;
+use App\Models\PermitTrack;
 use App\Models\RepDriverHandover;
 use App\Models\PushNotify;
 use App\Models\RepPortal;
@@ -318,6 +319,74 @@ class RepPortalController extends Controller
         $old['client_token'] = $old['client_token'] ?? bin2hex(random_bytes(16));
 
         $this->renderEntry($permit, $old, $errors, null);
+    }
+
+    // ═══════════════════════════════════ رحلة الشحنة من الميدان (v62)
+
+    /**
+     * شاشة تحديث حالة الرحلة على موبايل المندوب.
+     *
+     * ⚠️ **ولا رقم مالي فيها** (قاعدة v35: ممنوع أي مبلغ بيخصّ العميل يوصل
+     *    شاشة المندوب) — دي حالة تشغيلية بحتة.
+     */
+    public function trackForm(string $id): void
+    {
+        $this->requireRep();
+        $permit = RepPortal::myPermit(RepAuth::repId(), (int) $id);
+        if (!$permit) { flash('error', 'الإذن ده اتقفل أو مش موجود — كلّم المكتب.'); redirect('m'); }
+        if (!PermitTrack::ready()) { flash('error', 'تتبّع الرحلة لسه مش مفعّل.'); redirect('m/permit/' . (int) $id); }
+
+        $pid = (int) $permit['id'];
+        $events = PermitTrack::events($pid);
+        $this->render('m/track', [
+            'title'   => 'حالة الرحلة — ' . $permit['no'],
+            'permit'  => $permit,
+            'journey' => PermitTrack::summary($pid, $permit['type'] ?? null, PermitTrack::WHOLE_PERMIT, $events),
+            'bills'   => PermitTrack::billSummaries($pid, $permit['type'] ?? null, $events),
+        ], false);
+    }
+
+    /**
+     * حفظ تحديث الحالة من الميدان.
+     *
+     * ⚠️ **الحارس الحقيقي `RepPortal::assertAssigned`** (الإذن مفتوح — v43)
+     *    بيتنادى قبل أي كتابة؛ الفورم مش مصدر ثقة. و`PermitTrack::record`
+     *    بتتأكد إن المرحلة من نوع الإذن ده وإن البوليصة تابعة له.
+     *
+     * ⚠️ **مفيش `Closing::guard` عن قصد** — الحدث وصفي بحت وما بيدخلش أي
+     *    تقفيل، فتسجيله على يوم متقفل ما بيغيّرش أي رصيد مثبَّت (نفس قرار
+     *    اعتماد بنود المناديب في v35).
+     */
+    public function trackStore(string $id): void
+    {
+        $this->requireRep();
+        $this->requireCsrf();
+        $repId = RepAuth::repId();
+        $pid   = (int) $id;
+
+        try {
+            RepPortal::assertAssigned($repId, $pid);
+            PermitTrack::record(
+                $pid,
+                (string) ($_POST['stage_key'] ?? ''),
+                (int) ($_POST['bill_id'] ?? 0),
+                PermitTrack::SRC_REP,
+                (string) ($_POST['note'] ?? ''),
+                RepAuth::workDate(),
+                null,
+                $repId
+            );
+        } catch (\RuntimeException $e) {
+            flash('error', $e->getMessage());
+            redirect('m/permit/' . $pid . '/track');
+        }
+
+        $label = PermitTrack::labelOf((string) ($_POST['stage_key'] ?? ''));
+        $permitNo = (string) \App\Core\Database::scalar('SELECT permit_no FROM permits WHERE id = ?', [$pid]);
+        // ⚠️ الإشعار بعد نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
+        PushNotify::trackStage($pid, $permitNo, $label, (string) ($_SESSION['rep_name'] ?? 'مندوب'));
+        flash('success', 'الحالة اتحدّثت: ' . $label);
+        redirect('m/permit/' . $pid . '/track');
     }
 
     /**
@@ -631,6 +700,70 @@ class RepPortalController extends Controller
             flash('error', $e->getMessage());
         }
         redirect('m/bill/new');
+    }
+
+    // ═════════════════════════ «سلّمت السائق عهدته» على بوليصة موجودة (المرحلة ٣.٣)
+
+    /**
+     * الشاشة اللي رجّعت الإجراء الناقص: المكتب بيكون مسجّل البوليصة خلاص،
+     * والمندوب هو اللي سلّم السائق عهدتها — فبيقول كده بضغطة.
+     *
+     * ⚠️ ليه دي مش نفس `/m/bill/new`: v60 بيسمح **بإنشاء بوليصة جديدة** بس،
+     *    وده السبب إن استخدامه **صفر** — الغالب إن المكتب عامل البوليصة قبله.
+     *    بلا الشاشة دي عهدة السائق تفضل متخصومة من **خزنة المكتب** وهو اللي
+     *    دفعها، وده بالظبط الفرق اللي المرحلة ١ نضّفته وكان بيتراكم تاني.
+     *
+     * ⚠️ **وسم مش إدخال مبلغ** — الشرح الكامل في `RepPortal::claimableBills`.
+     */
+    public function billCustodyForm(): void
+    {
+        $this->requireRep();
+        $repId = RepAuth::repId();
+        $day = RepAuth::workDate();
+
+        $this->render('m/bill_custody', [
+            'title'     => 'سلّمت السائق عهدته',
+            'formToken' => \App\Core\FormState::token(),
+            // البوالص المتاحة للوسم + اللي وسمها هو في يوم العمل (قاعدة v49:
+            // شاشة المندوب تعرض يوم العمل وبس)
+            'bills'     => RepPortal::claimableBills($repId, $day),
+            'mine'      => RepPortal::myBills($repId, $day),
+            'pocket'    => RepPortal::dayPocket($repId, $day),
+            'ready'     => \App\Models\RepBillCustody::ready(),
+            'workDate'  => $day,
+        ], false);
+    }
+
+    public function billCustodyStore(): void
+    {
+        $this->requireRep();
+        $this->requireCsrf();
+        // ⚠️ رمز لمرة واحدة — ضغطة مكرّرة على شبكة بطيئة كانت هتوسم البوليصة
+        //    ثم ترجّع «حد سبقك وسجّلها» ورسالة مقلقة بلا سبب.
+        $this->claimForm('m/bill/custody');
+
+        try {
+            $res = RepPortal::claimBillCustody(RepAuth::repId(), (int) ($_POST['bill_id'] ?? 0));
+            flash('success', 'تم ✓ عهدة ' . $res['label'] . ' اتحسبت عليك — '
+                . number_format($res['amount'], 0) . ' جنيه اتخصمت من عهدتك.');
+        } catch (\Throwable $e) {
+            flash('error', $e->getMessage());
+        }
+        redirect('m/bill/custody');
+    }
+
+    /** إلغاء وسم سجّله بالغلط — العهدة ترجع على خزنة المكتب زي ما كانت. */
+    public function billCustodyUnclaim(string $bid): void
+    {
+        $this->requireRep();
+        $this->requireCsrf();
+        try {
+            $res = RepPortal::unclaimBillCustody(RepAuth::repId(), (int) $bid);
+            flash('success', 'اتلغى تسجيل عهدة ' . $res['label'] . ' — رجعت على المكتب.');
+        } catch (\Throwable $e) {
+            flash('error', $e->getMessage());
+        }
+        redirect('m/bill/custody');
     }
 
     /* ⚠️ v60 — شاشة «تسليم عهدة لسائق» (v45) اتشالت من بوابة المندوب بقرار

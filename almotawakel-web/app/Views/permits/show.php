@@ -70,6 +70,9 @@ $permitFormState = $permitFormState ?? [
 <?php /* الهيرو — كان مكرَّرًا حرفيًّا في الشاشتين (المرحلة ٣) */ ?>
 <?php include __DIR__ . '/_hero.php'; ?>
 
+<?php /* رحلة الشحنة — تايم لاين الحالة التشغيلية (v62، وصفي بحت) */ ?>
+<?php include __DIR__ . '/_journey.php'; ?>
+
 <?php /* مستندات الأطراف — البطاقة الضريبية/السجل التجاري (v56، عرض بحت) */ ?>
 <?php include __DIR__ . '/_docs.php'; ?>
 

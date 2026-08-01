@@ -3,6 +3,7 @@ namespace App\Models;
 
 use App\Core\Database;
 use App\Models\PartyDoc;
+use App\Models\PermitTrack;
 use RuntimeException;
 
 /**
@@ -192,6 +193,22 @@ class RepPortal
         }
         unset($pd);
 
+        /* حالة رحلة الشحنة (v62 — وصفي بحت). **استعلامان للشاشة كلها** عبر
+           `summaryFor` لا `summary()` في حلقة على ٣٠٠ إذن. الإذن اللي مالوش
+           أي تحديث بياخد `track = null` فما بيرسمش شارة فاضية. */
+        $trackMap = PermitTrack::summaryFor(array_keys($out));
+        foreach ($out as $tid => &$tp) {
+            $t = $trackMap[$tid] ?? null;
+            $tp['track'] = $t === null ? null : [
+                'label'    => $t['label'],
+                'icon'     => $t['icon'],
+                'percent'  => $t['percent'],
+                'finished' => $t['finished'],
+                'ago'      => PermitTrack::ago($t['last_at'] ?? null),
+            ];
+        }
+        unset($tp);
+
         // ⚠️ نرجّع بترتيب الاستعلام الأول (التاريخ) مش بترتيب الـid — الاستعلام
         //    التاني بيرتّب بـ`p.id` عشان تجميع الحركات، فالترتيب المعروض لازم
         //    يترجع من `$meta` اللي متولّدة من الترتيب الصح.
@@ -267,7 +284,7 @@ class RepPortal
             "SELECT s.*, p.permit_no, p.permit_type, p.company
              FROM rep_submissions s
              LEFT JOIN permits p ON p.id = s.permit_id
-             WHERE $where
+             WHERE $where" . RepCustody::epochSql('s.entry_date') . "
              ORDER BY s.created_at DESC, s.id DESC
              LIMIT $limit", $params);
     }
@@ -335,7 +352,7 @@ class RepPortal
                 COALESCE(SUM(status='pending'),0)  AS pending,
                 COALESCE(SUM(status='approved'),0) AS approved,
                 COALESCE(SUM(status='rejected'),0) AS rejected
-             FROM rep_submissions WHERE rep_id = ?$extra", $params);
+             FROM rep_submissions WHERE rep_id = ?$extra" . RepCustody::epochSql('entry_date'), $params);
         return [
             'pending'  => (int) ($row['pending'] ?? 0),
             'approved' => (int) ($row['approved'] ?? 0),
@@ -360,7 +377,8 @@ class RepPortal
         if ($day !== null && $day !== '') { $w = ' AND entry_date = ?'; $args[] = $day; }
         return round((float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM rep_submissions
-             WHERE rep_id = ? AND status = 'pending' AND is_visa = 0$w", $args), 2);
+             WHERE rep_id = ? AND status = 'pending' AND is_visa = 0$w"
+             . RepCustody::epochSql('entry_date'), $args), 2);
     }
 
     /**
@@ -445,7 +463,8 @@ class RepPortal
             'permit_at'  => Database::scalar(
                 "SELECT MAX(created_at) FROM permits WHERE status = 'open'"),
             'deposit_at' => RepCustody::available() ? Database::scalar(
-                "SELECT MAX(created_at) FROM rep_custody_deposits WHERE rep_id = ?$depWhere", $depArgs) : null,
+                "SELECT MAX(created_at) FROM rep_custody_deposits WHERE rep_id = ?$depWhere"
+                . RepCustody::epochSql('dep_date'), $depArgs) : null,
             'pending'    => self::myCounts($repId, $day)['pending'],
         ];
     }
@@ -903,6 +922,9 @@ class RepPortal
      */
     private static function strictValue(string $type, string $value): ?string
     {
+        // نفس قرار الأسماء البديلة في Controller::strictListError؛ مثال «40»
+        // المدموجة في «40 قدم» لازم تتوحّد في بوابة المندوب أيضًا.
+        $value = DataAlias::canonical($type, $value) ?? $value;
         $key = Maintenance::normkey($value);
         foreach (Lookup::ofType($type) as $v) {
             if (Maintenance::normkey((string) $v) === $key) { return (string) $v; }
@@ -1236,6 +1258,158 @@ class RepPortal
     public static function myBills(int $repId, string $day): array
     {
         return RepBillCustody::forRep($repId, 20, $day);
+    }
+
+    // ───────────────────────────── «سلّمت السائق عهدته» على بوليصة موجودة (٣.٣)
+
+    /** سقف قايمة البوالص المتاحة — حاجز عرض مش سياسة. */
+    private const CLAIM_LIMIT = 80;
+
+    /**
+     * البوالص اللي المندوب يقدر يقول «أنا اللي سلّمت السائق عهدتها».
+     *
+     * ⚠️ **الشاشة دي وسم مش إدخال مبلغ — والفرق ده مقصود.** المبلغ بيفضل زي ما
+     *    المكتب سجّله بالحرف، والمندوب بيقول «مين دفع» وبس. لو خلّيناه يكتب
+     *    المبلغ كان هيغيّر `bawalis.custody`، وهي **داخلة في معادلة دين
+     *    العميل** (`Calc::bawala`: نولون − عهدة − تحويلة − خصم + بياتة) — يعني
+     *    غلطة رقم واحدة بتغيّر حساب عميل. عشان كده القايمة دي بتعرض البوالص
+     *    اللي **عهدتها مسجّلة فعلاً** (`custody > 0`) وبس، والوسم بيبقى قابل
+     *    للإلغاء بالتمام (شيل الوسم = الحالة رجعت زي ما كانت بالحرف).
+     *
+     * الشروط: بوليصة حيّة (مش أرشيف) · على **إذن مفتوح** (قاعدة v43) · عهدتها
+     * مسجّلة · **مش موسومة لحد** · وتاريخها بين خط الفصل ويوم العمل، وبعد آخر
+     * يوم متقفل (اليوم المتقفل رصيده مثبَّت — v18/v49).
+     *
+     * ⚠️ `$repId` متساب في التوقيع بلا استخدام **عن قصد** — نفس سبب
+     *    `assertAssigned` بالحرف: v43 خلّت كل الأذونات المفتوحة ظاهرة لكل
+     *    المناديب، فلو اتقرّر تقييد ده بعدين يترجع من نقطة واحدة بلا لمس
+     *    الكنترولر ولا الشاشة.
+     */
+    public static function claimableBills(int $repId, string $day): array
+    {
+        if (!RepBillCustody::ready()) { return []; }
+
+        $from = RepCustody::epoch();
+        // اليوم المتقفل مرفوض في `dayLockReason` وقت الحفظ — بنفلتره من القايمة
+        // كمان عشان المندوب ما يشوفش بوالص ضغطها هيترفض بلا سبب مفهوم.
+        $lastClosed = Closing::lastClosedDate();
+        if ($lastClosed) {
+            $next = date('Y-m-d', strtotime($lastClosed . ' +1 day'));
+            if ($from === '' || $next > $from) { $from = $next; }
+        }
+
+        $args = []; $w = '';
+        if ($from !== '') { $w .= ' AND b.bill_date >= ?'; $args[] = $from; }
+        $w .= ' AND b.bill_date <= ?'; $args[] = $day;
+
+        return Database::all(
+            "SELECT b.id, b.bill_number, b.bill_date, b.driver, b.car_no, b.custody,
+                    b.container_no, b.container_type, b.container_count, b.destination,
+                    b.permit_id, p.permit_no, p.permit_type, p.company, p.client
+             FROM bawalis b
+             JOIN permits p ON p.id = b.permit_id
+             WHERE b.is_legacy = 0 AND b.custody > 0 AND b.custody_rep_id IS NULL
+               AND p.status = 'open'$w
+             ORDER BY b.bill_date DESC, b.id DESC
+             LIMIT " . self::CLAIM_LIMIT, $args);
+    }
+
+    /**
+     * المندوب بيوسم بوليصة موجودة بإنه هو اللي سلّم سائقها عهدته.
+     *
+     * ⚠️ **الأثر الوحيد: العهدة بتتشيل من خزنة المكتب وبتتحطّ على محفظته.**
+     *    المبلغ نفسه والدين والفاتورة والكشوف **ما بيتغيّروش ولا مليم** — مفيش
+     *    `Bill::recalc` هنا عن قصد لأن `custody` ما اتلمستش.
+     *
+     * ⚠️ الاتجاهان بيمشوا مع بعض في `UPDATE` واحد، والشرط `custody_rep_id IS NULL`
+     *    جوّه الـ`WHERE` هو اللي بيمنع مندوبين يوسموا نفس البوليصة في نفس اللحظة.
+     */
+    public static function claimBillCustody(int $repId, int $billId): array
+    {
+        if (!RepBillCustody::ready()) {
+            throw new RuntimeException('الميزة دي مش متفعّلة على النظام — كلّم المكتب.');
+        }
+
+        $bill = Database::row(
+            'SELECT b.*, p.status permit_status, p.permit_no
+               FROM bawalis b LEFT JOIN permits p ON p.id = b.permit_id
+              WHERE b.id = ?', [$billId]);
+        if (!$bill || (int) ($bill['is_legacy'] ?? 0) === 1) {
+            throw new RuntimeException('البوليصة دي مش موجودة.');
+        }
+        if (!empty($bill['custody_rep_id'])) {
+            $who = (string) Database::scalar(
+                'SELECT name FROM reps WHERE id = ?', [(int) $bill['custody_rep_id']]);
+            throw new RuntimeException((int) $bill['custody_rep_id'] === $repId
+                ? 'البوليصة دي متسجّلة على عهدتك خلاص.'
+                : 'البوليصة دي متسجّلة على ' . ($who !== '' ? $who : 'مندوب تاني') . '. كلّم المكتب.');
+        }
+        if ((float) ($bill['custody'] ?? 0) <= 0) {
+            throw new RuntimeException('البوليصة دي مفيهاش عهدة مسجّلة. المكتب لازم يسجّل المبلغ الأول.');
+        }
+
+        // الحد الأمني الحقيقي — إذن مفتوح وظاهر للمندوب (قاعدة v43)
+        $pid = (int) ($bill['permit_id'] ?? 0);
+        if ($pid <= 0) {
+            throw new RuntimeException('البوليصة دي مش مربوطة بإذن — كلّم المكتب.');
+        }
+        self::assertAssigned($repId, $pid);
+
+        $date = (string) $bill['bill_date'];
+        if (($block = RepBillCustody::payerBlock($date)) !== null) { throw new RuntimeException($block); }
+        if (($lock = RepCustody::dayLockReason($date)) !== null)   { throw new RuntimeException($lock); }
+
+        $pdo = Database::conn();
+        $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            // صف المندوب هو mutex كل مصادر عهدته (نفس قفل `createBill`/`RepInbox::approve`)
+            Database::row('SELECT id FROM reps WHERE id = ? FOR UPDATE', [$repId]);
+            $n = Database::exec(
+                'UPDATE bawalis SET custody_rep_id = ?
+                  WHERE id = ? AND custody_rep_id IS NULL AND is_legacy = 0', [$repId, $billId]);
+            if (!$n) {
+                throw new RuntimeException('حد سبقك وسجّلها — حدّث الصفحة.');
+            }
+            if ($own) { $pdo->commit(); }
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $e;
+        }
+
+        $amount = Custody::billDeduction((float) $bill['custody'], $bill['car_no'] ?? null);
+        $label  = 'بوليصة ' . ($bill['bill_number'] ?: '#' . $billId);
+        $after  = Database::row('SELECT * FROM bawalis WHERE id = ?', [$billId]);
+        Audit::log('update', 'bawalis', $billId, $bill, $after,
+            'عهدة ' . $label . ' اتسجّلت على محفظة المندوب — من موبايله',
+            ['permit_id' => $pid, 'permit_no' => $bill['permit_no'] ?? null,
+             'record_date' => $date, 'rep_id' => $repId, 'source' => 'rep_portal']);
+
+        return ['id' => $billId, 'label' => $label, 'amount' => $amount, 'date' => $date];
+    }
+
+    /** المندوب بيلغي وسم سجّله بالغلط — الحالة بترجع زي ما كانت بالحرف. */
+    public static function unclaimBillCustody(int $repId, int $billId): array
+    {
+        $bill = RepBillCustody::findMine($repId, $billId);
+        if (!$bill) {
+            throw new RuntimeException('البوليصة دي مش مسجّلة على عهدتك — حدّث الصفحة.');
+        }
+        $date = (string) $bill['bill_date'];
+        if (($lock = RepCustody::dayLockReason($date)) !== null) { throw new RuntimeException($lock); }
+
+        Database::exec(
+            'UPDATE bawalis SET custody_rep_id = NULL WHERE id = ? AND custody_rep_id = ?',
+            [$billId, $repId]);
+
+        $label = 'بوليصة ' . ($bill['bill_number'] ?: '#' . $billId);
+        $after = Database::row('SELECT * FROM bawalis WHERE id = ?', [$billId]);
+        Audit::log('update', 'bawalis', $billId, $bill, $after,
+            'إلغاء تسجيل عهدة ' . $label . ' من محفظة المندوب — من موبايله',
+            ['permit_id' => $bill['permit_id'] !== null ? (int) $bill['permit_id'] : null,
+             'record_date' => $date, 'rep_id' => $repId, 'source' => 'rep_portal']);
+
+        return ['id' => $billId, 'label' => $label];
     }
 
     private static function validDate(string $v): bool

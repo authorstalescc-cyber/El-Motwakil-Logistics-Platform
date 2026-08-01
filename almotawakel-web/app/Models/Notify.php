@@ -59,6 +59,7 @@ class Notify
         'bill.new'              => ['office', 'CrudController@index'],
         'submission.approved'   => ['rep',    null],
         'submission.rejected'   => ['rep',    null],
+        'submission.deleted'    => ['rep',    null],
         'custom'                => ['both',   null],
         'test'                  => ['both',   null],
 
@@ -71,6 +72,7 @@ class Notify
         'bill.linked'           => ['office', 'PermitController@index'],
         'permit.closed'         => ['office', 'PermitController@index'],
         'driver.handover'       => ['office', 'RepCustodyController@index'],
+        'track.stage'           => ['office', 'PermitController@index'],   // رحلة الشحنة (v62)
         'rep.transfer'          => ['office', 'RepCustodyController@index'],
 
         /* ── أنواع المرحلة ٧ (تلقائية — بيولّدها العامل مش المستخدم) ────────
@@ -98,6 +100,7 @@ class Notify
         'submission.new'      => ['label' => 'بند مندوب جديد',      'icon' => 'inbox'],
         'submission.approved' => ['label' => 'بند اتعمد',           'icon' => 'check-circle'],
         'submission.rejected' => ['label' => 'بند اترفض',           'icon' => 'x'],
+        'submission.deleted'  => ['label' => 'بند اتشال',           'icon' => 'trash'],
         'bill.new'            => ['label' => 'بوليصة جديدة',        'icon' => 'truck'],
         'bill.linked'         => ['label' => 'بوليصة على إذن',      'icon' => 'truck'],
         'invoice.new'         => ['label' => 'مستند اتصدر',         'icon' => 'receipt'],
@@ -106,6 +109,7 @@ class Notify
         'rep.settlement'      => ['label' => 'تسوية مندوب',         'icon' => 'check-circle'],
         'rep.transfer'        => ['label' => 'تحويل بين مناديب',    'icon' => 'shuffle'],
         'driver.handover'     => ['label' => 'تسليم عهدة لسائق',    'icon' => 'coins'],
+        'track.stage'         => ['label' => 'حالة رحلة اتحدّثت',   'icon' => 'map-pin'],
         'custom'              => ['label' => 'إشعار مكتوب',         'icon' => 'send'],
         'test'                => ['label' => 'تجربة',               'icon' => 'bell'],
         // المرحلة ٧ — تلقائية

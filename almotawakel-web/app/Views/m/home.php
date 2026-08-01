@@ -105,6 +105,21 @@ $permitCard = function (array $p) use ($num) {
         <?php endif; ?>
       </div>
 
+      <?php /* رحلة الشحنة (v62) — الحالة الحالية + رابط التحديث من الميدان.
+               الشارة بتظهر بس لو فيه تحديث فعلاً، والرابط بيفضل دايمًا عشان
+               يقدر يبدأ الرحلة من هنا. */ ?>
+      <a class="hm-stub-track<?= !empty($p['track']['finished']) ? ' is-done' : '' ?>"
+         href="<?= url('m/permit/' . $p['id'] . '/track') ?>">
+        <span class="ic"><?= icon($p['track']['icon'] ?? 'map-pin', 14) ?></span>
+        <?php if (!empty($p['track'])): ?>
+          <b><?= e($p['track']['label']) ?></b>
+          <span class="hm-stub-track-m"><?= e($p['track']['ago']) ?></span>
+        <?php else: ?>
+          <b>حدّث حالة الرحلة</b>
+          <span class="hm-stub-track-m">لسه ما بدأتش</span>
+        <?php endif; ?>
+      </a>
+
       <?php /* مستندات الأطراف (v56) — بتظهر بس لو فيه مستندات فعلاً، مفيش رابط ميت */ ?>
       <?php if (!empty($p['has_docs'])): ?>
         <a class="hm-stub-docs" href="<?= url('m/permit/' . $p['id'] . '/docs') ?>">
@@ -274,6 +289,12 @@ $permitCard = function (array $p) use ($num) {
     <?php /* v60 — «تسليم سائق» اتشال ومكانه «بوليصة جديدة»: المندوب بيضيف
              البوليصة نفسها وبيكتب عهدة السائق جوّاها، والعهدة بتتخصم من محفظته. */ ?>
     <a href="<?= url('m/bill/new') ?>"><span class="ic"><?= icon('truck', 14) ?></span>بوليصة جديدة</a>
+    <?php /* المرحلة ٣.٣ (docs/16) — البوليصة موجودة والمكتب سجّلها، والمندوب هو
+             اللي سلّم سائقها عهدته. بلا الزرار ده العهدة تفضل متخصومة من خزنة
+             المكتب وهو اللي دفعها. */ ?>
+    <?php if (\App\Models\RepBillCustody::ready()): ?>
+      <a href="<?= url('m/bill/custody') ?>"><span class="ic"><?= icon('coins', 14) ?></span>سلّمت سائق عهدة</a>
+    <?php endif; ?>
     <?php if (\App\Models\RepTransfer::available()): ?>
       <a href="<?= url('m/transfer') ?>"><span class="ic"><?= icon('shuffle', 14) ?></span>حوّل لمندوب</a>
     <?php endif; ?>

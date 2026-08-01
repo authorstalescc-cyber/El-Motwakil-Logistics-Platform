@@ -41,6 +41,9 @@ $wdToday = $wd === $today;
     <?php if ($permit['container_label'] !== ''): ?>
       <span class="hf-box"><?= icon('package', 14) ?> <bdi dir="ltr"><?= e($permit['container_label']) ?></bdi></span>
     <?php endif; ?>
+    <?php /* رحلة الشحنة (v62) — وصفي بحت، بلا أي رقم مالي */ ?>
+    <a class="hf-docs" href="<?= url('m/permit/' . (int) $permit['id'] . '/track') ?>">
+      <?= icon('map-pin', 14) ?> <?= e($permit['track']['label'] ?? 'حالة الرحلة') ?></a>
     <?php /* مستندات الأطراف (v56) — بتظهر بس لو فيه مستندات فعلاً */ ?>
     <?php if (!empty($permit['has_docs'])): ?>
       <a class="hf-docs" href="<?= url('m/permit/' . (int) $permit['id'] . '/docs') ?>">

@@ -16,6 +16,7 @@ use App\Models\Lookup;
 use App\Models\Audit;
 use App\Models\PartyMaster;
 use App\Models\DeletionPolicy;
+use App\Models\PermitTrack;
 
 /**
  * الإصدارات (إذن للصادر / شهادة للوارد) — أكبر عملية في النظام.
@@ -349,6 +350,9 @@ class PermitController extends Controller
             'co' => $co, 'cl' => $cl,
             'coChips' => $coChips, 'clChips' => $clChips,
             'grand' => $grand,
+            // حالة رحلة الشحنة (v62) — **استعلامان للصفحة كلها** عبر `summaryFor`
+            // لا `summary()` في حلقة على ٥٠ صف. وصفي بحت.
+            'trackMap' => PermitTrack::summaryFor(array_column($rows, 'id')),
             // اقتراحات أسماء لشريط الإجراءات الجماعية (تغيير الوكيل/الشركة)
             'agentOptions'   => array_column(PartyMaster::all('agent'), 'name'),
             'companyOptions' => array_column(PartyMaster::all('company'), 'name'),
@@ -525,8 +529,17 @@ class PermitController extends Controller
         }
         unset($mv);
 
+        /* رحلة الشحنة (v62) — وصفي بحت. الأحداث بتتجاب **مرة واحدة** وبتتوزّع
+           على ملخّص الإذن وملخّص كل بوليصة، فمفيش استعلام لكل بوليصة. */
+        $trackEvents = PermitTrack::events($pid);
+        $journey     = PermitTrack::summary($pid, $p['permit_type'], PermitTrack::WHOLE_PERMIT, $trackEvents);
+        $journeyBills = PermitTrack::billSummaries($pid, $p['permit_type'], $trackEvents);
+
         return [
             'p'            => $p,
+            'journey'      => $journey,
+            'journeyBills' => $journeyBills,
+            'trackReady'   => PermitTrack::ready(),
             'movements'    => $movements,
             'permitStages' => Permit::permitStagesGrouped($pid),
             'generators'   => Permit::generators($p['permit_no']),
@@ -590,6 +603,78 @@ class PermitController extends Controller
         Permit::saveChecklist($pid, $_POST);
         flash('success', 'تم حفظ بيانات المرشد.');
         redirect('permits/'.$pid.'/manage#rcp-guide');
+    }
+
+    // ═══════════════════════════════════ رحلة الشحنة (v62)
+
+    /**
+     * تسجيل مرحلة في رحلة الشحنة.
+     *
+     * ⚠️ **وصفي بحت** — ولا مليم بيتحرّك، فمفيش `Closing::guard` عن قصد
+     *    (البند ما بيدخلش أي تقفيل أصلاً — نفس قرار v39/v54).
+     *
+     * ⚠️ **الفورم مش مصدر ثقة**: `PermitTrack::record` هي اللي بتتحقّق إن
+     *    المرحلة من مراحل نوع الإذن ده وإن البوليصة تابعة للإذن ده — الفحص
+     *    في الموديل لا هنا، فأي مسار كتابة تاني بياخد نفس الحماية.
+     */
+    public function trackStage(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int) $id;
+        $p = Permit::find($pid);
+        if (!$p) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
+        if (!PermitTrack::ready()) { $this->fail('وحدة تتبّع الرحلة لسه مش مفعّلة — شغّل migrate_v62.', 'permits/'.$pid); }
+
+        $stage  = (string) ($_POST['stage_key'] ?? '');
+        $billId = (int) ($_POST['bill_id'] ?? 0);
+        $back   = 'permits/' . $pid . ($this->trackBackMode() === 'manage' ? '/manage' : '');
+
+        try {
+            PermitTrack::record(
+                $pid, $stage, $billId, PermitTrack::SRC_OFFICE,
+                (string) ($_POST['note'] ?? ''), (string) ($_POST['work_date'] ?? '')
+            );
+        } catch (\RuntimeException $e) {
+            $this->fail($e->getMessage(), $back, 'journey');
+        }
+
+        $label = PermitTrack::labelOf($stage);
+        Audit::log('update', 'permits', $pid, null, ['stage_key' => $stage, 'bill_id' => $billId],
+            'تحديث حالة الرحلة إلى «' . $label . '» على ' . Permit::noLabel($p['permit_type']) . ' ' .
+            ($p['permit_no'] ?: '#' . $pid), ['permit_id' => $pid]);
+
+        $this->done('الحالة اتحدّثت: ' . $label, $back, 'journey');
+    }
+
+    /** تراجع عن مرحلة مسجَّلة (التايم لاين شهادة على اللي حصل فعلاً). */
+    public function trackUndo(string $id): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $pid = (int) $id;
+        $p = Permit::find($pid);
+        if (!$p) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
+
+        $stage  = (string) ($_POST['stage_key'] ?? '');
+        $billId = (int) ($_POST['bill_id'] ?? 0);
+        $back   = 'permits/' . $pid . ($this->trackBackMode() === 'manage' ? '/manage' : '');
+
+        if (!PermitTrack::undo($pid, $stage, $billId)) {
+            $this->fail('المرحلة دي مش مسجَّلة أصلاً.', $back, 'journey');
+        }
+        $label = PermitTrack::labelOf($stage);
+        Audit::log('delete', 'permits', $pid, ['stage_key' => $stage, 'bill_id' => $billId], null,
+            'تراجع عن مرحلة «' . $label . '» في رحلة ' . Permit::noLabel($p['permit_type']) . ' ' .
+            ($p['permit_no'] ?: '#' . $pid), ['permit_id' => $pid]);
+
+        $this->done('اتشالت مرحلة: ' . $label, $back, 'journey');
+    }
+
+    /** وضع الرجوع بعد التحديث (عرض/تعديل) — قائمة بيضا لا نص من الفورم. */
+    private function trackBackMode(): string
+    {
+        return ($_POST['mode'] ?? '') === 'manage' ? 'manage' : 'view';
     }
 
     /** تأشير/إلغاء «مش محتاجه في الإذن ده» لإيصال متوقّع (استرشادي بحت). */
@@ -765,6 +850,14 @@ class PermitController extends Controller
             'p'             => $p,
             'movements'     => $data['movements'],
             'totals'        => $data['totals'],
+            /* ⚠️ نوافذ التفاصيل بتقرا من **نفس مصادر الأرقام المعروضة**:
+               `Permit::bills` = مصدر `totals['custody']` و`actualFreight`
+               (الاتنين `FROM bawalis WHERE permit_id = ?`)، و`expenseRows`
+               بتستخدم `expenseSql` نفسها بتاعة `totals['expense']`.
+               تجميع البوالص من الحركات أو البنود من `movementStagesGrouped`
+               بيقلّ عن الإجمالي (متحقَّق: بند واحد على الأقل بلا حركة). */
+            'bills'         => Permit::bills($pid),
+            'expenseRows'   => Permit::expenseRows($pid),
             'ctBreakdown'   => $ctMap[$pid] ?? [],
             'candidates'    => PermitInvoice::candidateItems($pid),
             'actualFreight' => PermitInvoice::actualFreight($pid),
@@ -822,13 +915,13 @@ class PermitController extends Controller
         }
 
         // بنود الفاتورة: بيان + كمية + سعر (+ علم النولون لحساب الضريبة عليه فقط)
-        // مع مزامنة عكسية مع الإذن: تعديل بند = تعديل بنده في الإذن، وإضافة بند = بند إيصال جديد في الإذن.
+        // ⚠️⚠️ قرار المالك (2026-08-01): **البند اللي يتكتب في الفاتورة يفضل في الفاتورة وبس**
+        //    — ممنوع الإصدار يضيف أي بند جديد على الإذن. الإصدار بقى **لقطة** لا نقطة إدخال:
+        //    بند جديد هنا = سطر في المستند المطبوع فقط، بلا `permit_stages` وبلا أثر على
+        //    المصروفات ولا الخزنة ولا التقفيل. الإدخال على الإذن مكانه شاشة الإذن نفسها.
+        //    المزامنة العكسية الباقية = **تحديث بند قائم** (بيانه/كميته/سعر العميل) لا إنشاء.
         $rows  = self::invoiceRowsFromPost();
         $items = [];
-
-        $today    = work_date();
-        $dayOpen  = (Closing::guard($today) === null);   // اليوم غير متقفل؟ (لإضافة بنود جديدة للإذن)
-        $latestMv = Database::scalar('SELECT id FROM permit_movements WHERE permit_id = ? ORDER BY seq DESC, id DESC LIMIT 1', [$pid]);
 
         foreach ($rows as $r) {
             $label     = $r['label'];
@@ -845,7 +938,7 @@ class PermitController extends Controller
                 'source'  => $src,
             ];
 
-            // ===== المزامنة العكسية مع الإذن (النولون مستثنى — رقم فاتورة مستقل) =====
+            // ===== تحديث بند قائم فقط (النولون مستثنى — رقم فاتورة مستقل) =====
             if ($isFreight) { continue; }
             $clientTotal = $r['total'];
             if (strncmp($src, 'stage:', 6) === 0) {
@@ -857,21 +950,9 @@ class PermitController extends Controller
                         [$label ?: null, (int)$qty, $clientTotal, $sid, $pid]
                     );
                 }
-            } elseif ($src === 'new' && $dayOpen) {
-                // بند جديد أضافه المستخدم → إيصال جديد في الإذن (على أحدث حركة) بتاريخ اليوم
-                Database::exec(
-                    "INSERT INTO permit_stages (permit_id, movement_id, stage_key, amount, qty, actual_amount, entry_date, note, status, is_visa)
-                     VALUES (?, ?, 'receipts', ?, ?, ?, ?, ?, 'done', 0)",
-                    [$pid, $latestMv ? (int)$latestMv : null, $clientTotal, (int)$qty, $clientTotal, $today, $label ?: 'إيصال']
-                );
-                $receiptId = Database::lastId();
-                $receiptRow = Database::row('SELECT * FROM permit_stages WHERE id = ?', [$receiptId]);
-                Audit::log('create', 'permit_stages', $receiptId, null, $receiptRow,
-                    'إضافة إيصال «'.($label ?: 'إيصال').'» بقيمة '.number_format((float)$clientTotal, 2, '.', ',').
-                    ' عند إصدار الفاتورة — '.Permit::noLabel($p['permit_type']).' '.($p['permit_no'] ?: '#'.$pid),
-                    ['permit_id'=>$pid, 'permit_no'=>$p['permit_no'], 'movement_id'=>$latestMv, 'record_date'=>$today]);
             }
-            // primary_auto (رسوم أولية تلقائية معروضة فقط) لا تُثبَّت في الإذن حتى لا تُضاف كمصروف نقدي.
+            // ⚠️ `src === 'new'` (بند كتبه المالك في الفاتورة) و`primary_auto` (رسوم أولية
+            //    معروضة) **الاتنين ما بيتسجّلوش في الإذن إطلاقًا** — يظهروا في المستند وبس.
         }
 
         $invId = PermitInvoice::create(self::invoicePayload($p, $items, $agency, $port));
@@ -1436,6 +1517,32 @@ class PermitController extends Controller
     }
 
     /** إنشاء بوليصة جديدة وربطها بالإصدار مباشرةً من التايم لاين */
+    /**
+     * مين سلّم السائق عهدته؟ — بيرجّع `rep_id` أو **null = خزنة المكتب** (الافتراضي).
+     *
+     * ⚠️⚠️ **الوسم ده بيعمل حاجتين لازم يمشوا مع بعض** (`RepBillCustody`):
+     *    ① بيستثني البوليصة من خزنة المكتب.  ② بيضيف مبلغها لصرف المندوب.
+     *    استثناء بلا إضافة = **فلوس بتتبخّر من النظام**.
+     *
+     * ⚠️ **الفورم مش مصدر ثقة:** أي رقم مش مندوب **نشط** بيترجّع null (خزنة) بدل
+     *    ما يتخزّن id وهمي فتختفي العهدة من الخزنة وما تظهرش عند حد.
+     *
+     * ⚠️ عهدة = صفر → null دايمًا (مفيش دافع أصلاً).
+     *
+     * ⚠️⚠️ **بوليصة تاريخها قبل خط الفصل بترجّع null كمان** — جانب المحفظة بيمرّ
+     *    على خط الفصل وجانب الخزنة لأ، فالوسم على تاريخ قديم = فلوس بتتبخّر.
+     *    المصدر الوحيد للفحص `RepBillCustody::payerAllowed()`.
+     */
+    private function custodyPayerId(float $custody, ?string $billDate = null): ?int
+    {
+        if ($custody <= 0 || !\App\Models\RepBillCustody::ready()) { return null; }
+        $rid = (int) ($_POST['custody_rep_id'] ?? 0);
+        if ($rid <= 0) { return null; }
+        if (!\App\Models\RepBillCustody::payerAllowed($billDate)) { return null; }
+        return Database::scalar(
+            "SELECT id FROM reps WHERE id = ? AND status = 'active'", [$rid]) ? $rid : null;
+    }
+
     public function createBill(string $id): void
     {
         $this->requireAuth();
@@ -1527,6 +1634,11 @@ class PermitController extends Controller
             'overnight_collection' => (float)($_POST['overnight_collection'] ?? 0),
         ];
         $data['debt'] = Calc::bawala($data)['debt'];
+        // ⚠️ بعد `Calc::bawala` عن قصد — ده وسم مش مدخل حسابي، وممنوع يدخل المعادلة.
+        if (\App\Models\RepBillCustody::ready()) {
+            $data['custody_rep_id'] = $this->custodyPayerId(
+                (float) $data['custody'], (string) $data['bill_date']);
+        }
 
         $cols = array_keys($data);
         Database::exec(
@@ -1551,6 +1663,14 @@ class PermitController extends Controller
         //    الطلب فما بيأخّرش الرد.
         PushNotify::billLinked($billId, (string) ($data['bill_number'] ?? ''), $pid,
                                (string) ($p['permit_no'] ?? ''), (string) ($data['declaration_owner'] ?? ''));
+        /* رحلة الشحنة (v62): أول بوليصة على العربية = بداية الرحلة (استلام
+           الحاوية). بيتسجّل على **البوليصة نفسها** لأن كل عربية ليها رحلتها،
+           و**بس لو مش مسجَّل**. ملفوف في try/catch — تسجيل حالة وصفية ممنوع
+           يوقف حفظ بوليصة. */
+        try {
+            $first = PermitTrack::stages($type)[0] ?? null;
+            if ($first) { PermitTrack::systemMark($pid, $first['key'], $billId, 'اتسجّلت بوليصة'); }
+        } catch (\Throwable $e) { /* وصفي بحت — ما يوقفش حفظ البوليصة */ }
         if ($this->wantsJson()) {
             if ($targetMv) { $this->ajaxMovement((int)$targetMv, 'تم إنشاء البوليصة وربطها بالحركة.'); } else { $this->json(['ok'=>true, 'flash'=>'تم إنشاء البوليصة.', 'reload'=>true]); }
             return;
@@ -1650,6 +1770,13 @@ class PermitController extends Controller
             'overnight_collection' => (float)($_POST['overnight_collection'] ?? 0),
         ];
         $data['debt'] = Calc::bawala($data)['debt'];
+        // ⚠️ **التعديل بينقل الفلوس مش بيكرّرها**: تغيير الدافع من الخزنة لمندوب
+        //    (أو العكس) بيتكتب في نفس الـUPDATE، فالخزنة والمحفظة بيتعدّلوا مع بعض
+        //    في خطوة واحدة — مستحيل المبلغ يتحسب في التنين ولا يختفي من التنين.
+        if (\App\Models\RepBillCustody::ready()) {
+            $data['custody_rep_id'] = $this->custodyPayerId(
+                (float) $data['custody'], (string) $data['bill_date']);
+        }
 
         $sets   = implode(',', array_map(fn($c)=>"`$c`=:$c", array_keys($data)));
         $params = array_combine(array_map(fn($c)=>":$c", array_keys($data)), array_values($data));
@@ -1756,6 +1883,16 @@ class PermitController extends Controller
             redirect('permits/'.$pid);
         }
         Database::exec('UPDATE permits SET status = ? WHERE id = ?', [$new, $pid]);
+        /* رحلة الشحنة (v62): إقفال الإذن = وصول المرحلة الأخيرة. **بيتسجّل بس
+           لو مش مسجَّل** فما بيدهسش تحديثًا كتبه المكتب أو المندوب بإيده،
+           و**ملفوف في try/catch**: فشل تسجيل حالة وصفية ممنوع يوقف الإقفال. */
+        if ($new === 'closed') {
+            try {
+                $st = PermitTrack::stages($p['permit_type'] ?? null);
+                $last = end($st);
+                if ($last) { PermitTrack::systemMark($pid, $last['key'], PermitTrack::WHOLE_PERMIT, 'الإذن اتقفل'); }
+            } catch (\Throwable $e) { /* وصفي بحت — ما يوقفش الإقفال */ }
+        }
         // ⚠️ الإشعار **بعد** نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
         PushNotify::permitClosed($pid, (string) ($p['permit_no'] ?? ''), $new === 'closed',
                                  (string) (\App\Core\Auth::user() ?? 'المكتب'));
