@@ -206,7 +206,13 @@ class Controller
      */
     private function strictListError(string $field, string $type, string $raw, array $existing): ?string
     {
-        $list = \App\Models\Lookup::ofType($type);
+        // الاسم البديل قرار دمج صريح، لذلك يُطبَّق قبل فحص القائمة المقفولة.
+        // مثال: «40» سبق دمجه في «40 قدم»؛ لو وصل من نموذج قديم أو POST مباشر
+        // يتحوّل للمعتمد بدل ما نعيد الخطأ أو نسمح بتلويث القائمة.
+        $raw = \App\Models\DataAlias::canonical($type, $raw) ?? $raw;
+        // ⚠️ `allowedFor` هي المصدر الوحيد المشترك مع الشاشة (شركة الشحن
+        //    بتقبل الوكلاء كمان — قرار المالك 2026-08-02).
+        $list = \App\Models\Lookup::allowedFor($type);
         $key  = \App\Models\Maintenance::normkey($raw);
 
         foreach ($list as $v) {

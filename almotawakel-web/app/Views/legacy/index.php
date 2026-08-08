@@ -17,57 +17,57 @@ $cols = [
     ['remaining','باقى','revenue',true],
 ];
 ?>
-<div class="flash" style="background:var(--gold-light);border-color:var(--gold);color:var(--navy)">
+<div class="flash p5-chip-on">
   <?= icon('inbox',18) ?>
   <b>أرشيف تاريخي للقراءة فقط</b> — بوالص مستوردة من النظام القديم.
-  <span style="color:var(--grey)">معزولة تمامًا: لا تدخل في العهدة أو التقفيل أو أي حساب في البرنامج الحالي.</span>
+  <span class="dbt-none">معزولة تمامًا: لا تدخل في العهدة أو التقفيل أو أي حساب في البرنامج الحالي.</span>
 </div>
 
 <div class="kpi-grid mb five">
-  <div class="card" style="padding:14px 16px">
-    <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">إجمالي البوالص<?= $active ? ' <span style="color:#8a6d10">(حسب الفلتر)</span>' : '' ?></div>
-    <div style="font-size:var(--fs-6);font-weight:600;color:var(--navy)"><?= intf($stats['n']) ?></div>
+  <div class="card p5-pad">
+    <div class="rts-l">إجمالي البوالص<?= $active ? ' <span class="p5-gold-tx">(حسب الفلتر)</span>' : '' ?></div>
+    <div class="p5-big"><?= intf($stats['n']) ?></div>
   </div>
-  <div class="card" style="padding:14px 16px">
-    <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">الفترة</div>
-    <div style="font-size:var(--fs-4);font-weight:600;color:var(--navy)"><?= dfmt($stats['min_d']) ?> — <?= dfmt($stats['max_d']) ?></div>
+  <div class="card p5-pad">
+    <div class="rts-l">الفترة</div>
+    <div class="p5-mid"><?= dfmt($stats['min_d']) ?> — <?= dfmt($stats['max_d']) ?></div>
   </div>
-  <div class="card" style="padding:14px 16px">
-    <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">إجمالي النولون</div>
-    <div style="font-size:var(--fs-6);font-weight:600;color:var(--navy)"><?= money0($stats['freight']) ?></div>
+  <div class="card p5-pad">
+    <div class="rts-l">إجمالي النولون</div>
+    <div class="p5-big"><?= money0($stats['freight']) ?></div>
   </div>
-  <div class="card" style="padding:14px 16px">
-    <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">إجمالي العهدة</div>
-    <div style="font-size:var(--fs-6);font-weight:600;color:var(--navy)"><?= money0($stats['custody']) ?></div>
+  <div class="card p5-pad">
+    <div class="rts-l">إجمالي العهدة</div>
+    <div class="p5-big"><?= money0($stats['custody']) ?></div>
   </div>
-  <div class="card" style="padding:14px 16px">
-    <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">إجمالي الباقي</div>
-    <div style="font-size:var(--fs-6);font-weight:600;color:var(--navy)"><?= money0($stats['remaining'] ?? 0) ?></div>
+  <div class="card p5-pad">
+    <div class="rts-l">إجمالي الباقي</div>
+    <div class="p5-big"><?= money0($stats['remaining'] ?? 0) ?></div>
   </div>
 </div>
 
 <!-- كشف حساب صاحب البيان (أرشيفي) — اقتراح أسماء يتحمّل الأخطاء الإملائية -->
-<div class="card" style="padding:14px 16px;margin-bottom:14px;border-inline-start:4px solid var(--gold)">
-  <div style="font-weight:600;color:var(--navy);margin-bottom:8px"><?= icon('layers', 14) ?> كشف حساب صاحب البيان (من الأرشيف)</div>
-  <form method="get" action="<?= url('legacy/statement') ?>" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-    <div style="position:relative;flex:1;min-width:280px;max-width:420px">
+<div class="card p5-note">
+  <div class="p5-h"><?= icon('layers', 14) ?> كشف حساب صاحب البيان (من الأرشيف)</div>
+  <form method="get" action="<?= url('legacy/statement') ?>" class="rts-row">
+    <div class="p5-search">
       <input type="text" name="owner" id="lgOwner" autocomplete="off" required
              placeholder="اسم صاحب البيان…"
-             style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px">
+             class="p5-in">
       <div id="lgSug" class="lg-sug" hidden></div>
     </div>
     <button class="btn gold sm" type="submit"><?= icon('search', 14) ?> معاينة الكشف</button>
     <button class="btn sm" type="submit" formtarget="_blank"><?= icon('file-text', 14) ?> فتح للطباعة</button>
-    <span style="font-size:var(--fs-1);color:var(--grey)">يعرض المدفوع والباقي لكل بوليصة — معاينة فقط، لا يُحفَظ ولا يمسّ أي حساب.</span>
+    <span class="dbt-sub">يعرض المدفوع والباقي لكل بوليصة — معاينة فقط، لا يُحفَظ ولا يمسّ أي حساب.</span>
   </form>
 </div>
 
 <div class="toolbar">
   <form method="get" action="<?= url('legacy') ?>">
-    <input type="search" name="q" value="<?= e($f['q']) ?>" placeholder="بحث" style="min-width:340px">
-    <label style="color:var(--grey);font-weight:500">من</label>
+    <input type="search" name="q" value="<?= e($f['q']) ?>" placeholder="بحث" class="p5-mw340">
+    <label class="dbt-none">من</label>
     <input type="date" name="from" value="<?= e($f['from']) ?>">
-    <label style="color:var(--grey);font-weight:500">إلى</label>
+    <label class="dbt-none">إلى</label>
     <input type="date" name="to" value="<?= e($f['to']) ?>">
     <button class="btn sm" type="submit"><?= icon('search',15) ?> تصفية</button>
     <?php if ($active): ?><a class="btn ghost sm" href="<?= url('legacy') ?>">إلغاء</a><?php endif; ?>
@@ -91,7 +91,7 @@ $cols = [
       <tbody>
         <?php if (!$rows): ?>
           <tr><td colspan="<?= count($cols)+2 ?>">
-            <div class="empty" style="padding:40px"><div class="ic"><?= icon('inbox', 14) ?></div>
+            <div class="empty p5-pad-xl"><div class="ic"><?= icon('inbox', 14) ?></div>
               <?= $active ? 'لا نتائج مطابقة للبحث.' : 'لا بيانات في الأرشيف.' ?></div>
           </td></tr>
         <?php else: $i = ($page-1)*$per; foreach ($rows as $row): $i++; ?>
@@ -113,7 +113,7 @@ $cols = [
       <tfoot>
         <tr>
           <td>Σ</td>
-          <td colspan="6" style="text-align:start;color:var(--grey)">إجمالي الصفحات المطابقة (<?= intf($sums['n']) ?> بوليصة)</td>
+          <td colspan="6" class="p5-start-mut">إجمالي الصفحات المطابقة (<?= intf($sums['n']) ?> بوليصة)</td>
           <td><?= money($sums['freight'], false) ?></td>
           <td><?= money($sums['custody'], false) ?></td>
           <td><?= money($sums['remaining'], false) ?></td>

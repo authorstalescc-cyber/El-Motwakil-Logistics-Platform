@@ -14,7 +14,6 @@
  *   value   ?string  الرقم الأساسي على الجنب (متنسّق مسبقًا)
  *   value_label ?string  تسمية الرقم
  *   value_tone  ?string  pos|neg
- *   secret  ?bool    الرقم يتقنّع لحد ما المالك يضغط «إظهار الأرصدة»
  *   meter   ?array   [['pct'=>float,'cls'=>'sp|pd|rt'], …] شريط استهلاك
  *   note    ?array   سطر بارز ['label'=>, 'value'=>, 'sub'=>?, 'tone'=>?]
  *   tags    ?array   [['icon'=>?,'text'=>,'tone'=>'ex|wait|low'], …]
@@ -27,7 +26,6 @@ $sub   = $sub ?? null;
 $value = $value ?? null;
 $valueLabel = $value_label ?? null;
 $valueTone  = $value_tone ?? '';
-$secret = !empty($secret);
 $meter = $meter ?? [];
 $note  = $note ?? null;
 $tags  = $tags ?? [];
@@ -49,7 +47,7 @@ $initial = $name !== '' ? mb_substr(trim($name), 0, 1, 'UTF-8') : '؟';
     </div>
     <?php if ($value !== null): ?>
       <div class="rp-bal">
-        <b class="<?= e($valueTone) ?>"><?php if ($secret): ?><span data-secret data-val="<?= e((string) $value) ?>">••••••</span><?php else: ?><?= e((string) $value) ?><?php endif; ?></b>
+        <b class="<?= e($valueTone) ?>"><?= e((string) $value) ?></b>
         <?php if ($valueLabel !== null && $valueLabel !== ''): ?><span><?= e((string) $valueLabel) ?></span><?php endif; ?>
       </div>
     <?php endif; ?>

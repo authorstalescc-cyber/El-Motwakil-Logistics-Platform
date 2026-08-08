@@ -8,9 +8,9 @@ $totalSame = 0;
 foreach ($overview as $r) { $totalSame += $r['same']; }
 ?>
 
-<div class="card" style="padding:18px;margin-bottom:16px">
+<div class="card p5-pad-18 mb">
   <div class="section-head"><?= icon('clipboard', 17) ?> تنظيف المسميات المكرَّرة</div>
-  <p style="color:var(--grey);line-height:1.9;margin:0">
+  <p class="set-p nomb">
     النظام بيمنع الأسماء المكرَّرة الجديدة تلقائيًّا، لكن اللي اتسجّل <b>قبل كده</b> محتاج قرارك.
     كل صف تحت بيقول: الحقل ده فيه كام قيمة، وكام منهم نفس الشيء مكتوب بأكتر من طريقة.
     <br>
@@ -41,7 +41,7 @@ foreach ($overview as $r) { $totalSame += $r['same']; }
           <td><?= (int) $r['total'] ?></td>
           <td>
             <?php if ($r['same'] > 0): ?>
-              <span class="pill" style="background:var(--red-lt);color:var(--red)"><?= (int) $r['same'] ?></span>
+              <span class="pill p5-tag-red"><?= (int) $r['same'] ?></span>
             <?php else: ?>
               <span class="pill ok">✓ نظيف</span>
             <?php endif; ?>
@@ -59,7 +59,7 @@ foreach ($overview as $r) { $totalSame += $r['same']; }
   </table>
 </div>
 
-<p style="color:var(--grey);margin-top:14px;line-height:1.9">
+<p class="set-p mt-4 nomb">
   <b>الشركات والعملاء وأصحاب البيان</b> ليهم سجل قانوني مربوط بالفواتير والكشوف،
   فدمجهم بيتعمل من <a href="<?= url('directory') ?>">البيانات الأساسية</a> عشان
   المستندات المرتبطة تتحرّك معاهم.

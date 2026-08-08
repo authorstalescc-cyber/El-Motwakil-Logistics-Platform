@@ -7,6 +7,7 @@ $labels = [
   'visa_deposits'=>'إيداعات فيزا', 'debt_payments'=>'سداد مديونيات',
   'permit_invoices'=>'فواتير العملاء', 'owner_statements'=>'كشوف أصحاب البيان',
   'agents'=>'الوكلاء', 'companies'=>'الشركات', 'declaration_owners'=>'أصحاب البيان',
+  'rep_submissions'=>'بنود المناديب',
 ];
 $actions = ['create'=>'إضافة','update'=>'تعديل','delete'=>'حذف','restore'=>'استرجاع','undo'=>'تراجع','login_free'=>'دخول حر','bulk_update'=>'تعديل جماعي',
   'issue'=>'إصدار','void'=>'إلغاء','reverse'=>'عكس','allocate'=>'تخصيص','alias'=>'اسم بديل','merge'=>'دمج','move'=>'نقل'];

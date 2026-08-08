@@ -48,7 +48,7 @@ $issuedStatements = array_values(array_filter(
 
 <!-- ملخّص صاحب البيان (استلم كام / فاضل كام) -->
 <div class="sec-head"><span><?= icon('clipboard', 14) ?> ملخّص صاحب البيان</span></div>
-<div class="card mb" style="padding:0;overflow:hidden">
+<div class="card mb" >
   <div class="st-tiles">
     <button type="button" class="stile" data-st-pop="all" data-st-title="كل بوالص <?= e($owner) ?>"><b><?= intf($stats['bills']) ?></b><span>إجمالي البوالص</span><small>اضغط للتفاصيل</small></button>
     <button type="button" class="stile" data-st-pop="paid" data-st-title="البوالص التي سبق الدفع عليها"><b class="pos"><?= money($stats['paid'],false) ?></b><span>استلم (المدفوع له)</span><small>اضغط للتفاصيل</small></button>
@@ -79,11 +79,11 @@ $issuedStatements = array_values(array_filter(
       <?php if ($popKey==='paid'): ?> · إجمالي المدفوع <b><?= money(array_sum(array_column($popRows,'paid')),false) ?></b><?php endif; ?>
       <?php if ($popKey==='due'): ?> · إجمالي الباقي <b><?= money(array_sum(array_column($popRows,'remaining')),false) ?></b><?php endif; ?>
     </div>
-    <?php if (!$popRows): ?><div class="empty" style="padding:28px">لا توجد بوالص في هذه المجموعة.</div><?php else: ?>
+    <?php if (!$popRows): ?><div class="empty p5-pad-28">لا توجد بوالص في هذه المجموعة.</div><?php else: ?>
     <div class="table-wrap"><table class="data st-drill-table"><thead><tr>
       <th>الرقم</th><th>التاريخ</th><th>الشركة</th><th>الجهة</th><th>التصنيف</th><th>نولون</th><th>عهدة</th><th>استلم</th><th>الباقي</th><th>الحالة</th><th>تعديل</th>
     </tr></thead><tbody><?php foreach ($popRows as $b): ?><tr>
-      <td><a href="<?= url('bawalis/'.(int)$b['id']) ?>" style="font-weight:600"><?= e($billNo($b)) ?></a></td>
+      <td><a href="<?= url('bawalis/'.(int)$b['id']) ?>" class="dbt-tot"><?= e($billNo($b)) ?></a></td>
       <td><?= dfmt($b['bill_date']) ?></td><td><?= e($b['company'] ?: '—') ?></td><td><?= e($b['destination'] ?: '—') ?></td><td><?= e($b['classification'] ?: '—') ?></td>
       <td><?= money($b['freight'],false) ?></td><td><?= money($b['custody'],false) ?></td><td class="pos"><?= money($b['paid'],false) ?></td><td class="<?= (float)$b['remaining']>0.005?'neg':'' ?>"><?= money($b['remaining'],false) ?></td><td><?= e($statusLabel($b)) ?></td>
       <td><a class="btn ghost sm" href="<?= url('bawalis/'.(int)$b['id'].'/edit') ?>" target="_blank" rel="noopener" title="تعديل البوليصة ثم تحديث بيانات الكشف"><?= icon('edit', 14) ?> تعديل</a></td>
@@ -94,11 +94,11 @@ $issuedStatements = array_values(array_filter(
 
   <div data-st-template="pending">
     <div class="d-modal-strip gold"><b><?= intf(count($pendingBills)) ?></b> بوليصة — أدخل نولون كل بوليصة واحفظها من نفس الصف.</div>
-    <?php if (!$pendingBills): ?><div class="empty" style="padding:28px">لا توجد بوالص بانتظار النولون.</div><?php else: ?>
+    <?php if (!$pendingBills): ?><div class="empty p5-pad-28">لا توجد بوالص بانتظار النولون.</div><?php else: ?>
     <div class="table-wrap"><table class="data st-drill-table pending"><thead><tr>
       <th>الرقم</th><th>التاريخ</th><th>الشركة</th><th>الجهة</th><th>التصنيف</th><th>الحاوية</th><th>عهدة</th><th>الخصم</th><th>النولون</th><th></th><th>تعديل</th>
     </tr></thead><tbody><?php foreach ($pendingBills as $b): ?><tr>
-      <td><a href="<?= url('bawalis/'.(int)$b['id']) ?>" style="font-weight:600"><?= e($billNo($b)) ?></a></td>
+      <td><a href="<?= url('bawalis/'.(int)$b['id']) ?>" class="dbt-tot"><?= e($billNo($b)) ?></a></td>
       <td><?= dfmt($b['bill_date']) ?></td><td><?= e($b['company'] ?: '—') ?></td><td><?= e($b['destination'] ?: '—') ?></td><td><?= e($b['classification'] ?: '—') ?></td><td><?= e($b['container_no'] ?: '—') ?></td><td><?= money($b['custody'],false) ?></td><td><?= money($b['discount'],false) ?></td>
       <td colspan="2"><form method="post" action="<?= url('bawalis/bulk-freight') ?>" class="st-quick-freight">
         <?= csrfField() ?><input type="hidden" name="back" value="<?= e($drillBack) ?>">
@@ -139,9 +139,9 @@ $issuedStatements = array_values(array_filter(
     $paidTotal = (float)($paidSummary['paid'] ?? 0);
   ?>
   <div class="sec-head"><span>① ملخّص البوالص التي سبق الدفع عليها</span></div>
-  <div class="card mb" style="padding:0;overflow:hidden">
+  <div class="card mb" >
     <?php if ($paidCount === 0): ?>
-      <div class="empty" style="padding:24px">لا توجد بوالص استلم عليها بعد.</div>
+      <div class="empty p5-pad-24">لا توجد بوالص استلم عليها بعد.</div>
     <?php else: ?>
       <label class="paid-summary-pick" id="paidSummary"
              data-count="<?= $paidCount ?>" data-paid="<?= e($paidTotal) ?>">
@@ -157,13 +157,13 @@ $issuedStatements = array_values(array_filter(
   <div class="sec-head"><span>② البوالص الباقية له بالتفصيل (<?= intf(count($remaining)) ?>)</span>
     <?php if ($remaining): ?><label class="chk-all"><input type="checkbox" class="pick-all" data-scope="rem" checked> تحديد الكل</label><?php endif; ?>
   </div>
-  <div class="card mb" style="padding:0;overflow:hidden">
+  <div class="card mb" >
     <?php if (!$remaining): ?>
-      <div class="empty" style="padding:24px">لا توجد بوالص باقية — كل مستحقاته مسدّدة <?= icon('check', 14) ?></div>
+      <div class="empty p5-pad-24">لا توجد بوالص باقية — كل مستحقاته مسدّدة <?= icon('check', 14) ?></div>
     <?php else: ?>
       <div class="table-wrap"><table class="data st-list" data-scope="rem">
         <thead><tr>
-          <th style="width:38px"></th><th class="g-identity">رقم البوليصة</th><th class="g-identity">التاريخ</th>
+          <th class="col-pick"></th><th class="g-identity">رقم البوليصة</th><th class="g-identity">التاريخ</th>
           <th class="g-identity">الشركة</th><th class="g-identity">الحاوية</th><th class="g-identity">العدد</th>
           <th class="g-identity">الجهة</th><th class="g-identity">التصنيف</th>
           <th class="g-revenue">نولون</th><th class="g-revenue">عهدة</th><th class="g-revenue">تحويلة</th>
@@ -173,7 +173,7 @@ $issuedStatements = array_values(array_filter(
         <?php foreach ($remaining as $b): ?>
           <tr>
             <td><input type="checkbox" name="remaining_ids[]" value="<?= (int)$b['id'] ?>" class="pick" data-remaining="<?= e($b['remaining']) ?>" <?= $isPicked((int)$b['id'], $remPicked) ? 'checked' : '' ?>></td>
-            <td style="font-weight:500"><?= e($billNo($b)) ?></td>
+            <td class="mv-ref"><?= e($billNo($b)) ?></td>
             <td><?= dfmt($b['bill_date']) ?></td>
             <td><?= e($b['company'] ?: '—') ?></td>
             <td><?= e($b['container_no'] ?: '—') ?><?php if($b['container_type']??''): ?> <span class="ct-chip"><?= e($b['container_type']) ?></span><?php endif; ?></td>
@@ -186,7 +186,7 @@ $issuedStatements = array_values(array_filter(
             <td><?= money($b['discount'],false) ?></td>
             <td><?= money($b['overnight_collection'],false) ?></td>
             <td class="pos"><?= money($b['paid'],false) ?></td>
-            <td class="neg" style="font-weight:600"><?= money($b['remaining'],false) ?></td>
+            <td class="neg dbt-tot"><?= money($b['remaining'],false) ?></td>
             <td><a class="btn ghost sm" href="<?= url('bawalis/'.(int)$b['id'].'/edit') ?>" target="_blank" rel="noopener" title="تعديل البوليصة ثم اضغط تحديث البيانات"><?= icon('edit', 14) ?> تعديل</a></td>
           </tr>
         <?php endforeach; ?>
@@ -197,17 +197,17 @@ $issuedStatements = array_values(array_filter(
 
   <!-- (3) الإصدار -->
   <div class="sec-head"><span>③ الإصدار</span></div>
-  <div class="card mb" style="padding:16px">
-    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:end">
+  <div class="card mb p5-pad-16">
+    <div class="p5-row wide end">
       <div>
-        <label style="font-size:var(--fs-2);font-weight:500;color:var(--grey)">تاريخ الكشف</label>
+        <label class="rts-l">تاريخ الكشف</label>
         <input type="date" name="statement_date" value="<?= e($fsOld['statement_date'] ?? work_date()) ?>"
-               style="display:block;margin-top:5px;padding:9px 12px;border:1px solid var(--line);border-radius:9px">
+               class="p5-in-block auto">
       </div>
-      <div style="flex:1;min-width:240px">
-        <label style="font-size:var(--fs-2);font-weight:500;color:var(--grey)">ملاحظة على الكشف (اختياري)</label>
+      <div class="p5-grow240">
+        <label class="rts-l">ملاحظة على الكشف (اختياري)</label>
         <textarea name="note" rows="2"
-                  style="display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--line);border-radius:var(--radius-1);font-family:inherit"><?= e($fsOld['note'] ?? '') ?></textarea>
+                  class="p5-in-block"><?= e($fsOld['note'] ?? '') ?></textarea>
       </div>
     </div>
 
@@ -218,7 +218,7 @@ $issuedStatements = array_values(array_filter(
       <div class="r grand"><span>مجموع الباقي المختار</span><b id="sumRem">0.00</b></div>
     </div>
 
-    <div style="margin-top:16px;display:flex;gap:10px">
+    <div class="p5-row mt-4">
       <button type="submit" class="btn gold"><?= icon('layers', 14) ?> إصدار وحفظ ثم طباعة</button>
       <a class="btn ghost" href="<?= url('settlements?owner=' . urlencode($owner)) ?>">إلغاء</a>
     </div>
@@ -228,7 +228,7 @@ $issuedStatements = array_values(array_filter(
 <!-- كشوف سابقة لصاحب البيان -->
 <?php if ($previous): ?>
   <div class="sec-head"><span><?= icon('folder', 14) ?> كشوف صادرة سابقاً (<?= intf(count($previous)) ?>)</span></div>
-  <div class="card mb" style="padding:0;overflow:hidden">
+  <div class="card mb" >
     <div class="table-wrap"><table class="data">
       <thead><tr>
         <th class="g-identity">رقم المستند</th><th class="g-identity">التاريخ</th>
@@ -238,16 +238,16 @@ $issuedStatements = array_values(array_filter(
       <tbody>
       <?php foreach ($previous as $pv): ?>
         <tr>
-          <td style="font-weight:500"><?= e($pv['doc_no'] ?: '#'.$pv['id']) ?></td>
+          <td class="mv-ref"><?= e($pv['doc_no'] ?: '#'.$pv['id']) ?></td>
           <td><?= dfmt($pv['statement_date']) ?></td>
           <td><?= intf($pv['paid_count']) ?></td>
           <td><?= intf($pv['remaining_count']) ?></td>
-          <td style="font-weight:600;color:var(--navy)"><?= money($pv['stat_remaining'],false) ?></td>
+          <td class="p5-h-inline"><?= money($pv['stat_remaining'],false) ?></td>
           <td><div class="actions">
             <a class="edit" href="<?= url('statements/'.$pv['id']) ?>" target="_blank" title="طباعة"><?= icon('file-text', 14) ?></a>
-            <?php if(($pv['status']??'issued')!=='void'): ?><form method="post" action="<?= url('statements/'.$pv['id'].'/delete') ?>" style="display:inline"
+            <?php if(($pv['status']??'issued')!=='void'): ?><form method="post" action="<?= url('statements/'.$pv['id'].'/delete') ?>" 
                   data-danger="1" data-confirm="إلغاء الكشف مع الاحتفاظ برقمه؟">
-              <?= csrfField() ?><input type="hidden" name="lock_version" value="<?= (int)($pv['lock_version']??1) ?>"><input name="reason" required placeholder="سبب الإلغاء" style="width:100px"><button class="del" title="إلغاء"><?= icon('x', 14) ?></button>
+              <?= csrfField() ?><input type="hidden" name="lock_version" value="<?= (int)($pv['lock_version']??1) ?>"><input name="reason" required placeholder="سبب الإلغاء" class="w100"><button class="del" title="إلغاء"><?= icon('x', 14) ?></button>
             </form><?php endif; ?>
           </div></td>
         </tr>
@@ -284,7 +284,11 @@ $issuedStatements = array_values(array_filter(
   .paid-summary-pick>input{width:19px;height:19px;accent-color:var(--gold,#C9A227)}
   .paid-summary-pick span{text-align:center}.paid-summary-pick span b{display:block;color:var(--navy);font-size:var(--fs-4)}.paid-summary-pick span small{color:var(--grey);font-weight:500}
   .paid-summary-pick em{font-style:normal;color:#7a5f0e;font-size:var(--fs-2);line-height:1.7}
-  .ct-chip{display:inline-block;background:#eef4ff;color:#2a5aa5;border-radius:var(--radius-1);padding:1px 8px;font-size:var(--fs-1);font-weight:500}
+  /* ⚠️ `.ct-chip` **اتنقلت لـ`app.css`**: كانت مكرَّرة حرفيًّا هنا وفي
+     `permits/invoice_form.php` بقيمتين مختلفتين (padding 1px مقابل 2px)،
+     وألوانها مكتوبة بالإيد فما كانتش بتشتغل في الوضع الليلي.
+     نفس درس `.cars-period` (v54): الكلاس المشترك بين شاشتين ما يعيشش
+     في `<style>` محلي. */
   .st-summary{margin-top:16px;max-width:400px;margin-inline-start:auto;border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden}
   .st-summary .r{display:flex;justify-content:space-between;padding:10px 16px;font-size:var(--fs-3);border-bottom:1px solid var(--line)}
   .st-summary .r b{font-variant-numeric:tabular-nums;font-weight:500}

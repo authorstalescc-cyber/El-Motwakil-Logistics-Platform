@@ -117,11 +117,15 @@ $num = fn($v) => number_format((float) $v, 0);
             <span class="hm-slip-amt">−<?= $num($t['amount']) ?></span>
           </div>
           <div class="hm-slip-acts">
-            <form method="post" action="<?= url('m/transfer/' . (int) $t['id'] . '/delete') ?>"
-                  onsubmit="return confirm('تلغي التحويل ده؟ المبلغ هيرجع لعهدتك.')">
-              <?= csrfField() ?>
-              <button type="submit" aria-label="ألغِ التحويل">ألغِ</button>
-            </form>
+            <?php /* الصفحة كلها جوّه فورم التحويل `f`، وHTML يمنع فورم جوّه فورم:
+                     المتصفح كان بيقفل `f` هنا، فيبقى زر «حوّل العهدة» تحت بلا
+                     فورم ولا يعمل أي شيء. زر الإلغاء يستخدم نفس CSRF ويغيّر
+                     وجهة الإرسال بـ`formaction` من غير فورم متداخل. */ ?>
+            <button type="submit"
+                    formaction="<?= url('m/transfer/' . (int) $t['id'] . '/delete') ?>"
+                    formmethod="post"
+                    onclick="return confirm('تلغي التحويل ده؟ المبلغ هيرجع لعهدتك.')"
+                    aria-label="ألغِ التحويل">ألغِ</button>
           </div>
         </article>
       <?php endforeach; ?>
@@ -130,7 +134,9 @@ $num = fn($v) => number_format((float) $v, 0);
 
   <?php if ($mates): ?>
   <div class="dock hf-dock">
-    <button class="btn gold" type="submit" id="save">حوّل العهدة</button>
+    <?php /* الربط الصريح يخلي الزر يرسل فورم التحويل حتى لو متصفح قديم أعاد
+             ترتيب DOM حول عناصر الصفحة. ما نعتمدش على الاحتواء البصري وحده. */ ?>
+    <button class="btn gold" type="submit" id="save" form="f">حوّل العهدة</button>
   </div>
   <?php endif; ?>
 </form>

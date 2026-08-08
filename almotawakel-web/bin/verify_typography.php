@@ -357,6 +357,41 @@ chk($emojiCount <= 40,
     . $emojiCount . ' بلا مقابل في icon()' . ($emojiCount > 40 ? ': ' . implode(', ', array_slice($emojiViews, 0, 8)) : ''));
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('⑦ ⚠️ كل اسم أيقونة مستعمل موجود في `icon()` (الفشل الصامت)');
+
+/* ⚠️ **باج بيفشل بالسكوت وحصل تلات مرات على الأقل:** `icon('اسم-مش-موجود')`
+   **ما بترميش خطأ** — بترجع الشكل الافتراضي `<circle r="9"/>` (دايرة فاضية).
+   فالشاشة بتترندر «سليمة» والمستخدم بيشوف دواير مكان الأيقونات.
+     • `monitor`/`sun`/`moon` عاشوا كده من المرحلة ١٥ لحد 2026-07-27 —
+       زرار وضع العرض كان دايرة فاضية **في النظام كله**.
+     • `unlock` في `layout.php` و`home` في شاشتين، و`box` (الصح `package`).
+   نفس عائلة `.table-mobile-scroll`: خطّاف موجود وتنفيذه ناقص.
+   الفحص ده بينادي `icon()` **فعليًّا** ويقارن بالشكل الافتراضي — فمستحيل
+   اسم جديد غلط يعدّي. */
+$fallbackIcon = icon('__definitely_not_an_icon__', 14);
+$missingIcons = [];
+foreach ($views as $p => $src) {
+    if (!preg_match_all('/icon\(\s*[\'"]([a-z0-9_-]+)[\'"]/', $src, $m)) { continue; }
+    foreach (array_unique($m[1]) as $name) {
+        if (icon($name, 14) === $fallbackIcon) {
+            $missingIcons[$name][] = basename($p);
+        }
+    }
+}
+chk($missingIcons === [],
+    'مفيش اسم أيقونة مستعمل وغير معرَّف — الناقص بيقع على دايرة فاضية بالسكوت'
+    . ($missingIcons ? ': ' . implode(' · ', array_map(
+        static fn ($n, $f) => $n . ' (' . implode(', ', array_slice(array_unique($f), 0, 3)) . ')',
+        array_keys($missingIcons), $missingIcons)) : ''));
+
+/* والاتجاه التاني: `app.js` بيرسم أيقونات الإشعارات من خريطة **تانية** —
+   لو نوع فيه أيقونة في `icon()` ومش في الخريطة دي بيقع على شكل افتراضي في
+   الجرس (باج موثَّق في v53). القاعدة: أي أيقونة نوع إشعار في الاتنين. */
+$appJs = (string) file_get_contents($root . '/public/assets/js/app.js');
+chk(str_contains($appJs, 'package') || !str_contains($appJs, 'notifIcon'),
+    'وخريطة أيقونات الجرس في `app.js` لسه موجودة (الأيقونة لازم في المكانين)');
+
+// ═══════════════════════════════════════════════════════════════════════
 echo "\n" . str_repeat('=', 62) . "\n";
 echo 'نجح: ' . $pass . '   |   فشل: ' . count($failures) . "\n";
 if ($failures) {

@@ -27,7 +27,39 @@ use App\Core\Database;
 class DailyReview
 {
     /** مجموعات نقدية تمنع الإقفال لو فيها بند غير متراجَع. */
-    public const BLOCKING = ['topups', 'permits', 'general', 'custody'];
+    /**
+     * الأقسام النقدية اللي لازم كل بند فيها يتعلّم قبل الإقفال.
+     *
+     * ⚠️ المرحلة ٢ (docs/16): `rep_deposit` اتضاف — العهدة اللي نزلت للمندوب **من
+     *    الدرج** بقت كاش خرج فعلاً، فلازم تتراجع زي أي مصروف. وفي المقابل
+     *    `rep_wallet` **مش** في القايمة عن قصد: البند اللي المندوب دفعه من محفظته
+     *    مبقاش يمسّ الدرج، فمعلوماتي زي الفيزا و«غير مدفوع» بالظبط.
+     */
+    public const BLOCKING = ['topups', 'permits', 'general', 'custody', 'rep_deposit'];
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لسؤال «أنهي بند في كارت «العهد المضافة» بيتحسب في
+     *    رصيد الخزنة فعلاً؟»** — وهو أساس مطابقة v50.
+     *
+     * الكارت بيعرض **كل** العهد (عشان المالك يشوفها في مكان واحد — قرار
+     * 2026-08-01)، لكن `Closing::sumTopups` مش بيحسبها كلها:
+     *   • `topup`    — إضافة يدوية للدرج ⇒ **محسوبة دايمًا**.
+     *   • `rep_bank` — عهدة من البنك للمندوب ⇒ محسوبة **بس** في نموذج «الخزنة =
+     *     كل كاش الشركة» (`bankTopupActive`). في نموذج «الدرج بس» الفلوس عمرها
+     *     ما دخلت الدرج فمش محسوبة.
+     *   • `rep_carry`— رصيد كان مع المندوب من قبل ⇒ **عمره ما يتحسب** (متحسوب
+     *     خلاص في مرحّل امبارح، وإعادة عدّه = عدّ مرتين).
+     *
+     * ⚠️ **ممنوع تكتب القايمة دي بإيدك في فاحص أو شاشة** — لو النموذج اتغيّر
+     *    وفضلت القايمة ثابتة، الفحص بيفشل بإنذار كاذب أو **بينجح كذبًا** والرصيد
+     *    يخالف الشاشة بلا أي خطأ ظاهر.
+     *
+     * @return string[]
+     */
+    public static function countedTopupTypes(): array
+    {
+        return RepCustody::bankTopupActive() ? ['topup', 'rep_bank'] : ['topup'];
+    }
 
     private static ?bool $available = null;
 
@@ -64,14 +96,64 @@ class DailyReview
     public static function view(string $date): array
     {
         $groups = [
-            'topups'  => self::group('topups',  'عهدة مضافة للخزنة', '➕', 'in',  'cash',
-                'فلوس دخلت الدرج بتاريخ اليوم'),
+            /* ⚠️ **طلب المالك (2026-07-30): «أي عهدة مندوب تتضاف له تنزل عهدة
+               مضافة للخزنة».** وهو محقّ في التصنيف: الفلوس **داخلة** فعلاً لإيد
+               الشركة، سواء نزلت الدرج أو جيب المندوب. فالقسم واحد، والفرق بيبان
+               **جوّه البنود** (كل بند بيقول راح فين) وفي سطر التفكيك تحت.
+               ⚠️⚠️ **لكن رصيد الدرج بيحسب بنود الدرج بس** — القسم ده طبقة تدقيق
+                  ما بتدخلش أي حساب (`DailyReview` عقدها قراءة بحتة)، والمعادلة
+                  فوق بتقرا `Closing::sumTopups` لوحدها. عشان كده المعادلة
+                  معنونة **«عهدة مضافة للدرج»** صراحةً — من غير كده الشاشة بتقول
+                  رقمين مختلفين لنفس الاسم وتناقض نفسها. */
+            /* ⚠️ **الاسم «العهد المضافة» مش «عهدة مضافة للخزنة»** (تصحيح 2026-08-01):
+               الكارت بيعرض العهد اللي راحت للمناديب من البنك كمان، ودي **ما
+               دخلتش الخزنة** في نموذج «الدرج بس» — فاسم فيه «للخزنة» بيكدب على
+               المالك (يوم فيه ٤٤,٠٠٠ عهد بنك والداخل للدرج صفر). والمعادلة فوق
+               اسمها «عهدة مضافة للدرج» فالاتنين كانوا هيتلخبطوا. */
+            'topups'  => self::group('topups',  'العهد المضافة', '➕', 'in',  'cash',
+                'كل عهدة اتضافت النهاردة — دخلت الدرج أو نزلت للمندوب من البنك. '
+                . 'رصيد الدرج بيحسب الجزء اللي دخله بس، وسطر التفكيك تحت بيوضّح.'),
             'permits' => self::group('permits', 'إيصالات ومصروفات الأذونات', '📄', 'out', 'cash',
                 'كل بند نقدي مسجَّل على إذن بتاريخ اليوم'),
             'general' => self::group('general', 'مصروفات عامة بدون إذن', '🧾', 'out', 'cash',
                 'مصروفات يدوية + سُلف وتسويات المناديب + نثرياتهم النقدية'),
+            /* ⚠️ بيشمل اللي سلّمها المندوب من عهدته كمان (تصحيح 2026-07-31) —
+               الكاش خرج من الشركة فعلاً، والبند بيقول مين سلّمها. */
             'custody' => self::group('custody', 'عهد السائقين', '🚛', 'out', 'cash',
-                'المخصوم فعليًّا من الخزنة بعد خصم قيمة البوليصة'),
+                'كل عهدة اتسلّمت لسائق النهاردة — من الدرج أو من عهدة مندوب، بعد خصم قيمة البوليصة'),
+            // المرحلة ٢ — كاش نزل من الدرج لمندوب. نقدي ومانع للإقفال زي أي مصروف.
+            'rep_deposit' => self::group('rep_deposit', 'عهدة نزلت للمناديب من الدرج', '💵', 'out', 'cash',
+                'الكاش اللي طلع من الدرج للمندوب في اليوم ده — اللي جاي من البنك مش هنا'),
+            // المرحلة ٢ — بند دفعه المندوب من محفظته: معلوماتي، ما بيمنعش الإقفال.
+            'rep_wallet' => self::group('rep_wallet', 'دفعها المندوب من عهدته', '🧑‍💼', 'out', 'info',
+                'اتدفعت من الفلوس النازلة للمندوب مش من الدرج — بتظهر في كارت المندوب'),
+            'driver_wallet' => self::group('driver_wallet', 'دفعها سائق المكتب من عهدته', '🚚', 'out', 'info',
+                'الجزء ده اتخصم من حساب السائق، لذلك لم يخرج مرة ثانية من درج المكتب'),
+            /* ⚠️ **استلام كاش من مندوب = تحويل داخلي، مش دخل جديد.**
+               رقم الخزنة في النموذج المجمّع = الدرج + جيوب المناديب، فالكاش
+               اللي رجع من جيب المندوب للدرج **ما بيغيّرش الإجمالي** — بيغيّر
+               مكانه بس. عشان كده معلوماتي (`info`) و**ممنوع يدخل `BLOCKING`**:
+               لو دخل، مجموع الأقسام النقدية هيخالف `Closing::dayView` وقاعدة
+               التطابق بتاعة v50 تتكسر بلا أي خطأ ظاهر. */
+            'rep_settle' => self::group('rep_settle', 'استلمت من المناديب', '🤲', 'in', 'info',
+                'كاش رجع من جيب المندوب لدرج المكتب — تحويل داخلي، الإجمالي ما بيتغيّرش'),
+            /* ⚠️⚠️ **مرآة `rep_settle` بالظبط، والاتجاه معكوس** (طلب المالك
+               2026-07-31: «تظهر ككارت في التقفيل اليومي»).
+               ═══ ليه قسم تاني مش نفس `rep_deposit` ═══
+               نفس الحدث (كاش من الدرج لجيب مندوب) **معناه المالي بيختلف حسب
+               النموذج الفعّال**:
+                 • قاعدة المرحلة ٢ (`rep_safe_rule_from`) ⇒ رقم الخزنة = الدرج
+                   لوحده، فالكاش **خرج فعلاً** ⇒ `rep_deposit` نقدي ومانع.
+                 • «الخزنة = كل كاش الشركة» (`rep_bank_topup_from` — الفعّال) ⇒
+                   الدرج وجيوب المناديب **الاتنين جوّه الرقم**، فالإجمالي ما
+                   اتغيّرش ⇒ **تحويل داخلي معلوماتي**.
+               ⚠️ **وممنوع يدخل `BLOCKING` في الحالة دي**: لو دخل، مجموع الأقسام
+                  النقدية هيخالف `Closing::dayView` وقاعدة التطابق بتاعة v50
+                  تتكسر **بلا أي خطأ ظاهر** (نفس تحذير `rep_settle` بالحرف).
+               ⚠️ الصف بيتولّد **مرّة واحدة بس** — القسم اللي بيستقبله بيتحدّد في
+                  ⑤ب تحت من `RepCustody::newSafeRuleActive()`، فمستحيل يتعدّ مرتين. */
+            'rep_drawer' => self::group('rep_drawer', 'نزلت للمناديب من الدرج', '💵', 'out', 'info',
+                'كاش خرج من درج المكتب لجيب مندوب — تحويل داخلي، إجمالي كاش الشركة ما بيتغيّرش'),
             'visa'    => self::group('visa',    'مدفوعات الفيزا', '💳', 'out', 'info',
                 'اتدفعت من كارت المكتب — مش من الدرج، فما بتمنعش الإقفال'),
             // v57 — بنود «غير مدفوع»: اتحاسبت من برّه الخزنة وبرّه عهدة المندوب،
@@ -112,11 +194,27 @@ class DailyReview
         unset($group);
 
         $totals = ['count'=>0,'reviewed'=>0,'pending'=>0,'stale'=>0,
-                   'cash'=>0.0,'visa'=>0.0,'unpaid'=>0.0,'blocking'=>0,'blocking_reviewed'=>0];
+                   'cash'=>0.0,'visa'=>0.0,'unpaid'=>0.0,'rep_wallet'=>0.0,'rep_settle'=>0.0,
+                   'driver_wallet'=>0.0,'rep_drawer'=>0.0,'rep_bank'=>0.0,'rep_carry'=>0.0,'topups_drawer'=>0.0,
+                   'blocking'=>0,'blocking_reviewed'=>0];
         foreach ($groups as $key => $group) {
             $totals['count'] += $group['count'];
             $totals['reviewed'] += $group['reviewed'];
             $totals['stale'] += $group['stale'];
+            /* ⚠️ برّه سلسلة `if/elseif` تحت عن قصد: القسم ده بقى **مانعًا**
+               (طلب المالك) فبيتلقّطه فرع BLOCKING الأول، ورقمه المستقل كان
+               هيفضل صفرًا للأبد لو ساب اعتماده على `elseif`. */
+            /* ⚠️ تفكيك «عهدة مضافة»: الدرج لوحده والمناديب لوحدهم. من غيره
+               الرقم المجمّع بيتقري كأنه كله دخل الدرج — وده بالظبط الالتباس
+               اللي المرحلة ٢ اتعملت عشانه. */
+            if ($key === 'topups') {
+                foreach ($group['items'] as $it) {
+                    $ty = $it['type'] ?? '';
+                    if ($ty === 'rep_bank')       { $totals['rep_bank'] += $it['amount']; }
+                    elseif ($ty === 'rep_carry')  { $totals['rep_carry'] += $it['amount']; }
+                    else                          { $totals['topups_drawer'] += $it['amount']; }
+                }
+            }
             if (in_array($key, self::BLOCKING, true)) {
                 $totals['blocking'] += $group['count'];
                 $totals['blocking_reviewed'] += $group['reviewed'];
@@ -125,13 +223,31 @@ class DailyReview
                 // ⚠️ منفصل عن الفيزا: الاتنين مش نقدي، لكن الفيزا خرجت من كارت
                 //    المكتب فعلاً و«غير مدفوع» ما خرجتش من أي محفظة عندنا.
                 $totals['unpaid'] += $group['total'];
+            } elseif ($key === 'rep_wallet') {
+                // ⚠️ التالت المنفصل (المرحلة ٢): دي **خرجت من محفظة مندوب فعلاً**
+                //    مش من الدرج ولا من كارت الفيزا ولا من برّه. تلات معانٍ مختلفة
+                //    وممنوع يتلمّوا في رقم واحد وإلا مطابقة الدرج تبقى مضلِّلة.
+                $totals['rep_wallet'] += $group['total'];
+            } elseif ($key === 'driver_wallet') {
+                $totals['driver_wallet'] += $group['total'];
+            } elseif ($key === 'rep_settle') {
+                /* ⚠️ **الرابع المنفصل: كاش رجع من المندوب للدرج.** لازم يبقى له
+                   مفتاحه — لو وقع في `visa` (فرع `else`) كان هيتقري «مدفوعات
+                   فيزا» وهو عكسها تمامًا (داخل مش خارج)، والشاشة تقول رقمًا
+                   غلط **بلا أي خطأ ظاهر**. */
+                $totals['rep_settle'] += $group['total'];
+            } elseif ($key === 'rep_drawer') {
+                /* ⚠️ **الخامس المنفصل: كاش نزل من الدرج لجيب مندوب** (الاتجاه
+                   المعكوس لـ`rep_settle`). لو وقع في فرع `else` كان هيتقري
+                   «مدفوعات فيزا» وهو مش خارج من كارت ولا من الشركة أصلاً. */
+                $totals['rep_drawer'] += $group['total'];
             } else {
                 $totals['visa'] += $group['total'];
             }
         }
         $totals['pending'] = $totals['count'] - $totals['reviewed'];
         $totals['blocking_pending'] = $totals['blocking'] - $totals['blocking_reviewed'];
-        foreach (['cash', 'visa', 'unpaid'] as $k) { $totals[$k] = round((float) $totals[$k], 2); }
+        foreach (['cash', 'visa', 'unpaid', 'rep_wallet', 'driver_wallet', 'rep_settle', 'rep_drawer', 'rep_bank', 'rep_carry', 'topups_drawer'] as $k) { $totals[$k] = round((float) $totals[$k], 2); }
         $totals['percent'] = $totals['blocking'] > 0
             ? (int) floor($totals['blocking_reviewed'] * 100 / $totals['blocking']) : 100;
 
@@ -182,13 +298,25 @@ class DailyReview
     {
         $items = [];
 
+        /* ⚠️⚠️ المرحلة ٢ — «هل صرف المندوب في اليوم ده لسه بيمسّ الدرج؟»
+           **نفس شرط `RepCustody::safeChargeSql` بالظبط لكن على مستوى PHP**، لأن
+           التصنيف هنا لكل صف على حِدة مش شرط SQL. لو الاتنين اختلفوا، الشاشة
+           بتحطّ بندًا في «نقدي» و`Closing` ما بيحسبهوش (أو العكس) — و`verify_v50`
+           بيمسك ده لأنه بيقارن مجموع الأقسام النقدية بمصروفات `Closing` بالمليم. */
+        $newRule = RepCustody::newSafeRuleActive() && $date >= RepCustody::safeRuleFrom();
+
         // ① عهدة مضافة للخزنة (داخل)
         foreach (Database::all(
             'SELECT id,amount,driver,note FROM manual_custody WHERE cust_date=? AND amount<>0 ORDER BY id', [$date]
         ) as $r) {
+            /* ⚠️ **السالب في الجدول ده معناه كاش خرج من الدرج مش دخله.**
+               `manual_custody` هو «حركة كاش الدرج» و`sumTopups` بتجمعه جمعًا
+               مباشرًا، فالسالب بيشتغل حسابيًّا صح — بس اسم «عهدة مضافة» عليه
+               بيتقري غلط تمامًا (بلاغ المالك 2026-07-30). الاسم بقى بالإشارة. */
+            $isOut = ((float) $r['amount']) < 0;
             $items[] = self::item('topup', (int) $r['id'], 'topups', (float) $r['amount'], [
-                'ref'   => 'إضافة عهدة',
-                'title' => 'عهدة مضافة للدرج',
+                'ref'   => $isOut ? 'خصم من الدرج' : 'إضافة عهدة',
+                'title' => $isOut ? 'كاش خرج من الدرج' : 'عهدة دخلت درج المكتب',
                 'party' => $r['driver'] ?: '—',
                 'party_label' => 'المصدر',
                 'note'  => $r['note'],
@@ -207,9 +335,17 @@ class DailyReview
         $mvCols   = self::columnExists('permit_movements', 'container_count')
             ? 'pm.container_count AS mv_cnt, pm.container_type AS mv_type'
             : 'NULL AS mv_cnt, NULL AS mv_type';
+        $safeAmount = OfficeDriverStatement::stageSafeAmountSql('s');
+        $driverAmount = OfficeDriverStatement::stageDriverAmountSql('s');
         $rows = Database::all(
-            "SELECT s.id,s.amount,s.note,s.ref_no,s.stage_key,s.is_visa,$unpaidCol AS unpaid,s.permit_id,
+            /* ⚠️ `$repCol AS paid_by_rep` إجبارية جنب الاسم: التصنيف لازم يكون على
+               **العمود نفسه** زي شرط `RepCustody::safeChargeSql` بالحرف. الاسم جاي
+               من LEFT JOIN فبيرجع NULL لو صف المندوب اتمسح، وساعتها البند يتصنّف
+               «من الدرج» وهو مدفوع من محفظة — فيختلف عن `Closing` بلا أي خطأ ظاهر. */
+            "SELECT s.id,s.amount,$safeAmount AS safe_amount,$driverAmount AS driver_amount,
+                    s.note,s.ref_no,s.stage_key,s.is_visa,$unpaidCol AS unpaid,s.permit_id,
                     $qtyCol AS qty, $actualCol AS actual_amount, $repName AS rep_name,
+                    $repCol AS paid_by_rep,
                     pm.seq AS movement_seq, $mvCols,
                     p.permit_no,p.permit_type,p.company,p.client,p.destination,
                     p.agency,p.shipping_co,p.port,p.containers,p.container_type
@@ -231,8 +367,9 @@ class DailyReview
             // «إذن 123» / «شهادة 123» — الوسم الطويل («رقم الإذن») بيتحوّل شارة تحت
             $theme = Permit::theme((string) $r['permit_type']);
             $kind  = (string) $r['permit_type'] === 'warid' ? 'شهادة' : 'إذن';
-            $items[] = self::item('stage', (int) $r['id'],
-                $unpaid ? 'unpaid' : ($visa ? 'visa' : 'permits'), (float) $r['amount'], [
+            // المرحلة ٢: البند اللي دفعه المندوب من محفظته مبقاش يمسّ الدرج
+            $byRepWallet = $newRule && !empty($r['paid_by_rep']);
+            $meta = [
                 'ref'       => ($r['permit_no'] ? $kind . ' ' . $r['permit_no'] : '#' . (int) $r['permit_id']),
                 'title'     => Permit::label((string) $r['stage_key']),
                 'party'     => trim((string) ($r['client'] ?: $r['company'])) ?: '—',
@@ -257,7 +394,25 @@ class DailyReview
                 'visa'      => $visa,
                 'unpaid'    => $unpaid,
                 'link'      => 'permits/' . (int) $r['permit_id'],
-            ]);
+            ];
+            $cashAmount = (!$unpaid && !$visa && !$byRepWallet)
+                ? round((float) $r['safe_amount'], 2)
+                : round((float) $r['amount'], 2);
+            if (abs($cashAmount) >= 0.005) {
+                $items[] = self::item('stage', (int) $r['id'],
+                    $unpaid ? 'unpaid' : ($visa ? 'visa' : ($byRepWallet ? 'rep_wallet' : 'permits')),
+                    $cashAmount, $meta);
+            }
+            $driverPaid = (!$unpaid && !$visa && empty($r['paid_by_rep']))
+                ? round((float) $r['driver_amount'], 2) : 0.0;
+            if ($driverPaid >= 0.005) {
+                $driverMeta = $meta;
+                $driverMeta['title'] = ($meta['title'] ?? 'إيصال') . ' — دفعه سائق المكتب';
+                $driverMeta['note'] = trim((string) ($meta['note'] ?? ''))
+                    . ' · خارج درج المكتب ومخصوم من حساب السائق';
+                $items[] = self::item('driver_stage', (int) $r['id'], 'driver_wallet',
+                    $driverPaid, $driverMeta);
+            }
         }
 
         // ③ مصروفات يدوية
@@ -307,7 +462,10 @@ class DailyReview
                  WHERE x.amount<>0 AND x.exp_date=? ORDER BY x.id", [$date]
             ) as $r) {
                 $visa = !empty($r['is_visa']);
-                $items[] = self::item('rep_misc', (int) $r['id'], $visa ? 'visa' : 'general', (float) $r['amount'], [
+                // المرحلة ٢: **كل** نثرية مدفوعة من محفظة المندوب — فبعد بداية
+                // القاعدة الجديدة مفيش منها حاجة نقدية على الدرج.
+                $items[] = self::item('rep_misc', (int) $r['id'],
+                    $visa ? 'visa' : ($newRule ? 'rep_wallet' : 'general'), (float) $r['amount'], [
                     'ref'    => 'نثرية مندوب',
                     'title'  => $r['category'] ?: RepMiscExpense::CATEGORY,
                     'party'  => $r['name'] ?: '—',
@@ -320,12 +478,98 @@ class DailyReview
             }
         }
 
-        // ⑥ عهد السائقين — المبلغ المراجَع هو **المخصوم فعلاً** (بعد خصم البوليصة)
+        /* ⑤ب المرحلة ٢ — عهدة نزلت للمندوب **من الدرج** (`source='office'`).
+           ⚠️ **الاتجاه التاني للقاعدة**: القسم ⑤ فوق شال صرف المندوب من النقدي،
+              والقسم ده بيسجّل خروج الكاش من الدرج وقت تنزيله. واحد بلا التاني =
+              الشاشة تقول رقمًا والخزنة تقول رقمًا تاني. اللي جاي من البنك
+              (`source='bank'`) **مش هنا** لأنه عمره ما دخل الدرج. */
+        /* ⚠️⚠️ **بقى يظهر في النموذجين** (طلب المالك 2026-07-31: «تظهر ككارت في
+              التقفيل اليومي»). قبل كده كان مشروطًا بـ`$newRule` — والإنتاج شغّال
+              بالنموذج المجمّع، فالكاش اللي بيخرج من الدرج لمندوب كان **مختفي
+              تمامًا** من شاشة التقفيل (⑤ج تحت بتتخطّى `office` كمان).
+           ⚠️⚠️ **القسم بيتغيّر مع النموذج، والشرط معاه — والاتنين لازم يمشوا مع
+              بعض:** في قاعدة المرحلة ٢ ده كاش خرج فعلاً ⇒ قسم نقدي مانع، والشرط
+              لازم يبقى **`officeDepositSql` نفسها** بتاعة `Closing::sumOfficeDeposits`
+              (بحدّ خط الفصل) وإلا صف قديم يظهر في قسم نقدي وهو مش متحسوب في
+              `Closing` ⇒ مطابقة v50 تتكسر. وفي النموذج المجمّع ده تحويل داخلي ⇒
+              قسم معلوماتي، والشرط بيبقى «مصدره الدرج» بلا حدّ (عرض بحت).
+           ⚠️ **`item_type` بيفضل `rep_deposit` في الحالتين** — علامات المراجعة
+              مخزَّنة بـ(type,id)، فتغييره كان هيتيّم كل علامة قديمة بالسكوت. */
+        if (self::tableExists('rep_custody_deposits')) {
+            $drawerGroup = $newRule ? 'rep_deposit' : 'rep_drawer';
+            $drawerCond  = $newRule
+                ? RepCustody::officeDepositSql('d.dep_date')
+                : RepCustody::sourceIsSql('office', 'd.source');
+            foreach (Database::all(
+                "SELECT d.id,d.rep_id,d.amount,d.note,r.name
+                 FROM rep_custody_deposits d JOIN reps r ON r.id=d.rep_id
+                 WHERE d.amount<>0 AND d.dep_date=?" . $drawerCond
+                 . ' ORDER BY d.id', [$date]
+            ) as $r) {
+                $items[] = self::item('rep_deposit', (int) $r['id'], $drawerGroup, (float) $r['amount'], [
+                    'ref'   => 'تنزيل عهدة',
+                    'title' => 'كاش نزل من الدرج للمندوب',
+                    'party' => $r['name'] ?: '—',
+                    'party_label' => 'المندوب',
+                    'note'  => $r['note'],
+                    'link'  => 'rep-custody/' . (int) $r['rep_id'],
+                ]);
+            }
+        }
+
+        /* ⑤ج عهدة نزلت للمندوب **من البنك أو مرحَّلة** — معلوماتية بحتة.
+           ⚠️ **بتظهر بلا شرط القاعدة الجديدة** عن قصد: هي عرض بحت وما بتدخلش أي
+              مجموع نقدي، والمالك محتاج يشوف صورة اليوم كاملة قبل التفعيل وبعده. */
+        if (self::tableExists('rep_custody_deposits')) {
+            $srcCol = self::columnExists('rep_custody_deposits', 'source') ? 'd.source' : "'bank'";
+            foreach (Database::all(
+                "SELECT d.id,d.rep_id,d.amount,d.note,$srcCol AS src,r.name
+                 FROM rep_custody_deposits d JOIN reps r ON r.id=d.rep_id
+                 WHERE d.amount<>0 AND d.dep_date=? ORDER BY d.id", [$date]
+            ) as $r) {
+                // اللي طلع من الدرج له قسمه النقدي فوق — ما يتكررش هنا
+                if ((string) $r['src'] === 'office') { continue; }
+                /* ⚠️ نوع مختلف لكل مصدر — **ده اللي بيخلّي المطابقة مع `Closing`
+                   ممكنة**: `bank` بس هي اللي بتتحسب إضافة للخزنة، و`carry` رصيد
+                   كان متحسوب خلاص في مرحّل امبارح فعرضه توثيق مش حساب. */
+                $isCarry = (string) $r['src'] === 'carry';
+                /* ⚠️ **كل العهد في كارت «العهد المضافة» — قرار المالك 2026-08-01:**
+                   «كارت العهد المضافة يعرض العهد اللي اتضافت من البنك». وهو محقّ
+                   عرضيًّا: دي عهدة اتضافت فعلاً، والمالك محتاج يشوفها في مكان
+                   واحد مش متفرّقة على كروت.
+                   ⚠️⚠️ **والمطابقة محفوظة لأن المجموع المحسوب مشتقّ مش مكتوب:**
+                      `countedTopupTypes()` هي اللي بتقول أنهي نوع `Closing`
+                      بيحسبه فعلاً — في نموذج «الدرج بس» البنك **مش** منها، فمجموع
+                      الكارت بيبقى أكبر من الرصيد **عن قصد** وسطر التفكيك بيشرح
+                      الفرق (نفس معاملة `carry` الموجودة من الأول). */
+                $items[] = self::item($isCarry ? 'rep_carry' : 'rep_bank',
+                    (int) $r['id'], 'topups', (float) $r['amount'], [
+                    'ref'   => $isCarry ? 'رصيد مرحَّل' : 'عهدة للمندوب',
+                    'title' => $isCarry
+                        ? 'كان معاه من قبل — متحسوب في مرحّل امبارح، مش إضافة جديدة'
+                        : 'اتسحبت من البنك ونزلت للمندوب',
+                    'party' => $r['name'] ?: '—',
+                    'party_label' => 'المندوب',
+                    'note'  => $r['note'],
+                    'link'  => 'rep-custody/' . (int) $r['rep_id'],
+                ]);
+            }
+        }
+
+        /* ⑥ عهد السائقين — المبلغ المراجَع هو **المخصوم فعلاً** (بعد خصم البوليصة)
+           ⚠️ **بيشمل اللي سلّمها المندوب من عهدته** (تصحيح 2026-07-31): في
+              النموذج المجمّع محفظة المندوب جوّه رقم الخزنة، فالعهدة دي كاش خرج
+              من الشركة فعلاً ولازم تتراجع زي أي عهدة. `officeExcludeSql` هو
+              اللي بيقرّر — **ممنوع تكتب شرط `custody_rep_id` هنا بإيدك**.
+           ⚠️ اسم الدافع بيتعرض في البند نفسه، وإلا المالك بيشوف الرقم وما
+              يعرفش الكاش خرج من الدرج ولا من جيب المندوب. */
         foreach (Database::all(
             'SELECT b.id,b.bill_number,b.driver,b.company,b.custody,b.car_no,b.car_owner,
                     b.destination,b.container_type,b.container_count,b.declaration_owner,
-                    b.freight,b.permit_id,p.permit_no,p.permit_type,p.agency,p.client
-             FROM bawalis b LEFT JOIN permits p ON p.id=b.permit_id
+                    b.freight,b.permit_id,p.permit_no,p.permit_type,p.agency,p.client'
+             . RepBillCustody::payerSelectSql() . '
+             FROM bawalis b LEFT JOIN permits p ON p.id=b.permit_id'
+             . RepBillCustody::payerJoinSql('b') . '
              WHERE b.is_legacy=0 AND b.bill_date=? AND b.custody>0'
              . RepBillCustody::officeExcludeSql('b') . ' ORDER BY b.id', [$date]
         ) as $r) {
@@ -346,6 +590,8 @@ class DailyReview
                                                         $r['container_type'] ?: null),
                 'car'     => trim((string) $r['car_no']) ?: null,
                 'car_owner' => trim((string) $r['car_owner']) ?: null,
+                // ⚠️ فاضي = طلعت من درج المكتب. الشاشة بتعرضه شارة «دفعها المندوب».
+                'by_rep'  => trim((string) ($r['custody_rep_name'] ?? '')) ?: null,
                 'permit_ref' => $r['permit_no']
                     ? ((string) $r['permit_type'] === 'warid' ? 'شهادة ' : 'إذن ') . $r['permit_no'] : null,
                 'freight' => $r['freight'] === null ? null : round((float) $r['freight'], 2),
@@ -354,6 +600,27 @@ class DailyReview
                              . ' − خصم ' . number_format(round($custody - $deduction, 2), 2),
                 'link'    => 'bawalis/' . (int) $r['id'],
             ]);
+        }
+
+        /* ⑦ استلمت من المناديب — كاش رجع من جيب المندوب لدرج المكتب.
+           ⚠️ **معلوماتي مش نقدي**: الإجمالي (درج + جيوب) ما بيتغيّرش، بيتنقل بس.
+           ⚠️ الأرقام من `RepCustody::settlementsOn()` وبس — نفس الجدول اللي
+              بيقرا منه كارت المندوب، فمفيش تعريف تاني للمبلغ. */
+        if (RepCustody::available()) {
+            foreach (RepCustody::settlementsOn($date) as $r) {
+                $amount = round((float) $r['returned'], 2);
+                if (abs($amount) < 0.005) { continue; }
+                $items[] = self::item('rep_settle', (int) $r['id'], 'rep_settle', $amount, [
+                    'ref'   => $amount < 0 ? 'دفعت للمندوب' : 'استلمت من المندوب',
+                    'title' => 'تصفية عهدة يوم ' . dfmt((string) $r['settle_date']),
+                    'party' => $r['rep_name'] ?: '—',
+                    'party_label' => 'المندوب',
+                    'note'  => $amount < 0
+                        ? 'المندوب كان فارش من جيبه — المكتب دفع له الفرق'
+                        : ($r['note'] ?: null),
+                    'link'  => 'rep-custody/' . (int) $r['rep_id'],
+                ]);
+            }
         }
 
         return $items;

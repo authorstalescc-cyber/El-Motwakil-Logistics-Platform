@@ -49,7 +49,6 @@ $dayLeft = round((float) $dayB['balance'] - $pendingDaySum, 2);
   <?php endif; ?>
   <div class="spacer"></div>
   <?php /* الأرصدة مقنّعة افتراضيًّا — المعالج عام في app.js (مش سكربت محلي) */ ?>
-  <button type="button" class="btn ghost secret-toggle" aria-pressed="false"><?= icon('search', 14) ?> إظهار الأرصدة</button>
   <a class="btn ghost" href="<?= url('reps/' . $repId) ?>">كشف المرتبات</a>
   <a class="btn ghost" href="<?= url('rep-custody') ?>">‹ كل المناديب</a>
 </div>
@@ -70,10 +69,26 @@ $dayLeft = round((float) $dayB['balance'] - $pendingDaySum, 2);
 <?php /* ⚠️ **ممنوع رقم أصمّ**: كل رقم بيفتح بنوده من
          `GET /rep-custody/drill/{what}?rep={id}` — بيتجابوا عند الضغط بس. */ ?>
 <?php $rd = static fn (string $what): string => url('rep-custody/drill/' . $what . '?rep=' . $repId); ?>
-<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($dayB, $pendingDaySum, $dayLeft, $rd, $dayLabel) { ?>
+<?php
+/* ⚠️ تفكيك «نزل له اليوم» بالمصدر — نفس صياغة `/rep-custody` بالحرف
+   (`sourceBadge`) ونفس نطاق الرقم (`depositSourceTotals` بالمندوب واليوم).
+   بيختفي لو مصدر واحد بس عشان ما يكررش اللي الكارت قايله. */
+$cardSrc = \App\Models\RepCustody::depositSourceTotals($day, $repId);
+$cardSplit = null;
+if (count($cardSrc) > 1) {
+    $parts = [];
+    foreach ($cardSrc as $k => $v) {
+        $b = \App\Models\RepCustody::sourceBadge($k);
+        if ($b) { $parts[] = $b['short'] . ' ' . money0($v); }
+    }
+    if ($parts) { $cardSplit = ['dir' => 'flat', 'tone' => 'mute', 'text' => implode(' · ', $parts)]; }
+}
+?>
+<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($dayB, $pendingDaySum, $dayLeft, $rd, $dayLabel, $cardSplit) { ?>
   <?php partial('stat', [
     'label' => 'نزل له اليوم', 'value' => intf($dayB['deposits']),
     'icon' => 'wallet', 'tone' => 'green',
+    'trend' => $cardSplit,
     'drill' => $rd('rep_deposits'), 'title' => 'العهدة اللي نزلت له في ' . $dayLabel,
   ]); ?>
   <?php partial('stat', [
@@ -87,13 +102,12 @@ $dayLeft = round((float) $dayB['balance'] - $pendingDaySum, 2);
   <?php partial('stat', [
     'label' => $pendingDaySum > 0 ? 'فاضل معاه (بعد المستني)' : 'فاضل من عهدة اليوم',
     'value' => intf($dayLeft),
-    'icon' => 'briefcase', 'tone' => 'gold', 'secret' => true,
-    'drill' => $rd('rep_spent'), 'title' => 'الفاضل من عهدة ' . $dayLabel,
+    'icon' => 'briefcase', 'tone' => 'gold', 'drill' => $rd('rep_spent'), 'title' => 'الفاضل من عهدة ' . $dayLabel,
   ]); ?>
   <?php partial('stat', [
-    'label' => 'مستني مراجعتك اليوم', 'value' => intf($pendingDaySum),
+    'label' => 'مستني نقدي اليوم', 'value' => intf($pendingDaySum),
     'icon' => 'hourglass', 'tone' => 'sader',
-    'drill' => $rd('rep_pending'), 'title' => 'بنود ' . $dayLabel . ' المستنية اعتمادك',
+    'drill' => $rd('rep_pending'), 'title' => 'البنود النقدية في ' . $dayLabel . ' المستنية اعتمادك',
   ]); ?>
 <?php }]); ?>
 
@@ -104,7 +118,10 @@ $dayLeft = round((float) $dayB['balance'] - $pendingDaySum, 2);
   <div class="note mb rc-pend">
     <?= icon('hourglass', 15) ?> <strong><?= intf(count($pendingAll)) ?> بند</strong> مستني مراجعتك من المندوب ده
     (<?= money(array_sum(array_column($pendingAll, 'amount')), false) ?> على كل الأيام).
-    <a href="<?= url('rep-custody/inbox') ?>"><strong>راجعهم دلوقتي ←</strong></a>
+    <?php /* ⚠️ **`?rep=` إلزامية**: من غيرها الرابط بيوَدّي على كل المناديب
+             والمالك يدوّر وسطهم — وهي الشكوى اللي الفلترة الخادمية اتعملت
+             عشانها. الصندوق بيحترمها بعد كل اعتماد كمان. */ ?>
+    <a href="<?= url('rep-custody/inbox?status=pending&rep=' . $repId) ?>"><strong>راجع بنوده دلوقتي ←</strong></a>
   </div>
 <?php endif; ?>
 
@@ -150,7 +167,23 @@ switch ($tab) {
 .rc-eq-part.wait .v{color:var(--sader-dk)}
 .rc-eq-op{font-weight:700;color:var(--grey)}
 
+/* ── درج تعديل التحويل لزميل (2026-07-31) ──
+   ⚠️ `<details>` بلا جافاسكريبت عن قصد: الكارت بيترندر في تبويبات وروابط
+      حقيقية، فأي خطّاف JS هنا بيبقى نقطة فشل صامت زيادة. */
+.rc-trf-edit{margin:0 0 var(--space-2);border:1px solid var(--line);
+  border-radius:var(--radius-2);background:var(--zebra)}
+.rc-trf-edit[open]{background:var(--card);border-color:var(--navy)}
+.rc-trf-sum{padding:var(--space-2) var(--space-3);cursor:pointer;font-size:var(--fs-1);
+  color:var(--grey);font-weight:var(--fw-bold);list-style:none}
+.rc-trf-sum::-webkit-details-marker{display:none}
+.rc-trf-edit[open] .rc-trf-sum{color:var(--navy);border-bottom:1px solid var(--line)}
+.rc-trf-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:var(--space-3);padding:var(--space-3)}
+.rc-trf-acts{display:flex;align-items:end}
+.rc-trf-del{padding:0 var(--space-3) var(--space-3)}
+
 @media (max-width:640px){
+  .rc-trf-form{grid-template-columns:1fr}
   .rc-eq{gap:6px;font-size:var(--fs-1)}
   .rc-eq-part{min-width:72px;padding:6px 9px}
 }

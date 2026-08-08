@@ -878,4 +878,23 @@ class Permit
             'bills'     => (int)$b['n'],
         ];
     }
+
+    /**
+     * بنود المصروفات كصفوف — **لنافذة تفاصيل رقم «المصروفات الفعلية»**.
+     *
+     * ⚠️ بتستخدم **`expenseSql()` نفسها** اللي `totals()` بتحسب بيها
+     *    `totals['expense']`، فمستحيل النافذة تقول رقمًا والكارت يقول غيره.
+     *    **ممنوع تكتب الشرط بإيدك هنا** ولا تجمّع البنود من
+     *    `movementStagesGrouped()` — متحقَّق على بيانات الإنتاج إن فيه بندًا
+     *    مربوطًا بالإذن **بلا حركة**، فالتجميع من الحركات بيقلّ عن الإجمالي
+     *    والنافذة تكدب.
+     */
+    public static function expenseRows(int $permitId): array
+    {
+        return Database::all(
+            "SELECT * FROM permit_stages s WHERE s.permit_id = ? AND " . self::expenseSql('s')
+            . " ORDER BY s.entry_date, s.id",
+            [$permitId]
+        );
+    }
 }

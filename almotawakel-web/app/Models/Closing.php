@@ -63,8 +63,27 @@ class Closing
     private static function sumTopups(?string $gt, bool $gte, ?string $lt, ?string $eq = null): float
     {
         [$w, $p] = self::whereDate('cust_date', $gt, $gte, $lt, $eq);
+        $manual = (float) Database::scalar(
+            "SELECT COALESCE(SUM(amount),0) FROM manual_custody WHERE $w", $p);
+        return round($manual + self::sumBankDeposits($gt, $gte, $lt, $eq), 2);
+    }
+
+    /**
+     * عهدة نزلت للمندوب **من البنك** — بتتحسب إضافة للخزنة (قرار المالك 2026-07-30:
+     * «أي عهدة يتم إضافتها للمندوب كأنها في الدرج»).
+     *
+     * ⚠️ **`bank` بس** — `office` تحويل داخلي (الاتنين جوّه الرقم) و`carry` متحسوب
+     *    خلاص في مرحّل اليوم السابق، فأي واحد فيهم كان هيتعدّ **مرتين**. الشرط من
+     *    `RepCustody::bankTopupSql()` — ممنوع يتكتب بالإيد.
+     * ⚠️ بترجّع 0 لو القاعدة مطفية ⇒ السلوك السابق بالحرف.
+     */
+    private static function sumBankDeposits(?string $gt, bool $gte, ?string $lt, ?string $eq = null): float
+    {
+        if (!RepCustody::bankTopupActive() || !self::tableExists('rep_custody_deposits')) { return 0.0; }
+        [$w, $p] = self::whereDate('dep_date', $gt, $gte, $lt, $eq);
         return round((float) Database::scalar(
-            "SELECT COALESCE(SUM(amount),0) FROM manual_custody WHERE $w", $p), 2);
+            "SELECT COALESCE(SUM(amount),0) FROM rep_custody_deposits
+             WHERE $w" . RepCustody::bankTopupSql(), $p), 2);
     }
 
     /**
@@ -90,15 +109,40 @@ class Closing
     {
         $expSql = Permit::expenseSql('s');
         [$w1, $p1] = self::whereDate('s.entry_date', $gt, $gte, $lt, $eq);
+        // ⚠️ المرحلة ٢: بند دفعه المندوب من محفظته بعد بداية القاعدة الجديدة
+        //    **ما بيتخصمش من الدرج** — الشرط من `RepCustody::safeChargeSql` وممنوع
+        //    يتكتب بالإيد (لازم يمشي مع `movementTotals` تحت بالحرف).
+        $stageAmount = OfficeDriverStatement::stageSafeAmountSql('s');
         $stage = (float) Database::scalar(
-            "SELECT COALESCE(SUM(s.amount),0) FROM permit_stages s
-             WHERE $expSql AND " . Permit::cashOutSql('s') . " AND $w1", $p1);
+            "SELECT COALESCE(SUM($stageAmount),0) FROM permit_stages s
+             WHERE $expSql AND " . Permit::cashOutSql('s')
+             . RepCustody::safeChargeSql('s.entry_date', 's.paid_by_rep_id') . " AND $w1", $p1);
         [$w2, $p2] = self::whereDate('exp_date', $gt, $gte, $lt, $eq);
         $manual = (float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM manual_expenses WHERE is_visa = 0 AND $w2", $p2);
         $reps = self::sumRepCash($gt, $gte, $lt, $eq);
         $misc = self::sumRepMisc($gt, $gte, $lt, $eq);
-        return round($stage + $manual + $reps + $misc, 2);
+        $repDep = self::sumOfficeDeposits($gt, $gte, $lt, $eq);
+        return round($stage + $manual + $reps + $misc + $repDep, 2);
+    }
+
+    /**
+     * إجمالي عهد المناديب اللي **طلعت من درج المكتب فعلاً** (`source='office'`).
+     *
+     * ⚠️⚠️ ده **الاتجاه التاني** لقاعدة المرحلة ٢، ولازم يمشي مع
+     *    `RepCustody::safeChargeSql` مع بعض: الأولى بتشيل صرف المندوب من الدرج،
+     *    ودي بتسجّل خروج الكاش وقت تنزيله. تطبيق واحدة بلا التانية = **الخزنة
+     *    بتقول رقمًا أعلى من الحقيقة** لأن الكاش اللي طلع من الدرج مش متسجّل.
+     *
+     * ⚠️ بترجّع 0 لو القاعدة مطفية أو الجدول مش موجود ⇒ سلوك v42 بالحرف.
+     */
+    private static function sumOfficeDeposits(?string $gt, bool $gte, ?string $lt, ?string $eq = null): float
+    {
+        if (!RepCustody::newSafeRuleActive() || !self::tableExists('rep_custody_deposits')) { return 0.0; }
+        [$w, $p] = self::whereDate('dep_date', $gt, $gte, $lt, $eq);
+        return round((float) Database::scalar(
+            "SELECT COALESCE(SUM(amount),0) FROM rep_custody_deposits
+             WHERE $w" . RepCustody::officeDepositSql(), $p), 2);
     }
 
     /**
@@ -114,8 +158,11 @@ class Closing
         if (!self::tableExists('rep_misc_expenses')) { return 0.0; }
         [$w, $p] = self::whereDate('exp_date', $gt, $gte, $lt, $eq);
         $cash = RepMiscExpense::cashOnlySql();
+        // ⚠️ المرحلة ٢: **كل** صفوف الجدول ده صرف مندوب، فبعد بداية القاعدة الجديدة
+        //    مفيش منها حاجة بتمسّ الدرج — عشان كده `safeChargeSql` بلا عمود مندوب.
         return round((float) Database::scalar(
-            "SELECT COALESCE(SUM(amount),0) FROM rep_misc_expenses WHERE $cash AND $w", $p), 2);
+            "SELECT COALESCE(SUM(amount),0) FROM rep_misc_expenses WHERE $cash AND $w"
+            . RepCustody::safeChargeSql('exp_date'), $p), 2);
     }
 
     /** إجمالي كاش المناديب النقدي (سُلف + دفعات تسوية، بلا فيزا) في نطاق/يوم. */
@@ -168,13 +215,30 @@ class Closing
             array_push($params, ...$sqlParams);
         };
 
+        /* ⚠️ الفرعان دول لازم يفضلوا مطابقين لـ`sumTopups` بالحرف (نفس تحذير
+           فروع المصروفات تحت) — الرصيد الحيّ بيتحسب من هنا والمثبَّت من هناك. */
         [$w, $p] = self::whereDate('cust_date', $gt, $gte, $lt, $eq);
-        $append('topups', "SELECT amount FROM manual_custody WHERE $w", $p);
+        $topupParts = ["SELECT amount FROM manual_custody WHERE $w"];
+        $topupParams = $p;
+        if (RepCustody::bankTopupActive() && self::tableExists('rep_custody_deposits')) {
+            [$w2, $p2] = self::whereDate('dep_date', $gt, $gte, $lt, $eq);
+            $topupParts[] = "SELECT amount FROM rep_custody_deposits WHERE $w2"
+                          . RepCustody::bankTopupSql();
+            array_push($topupParams, ...$p2);
+        }
+        $append('topups', implode(' UNION ALL ', $topupParts), $topupParams);
 
+        /* ⚠️⚠️ **الفروع دي لازم تفضل مطابقة لـ`sumExpenses` بالحرف.** الاتنين
+           بيحسبوا نفس الرقم من نفس المصادر — ده المسار السريع للأرصدة الحيّة
+           وده المسار المفرد اللي `closeDay`/`refreshLockedChainFrom` بيستخدموه.
+           أي شرط يتضاف في واحد وينسى في التاني = الرصيد الحيّ يخالف الرصيد
+           المثبَّت في `daily_closings` **بلا أي خطأ ظاهر**. */
         $expenseParts = []; $expenseParams = [];
         [$w, $p] = self::whereDate('s.entry_date', $gt, $gte, $lt, $eq);
-        $expenseParts[] = "SELECT s.amount FROM permit_stages s WHERE " . Permit::expenseSql('s')
-                        . " AND " . Permit::cashOutSql('s') . " AND $w";
+        $stageAmount = OfficeDriverStatement::stageSafeAmountSql('s');
+        $expenseParts[] = "SELECT $stageAmount amount FROM permit_stages s WHERE " . Permit::expenseSql('s')
+                        . " AND " . Permit::cashOutSql('s')
+                        . RepCustody::safeChargeSql('s.entry_date', 's.paid_by_rep_id') . " AND $w";
         array_push($expenseParams, ...$p);
         [$w, $p] = self::whereDate('exp_date', $gt, $gte, $lt, $eq);
         $expenseParts[] = "SELECT amount FROM manual_expenses WHERE is_visa=0 AND $w";
@@ -186,7 +250,15 @@ class Closing
             [$w, $p] = self::whereDate('exp_date', $gt, $gte, $lt, $eq);
             // v45: الكاش بس — المدفوع بالفيزا خرج من الكارت مش من الخزنة.
             $expenseParts[] = "SELECT amount FROM rep_misc_expenses WHERE "
-                            . RepMiscExpense::cashOnlySql() . " AND $w";
+                            . RepMiscExpense::cashOnlySql() . " AND $w"
+                            . RepCustody::safeChargeSql('exp_date');
+            array_push($expenseParams, ...$p);
+        }
+        // المرحلة ٢: التنزيل اللي طلع من الدرج فعلاً = كاش خرج من الخزنة يوم تنزيله
+        if (RepCustody::newSafeRuleActive() && self::tableExists('rep_custody_deposits')) {
+            [$w, $p] = self::whereDate('dep_date', $gt, $gte, $lt, $eq);
+            $expenseParts[] = "SELECT amount FROM rep_custody_deposits WHERE $w"
+                            . RepCustody::officeDepositSql();
             array_push($expenseParams, ...$p);
         }
         $append('expenses', implode(' UNION ALL ', $expenseParts), $expenseParams);
@@ -317,6 +389,23 @@ class Closing
         return ($max === null || $max === false) ? null : $max;
     }
 
+    /**
+     * اليوم المتقفل اللي «رصيد أول اليوم» جاي منه (آخر إقفال **قبل** $date)،
+     * أو null لو مفيش (وساعتها المصدر هو الرصيد الافتتاحي في الإعدادات).
+     *
+     * ⚠️ عرض بحت — نافذة تفاصيل «رصيد أول اليوم» في شاشة التقفيل بتقول للمالك
+     *    الرقم ده جاي منين بدل ما يبقى رقمًا أصمّ. **مش** `lastClosedDate()`:
+     *    دي بترجّع آخر إقفال في النظام كله، واللي بيهمّنا هنا هو نقطة ارتكاز
+     *    اليوم المعروض تحديدًا (نفس منطق `anchor()` الخاصة).
+     */
+    public static function openingSource(string $date): ?string
+    {
+        if (!self::available()) { return null; }
+        $d = Database::scalar(
+            "SELECT MAX(close_date) FROM daily_closings WHERE close_date < ?", [$date]);
+        return ($d === null || $d === false) ? null : $d;
+    }
+
     /** هل اليوم متقفل؟ (أي تاريخ ≤ آخر يوم متقفل يقع ضمن الفترة المقفلة) */
     public static function isLocked(string $date): bool
     {
@@ -407,8 +496,11 @@ class Closing
         [$w, $p] = self::whereDate('cust_date', $afterClosed, false, $beforeDate, null);
         if (Database::scalar("SELECT COUNT(*) FROM manual_custody WHERE $w", $p)) { return true; }
         [$w, $p] = self::whereDate('s.entry_date', $afterClosed, false, $beforeDate, null);
+        $stageAmount = OfficeDriverStatement::stageSafeAmountSql('s');
         if (Database::scalar("SELECT COUNT(*) FROM permit_stages s WHERE $expSql AND "
-            . Permit::cashOutSql('s') . " AND $w", $p)) { return true; }
+            . Permit::cashOutSql('s')
+            . RepCustody::safeChargeSql('s.entry_date', 's.paid_by_rep_id')
+            . " AND $stageAmount<>0 AND $w", $p)) { return true; }
         [$w, $p] = self::whereDate('exp_date', $afterClosed, false, $beforeDate, null);
         if (Database::scalar("SELECT COUNT(*) FROM manual_expenses WHERE is_visa=0 AND $w", $p)) { return true; }
         [$w, $p] = self::whereDate('bill_date', $afterClosed, false, $beforeDate, null);
@@ -423,7 +515,19 @@ class Closing
         if (self::tableExists('rep_misc_expenses')) {
             [$w, $p] = self::whereDate('exp_date', $afterClosed, false, $beforeDate, null);
             $cash = RepMiscExpense::cashOnlySql();
-            if (Database::scalar("SELECT COUNT(*) FROM rep_misc_expenses WHERE $cash AND $w", $p)) { return true; }
+            if (Database::scalar("SELECT COUNT(*) FROM rep_misc_expenses WHERE $cash AND $w"
+                . RepCustody::safeChargeSql('exp_date'), $p)) { return true; }
+        }
+        // التنزيل بقى حركة خزنة — لازم يتعدّ في كشف الفجوات كمان، وإلا يوم فيه
+        // تنزيل بس يتقري «مفيش حركة» فيتخطّى في التقفيل.
+        if (self::tableExists('rep_custody_deposits')) {
+            [$w, $p] = self::whereDate('dep_date', $afterClosed, false, $beforeDate, null);
+            if (RepCustody::newSafeRuleActive()
+                && Database::scalar("SELECT COUNT(*) FROM rep_custody_deposits WHERE $w"
+                    . RepCustody::officeDepositSql(), $p)) { return true; }
+            if (RepCustody::bankTopupActive()
+                && Database::scalar("SELECT COUNT(*) FROM rep_custody_deposits WHERE $w"
+                    . RepCustody::bankTopupSql(), $p)) { return true; }
         }
         return false;
     }
@@ -467,6 +571,65 @@ class Closing
             'closed_by' => null,
             'closed_at' => null,
         ];
+    }
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لرقم «عهدة مسحوبة من الدرج» في يوم** — عشان معادلة
+     *    شاشة التقفيل تفصله عن «المصروفات النقدية» (طلب المالك 2026-08-01).
+     *
+     * ⚠️ **مش رقم جديد** — هو **جزء من `expenses`** جوّه `sumExpenses` بالظبط
+     *    (`sumOfficeDeposits`). الشاشة بتطرحه من خانة المصروفات وتعرضه في خانته،
+     *    فالمعادلة بتفضل مقفولة: `opening + topups − (expenses − هو) − هو − driver`.
+     *    **ممنوع تحسبه بشرط مكتوب بالإيد** — لازم من `RepCustody::officeDepositSql()`
+     *    وإلا يفصل عن `Closing` والمعادلة تبوظ.
+     *
+     * ⚠️ **بيتحسب حيًّا حتى لليوم المتقفل** عن قصد: `daily_closings` مفيهاش عمود
+     *    للجزء ده، وصفوف `rep_custody_deposits` **ما بتتغيّرش** بعد الإقفال —
+     *    فالمشتق منها مطابق للمخزَّن. إضافة عمود كانت هتحتاج هجرة وإعادة حساب كل
+     *    الإقفالات القديمة بلا أي مكسب.
+     *
+     * بترجّع 0 لو القاعدة مطفية ⇒ الخانة بتختفي من الشاشة (مفيش سحب من الدرج أصلاً).
+     */
+    public static function dayOfficeDeposits(string $date): float
+    {
+        return self::sumOfficeDeposits(null, false, null, $date);
+    }
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لرقم «عهدة منزلة للمناديب من البنك» في يوم** — عشان
+     *    معادلة الشاشة تفصله عن «عهدة مضافة للدرج» (طلب المالك 2026-08-01:
+     *    «الكارت يتغيّر ويبقى عهدة منزلة للمناديب ويتحسبوا مع الحسب»).
+     *
+     * ⚠️ **جزء من `topups` مش رقم زيادة** — `sumTopups` = إضافات الدرج اليدوية
+     *    **+** ده. الشاشة بتطرحه من خانة «عهدة مضافة للدرج» فالمعادلة تفضل مقفولة:
+     *    `opening + topupsDrawer + bankToReps − expenses − driver = closing`.
+     *    **ممنوع تحسبه بشرط مكتوب بالإيد** — لازم من `RepCustody::bankTopupSql()`.
+     *
+     * ⚠️ بيتحسب حيًّا حتى لليوم المتقفل: `daily_closings` مفيهاش عمود للجزء ده،
+     *    وصفوف `rep_custody_deposits` ما بتتغيّرش بعد الإقفال.
+     *
+     * بترجّع 0 لو النموذج المجمّع مطفي ⇒ الخانة بتختفي (العهدة مش داخلة الحساب أصلاً).
+     */
+    public static function dayBankDeposits(string $date): float
+    {
+        return self::sumBankDeposits(null, false, null, $date);
+    }
+
+    /**
+     * كل الكاش اللي نزل من **الدرج** لجيوب المناديب في يوم — **للعرض بس**.
+     *
+     * ⚠️⚠️ **ما تخلطهاش بـ`dayOfficeDeposits()`**: تلك بترجّع الجزء اللي بيتحسب
+     *    **مصروفًا** (وبترجّع صفر في النموذج المجمّع لأنه تحويل داخلي)، ودي
+     *    بترجّع **الرقم الحقيقي دايمًا** عشان الشاشة تقدر تقول للمالك «نزل من
+     *    الدرج كذا» حتى في النموذج اللي مابيخصمهوش (طلب المالك: يشوف السطرين).
+     *    استعمال الغلط منهم في الحساب بيخلّي المعادلة ما تقفلش.
+     */
+    public static function dayDrawerToReps(string $date): float
+    {
+        if (!self::tableExists('rep_custody_deposits')) { return 0.0; }
+        return round((float) Database::scalar(
+            "SELECT COALESCE(SUM(amount),0) FROM rep_custody_deposits WHERE dep_date = ?"
+            . RepCustody::sourceIsSql('office'), [$date]), 2);
     }
 
     // ───────────────────────────────────────────── إقفال / فتح
@@ -525,6 +688,68 @@ class Closing
         return ['ok' => true, 'msg' => 'تم فتح إقفال يوم ' . dfmt($date) . '. يمكنك الآن التعديل على بياناته.'];
     }
 
+    /**
+     * تفكيك **كل الكاش اللي برّه البنك** على المحافظ — للعرض في آخر شاشة التقفيل.
+     *
+     * ⚠️ **ليه القسم ده لازم بعد المرحلة ٢:** قبلها كان رقم «الخزنة» رقمًا
+     *    مجمَّعًا (درج + جيوب المناديب) — وده اللي خلّى المالك مش قادر يعدّ الدرج
+     *    ويطابقه. بعدها بقى الرقم **الدرج لوحده**، فلازم حتة واحدة تقول الباقي فين.
+     *
+     * ⚠️ **مفيش ولا رقم بيتحسب من جديد هنا.** الدرج من `currentBalance()` وكل
+     *    محفظة من `RepCustody::balance($rid)` — نفس الدوال اللي بتغذّي كل شاشة
+     *    تانية، فمستحيل الشاشة دي تقول رقمًا يخالف كارت المندوب أو الداشبورد.
+     *
+     * ⚠️ **الرصيد التراكمي مش اليومي** عن قصد: السؤال هنا «الكاش اللي برّه البنك
+     *    فين دلوقتي؟» — وده تراكمي بطبيعته (قاعدة v49: التراكمي هو الحقيقة
+     *    المالية، واليومي عدسة عرض فوقه).
+     *
+     * ⚠️⚠️ **`total` معناه ثابت: الدرج + جيوب المناديب — ولا تضيف عليه خزنة
+     *    الشركة (v66).** فيه فحص صريح في `bin/verify_safe_rule.php` بيقول
+     *    «الإجمالي = الدرج + المناديب دايمًا»، وهو حارس حقيقي مش شكليّة: الرقم
+     *    ده هو «الكاش اللي بيشتغل بيه المكتب والمناديب» وكل حساب اتبنى عليه.
+     *    خزنة الشركة طبقة **فوقه** فليها مفتاحان مستقلان:
+     *      • `company` = رصيد خزنة الشركة (`CompanySafe::balance`)
+     *      • `grand`   = `total + company` = كل الكاش برّه البنك فعلاً
+     *    بيرجّعوا صفر قبل migrate_v66 ⇒ `grand === total` والسلوك القديم بالحرف.
+     *
+     * @return array{drawer:float, reps:list<array{id:int,name:string,balance:float}>,
+     *               reps_total:float, total:float, company:float, grand:float}
+     */
+    public static function walletSplit(): array
+    {
+        /* ⚠️⚠️ **معنى `currentBalance()` بيتغيّر مع النموذج — ولازم التفكيك يتبعه.**
+           • «الخزنة = الدرج بس»      ⇒ `currentBalance` = الدرج، والإجمالي = الدرج + المناديب.
+           • «الخزنة = كل كاش الشركة» ⇒ `currentBalance` = **الإجمالي**، والدرج = الإجمالي − المناديب.
+           لو سِبنا الحساب على النموذج الأول في التاني، الشاشة بتعرض الإجمالي على
+           إنه «درج المكتب» وبعدين تعدّ المناديب تاني — يعني **الفلوس تتقري مرتين**. */
+        $totalIsAll = RepCustody::bankTopupActive();
+        $reps = [];
+        $repsTotal = 0.0;
+        if (RepCustody::available()) {
+            foreach (Database::all('SELECT id, name FROM reps ORDER BY name') as $r) {
+                $bal = round(RepCustody::balance((int) $r['id']), 2);
+                // المندوب اللي رصيده صفر مش محفظة — وجوده بصفر تشتيت بس
+                if (abs($bal) < 0.005) { continue; }
+                $reps[] = ['id' => (int) $r['id'], 'name' => (string) $r['name'], 'balance' => $bal];
+                $repsTotal += $bal;
+            }
+            usort($reps, static fn($a, $b) => $b['balance'] <=> $a['balance']);
+        }
+        $repsTotal = round($repsTotal, 2);
+        $balance = round(self::currentBalance(), 2);
+        $drawer = $totalIsAll ? round($balance - $repsTotal, 2) : $balance;
+        $total  = $totalIsAll ? $balance : round($balance + $repsTotal, 2);
+        $company = round(CompanySafe::balance(), 2);   // 0.0 قبل migrate_v66
+        return [
+            'drawer'     => $drawer,
+            'reps'       => $reps,
+            'reps_total' => $repsTotal,
+            'total'      => $total,
+            'company'    => $company,
+            'grand'      => round($total + $company, 2),
+        ];
+    }
+
     /** قائمة كل الإقفالات (الأحدث أولًا) — للعرض/التدقيق. */
     public static function all(): array
     {
@@ -537,7 +762,12 @@ class Closing
     {
         $dates = array_filter([
             Database::scalar("SELECT MIN(cust_date) FROM manual_custody"),
-            Database::scalar("SELECT MIN(s.entry_date) FROM permit_stages s"),
+            Database::scalar(
+                "SELECT MIN(s.entry_date) FROM permit_stages s WHERE "
+                . Permit::expenseSql('s') . " AND " . Permit::cashOutSql('s')
+                . RepCustody::safeChargeSql('s.entry_date', 's.paid_by_rep_id')
+                . " AND " . OfficeDriverStatement::stageSafeAmountSql('s') . "<>0"
+            ),
             Database::scalar("SELECT MIN(exp_date) FROM manual_expenses"),
             Database::scalar("SELECT MIN(bill_date) FROM bawalis WHERE is_legacy = 0 AND custody > 0"
                 . RepBillCustody::officeExcludeSql()),
@@ -546,7 +776,12 @@ class Closing
                 : null,
             self::tableExists('rep_misc_expenses')
                 ? Database::scalar("SELECT MIN(exp_date) FROM rep_misc_expenses WHERE "
-                    . RepMiscExpense::cashOnlySql())
+                    . RepMiscExpense::cashOnlySql() . RepCustody::safeChargeSql('exp_date'))
+                : null,
+            // المرحلة ٢: التنزيل من الدرج حركة خزنة برضه
+            RepCustody::newSafeRuleActive() && self::tableExists('rep_custody_deposits')
+                ? Database::scalar("SELECT MIN(dep_date) FROM rep_custody_deposits WHERE 1"
+                    . RepCustody::officeDepositSql())
                 : null,
         ], fn($d) => $d !== null && $d !== false && $d !== '');
         if (!$dates) { return null; }

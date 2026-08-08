@@ -44,16 +44,40 @@ class RepInbox
     }
 
     /**
-     * بنود للمراجعة. $status: pending|approved|rejected|'' (الكل).
-     * $repId=0 → كل المناديب. $day='' → كل الأيام.
+     * شرط الفلترة المشترك — **المصدر الوحيد** لـ«أنهي بنود بتتعرض».
+     * لازم `listing()` و`countListing()` يستخدموه مع بعض، وإلا الترقيم يقول
+     * «صفحة ٢ من ٨» والقايمة تعرض حاجة تانية.
+     *
+     * @return array{0:string,1:array} [جملة WHERE، معاملاتها]
      */
-    public static function listing(string $status = 'pending', int $repId = 0, string $day = ''): array
+    private static function filterWhere(string $status, int $repId, string $day): array
     {
         $w = []; $p = [];
         if ($status !== '') { $w[] = 's.status = ?'; $p[] = $status; }
         if ($repId > 0)     { $w[] = 's.rep_id = ?'; $p[] = $repId; }
         if ($day !== '')    { $w[] = 's.entry_date = ?'; $p[] = $day; }
-        $where = $w ? 'WHERE ' . implode(' AND ', $w) : '';
+        return [$w ? 'WHERE ' . implode(' AND ', $w) : '', $p];
+    }
+
+    /**
+     * بنود للمراجعة. $status: pending|approved|rejected|'' (الكل).
+     * $repId=0 → كل المناديب. $day='' → كل الأيام.
+     *
+     * ⚠️ `$limit` **إلزامي فعليًّا للتبويبات غير المستنية**: «معتمد» فيه ٣٤٦ بند
+     *    على الإنتاج، ورسمهم في صفحة واحدة كان بيتقل الشاشة بلا داعٍ.
+     *    `$limit = 0` = بلا حدّ (السلوك القديم — لسه مستخدَم في تبويب «مستني»
+     *    وفي كارت المندوب اللي بيقرا بنود مندوب واحد).
+     */
+    public static function listing(string $status = 'pending', int $repId = 0, string $day = '', int $limit = 0, int $offset = 0): array
+    {
+        [$where, $p] = self::filterWhere($status, $repId, $day);
+        // ⚠️ `LIMIT ?` ما بتنفعش: الاتصال بـ`ATTR_EMULATE_PREPARES => false`
+        //    وMySQL بترفض معامل مربوط في LIMIT. الحقن كـint مضبوط (نفس نمط
+        //    `Audit::recent` و`SecurityMonitor`).
+        $lim = '';
+        if ($limit > 0) {
+            $lim = ' LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset);
+        }
 
         return Database::all(
             "SELECT s.*, r.name AS rep_name,
@@ -64,14 +88,27 @@ class RepInbox
              LEFT JOIN permits p ON p.id = s.permit_id
              LEFT JOIN permit_movements m ON m.id = s.movement_id
              $where
-             ORDER BY s.entry_date DESC, r.name, s.id", $p);
+             ORDER BY s.entry_date DESC, r.name, s.id$lim", $p);
     }
 
-    /** البنود المستنية مجمّعة بالمندوب ثم اليوم — عشان الاعتماد الجماعي. */
-    public static function pendingGrouped(): array
+    /** عدد البنود المطابقة لنفس الفلتر — أساس الترقيم. */
+    public static function countListing(string $status = 'pending', int $repId = 0, string $day = ''): int
+    {
+        [$where, $p] = self::filterWhere($status, $repId, $day);
+        return (int) Database::scalar("SELECT COUNT(*) FROM rep_submissions s $where", $p);
+    }
+
+    /**
+     * البنود المستنية مجمّعة بالمندوب ثم اليوم — عشان الاعتماد الجماعي.
+     *
+     * ⚠️ `$repId`/`$day` **عدسة عرض بس**: الصلاحيات والحُرّاس كلها في
+     *    `approve/update/delete` وما بتتغيّرش. الغرض إن المالك يدوس على مندوب
+     *    من كارته فيراجع بنوده هو بدل ما يدوّر وسط كل المناديب.
+     */
+    public static function pendingGrouped(int $repId = 0, string $day = ''): array
     {
         $out = [];
-        foreach (self::listing('pending') as $row) {
+        foreach (self::listing('pending', $repId, $day) as $row) {
             $rid = (int) $row['rep_id'];
             $day = (string) $row['entry_date'];
             $out[$rid]['rep_id'] = $rid;
@@ -85,11 +122,75 @@ class RepInbox
         return $out;
     }
 
+    /**
+     * البنود المستنية مقسّمة على المناديب — لشرايح الفلترة فوق الصندوق.
+     * استعلام واحد مجمَّع (مش لفّة على `pendingGrouped` اللي بتجيب كل الصفوف).
+     *
+     * @return array<int,array{rep_id:int,name:string,count:int,total:float}>
+     */
+    public static function pendingByRep(): array
+    {
+        if (!RepCustody::available()) { return []; }
+        $rows = Database::all(
+            "SELECT s.rep_id, r.name, COUNT(*) AS c, SUM(s.amount) AS t
+             FROM rep_submissions s
+             JOIN reps r ON r.id = s.rep_id
+             WHERE s.status = 'pending'
+             GROUP BY s.rep_id, r.name
+             ORDER BY c DESC, r.name");
+        return array_map(static fn (array $r): array => [
+            'rep_id' => (int) $r['rep_id'],
+            'name'   => (string) $r['name'],
+            'count'  => (int) $r['c'],
+            'total'  => (float) $r['t'],
+        ], $rows);
+    }
+
+    /**
+     * حركات مجموعة أذونات في استعلام واحد — بديل `movementsOf()` جوّه اللوب.
+     *
+     * ⚠️ كانت `movementsOf()` بتتنادى **لكل بند** في الشاشة (N+1). الشاشة
+     *    بتعرض عشرات البنود على نفس الأذونات، فده كان استعلامًا لكل صف.
+     *
+     * @param int[] $permitIds
+     * @return array<int,array<int,array>> permit_id → حركاته
+     */
+    public static function movementsFor(array $permitIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $permitIds))));
+        if (!$ids) { return []; }
+        $in = implode(',', $ids);   // ints مضبوطة — مفيش مدخل مستخدم هنا
+        $out = [];
+        foreach (Database::all(
+            "SELECT permit_id, id, seq, note, container_count, container_type
+             FROM permit_movements WHERE permit_id IN ($in) ORDER BY permit_id, seq, id") as $r) {
+            $out[(int) $r['permit_id']][] = $r;
+        }
+        return $out;
+    }
+
+    /**
+     * البند ده اعتماده هيترفض بسبب خط الفصل؟ (عرض بس — الحارس الحقيقي
+     * `epochBlock` جوّه `approve`). بيخلّي الشاشة تقول السبب قبل الضغط بدل
+     * ما المالك يدوس ويستغرب الرفض.
+     */
+    public static function isPreEpoch(?string $entryDate): bool
+    {
+        $epoch = RepCustody::epoch();
+        $d = (string) ($entryDate ?? '');
+        return $epoch !== '' && $d !== '' && $d < $epoch;
+    }
+
     /** عدد البنود المستنية (للشارة في القائمة). */
     public static function pendingCount(): int
     {
         if (!RepCustody::available()) { return 0; }
-        return (int) Database::scalar("SELECT COUNT(*) FROM rep_submissions WHERE status = 'pending'");
+        // ⚠️ خط الفصل: البنود القديمة **اعتمادها مرفوض** (`epochBlock`)، فعدّها في
+        //    الشارة كان بيدّي رقمًا المالك مش قادر يقلّله مهما راجع — و«الجرس يقول
+        //    رقم والصفحة تقول رقم تاني» (فرق 6 بنود مقيس على الإنتاج).
+        return (int) Database::scalar(
+            "SELECT COUNT(*) FROM rep_submissions WHERE status = 'pending'"
+            . RepCustody::epochSql('entry_date'));
     }
 
     /**
@@ -302,6 +403,32 @@ class RepInbox
      * اعتماد بند: بيولّد صف permit_stages حقيقي ويربطه بالبند.
      * بيرجع id الصف المُنشأ. بيرمي استثناء لو البند مش pending أو الإذن اتمسح.
      */
+    /**
+     * ⚠️ منع اعتماد بند تاريخه **قبل بداية النظام الجديد** (`rep_custody_epoch`).
+     *
+     * **ليه:** البنود العالقة من قبل خط الفصل كلها اتّضح إنها **عهد سواقين**
+     * اتسجّلت غلط كإيصال/مصروف (متحقَّق على الإنتاج: ٦ بنود = 81,000، كلها
+     * «عهده عربيه»/«عهد عربيه»). عهدة السائق دي **متخصومة أصلاً من خزنة المكتب
+     * على بوليصتها**، فاعتمادها هنا = **خصم نفس الفلوس مرتين**. وفوق كده تاريخها
+     * في يوم متقفل، فبتولّد بندًا جوّه لقطة مجمّدة.
+     *
+     * **القرار (المالك): البنود ما تتلمسش إطلاقًا** — لا تتمسح ولا تتعدّل. الحماية
+     * من **منع الاعتماد** مش من الحذف؛ فبتفضل في السجل بحالتها للتوثيق.
+     *
+     * ⚠️ الحارس في **الموديل** مش في الشاشة — إخفاء الزرار مش حماية، والفورم مش
+     *    مصدر ثقة. وبيرجّع null لو الميزة مطفية ⇒ السلوك القديم بالحرف.
+     */
+    private static function epochBlock(array $s): ?string
+    {
+        $epoch = RepCustody::epoch();
+        $date  = (string) ($s['entry_date'] ?? '');
+        if ($epoch === '' || $date === '' || $date >= $epoch) { return null; }
+        return 'البند ده تاريخه ' . dfmt($date) . ' — يعني من قبل بداية النظام الجديد ('
+             . dfmt($epoch) . ') فمش هينفع يتعتمد. البنود دي عهد سواقين متخصومة '
+             . 'أصلاً على بوالصها من خزنة المكتب، واعتمادها هيخصم نفس الفلوس مرتين. '
+             . 'سيبه زي ما هو للتوثيق، أو ارفضه.';
+    }
+
     public static function approve(int $subId): int
     {
         $pdo = Database::conn();
@@ -312,6 +439,7 @@ class RepInbox
             $s = self::lockSubmission($subId);
             if (!$s) { throw new RuntimeException('البند مش موجود.'); }
             if ($s['status'] !== 'pending') { throw new RuntimeException('البند اتراجع قبل كده.'); }
+            if (($err = self::epochBlock($s)) !== null) { throw new RuntimeException($err); }
             Database::exec(
                 "UPDATE rep_submissions SET review_started_at=COALESCE(review_started_at,NOW()),
                         review_started_by=COALESCE(review_started_by,?) WHERE id=? AND status='pending'",
@@ -524,6 +652,89 @@ class RepInbox
                 'رفض بند مندوب «' . $s['note'] . '» (' . number_format((float) $s['amount'], 2, '.', ',') . ') — ' . $reason,
                 ['rep_id' => (int) $s['rep_id'], 'record_date' => $s['entry_date']]);
             if ($own) { $pdo->commit(); }
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $e;
+        }
+    }
+
+    // ─────────────────────────────────────────── الحذف النهائي
+
+    /**
+     * حذف بند من صندوق المراجعة **نهائيًّا** — للبند اللي مالوش لزمة خالص
+     * (اتبعت غلط، اتكرّر، تجربة من المندوب). بديل الرفض اللي بيسيب سجلًّا
+     * بيفضل في الشاشة والكشوف.
+     *
+     * ⚠️ **مفيش أي أثر مالي — وده مش صدفة:** البند المستني/المرفوض عمره ما
+     *    اتخصم من خزنة ولا من عهدة مندوب (الخصم بيحصل وقت الاعتماد بس، لما
+     *    بيتولّد `permit_stages`/`rep_misc_expenses`). فالحذف ماليًّا **زي
+     *    الرفض بالظبط**: البند بيخرج من «مستني» فبيرجع للمندوب في «فاضل معاه».
+     *    عشان كده **مفيش `Closing::guard`** هنا — مفيش رصيد مثبَّت بيتغيّر.
+     *
+     * ⚠️ **البند المعتمد بيترفض** — له بند فعلي على الإذن (أو نثرية) داخل
+     *    الفاتورة والمصروفات والخزنة. حذفه من هنا كان هيسيب البند الفعلي
+     *    يتيم بلا سجل اعتماد. المسار الصح: امسح البند من تايم لاين الإذن،
+     *    و`DeletionPolicy::detachStage` بتفكّ الربط وتسيب السجل بحالته.
+     *
+     * الصف بيتنقل **لسلة المحذوفات** (`Audit::trash`) قبل ما يتشال، فالمالك
+     * يقدر يسترجعه من `/audit`. صورة الإيصال بتفضل على القرص عشان الاسترجاع
+     * يرجّع البند بصورته.
+     *
+     * بيرجع صف البند قبل الحذف (الكنترولر محتاجه للإشعار).
+     */
+    public static function delete(int $subId): array
+    {
+        $pdo = Database::conn();
+        $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            $s = self::lockSubmission($subId);
+            if (!$s) { throw new RuntimeException('البند مش موجود.'); }
+            $linked = $s['stage_id'] !== null || $s['misc_id'] !== null;
+            if ($s['status'] === 'approved' || $linked) {
+                throw new RuntimeException($linked
+                    ? 'البند ده معتمد وله بند فعلي على الإذن/المصروفات — ما ينفعش يتحذف من هنا. '
+                      . 'امسح البند من تايم لاين الإذن، وسجل الاعتماد هيتفكّ لوحده.'
+                    // الحالة دي بتحصل لما البند الفعلي اتمسح من الإذن قبل كده
+                    // (DeletionPolicy::detachStage/detachMisc بتفكّ الربط وتسيب
+                    // السجل شاهدًا على إن الاعتماد حصل). محو الشاهد ده ممنوع.
+                    : 'البند ده اتعمد قبل كده وبنده الفعلي اتمسح من الإذن — السجل بيفضل شاهدًا على الاعتماد وما بيتحذفش.');
+            }
+
+            $label = trim((string) $s['note']) . ' — ' . number_format((float) $s['amount'], 2, '.', ',')
+                   . ' ج · ' . $s['rep_name'] . ' · ' . $s['entry_date'];
+            Audit::trash('rep_submissions', $s, mb_substr($label, 0, 255));
+
+            $changed = Database::exec(
+                "DELETE FROM rep_submissions
+                 WHERE id = ? AND status <> 'approved' AND stage_id IS NULL AND misc_id IS NULL",
+                [$subId]);
+            if ($changed !== 1) { throw new RuntimeException('اتغيّرت حالة البند من طلب تاني — حدّث الصفحة.'); }
+
+            if ($own) { $pdo->commit(); }
+            return $s;
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $e;
+        }
+    }
+
+    /** حذف دفعة — كلها أو ولا واحدة. بيرجع عدد اللي اتحذف. */
+    public static function deleteMany(array $ids): int
+    {
+        $ids = array_values(array_filter(array_map('intval', $ids)));
+        sort($ids, SORT_NUMERIC);
+        if (!$ids) { throw new RuntimeException('اختر بندًا واحدًا على الأقل.'); }
+        if (count($ids) > 200) { throw new RuntimeException('الحد الأقصى 200 بند في المرة.'); }
+
+        $pdo = Database::conn();
+        $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            $n = 0;
+            foreach ($ids as $id) { self::delete($id); $n++; }
+            if ($own) { $pdo->commit(); }
+            return $n;
         } catch (\Throwable $e) {
             if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
             throw $e;

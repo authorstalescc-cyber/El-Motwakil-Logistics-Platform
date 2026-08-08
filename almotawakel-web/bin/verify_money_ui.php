@@ -63,8 +63,15 @@ chk(substr_count($office, "'drill' =>") >= 3, 'وكلهم بيفتحوا بنو�
 chk(!str_contains($office, '<table'), 'الجدول (٧ أعمدة) اتشال — الكارت بقى `entity_card`');
 chk(str_contains($office, "partial('entity_card'") && str_contains($office, "partial('row_item'"),
     'وبيستخدم كارت الكيان والصف');
-chk(str_contains($office, 'secret-toggle') && str_contains($office, "'secret' => true"),
-    'الأرصدة مقنّعة ومعاها زرار كشف (المعالج عام في app.js)');
+/* ⚠️ **التوقّع اتقلب عن قصد (2026-08-08) — مش ترخية.** «إخفاء الأرصدة»
+   (`data-secret` + `'secret' => true` + `.secret-toggle`) **اتشال من النظام
+   كله بقرار المالك يوم 2026-08-02** من ١٢ ملف. الفاحص ده اتنسي فضل يحرس ميزة
+   مشالة ويدّي إنذارًا كاذبًا دائمًا — نفس اللي اتعمل في
+   `verify_rep_custody_day` §⑩ وقتها. الحارس دلوقتي بيمنع **رجوعها**، لأن
+   الرجوع نص-نص (سمة بلا معالج) بيرجّع الباج القديم: رقم مقنّع للأبد بلا
+   طريقة يتشاف بيها. */
+chk(!str_contains($office, 'secret-toggle') && !str_contains($office, "'secret' => true"),
+    'إخفاء الأرصدة مشال (قرار المالك 2026-08-02) — ولا رجع نص-نص');
 
 // ═══ ② خزنة المكتب
 sec('② /custody — خزنة المكتب');
@@ -98,8 +105,15 @@ chk(str_contains($expenses, '<a class="exp-src'),
 chk(str_contains($expenses, "\$qs(['source' => \$isOn ? '' : \$key])"),
     'والضغط تاني بيلغي التصفية');
 chk(str_contains($expenses, '.exp-src.on{'), 'والكارت المعروض دلوقتي بيبان معلَّم');
-chk(str_contains($debts, '<a class="kpi red" href="<?= url(\'debts\') ?>?tab=owners"'),
-    'رقم «إجمالي المديونيات» بقى رابط — كان الوحيد اللي مالوش طريق');
+/* ⚠️ **الفحص على المعنى مش على اسم كلاس**: البطاقات كانت ماركب `.kpi` مكتوبًا
+   بالإيد وبقت مكوّن `stat` المشترك بمعامل `url` (2026-07-28). اللي بيهمّنا إن
+   كل رقم لسه **بيوصّل لبنوده** — والمكوّن نفسه بيرفض يترسم بلا `drill` ولا
+   `url` (قاعدة «ممنوع رقم أصمّ»)، فالحماية بقت في المنبع. */
+chk(substr_count($debts, "partial('stat',") === 4 && substr_count($debts, "'url' =>") === 4,
+    'أربع بطاقات في /debts بمكوّن `stat`، وكل واحدة معاها `url` لبنودها');
+chk(str_contains($debts, "url('debts?tab=owners')")
+    && str_contains($debts, "url('debts?tab=visa')"),
+    'ورقم «إجمالي المديونيات» و«الفيزا» لسه بيوصّلوا لتبويبهم');
 chk(!preg_match('~<div class="kpi [a-z]+"><div class="lbl">~', $debts),
     'ومفيش رقم باقي في /debts بلا طريق');
 

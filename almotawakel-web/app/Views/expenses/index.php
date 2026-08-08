@@ -59,7 +59,7 @@ tr.norec:hover{background:transparent!important}
 
 <!-- شريط الأدوات والفلترة -->
 <div class="toolbar">
-  <form method="get" action="<?= url('expenses') ?>" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+  <form method="get" action="<?= url('expenses') ?>" class="p5-row tight ai-c">
     <input type="search" name="q" value="<?= e($f['q']) ?>" placeholder="بحث (فئة / جهة / بيان)…">
     <select name="source">
       <option value="">كل المصادر</option>
@@ -78,9 +78,9 @@ tr.norec:hover{background:transparent!important}
         <option value="<?= e($y) ?>" <?= (string)$year===(string)$y?'selected':'' ?>><?= e($y) ?></option>
       <?php endforeach; ?>
     </select>
-    <label style="font-size:var(--fs-2);color:var(--grey)">من</label>
+    <label class="dbt-sub">من</label>
     <input type="date" name="from" value="<?= e($f['from']) ?>">
-    <label style="font-size:var(--fs-2);color:var(--grey)">إلى</label>
+    <label class="dbt-sub">إلى</label>
     <input type="date" name="to" value="<?= e($f['to']) ?>">
     <button class="btn sm" type="submit">تصفية</button>
     <?php if ($hasFilter): ?><a class="btn ghost sm" href="<?= url('expenses') ?>">إلغاء</a><?php endif; ?>
@@ -132,7 +132,7 @@ tr.norec:hover{background:transparent!important}
               <div class="actions">
                 <?php if ($isManual): ?>
                   <a class="edit" href="<?= url('expenses/'.$r['ref_id'].'/edit?back=' . rawurlencode($returnPath)) ?>" title="تعديل"><?= icon('edit', 14) ?></a>
-                  <form class="confirm-delete" method="post" action="<?= url('expenses/'.$r['ref_id'].'/delete') ?>" style="margin:0">
+                  <form class="confirm-delete" method="post" action="<?= url('expenses/'.$r['ref_id'].'/delete') ?>" >
                     <?= csrfField() ?>
                     <?= formStateFields(FormState::token(), $returnPath) ?>
                     <button class="del" type="submit" title="حذف"><?= icon('trash', 14) ?></button>
@@ -140,7 +140,7 @@ tr.norec:hover{background:transparent!important}
                 <?php elseif ($originUrl): ?>
                   <a href="<?= e($originUrl) ?>" title="فتح البند الأصلي">↗️</a>
                 <?php else: ?>
-                  <span style="color:var(--grey)">—</span>
+                  <span class="dbt-none">—</span>
                 <?php endif; ?>
               </div>
             </td>
@@ -150,8 +150,8 @@ tr.norec:hover{background:transparent!important}
       <?php if ($rows): ?>
       <tfoot>
         <tr>
-          <td colspan="6" style="text-align:left;font-weight:500"><?= $isDebtFilter ? 'إجمالي سداد المديونيات' : 'إجمالي المصاريف (بدون سداد المديونيات)' ?><?= $hasFilter?' (بالفلتر الحالي)':'' ?></td>
-          <td class="neg" style="font-weight:600"><?= money($isDebtFilter ? $debtTotal : $totals['grand'], false) ?></td>
+          <td colspan="6" class="end mv-ref"><?= $isDebtFilter ? 'إجمالي سداد المديونيات' : 'إجمالي المصاريف (بدون سداد المديونيات)' ?><?= $hasFilter?' (بالفلتر الحالي)':'' ?></td>
+          <td class="neg dbt-tot"><?= money($isDebtFilter ? $debtTotal : $totals['grand'], false) ?></td>
           <td></td>
         </tr>
       </tfoot>

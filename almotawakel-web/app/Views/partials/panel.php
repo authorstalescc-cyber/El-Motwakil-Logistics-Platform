@@ -21,6 +21,8 @@
  *   scroll  ?bool             الجسم قابل للتمرير بارتفاع محدود (`.d-list`)
  *   body    string|callable
  *   class   ?string
+ *   id      ?string           مرساة للوح — عشان `redirect` بعد الحفظ يرجّع عليه
+ *                             (قاعدة «كل redirect بعد حفظ يحمل مرساته»)
  */
 $title  = (string) ($title ?? '');
 $icon   = $icon ?? null;
@@ -29,8 +31,9 @@ $action = $action ?? null;
 $scroll = !empty($scroll);
 $body   = $body ?? '';
 $class  = $class ?? '';
+$anchor = (string) ($id ?? '');
 ?>
-<div class="d-card<?= $class !== '' ? ' ' . e($class) : '' ?>">
+<div class="d-card<?= $class !== '' ? ' ' . e($class) : '' ?>"<?= $anchor !== '' ? ' id="' . e($anchor) . '"' : '' ?>>
   <div class="d-card-head">
     <h3>
       <?php if ($icon) { echo icon($icon, 18); } ?>

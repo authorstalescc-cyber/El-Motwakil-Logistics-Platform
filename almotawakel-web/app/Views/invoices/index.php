@@ -10,7 +10,7 @@ $voidState = $voidState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
 $voidOldId = (int)($voidState['old']['_void_id'] ?? 0);
 ?>
 <div class="page-head">
-  <div><h1 style="margin:0"><?= icon('receipt', 14) ?> إصدار الفواتير</h1></div>
+  <div><h1 ><?= icon('receipt', 14) ?> إصدار الفواتير</h1></div>
   <a class="btn gold" href="<?= url('invoices/new') ?>"><?= icon('plus', 14) ?> إصدار فاتورة جديدة</a>
 </div>
 
@@ -24,29 +24,29 @@ $voidOldId = (int)($voidState['old']['_void_id'] ?? 0);
 </div>
 
 <!-- فلترة -->
-<form class="card mb" method="get" action="<?= url('invoices') ?>" style="padding:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+<form class="card mb" method="get" action="<?= url('invoices') ?>" class="p5-pad p5-row end">
   <div><label class="flt-l">بحث</label>
     <input type="text" name="q" value="<?= e($q) ?>" placeholder="بحث"
-           style="width:280px;padding:8px 11px;border:1px solid var(--line);border-radius:8px"></div>
+           class="p5-fin w280"></div>
   <div><label class="flt-l">النوع</label>
-    <select name="kind" style="padding:8px 11px;border:1px solid var(--line);border-radius:8px">
+    <select name="kind" class="p5-fin">
       <option value="">الكل</option>
       <option value="invoice"   <?= $kind==='invoice'?'selected':'' ?>>فاتورة</option>
       <option value="statement" <?= $kind==='statement'?'selected':'' ?>>كشف حساب</option>
     </select></div>
   <div><label class="flt-l">الضريبة</label>
-    <select name="tax" style="padding:8px 11px;border:1px solid var(--line);border-radius:8px">
+    <select name="tax" class="p5-fin">
       <option value="">الكل</option>
       <option value="1" <?= $tax==='1'?'selected':'' ?>>ضريبية</option>
       <option value="0" <?= $tax==='0'?'selected':'' ?>>غير ضريبية</option>
     </select></div>
   <div><label class="flt-l">الحالة</label>
-    <select name="status" style="padding:8px 11px;border:1px solid var(--line);border-radius:8px">
+    <select name="status" class="p5-fin">
       <option value="">الكل</option>
       <?php foreach(PermitInvoice::STATUSES as $sk=>$sl): ?><option value="<?= e($sk) ?>" <?= $status===$sk?'selected':'' ?>><?= e($sl) ?></option><?php endforeach; ?>
     </select></div>
-  <div><label class="flt-l">من</label><input type="date" name="from" value="<?= e($from) ?>" style="padding:8px;border:1px solid var(--line);border-radius:8px"></div>
-  <div><label class="flt-l">إلى</label><input type="date" name="to" value="<?= e($to) ?>" style="padding:8px;border:1px solid var(--line);border-radius:8px"></div>
+  <div><label class="flt-l">من</label><input type="date" name="from" value="<?= e($from) ?>" class="p5-fin sq"></div>
+  <div><label class="flt-l">إلى</label><input type="date" name="to" value="<?= e($to) ?>" class="p5-fin sq"></div>
   <button class="btn" type="submit"><?= icon('search', 14) ?> بحث</button>
   <?php if($q||$kind||$tax||$status||$from||$to): ?><a class="btn ghost" href="<?= url('invoices') ?>">مسح</a><?php endif; ?>
 </form>
@@ -57,8 +57,8 @@ $voidOldId = (int)($voidState['old']['_void_id'] ?? 0);
       data-danger="1" data-confirm="إلغاء المستندات المحددة مع الاحتفاظ بأرقامها وسجلها؟">
   <?= csrfField() ?>
   <?= formStateFields($bulkState['token'], $bulkState['back']) ?>
-  <div class="field" style="display:inline-block;margin:8px">
-    <input type="text" name="reason" value="<?= e($bulkState['old']['reason'] ?? '') ?>" required placeholder="سبب الإلغاء" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"<?= fieldErrorAttrs('reason', $bulkState['errors']) ?>>
+  <div class="field p5-ib m8">
+    <input type="text" name="reason" value="<?= e($bulkState['old']['reason'] ?? '') ?>" required placeholder="سبب الإلغاء" class="p5-fin sm"<?= fieldErrorAttrs('reason', $bulkState['errors']) ?>>
     <?= fieldError('reason', $bulkState['errors']) ?>
     <?= fieldError('ids', $bulkState['errors']) ?>
   </div>
@@ -67,10 +67,10 @@ $voidOldId = (int)($voidState['old']['_void_id'] ?? 0);
 <?php if ($voidState['errors']): ?><?= formErrorSummary($voidState['errors']) ?><?php endif; ?>
 
 <!-- الجدول -->
-<div class="card" style="padding:0;overflow:hidden">
+<div class="card" >
   <?php if (!$rows): ?>
-    <div class="empty" style="padding:40px"><div class="ic"><?= icon('receipt', 14) ?></div>لا توجد فواتير مطابقة.
-      <div style="margin-top:12px"><a class="btn gold" href="<?= url('invoices/new') ?>"><?= icon('plus', 14) ?> إصدار فاتورة جديدة</a></div></div>
+    <div class="empty p5-pad-xl"><div class="ic"><?= icon('receipt', 14) ?></div>لا توجد فواتير مطابقة.
+      <div class="mt-3"><a class="btn gold" href="<?= url('invoices/new') ?>"><?= icon('plus', 14) ?> إصدار فاتورة جديدة</a></div></div>
   <?php else: ?>
     <!-- شريط الحذف الجماعي -->
     <div class="bulkbar" id="bulkbar">
@@ -80,7 +80,7 @@ $voidOldId = (int)($voidState['old']['_void_id'] ?? 0);
     </div>
     <div class="table-wrap"><table class="data">
       <thead><tr>
-        <th style="width:38px"></th>
+        <th class="col-pick"></th>
         <th class="g-identity">رقم المستند</th><th class="g-identity">النوع</th><th class="g-identity">التاريخ</th>
         <th class="g-identity">العميل</th><th class="g-identity">الحالة</th><th class="g-identity">الاستحقاق</th><th class="g-identity">الإذن</th>
         <th class="g-revenue">الإجمالي</th><th class="g-revenue">المتبقي</th><th class="g-identity"></th>
@@ -88,23 +88,23 @@ $voidOldId = (int)($voidState['old']['_void_id'] ?? 0);
       <tbody>
       <?php foreach ($rows as $iv): ?>
         <tr>
-          <td style="text-align:center"><input type="checkbox" class="rowchk" name="ids[]" value="<?= (int)$iv['id'] ?>" form="bulkForm"></td>
-          <td style="font-weight:600"><?= e($iv['doc_no'] ?: '#'.$iv['id']) ?></td>
+          <td class="center"><input type="checkbox" class="rowchk" name="ids[]" value="<?= (int)$iv['id'] ?>" form="bulkForm"></td>
+          <td class="dbt-tot"><?= e($iv['doc_no'] ?: '#'.$iv['id']) ?></td>
           <td><span class="pill <?= $iv['doc_kind']==='statement'?'st-partial':'st-paid' ?>"><?= e(PermitInvoice::kindLabel($iv['doc_kind'])) ?><?= $iv['taxable']?' • ضريبية':'' ?></span></td>
           <td><?= dfmt($iv['invoice_date']) ?></td>
           <td><?= e($iv['client'] ?: '—') ?></td>
           <td><span class="pill <?= $iv['status']==='paid'?'st-paid':($iv['status']==='void'?'st-unpaid':'st-partial') ?>"><?= e(PermitInvoice::statusLabel($iv['status'],$iv['due_date'])) ?></span></td>
           <td><?= $iv['due_date']?dfmt($iv['due_date']):'—' ?></td>
           <td><?php if($iv['permit_id']): ?><a href="<?= url('permits/'.$iv['permit_id']) ?>"><?= e($iv['permit_no'] ?: '#'.$iv['permit_id']) ?></a><?php else: ?>—<?php endif; ?></td>
-          <td style="font-weight:600;color:var(--navy)"><?= money($iv['total'],false) ?></td>
-          <td style="font-weight:600;color:<?= (float)$iv['balance_due']>0?'var(--red)':'var(--green)' ?>"><?= money($iv['balance_due'],false) ?></td>
+          <td class="p5-h-inline"><?= money($iv['total'],false) ?></td>
+          <td class="dbt-tot <?= (float)$iv['balance_due']>0?'neg':'pos' ?>"><?= money($iv['balance_due'],false) ?></td>
           <td><div class="actions">
             <a class="edit" href="<?= url('permits/invoice/'.$iv['id']) ?>" target="_blank" title="طباعة"><?= icon('file-text', 14) ?></a>
             <a class="edit" href="<?= url('permits/'.$iv['permit_id'].'/invoice') ?>" title="إصدار مستند آخر لنفس الإذن"><?= icon('plus', 14) ?></a>
-            <?php if($iv['status']!=='void'): ?><form method="post" action="<?= url('permits/invoice/'.$iv['id'].'/delete') ?>" style="display:inline"
+            <?php if($iv['status']!=='void'): ?><form method="post" action="<?= url('permits/invoice/'.$iv['id'].'/delete') ?>" 
                   data-danger="1" data-confirm="إلغاء هذا المستند؟ سيظل رقمه محفوظاً.">
               <?= csrfField() ?><?= formStateFields($voidState['token'], $voidState['back']) ?><input type="hidden" name="_void_id" value="<?= (int)$iv['id'] ?>"><input type="hidden" name="lock_version" value="<?= (int)$iv['lock_version'] ?>">
-              <span class="field" style="display:inline-block;margin:0"><input type="text" name="reason" value="<?= $voidOldId===(int)$iv['id'] ? e($voidState['old']['reason'] ?? '') : '' ?>" required placeholder="سبب الإلغاء" style="width:110px"<?= $voidOldId===(int)$iv['id'] ? fieldErrorAttrs('reason', $voidState['errors']) : '' ?>><?= $voidOldId===(int)$iv['id'] ? fieldError('reason', $voidState['errors']) : '' ?></span><button class="del" type="submit" data-primary-submit title="إلغاء"><?= icon('x', 14) ?></button>
+              <span class="field p5-ib"><input type="text" name="reason" value="<?= $voidOldId===(int)$iv['id'] ? e($voidState['old']['reason'] ?? '') : '' ?>" required placeholder="سبب الإلغاء" class="w110"<?= $voidOldId===(int)$iv['id'] ? fieldErrorAttrs('reason', $voidState['errors']) : '' ?>><?= $voidOldId===(int)$iv['id'] ? fieldError('reason', $voidState['errors']) : '' ?></span><button class="del" type="submit" data-primary-submit title="إلغاء"><?= icon('x', 14) ?></button>
             </form><?php endif; ?>
           </div></td>
         </tr>

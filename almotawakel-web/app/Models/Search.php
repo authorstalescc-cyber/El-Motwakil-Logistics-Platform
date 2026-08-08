@@ -573,11 +573,19 @@ class Search
      * تعبير SQL يطبّق نفس قواعد normText على عمود، حتى تتطابق المقارنة
      * بين العمود المطبَّع والاستعلام المطبَّع. المحارف كلها ثابتة آمنة الحقن.
      */
-    private static function normSql(string $col): string
+    private static function normSql(string $col, bool $withDigits = true): string
     {
         $expr = "`$col`";
         foreach (self::SQL_STRIP as $ch) { $expr = "REPLACE($expr,'$ch','')"; }
-        foreach (self::NORM_MAP as $from => $to) { $expr = "REPLACE($expr,'$from','$to')"; }
+        foreach (self::NORM_MAP as $from => $to) {
+            /* ⚠️ تحويل الأرقام العربية/الفارسية = **٢٠ REPLACE من أصل ٢٨** يعني
+               أغلب تكلفة التعبير. ولو الكلمة اللي بندوّر بيها مفيهاش رقم أصلاً،
+               تطبيع أرقام العمود **مستحيل يغيّر نتيجة المطابقة** (التحويل بيبدّل
+               رمز رقم برمز رقم، فما بيمسّش أي حرف في كلمة بلا أرقام). فبنشيله
+               وقتها ونكسب النص. الكلمة اللي فيها رقم بتاخد التعبير كامل. */
+            if (!$withDigits && $to >= '0' && $to <= '9') { continue; }
+            $expr = "REPLACE($expr,'$from','$to')";
+        }
         return "LOWER($expr)";
     }
 
@@ -600,6 +608,41 @@ class Search
     {
         $q = self::normText($q); // بعد تحويل الأرقام العربية
         return (bool)preg_match('/^[\s\d\-\/]+$/u', $q) && preg_match('/\d/u', $q);
+    }
+
+    /**
+     * شرط بحث نصّي ذكي جاهز لأي استعلام برّه الوحدة دي — **المصدر الوحيد**.
+     * بيطبّق نفس قواعد البحث الشامل بالحرف: تطبيع الطرفين (ألف/تاء مربوطة/ياء/
+     * همزات/تشكيل/تطويل/أرقام عربية) + تقطيع لكلمات، كل كلمة لازم تتطابق في
+     * **أي** عمود (OR) وكل الكلمات مطلوبة (AND) — فـ«جلال العاشر» بتلاقي
+     * البوليصة اللي سائقها جلال وجهتها العاشر بأي ترتيب.
+     *
+     * ⚠️ ممنوع تكتب `LIKE '%$q%'` خام في أي شاشة — كان ده سبب إن بحث صفحة
+     *    السجلات يرجّع صفر لـ«الإسماعيلية» بينما المخزَّن «الاسماعيليه».
+     *
+     * @param  string[] $cols أعمدة الجدول (أسماء ثابتة من الكود لا من المستخدم)
+     * @return array{0:string,1:array} [شرط SQL بين قوسين أو '' ، معاملات مربوطة]
+     */
+    public static function likeWhere(array $cols, string $q): array
+    {
+        $normQ  = self::normText($q);
+        $tokens = preg_split('/\s+/u', $normQ, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (!$cols || !$tokens) { return ['', []]; }
+
+        $cache = [];   // [العمود][فيه أرقام؟] ⇒ تعبير التطبيع (يتحسب مرة واحدة)
+        $and = []; $params = [];
+        foreach ($tokens as $tok) {
+            $withDigits = (bool) preg_match('/\d/u', $tok);
+            $like = '%' . self::escapeLike($tok) . '%';
+            $ors  = [];
+            foreach ($cols as $c) {
+                $expr = $cache[$c][(int) $withDigits] ??= self::normSql($c, $withDigits);
+                $ors[] = "$expr LIKE ? ESCAPE '\\\\'";
+                $params[] = $like;
+            }
+            $and[] = '(' . implode(' OR ', $ors) . ')';
+        }
+        return ['(' . implode(' AND ', $and) . ')', $params];
     }
 
     /** تهريب رموز LIKE الخاصة داخل الاستعلام */

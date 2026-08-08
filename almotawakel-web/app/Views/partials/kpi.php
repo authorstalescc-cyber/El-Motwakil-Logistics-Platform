@@ -13,7 +13,7 @@
  *   note   ?string  سطر صغير تحت الرقم
  *   bgic   ?string  إيموجي خلفية باهتة
  *   url    ?string  لو موجود البطاقة تبقى رابط (`a.kpi` معرَّف أصلاً)
- *   attrs  ?string  سمات HTML إضافية جاهزة (مثل data-secret) — **مش بتتهرّب**
+ *   attrs  ?string  سمات HTML إضافية جاهزة (مثل data-drill) — **مش بتتهرّب**
  */
 $label = $label ?? '';
 $value = $value ?? '';

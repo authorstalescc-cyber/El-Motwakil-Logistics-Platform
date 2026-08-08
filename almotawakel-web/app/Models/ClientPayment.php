@@ -11,24 +11,47 @@ use App\Core\Database;
  *   • route='cash' → إضافة عهدة يدوية (manual_custody) بتاريخ الدفعة → تزيد عهدة اليوم
  *                    وتدخل التقفيل اليومي. تحترم قاعدة الإقفال (Closing::guard) في الكنترولر.
  *   • route='visa' → شحنة رصيد (visa_deposits) على كارت مختار → تزيد رصيد الكارت.
+ *   • route='company' → حركة في **خزنة الشركة** (company_safe_entries، v66) → تزيد رصيدها.
+ *                    ⚠️ **بلا Closing::guard** عن قصد: الفلوس دخلت خزنة الشركة مش الدرج،
+ *                    فمفيش رصيد مثبَّت في daily_closings بيتغيّر — زي route='visa' بالظبط.
  *   • route='none' → تُسجَّل في حساب العميل فقط بلا مساس بأي عهدة.
  *
- * الدفعة هي مصدر الحقيقة؛ السجل المُولَّد في manual_custody/visa_deposits مربوط عبر
- * custody_id/deposit_id ليُعكس معها. الربط الأساسي بالوكيل agent_id، مع إبقاء الاسم كلقطة.
+ * الدفعة هي مصدر الحقيقة؛ السجل المُولَّد في manual_custody/visa_deposits/company_safe_entries
+ * مربوط عبر custody_id/deposit_id/company_entry_id ليُعكس معها. الربط الأساسي بالوكيل
+ * agent_id، مع إبقاء الاسم كلقطة.
  *
  * كشف الحساب: المطلوب من العميل = فواتير الأذونات (+ شامل إن وُجد) ناقص مجموع الدفعات.
  */
 class ClientPayment
 {
     public const ROUTES = [
-        'none' => 'بدون توجيه',
-        'cash' => 'عهدة نقدية (عهدة اليوم)',
-        'visa' => 'شحن كارت فيزا',
+        'none'    => 'بدون توجيه',
+        'cash'    => 'عهدة نقدية (عهدة اليوم)',
+        'visa'    => 'شحن كارت فيزا',
+        'company' => 'خزنة الشركة',
     ];
 
     public static function routeLabel(string $route): string
     {
         return self::ROUTES[$route] ?? $route;
+    }
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لسؤال «أنهي توجيه متاح دلوقتي؟»** — لازم تقرا منه
+     *    الشاشتان (`payments/index` · `directory/agent`) **والكنترولران**
+     *    (`PaymentController::pay` · `DirectoryController::addPayment`) مع بعض.
+     *    لو الشاشة عرضت خيارًا والكنترولر رفضه، المستخدم بيختار ويلاقي دفعته
+     *    اتسجّلت «بدون توجيه» **بلا أي رسالة** — وده أسوأ من منع الخيار أصلاً.
+     *
+     * ⚠️ `company` بتختفي قبل migrate_v66 — الجدول مش موجود فالحفظ كان هيرمي.
+     *
+     * @return array<string,string>  [المفتاح => التسمية]
+     */
+    public static function routeChoices(): array
+    {
+        $out = self::ROUTES;
+        if (!CompanySafe::ready()) { unset($out['company']); }
+        return $out;
     }
 
     private static function hasTable(): bool
@@ -157,7 +180,7 @@ class ClientPayment
      */
     public static function create(array $d): int
     {
-        $route  = in_array($d['route'] ?? 'none', ['cash', 'visa'], true) ? $d['route'] : 'none';
+        $route  = in_array($d['route'] ?? 'none', ['cash', 'visa', 'company'], true) ? $d['route'] : 'none';
         $name   = trim((string) ($d['client_name'] ?? ''));
         $date   = ($d['pay_date'] ?? '') ?: null;
         $amount = (float) ($d['amount'] ?? 0);
@@ -168,12 +191,20 @@ class ClientPayment
         if (!$agent) { throw new \RuntimeException('العميل غير موجود في البيانات الأساسية.'); }
         $name = $agent['name'];
 
-        $custodyId = null; $depositId = null; $visaCardId = null;
+        $custodyId = null; $depositId = null; $visaCardId = null; $companyEntryId = null;
         $pdo = Database::conn();
         $started = !$pdo->inTransaction();
         if ($started) { $pdo->beginTransaction(); }
         try {
-            if ($route === 'cash') {
+            if ($route === 'company') {
+                /* ⚠️ **بلا `Closing::guard`** عن قصد: الفلوس دخلت خزنة الشركة
+                   (رصيد جارٍ بلا إقفال) مش الدرج، فمفيش رصيد مثبَّت بيتغيّر —
+                   نفس منطق `route='visa'` بالحرف. */
+                if (!CompanySafe::ready()) {
+                    throw new \RuntimeException('خزنة الشركة مش مفعّلة. شغّل php bin/migrate_v66.php أولاً.');
+                }
+                $companyEntryId = CompanySafe::createFromClient($name, $date, $amount, $note);
+            } elseif ($route === 'cash') {
                 $custodyId = Custody::createTopup([
                     'cust_date' => $date,
                     'driver'    => $name,
@@ -193,9 +224,9 @@ class ClientPayment
 
             Database::exec(
                 "INSERT INTO client_payments
-                    (client_name,agent_id,pay_date,amount,status,unallocated_amount,note,route,custody_id,deposit_id,visa_card_id)
-                 VALUES (?,?,?,?, 'posted', ?,?,?,?,?,?)",
-                [$name,(int)$agent['id'],$date,$amount,$amount,$note!==''?$note:null,$route,$custodyId,$depositId,$visaCardId]
+                    (client_name,agent_id,pay_date,amount,status,unallocated_amount,note,route,custody_id,deposit_id,visa_card_id,company_entry_id)
+                 VALUES (?,?,?,?, 'posted', ?,?,?,?,?,?,?)",
+                [$name,(int)$agent['id'],$date,$amount,$amount,$note!==''?$note:null,$route,$custodyId,$depositId,$visaCardId,$companyEntryId]
             );
             $id = Database::lastId();
             $invoiceId = (int)($d['invoice_id'] ?? 0);
@@ -213,7 +244,7 @@ class ClientPayment
     }
 
     /**
-     * حذف دفعة + السجل المرتبط بها (عهدة يدوية / شحنة فيزا).
+     * حذف دفعة + السجل المرتبط بها (عهدة يدوية / شحنة فيزا / حركة خزنة شركة).
      * يفترض أن الكنترولر تحقّق من Closing::guard على تاريخ العهدة لو route='cash'.
      */
     public static function reverse(int $id, string $reason): void
@@ -233,6 +264,10 @@ class ClientPayment
             Database::exec('DELETE FROM invoice_payment_allocations WHERE payment_id=?',[$id]);
             if ($row['route']==='cash' && $row['custody_id']) { Custody::deleteTopup((int)$row['custody_id']); }
             elseif ($row['route']==='visa' && $row['deposit_id']) { VisaCard::deleteDeposit((int)$row['deposit_id']); }
+            // ⚠️ لازم يتشال هنا كمان وإلا خزنة الشركة تفضل فيها فلوس تحصيل اتعكس.
+            elseif ($row['route']==='company' && !empty($row['company_entry_id'])) {
+                CompanySafe::deleteRaw((int)$row['company_entry_id']);
+            }
             Database::exec(
                 "UPDATE client_payments SET status='reversed',unallocated_amount=0,reversed_at=NOW(),reversed_by=?,
                  reverse_reason=?,lock_version=lock_version+1 WHERE id=? AND status='posted'",

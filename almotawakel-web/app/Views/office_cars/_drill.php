@@ -52,7 +52,7 @@ $tripRow = static function (array $t, string $money = 'freight'): void {
 /* صف سيارة — للنوافذ على مستوى الأسطول. */
 $carRow = static function (array $c, string $key, string $label) use ($qs): void {
     $val = $c[$key] ?? 0;
-    $isMoney = in_array($key, ['freight', 'custody', 'expenses', 'net'], true);
+    $isMoney = in_array($key, ['freight', 'custody', 'expenses', 'expenses_total', 'net'], true);
     partial('row_item', [
         'title'  => (string) $c['name'],
         'icon'   => 'truck',
@@ -64,7 +64,7 @@ $carRow = static function (array $c, string $key, string $label) use ($qs): void
             $c['driver'] ? ['icon' => 'user', 'text' => (string) $c['driver']] : null,
         ])),
         'amount' => $isMoney ? money((float) $val, false) : intf((int) $val),
-        'amount_tone' => in_array($key, ['expenses'], true) ? 'ex'
+        'amount_tone' => in_array($key, ['expenses', 'expenses_total'], true) ? 'ex'
                         : ($key === 'net' && (float) $val < 0 ? 'neg' : ''),
         'sub'    => $label,
     ]);
@@ -93,14 +93,15 @@ if (!str_starts_with($what, 'car_')) {
         partial('drill', [
             'how'   => 'مصاريف سيارات المكتب في ' . $pLbl . ' — سولار وإصلاحات وغيره. '
                      . 'مش داخلة خزنة المكتب ولا التقفيل اليومي.',
-            'count' => count(array_filter($fleet, static fn ($c) => (float) $c['expenses'] > 0)),
-            'total' => ['label' => 'إجمالي المصاريف', 'value' => money($sum['expenses'] ?? 0, false)],
+            'count' => count(array_filter($fleet, static fn ($c) => (float) ($c['expenses_total'] ?? $c['expenses']) > 0)),
+            'total' => ['label' => 'إجمالي المصاريف',
+                        'value' => money($sum['expenses_total'] ?? $sum['expenses'] ?? 0, false)],
             'more'  => ['label' => 'سيارات المكتب', 'url' => url('cars' . $qs)],
             'empty' => ['title' => 'مفيش مصاريف مسجَّلة في الفترة دي'],
             'body'  => function () use ($fleet, $carRow) {
                 foreach ($fleet as $c) {
-                    if ((float) $c['expenses'] <= 0) { continue; }
-                    $carRow($c, 'expenses', 'مصاريف');
+                    if ((float) ($c['expenses_total'] ?? $c['expenses']) <= 0) { continue; }
+                    $carRow($c, 'expenses_total', 'مصاريف');
                 }
             },
         ]);
@@ -146,10 +147,31 @@ switch ($what) {
         partial('drill', [
             'how'   => 'مصاريف ' . $carTitle . '. سجل خاص بالسيارة — مش داخل الخزنة ولا التقفيل.',
             'count' => count($expenses ?? []),
-            'total' => ['label' => 'إجمالي المصاريف', 'value' => money($perf['expenses'] ?? 0, false)],
+            'total' => ['label' => 'إجمالي المصاريف',
+                        'value' => money($perf['expenses_total'] ?? $perf['expenses'] ?? 0, false)],
             'more'  => ['label' => 'صفحة السيارة', 'url' => $carUrl],
             'empty' => ['title' => 'مفيش مصاريف في الفترة دي'],
-            'body'  => function () use ($expenses) {
+            'body'  => function () use ($expenses, $perf, $trips) {
+                /* ⚠️ مصدران: مصاريف مسجَّلة على السيارة + بنود مصروفات البوالص
+                   (سولار/كاوتش/دور سواق). الاتنين بيتخصموا من الصافي، فبيتعرضوا
+                   مفصولين عشان لو نفس البند اتسجّل مرتين الازدواج يبان. */
+                if ((float) ($perf['bill_expenses'] ?? 0) > 0) {
+                    foreach (($trips ?? []) as $t) {
+                        if ((float) ($t['bill_expense'] ?? 0) <= 0) { continue; }
+                        partial('row_item', [
+                            'title'  => 'مصروفات بوليصة ' . ($t['bill_number'] ?: '#' . $t['id']),
+                            'icon'   => 'truck',
+                            'meta'   => array_values(array_filter([
+                                ['icon' => 'calendar', 'text' => dfmt($t['bill_date'])],
+                                $t['driver'] ? ['icon' => 'user', 'text' => $t['driver']] : null,
+                                $t['destination'] ? ['icon' => 'map-pin', 'text' => $t['destination']] : null,
+                            ])),
+                            'url'    => url('bawalis/' . (int) $t['id']),
+                            'amount' => money($t['bill_expense'], false),
+                            'amount_tone' => 'ex',
+                        ]);
+                    }
+                }
                 foreach (($expenses ?? []) as $x) {
                     partial('row_item', [
                         'title'  => OfficeCar::kindLabel($x['category']),
@@ -171,7 +193,8 @@ switch ($what) {
     case 'car_net':
         // النافذة دي بتشرح **المعادلة** مش بتعرض بنودًا — الرقم مشتق.
         partial('drill', [
-            'how'   => 'صافي السيارة = النولون − العهد اللي اتدفعت للسواق − مصاريف السيارة. '
+            'how'   => 'صافي السيارة = النولون − العهد اللي اتدفعت للسواق − مصاريف السيارة '
+                     . '− مصروفات البوالص. '
                      . 'رقم استرشادي لأداء السيارة، **مش** ربح محاسبي: مفيهوش التحويلة ولا الخصم '
                      . 'ولا أي تكلفة عامة على الشركة.',
             'total' => ['label' => 'الصافي في ' . $pLbl, 'value' => money($perf['net'] ?? 0, false)],
@@ -184,9 +207,12 @@ switch ($what) {
                     'meta' => [['icon' => 'info', 'text' => 'المخصوم من الخزنة منها: '
                         . money0($perf['custody_deducted'])]],
                     'amount' => money($perf['custody'], false), 'amount_tone' => 'rc', 'sub' => '−']);
-                partial('row_item', ['title' => 'مصاريف السيارة', 'icon' => 'trending-down',
+                partial('row_item', ['title' => 'مصاريف مسجَّلة على السيارة', 'icon' => 'trending-down',
                     'meta' => [['icon' => 'alert', 'text' => 'مش داخلة الخزنة']],
                     'amount' => money($perf['expenses'], false), 'amount_tone' => 'ex', 'sub' => '−']);
+                partial('row_item', ['title' => 'مصروفات البوالص', 'icon' => 'truck',
+                    'meta' => [['icon' => 'info', 'text' => 'سولار وكاوتش ودور سواق على البوليصة نفسها']],
+                    'amount' => money($perf['bill_expenses'] ?? 0, false), 'amount_tone' => 'ex', 'sub' => '−']);
             },
         ]);
         return;

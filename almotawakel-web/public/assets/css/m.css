@@ -657,11 +657,43 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   box-shadow:0 1px 2px rgba(16,26,40,.05), 0 6px 18px rgba(16,26,40,.05);
   overflow:hidden; position:relative;
 }
+/* ⚠️ شريط الحافة بيقول **حاجتين مع بعض**: لون النوع على طول الشريط (صادر/وارد)
+   + «قبّة» فوق بلون الحالة. عشان كده الاتنين توكن مستقل بدل ما نكتب تدرّجًا
+   لكل تركيبة (٢ نوع × ٤ حالات = ٨ قواعد). ترتيب الحالات مقصود: الأحدث انتباهًا
+   بيغلب — خلصت ← مثبَّت ← جديد. */
+/* ═══ نسيج «ورق الأمان» + ميل بلون النوع ═══════════════════════════
+   ⚠️ **تدرّجات CSS بس — ولا صورة ولا فلتر.** فلتر الضوضاء (`feTurbulence`)
+      شكله أحلى لكنه بيتعاد حسابه مع كل تمرير على ٣٧ كارت، وموبايل المندوب
+      رخيص وفي الشمس. التدرّج بيترسم مرّة وبيتكاش.
+   ⚠️ الشفافية **٤٪ وأقل** عن قصد: النسيج لازم يتحسّ ولا يتقرا. أي رفع فوق كده
+      بيقلّل تباين النص العربي الصغير في ضوء النهار.
+   ⚠️ الميل بيختلف مع النوع — فالنسيج **بيحمل معنى** لا زخرفة: المندوب يفرّق
+      صادر من وارد من بعيد قبل ما يقرا. */
+.hm-stub{
+  --stub-edge:var(--sader); --stub-cap:transparent;
+  --stub-weave:rgba(178,106,27,.038);     /* صادر */
+  --stub-tilt:45deg;
+  background-color:var(--hm-card);
+  background-image:
+    repeating-linear-gradient(var(--stub-tilt),
+      var(--stub-weave) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(calc(var(--stub-tilt) + 90deg),
+      var(--stub-weave) 0 1px, transparent 1px 8px),
+    /* عمق الورق: الكارت بيغمق شعرة ناحية تحت فيحسّ مقوّى مش مسطّح */
+    linear-gradient(180deg, #FFFFFF 0%, #FBFCFE 100%);
+}
+.hm-stub.is-warid{
+  --stub-edge:var(--warid);
+  --stub-weave:rgba(14,124,134,.038);     /* وارد */
+  --stub-tilt:135deg;                    /* الميل معكوس — الفرق بيبان فورًا */
+}
+.hm-stub.is-done{--stub-cap:#1E8E5A}      /* رحلة الشحنة خلصت */
+.hm-stub.is-pinned{--stub-cap:var(--hm-gold)}
+.hm-stub.is-new{--stub-cap:#2563EB}
 .hm-stub::before{
   content:""; position:absolute; inset-block:0; inset-inline-start:0; width:5px;
-  background:var(--sader);
+  background:linear-gradient(var(--stub-cap) 0 0) top/100% 32% no-repeat, var(--stub-edge);
 }
-.hm-stub.is-warid::before{background:var(--warid)}
 
 .hm-stub-body{padding:14px 16px 12px 14px}
 .hm-stub-head{display:flex; align-items:flex-start; gap:9px}
@@ -670,8 +702,15 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   line-height:1.35; letter-spacing:-.01em; overflow-wrap:anywhere;
 }
 .hm-kind{
-  flex:none; background:var(--sader-lt); color:var(--sader);
-  border-radius:99px; padding:3px 10px; font-size:.72rem; font-weight:600;
+  flex:none; display:inline-flex; align-items:center; gap:5px;
+  background:var(--sader-lt); color:var(--sader);
+  border-radius:99px; padding:3px 4px 3px 10px; font-size:.72rem; font-weight:600;
+}
+/* الرقم على خلفية بيضا جوّه الشريحة — بارز بلا ما ياخد سطرًا لوحده */
+.hm-kind b{
+  background:var(--hm-card); border-radius:99px; padding:1px 8px;
+  font-size:.82rem; font-weight:700; color:var(--hm-text);
+  font-variant-numeric:tabular-nums;
 }
 .hm-stub.is-warid .hm-kind{background:var(--warid-lt); color:#07636B}
 .hm-ref{
@@ -708,8 +747,14 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   display:flex; align-items:center; justify-content:space-between;
   min-height:52px; padding:0 16px 0 14px; text-decoration:none;
   color:var(--navy); font-weight:700; font-size:.97rem;
-  border-top:1.5px dashed var(--hm-line); background:#FCFDFE;
   position:relative;
+  /* ⚠️ صف تقب حقيقي بدل الشرطة المتقطّعة — بيكمّل حكاية «الكعب المقطوع» اللي
+     النقرتين على الطرفين بدأوها. دايرة كل ٨ بكسل، نصّها برّه الحافة. */
+  background-color:#FCFDFE;
+  background-image:radial-gradient(circle, var(--hm-line) 0 1.5px, transparent 1.7px);
+  background-size:8px 8px;
+  background-repeat:repeat-x;
+  background-position:0 -4px;
 }
 /* النقرتين على طرفي الخط = حس الكعب المقطوع */
 .hm-stub-go::before, .hm-stub-go::after{
@@ -719,7 +764,8 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .hm-stub-go::before{inset-inline-start:-7px}
 .hm-stub-go::after{inset-inline-end:-7px}
 .hm-stub-go svg{width:19px; height:19px; color:var(--hm-muted)}
-.hm-stub-go:active{background:var(--gold-lt); color:var(--navy-dk)}
+/* ⚠️ `background-color` لا `background` — الاختصار بيمسح صف التقب معاه. */
+.hm-stub-go:active{background-color:var(--gold-lt); color:var(--navy-dk)}
 
 /* ── فلاتر البنود ────────────────────────────────── */
 .hm-filters{display:flex; gap:7px; overflow-x:auto; padding-bottom:4px; margin-bottom:11px;
@@ -934,27 +980,8 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 
 /* «انت شغّال على يوم فات» — تحذير صريح إن الرقم الكبير مش عهدة النهاردة.
    (كان مكتوب بخط صغير جوّه شريحة التاريخ فما حدش بيلاحظه.) */
-.hm-pastday{
-  margin:12px 16px 0; padding:13px 15px; border-radius:14px;
-  background:var(--gold-lt, #FBF3DC); border:1px solid #E5D6A4;
-  display:flex; flex-direction:column; gap:4px;
-}
-.hm-pastday b{color:#6B5200; font-size:.95rem}
-.hm-pastday span{color:#7A6212; font-size:.83rem; line-height:1.6}
-.hm-pastday-btn{
-  align-self:flex-start; margin-top:6px; min-height:38px; padding:0 16px; border-radius:10px;
-  background:#6B5200; color:#fff; font-weight:600; font-size:.83rem;
-  display:inline-flex; align-items:center; text-decoration:none;
-}
 
 /* «ماحدش نزّل لك عهدة على اليوم ده» — بيشرح ليه الرقم صفر أو سالب */
-.hm-nodep{
-  margin:12px 16px 0; padding:12px 15px; border-radius:14px;
-  background:var(--hm-sheet, #F5F7FA); border:1px dashed var(--hm-line, #E3E7ED);
-  display:flex; flex-direction:column; gap:3px;
-}
-.hm-nodep b{color:var(--hm-text, #16202B); font-size:.9rem}
-.hm-nodep span{color:var(--hm-muted, #6B7683); font-size:.82rem; line-height:1.6}
 
 /* «إجمالي اللي معاك من كل الأيام» — سطر مفصول عن أرقام اليوم عشان ما يتخلطش بيها */
 .hm-dl-all{border-top:1px dashed var(--hm-line); margin-top:6px; padding-top:8px}
@@ -1338,7 +1365,23 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
 .ntp-ch input:disabled{opacity:.4}
 
 /* شارة الجرس في شريط شاشة المندوب الرئيسية */
-.nt-bell{position:relative; text-decoration:none}
+/* ⚠️⚠️ الجرس كان **مختفي تمامًا** على الشاشة: `.hm-body` بتحطّ
+   `color:var(--hm-text)` (شبه أسود) و`.hm-top` بتحطّ خلفية كحلي غامق **بلا
+   لون نص**، والأيقونة `stroke:currentColor` — يعني غامق على غامق. باقي عناصر
+   الهيدر (`.hm-hi small/b` و`.hm-bar button`) بتحدّد لونها بنفسها، والجرس
+   وحده كان ناسي. **أي عنصر جديد في `.hm-top` لازم يحدّد لونه صراحةً.** */
+.nt-bell{
+  position:relative; text-decoration:none; flex:0 0 auto;
+  margin-inline-start:auto;            /* الجرس وزرار الخروج مع بعض في الآخر */
+  width:38px; height:38px; border-radius:50%;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--hm-ink-2); border:1px solid var(--hm-ink-3);
+  color:var(--hm-on-dark);
+}
+.nt-bell svg{width:18px; height:18px}
+.nt-bell:active{background:var(--hm-ink-3)}
+/* الفورم بعده مالوش داعي ياخد المسافة تاني — الجرس خدها */
+.hm-bar .nt-bell + form{margin-inline-start:0}
 .nt-bell .nt-dot{
   position:absolute; top:-2px; inset-inline-end:-2px; min-width:17px; height:17px;
   padding:0 4px; display:flex; align-items:center; justify-content:center;
@@ -1551,3 +1594,438 @@ input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none
   border:1px solid var(--navy); border-radius:11px; background:#F2F6FC;
   color:var(--navy); font:inherit; font-size:.83rem; font-weight:600}
 .mt-bill-btn:active{background:var(--gold-lt)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   v63 — تثبيت الأذونات + فلاتر القايمة + عرض بنود يوم تاني
+   ⚠️ الكلاسات دي في m.css **لا app.css**: بوابة `/m` ما بتحمّلش app.css
+      (نفس درس `.table-mobile-scroll` الموثَّق — كلاس بلا شكل بيفشل بالسكوت).
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── شرايح الفلترة (كلها في المتصفح — بلا أي طلب للخادم) ─────────── */
+.hm-fchips{
+  display:flex; gap:7px; overflow-x:auto; padding-bottom:4px; margin:0 0 11px;
+  scrollbar-width:none; -webkit-overflow-scrolling:touch;
+}
+.hm-fchips::-webkit-scrollbar{display:none}
+.hm-fchips button{
+  flex:0 0 auto; display:inline-flex; align-items:center; gap:5px;
+  min-height:36px; padding:0 12px; border-radius:99px; cursor:pointer;
+  border:1px solid var(--hm-line); background:var(--hm-card);
+  color:var(--hm-muted); font:inherit; font-size:.8rem; font-weight:600;
+}
+.hm-fchips button svg{width:14px; height:14px; flex:0 0 auto}
+.hm-fchips button i{
+  font-style:normal; font-size:.72rem; font-weight:700; opacity:.7;
+}
+.hm-fchips button.is-on{
+  background:var(--hm-ink); border-color:var(--hm-ink); color:#fff;
+}
+.hm-fchips button.is-on i{opacity:.85}
+
+/* ── زرار التثبيت على كارت الإذن ─────────────────────────────────── */
+/* ⚠️ `z-index:3` هنا مش زخرفة: جسم الكارت كله مغطّى برابط التفاصيل
+   (`.hm-stub-open` بـ`z-index:2`)، فمن غيرها الضغط على زرار التثبيت بيفتح
+   صفحة التفاصيل بدل ما يثبّت. */
+.hm-pin-f{margin:0; line-height:0; flex:0 0 auto; position:relative; z-index:3}
+.hm-pin{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:36px; height:36px; border-radius:50%; cursor:pointer;
+  border:1px solid var(--hm-line); background:var(--hm-card);
+  color:#B9C3D1; padding:0;
+}
+.hm-pin svg{width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.9;
+  stroke-linejoin:round}
+.hm-pin.is-on{border-color:var(--hm-gold); color:var(--hm-gold); background:#FFFBF0}
+.hm-pin.is-on svg{fill:currentColor}
+.hm-pin:active{transform:scale(.92)}
+/* الإذن المثبَّت: شريط ذهبي على الحافة عشان يبان من غير ما ياخد لون كامل */
+.hm-stub.is-pinned{box-shadow:0 1px 2px rgba(16,26,40,.05), 0 6px 18px rgba(212,175,55,.16)}
+
+
+/* ── رابط «شوف بنود يوم تاني» ─────────────────────────────────────── */
+.hm-otherday{
+  display:flex; align-items:center; gap:8px; margin:0 0 11px;
+  min-height:44px; padding:0 13px; border-radius:13px;
+  border:1px dashed var(--hm-line); background:var(--hm-card);
+  color:var(--hm-text); text-decoration:none; font-size:.85rem; font-weight:600;
+}
+.hm-otherday svg{width:15px; height:15px; color:var(--hm-muted); flex:0 0 auto}
+.hm-otherday span{margin-inline-start:auto; font-size:.75rem; font-weight:500;
+  color:var(--hm-muted)}
+.hm-otherday:active{background:var(--hm-sheet)}
+
+/* ── شاشة بنود يوم تاني (قراءة فقط) ───────────────────────────────── */
+.hm-daynav{display:flex; align-items:center; gap:8px; margin:10px 0 0}
+.hm-daynav a, .hm-daynav span{
+  flex:1; text-align:center; min-height:38px; display:flex;
+  align-items:center; justify-content:center; border-radius:11px;
+  font-size:.8rem; font-weight:600; text-decoration:none;
+  background:var(--hm-ink-2); border:1px solid var(--hm-ink-3); color:var(--hm-on-dark);
+}
+.hm-daynav .is-now{background:transparent; border-style:dashed; color:var(--hm-on-dark-dim)}
+.hm-daynav a.is-now{color:var(--hm-gold); border-color:var(--hm-gold)}
+.hm-daynav a:active{background:var(--hm-ink-3)}
+
+/* ⚠️ السطر ده مش زخرفة — هو اللي بيمنع المندوب يفتكر إنه بيشتغل على اليوم
+   المعروض. الصفحة مفيهاش أي إجراء عن قصد، والتنبيه بيقول السبب. */
+.hm-readonly{
+  display:flex; align-items:center; gap:8px; margin:10px 0 0;
+  padding:9px 12px; border-radius:12px;
+  background:rgba(212,175,55,.13); border:1px solid rgba(212,175,55,.32);
+  color:var(--hm-on-dark); font-size:.79rem; line-height:1.5;
+}
+.hm-readonly svg{width:15px; height:15px; color:var(--hm-gold); flex:0 0 auto}
+.hm-readonly a{color:var(--hm-gold); font-weight:700}
+
+.hm-daysum{display:flex; gap:8px; margin:10px 0 0}
+.hm-daysum span{
+  flex:1; text-align:center; padding:8px 6px; border-radius:12px;
+  background:var(--hm-ink-2); border:1px solid var(--hm-ink-3);
+  color:var(--hm-on-dark-dim); font-size:.73rem;
+}
+.hm-daysum b{display:block; font-size:1rem; font-weight:700; color:var(--hm-on-dark)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ختم الميناء · التوكيل البارز · وسم الحاويات المبرّدة (كارت الإذن)
+   ⚠️ **رسم بالكود لا صور** (قرار المالك): صفر كيلوبايت على موبايل المندوب،
+      حادّ على أي كثافة شاشة، وبياخد لون السمة تلقائيًّا.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── ختم الركن ─────────────────────────────────────────────────────
+   ⚠️ زخرفي بحت: `aria-hidden` في الماركب و`pointer-events:none` هنا — من
+      غيرها بيلقط ضغطات المندوب على زرار التثبيت اللي تحته. */
+/* ⚠️ الختم **جوّه الكارت بالكامل** — أول نسخة كانت بتطلّعه برّه الحافة
+   (`-14px`/`-16px`) و`overflow:hidden` بتقصّه، فالمنارة والندفة كانوا بيبانوا
+   نصّ شكل مكسور يقرا كغلطة مش كعلامة مائية. */
+.hm-stamp{
+  position:absolute; inset-block-start:10px; inset-inline-end:12px;
+  width:78px; height:78px; pointer-events:none; z-index:0;
+  color:var(--hm-text); opacity:.06;
+  transform:rotate(-6deg);
+}
+/* ⚠️ خصائص الخط بتتحط هنا لأن `<use>` بيجيب الشكل من `<symbol>` والـsymbol
+   مالوش الخصائص دي (كانت على وسم `<svg>` بتاع `icon()`). من غيرها الختم
+   بيترسم **معبّى أسود** بدل خطوط. */
+.hm-stamp svg{
+  width:100%; height:100%;
+  fill:none; stroke:currentColor; stroke-width:1.4;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+/* مكتبة الأختام نفسها مخفية — بترسم عبر `<use>` بس */
+.hm-stamp-lib{position:absolute; width:0; height:0; overflow:hidden}
+/* المبرّد ختمه أزرق مقروء أكتر شوية — هو الوسم اللي المندوب بيدوّر عليه */
+.hm-stub.is-cold .hm-stamp{color:#1D6FD4; opacity:.07}
+/* ⚠️ الجسم لازم يبقى فوق الختم وإلا النص يتلغبط معاه */
+.hm-stub-body{position:relative; z-index:1}
+/* الرابط بيغطّي الجسم كله — فورم جوّه رابط ماركب باطل، والتغطية هي البديل. */
+.hm-stub-open{position:absolute; inset:0; z-index:2}
+
+/* ── التوكيل الملاحي (طلب المالك: بارز وبشكل جميل) ─────────────── */
+.hm-agency{
+  display:flex; align-items:center; gap:9px; margin-top:10px;
+  padding:8px 11px; border-radius:12px;
+  background:linear-gradient(180deg, #FBF7EA, #F7F2E2);
+  border:1px solid #EADFBF; border-inline-start:3px solid var(--hm-gold);
+}
+.hm-agency-ic{
+  flex:0 0 auto; width:28px; height:28px; border-radius:8px;
+  display:grid; place-items:center;
+  background:#fff; border:1px solid #EADFBF; color:#8A6D12;
+}
+.hm-agency-ic svg{width:15px; height:15px}
+.hm-agency-txt{display:flex; flex-direction:column; line-height:1.3; min-width:0}
+.hm-agency-txt small{font-size:.68rem; font-weight:500; color:#96803C; letter-spacing:.02em}
+.hm-agency-txt b{font-size:.95rem; font-weight:700; color:#4A3B08; overflow-wrap:anywhere}
+
+/* ── سطر الميناء + وسم المبرّد ─────────────────────────────────── */
+.hm-portline{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
+.hm-port, .hm-cold{
+  display:inline-flex; align-items:center; gap:5px;
+  border-radius:99px; padding:3px 10px; font-size:.76rem; font-weight:600;
+}
+.hm-port svg, .hm-cold svg{width:13px; height:13px; flex:0 0 auto}
+.hm-port{background:var(--hm-sheet); border:1px solid var(--hm-line); color:var(--hm-muted)}
+/* المبرّد بلون بارد صريح — ده اللي بيخلّيه يبان من غير ما تقرا */
+.hm-cold{background:#E8F2FE; border:1px solid #BBD9F7; color:#1552A0}
+
+/* ═══════════════════════════════════════════════════════════════════
+   شكل الحاوية على كارت الإذن — العدد×المقاس مكتوب جوّه الرسمة
+   ⚠️ الرسمة بتتمدّ بالعرض (`preserveAspectRatio="none"` في الماركب) فالعشرين
+      بتطلع **أقصر** من الأربعين بنفس الشكل — ده الفرق الحقيقي بينهم في الواقع.
+   ⚠️ الأشكال في `<symbol>` مرّة واحدة والكروت بتشاور بـ`<use>`؛ وخصائص الرسم
+      لازم تتحط على الـ`<svg>` المضيف لأن `<use>` ما بيورّثهاش (مصيدة الختم).
+   ═══════════════════════════════════════════════════════════════════ */
+.hm-boxwrap{display:inline-flex; align-items:center; gap:5px; flex:0 0 auto}
+.hm-box{
+  position:relative; display:inline-flex; align-items:center; justify-content:center;
+  height:38px; flex:0 0 auto; color:#8A97A9;
+}
+/* ⚠️ المقاسات دي **محسوبة على أطول احتمال** («١٢×٤٠» ≈ ٥٢px) + المساحة
+   الفاضية في نص الرسمة (٥٦٪ من عرضها) — عشان التصنيف الكامل يقعد جوّه
+   الحاوية بلا ما يلمس أضلاعها. لو صغّرتها، الرقم هيتداخل تاني. */
+.hm-box.sz-20{width:92px}
+.hm-box.sz-40{width:106px}
+.hm-box.sz-45{width:112px}
+.hm-box.sz-x {width:84px}          /* بلا مقاس (تانك · جامبو · فلات راك) */
+.hm-box.is-jumbo{width:104px}
+
+.hm-box-art{
+  position:absolute; inset:0; width:100%; height:100%;
+  fill:none; stroke:currentColor; stroke-width:1.6;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+/* ⚠️ النص فوق الرسمة ومعاه خلفية بلون الكارت — من غيرها الأضلاع بتعدّي من
+   ورا الأرقام وتبوّظ قراءتها على شاشة صغيرة. */
+.hm-box-lbl{
+  position:relative; z-index:1; padding:0 3px;
+  color:var(--hm-text);
+  font-size:.82rem; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.2;
+}
+/* كلمة النوع بتظهر بس لما الرسمة مش كافية لوحدها (الجافة شكلها بيقول كل حاجة) */
+.hm-box-sub{
+  align-self:center; padding:2px 8px; border-radius:99px;
+  background:var(--hm-sheet); border:1px solid var(--hm-line);
+  color:var(--hm-muted); font-size:.73rem; font-weight:600;
+}
+/* المبرّد بلونه البارد في الرسمة والكلمة — نفس لون وسمه فوق */
+.hm-box.is-reefer{color:#2E86DE}
+.hm-box.is-reefer + .hm-box-sub{background:#E8F2FE; border-color:#BBD9F7; color:#1552A0}
+
+/* ═══════════════════════════════════════════════════════════════════
+   صفحة تفاصيل الإذن `/m/permit/{id}/info` — قراءة فقط
+   ⚠️ ولا رقم بيخصّ العميل فيها (قاعدة v35) — الحماية في الموديل، والتنسيق
+      هنا بس. وكل الكلاسات في m.css لأن البوابة ما بتحمّلش app.css.
+   ═══════════════════════════════════════════════════════════════════ */
+/* ⚠️ الصفحة دي مالهاش تاب بار تحت (بعكس `/m`)، فلو الخلفية فضلت غامقة
+   بيفضل شريط أسود تحت المحتوى. خلفية الجسم بلون الشيت فالنهاية تبقى ناعمة. */
+.pi-body{background:var(--hm-sheet)}
+.pi-hero{margin-top:14px; padding-inline-start:12px; border-inline-start:4px solid var(--sader)}
+.pi-hero.is-warid{border-inline-start-color:var(--warid)}
+.pi-hero h1{margin:0; font-size:1.24rem; font-weight:700; color:var(--hm-on-dark);
+  line-height:1.35; overflow-wrap:anywhere}
+.pi-hero p{margin:4px 0 0; display:flex; align-items:center; gap:5px;
+  color:var(--hm-on-dark-dim); font-size:.86rem}
+.pi-hero p svg, .pi-hero-tags svg{width:13px; height:13px; flex:0 0 auto}
+.pi-hero-tags{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px}
+.pi-hero-tags span{display:inline-flex; align-items:center; gap:5px;
+  background:var(--hm-ink-2); border:1px solid var(--hm-ink-3); border-radius:99px;
+  padding:3px 10px; color:var(--hm-on-dark-dim); font-size:.75rem; font-weight:600}
+.pi-hero-tags .is-cold{background:#12324F; border-color:#1B4B73; color:#8FC4F5}
+
+.pi-h{display:flex; align-items:center; gap:7px; margin:20px 2px 10px;
+  font-size:.86rem; font-weight:700; color:var(--hm-text)}
+.pi-h:first-of-type{margin-top:4px}
+.pi-h svg{width:15px; height:15px; color:var(--hm-muted); flex:0 0 auto}
+.pi-n{background:var(--hm-sheet); border:1px solid var(--hm-line); border-radius:99px;
+  padding:1px 8px; font-size:.72rem; font-weight:600; color:var(--hm-muted)}
+
+.pi-boxes{display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+  background:var(--hm-card); border:1px solid var(--hm-line);
+  border-radius:14px; padding:11px 13px}
+
+.pi-facts{display:grid; grid-template-columns:1fr 1fr; gap:1px; margin:0;
+  background:var(--hm-line); border:1px solid var(--hm-line);
+  border-radius:14px; overflow:hidden}
+.pi-facts > div{background:var(--hm-card); padding:9px 12px; min-width:0}
+.pi-facts dt{color:var(--hm-muted); font-size:.72rem; font-weight:500; margin-bottom:2px}
+.pi-facts dd{margin:0; font-size:.87rem; font-weight:600; overflow-wrap:anywhere}
+@media (max-width:360px){ .pi-facts{grid-template-columns:1fr} }
+
+/* ── العربية والسائق ─────────────────────────────────────────────── */
+.pi-car{display:flex; align-items:flex-start; gap:11px; margin-bottom:9px;
+  background:var(--hm-card); border:1px solid var(--hm-line);
+  border-radius:14px; padding:11px 12px}
+/* اللوحة بشكل لوحة سيارة فعلًا — بتتقرا من بعيد */
+.pi-car-plate{flex:0 0 auto; align-self:center; min-width:78px; text-align:center;
+  background:var(--hm-sheet); border:1.5px solid var(--hm-line); border-radius:7px;
+  padding:6px 8px; font-size:.82rem; font-weight:700; color:var(--hm-text);
+  font-variant-numeric:tabular-nums; letter-spacing:.04em}
+.pi-car-mid{min-width:0; flex:1}
+.pi-car-mid > b{display:block; font-size:.95rem; font-weight:700; overflow-wrap:anywhere}
+.pi-car-meta{display:flex; flex-wrap:wrap; gap:4px; margin-top:3px;
+  color:var(--hm-muted); font-size:.76rem}
+.pi-car-meta svg{width:12px; height:12px; vertical-align:-1px}
+.pi-car-cnt{display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin-top:6px;
+  font-size:.78rem; font-weight:600; color:var(--hm-text)}
+.pi-car-cnt svg{width:12px; height:12px; color:var(--hm-muted); flex:0 0 auto}
+.pi-car-cnt em{font-style:normal; background:var(--hm-sheet); border:1px solid var(--hm-line);
+  border-radius:99px; padding:1px 8px; font-size:.72rem; color:var(--hm-muted)}
+
+/* ── بند مسجَّل ──────────────────────────────────────────────────── */
+.pi-entry{display:flex; align-items:flex-start; gap:10px; margin-bottom:8px;
+  background:var(--hm-card); border:1px solid var(--hm-line);
+  border-inline-start:3px solid var(--hm-line);
+  border-radius:12px; padding:10px 12px}
+.pi-entry.is-approved{border-inline-start-color:#1E8E5A}
+.pi-entry.is-pending{border-inline-start-color:var(--hm-gold)}
+.pi-entry.is-rejected{border-inline-start-color:#B3261E}
+/* بند المندوب نفسه بيتميّز — بيفرّق «أنا سجّلته» عن «زميلي سجّله» فورًا */
+.pi-entry.is-mine{background:#FBFCFE}
+.pi-entry-ic{flex:0 0 auto; width:30px; height:30px; border-radius:9px;
+  display:grid; place-items:center; background:var(--hm-sheet); color:var(--hm-muted)}
+.pi-entry-ic svg{width:15px; height:15px}
+.pi-entry-mid{flex:1; min-width:0}
+.pi-entry-mid > b{display:block; font-size:.9rem; font-weight:600; overflow-wrap:anywhere}
+.pi-entry-meta{display:flex; flex-wrap:wrap; gap:4px; margin-top:3px;
+  color:var(--hm-muted); font-size:.75rem}
+.pi-entry-meta svg{width:12px; height:12px; vertical-align:-1px}
+.pi-who{display:inline-flex; align-items:center; gap:4px; font-weight:600; color:var(--hm-text)}
+.pi-who em{font-style:normal; background:var(--gold-lt, #FBF3DC); border-radius:99px;
+  padding:0 6px; font-size:.68rem; color:#7A6110}
+.pi-entry-end{flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-end; gap:4px}
+.pi-entry-amt{font-size:.95rem; font-weight:700; font-variant-numeric:tabular-nums}
+
+/* ── إجراءات الصفحة ──────────────────────────────────────────────── */
+.pi-acts{display:flex; flex-wrap:wrap; gap:8px; margin:22px 0 8px}
+.pi-acts a{flex:1 1 44%; display:inline-flex; align-items:center; justify-content:center;
+  gap:7px; min-height:48px; border-radius:13px; text-decoration:none;
+  background:var(--hm-card); border:1px solid var(--hm-line);
+  color:var(--hm-text); font-size:.88rem; font-weight:700}
+.pi-acts a svg{width:15px; height:15px; color:var(--hm-muted); flex:0 0 auto}
+.pi-acts a.is-primary{background:var(--hm-ink); border-color:var(--hm-ink); color:#fff; flex-basis:100%}
+.pi-acts a.is-primary svg{color:var(--hm-gold)}
+.pi-acts a:active{background:var(--hm-sheet)}
+.pi-acts a.is-primary:active{background:var(--hm-ink-2)}
+
+/* ── رسمة القاطرة والمقطورة في صفحة تفاصيل الإذن ─────────────────── */
+.pi-car{flex-direction:column; align-items:stretch; gap:0}
+.pi-car-top{display:flex; align-items:center; gap:10px; margin-bottom:9px}
+.pi-truck{width:96px; height:37px; flex:0 0 auto;
+  fill:none; stroke:currentColor; stroke-width:1.6;
+  stroke-linecap:round; stroke-linejoin:round; color:#8A97A9}
+/* ⚠️ سيارة المكتب بتتميّز بالرسمة **واللون** — التفرقة نفسها بتيجي من
+   `OfficeCar::matchPlate` لا من نص في البوليصة. */
+.pi-car.is-office{border-color:#EADFBF; background:linear-gradient(180deg,#FFFDF7,var(--hm-card))}
+.pi-car.is-office .pi-truck{color:#B8912B}
+.pi-office-tag{display:inline-flex; align-items:center; gap:4px; margin-inline-start:auto;
+  background:var(--gold-lt,#FBF3DC); border:1px solid #EADFBF; border-radius:99px;
+  padding:3px 9px; font-size:.71rem; font-weight:700; color:#7A6110}
+.pi-office-tag svg{width:12px; height:12px; fill:currentColor; stroke:none}
+.pi-car .pi-car-plate{align-self:center}
+
+/* ── وقت الوصول المتوقّع ─────────────────────────────────────────── */
+/* ⚠️ **تقدير مش وعد** (قاعدة v34): مبني على مسافة طريق حقيقية وسرعة شاحنة
+   محمّلة. القسم كله بيختفي لو الوجهة مش متحدّدة — بدل رقم مخترع. */
+.pi-eta{display:flex; align-items:center; gap:11px; margin:2px 0 16px;
+  padding:12px 13px; border-radius:14px;
+  background:linear-gradient(180deg,#F2F7FE,#EAF1FB); border:1px solid #CFE0F5}
+.pi-eta-ic{flex:0 0 auto; width:36px; height:36px; border-radius:11px; display:grid;
+  place-items:center; background:#fff; border:1px solid #CFE0F5; color:#1D6FD4}
+.pi-eta-ic svg{width:18px; height:18px}
+.pi-eta-mid{flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.35}
+.pi-eta-mid small{font-size:.71rem; color:#4B6B93; font-weight:500}
+.pi-eta-mid > b{font-size:1.02rem; font-weight:700; color:#123A66}
+.pi-eta-km{font-size:.72rem; color:#5B7BA3; font-variant-numeric:tabular-nums}
+.pi-eta-to{flex:0 0 auto; align-self:flex-start; display:inline-flex; align-items:center; gap:4px;
+  background:#fff; border:1px solid #CFE0F5; border-radius:99px; padding:3px 9px;
+  font-size:.72rem; font-weight:600; color:#1552A0; max-width:38%}
+.pi-eta-to svg{width:12px; height:12px; flex:0 0 auto}
+
+/* ── ملفات الإذن ─────────────────────────────────────────────────── */
+.pi-files{display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:9px}
+.pi-file{position:relative; margin:0; background:var(--hm-card);
+  border:1px solid var(--hm-line); border-radius:13px; overflow:hidden}
+.pi-file > a{display:block; aspect-ratio:1/1; background:var(--hm-sheet)}
+.pi-file img{width:100%; height:100%; object-fit:cover; display:block}
+.pi-file-doc{width:100%; height:100%; display:grid; place-items:center; align-content:center;
+  gap:4px; color:var(--hm-muted)}
+.pi-file-doc svg{width:22px; height:22px}
+.pi-file-doc em{font-style:normal; font-size:.68rem; font-weight:700; letter-spacing:.06em}
+.pi-file figcaption{padding:7px 9px; display:flex; flex-direction:column; gap:2px; min-width:0}
+.pi-file figcaption b{font-size:.76rem; font-weight:600; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap}
+.pi-file figcaption small{font-size:.67rem; color:var(--hm-muted); overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap}
+.pi-file form{position:absolute; inset-block-start:5px; inset-inline-end:5px; margin:0}
+.pi-file form button{width:28px; height:28px; border-radius:50%; cursor:pointer; padding:0;
+  display:grid; place-items:center; background:rgba(255,255,255,.92);
+  border:1px solid var(--hm-line); color:#B3261E}
+.pi-file form button svg{width:13px; height:13px}
+
+.pi-upload{display:flex; flex-direction:column; gap:8px; margin-top:10px}
+
+/* ① الاختيار: تصوير أو ملف — خانتان مش واحدة (`capture` بتفتح الكاميرا) */
+.pi-up-choices{display:flex; gap:8px}
+.pi-up-choice{flex:1; display:flex; flex-direction:column; align-items:center; gap:7px;
+  cursor:pointer; padding:16px 10px; border-radius:14px; background:var(--hm-card);
+  border:1.5px dashed var(--hm-line); text-align:center}
+.pi-up-choice input[type=file]{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none}
+.pi-up-choice .ic{width:44px; height:44px; border-radius:13px; display:grid; place-items:center;
+  background:var(--hm-sheet); color:var(--hm-muted)}
+.pi-up-choice .ic svg{width:20px; height:20px}
+.pi-up-choice b{font-size:.86rem; font-weight:700}
+.pi-up-choice:active{background:var(--hm-sheet); border-color:var(--hm-gold)}
+
+/* ② المعاينة: المندوب يشوف اللي اختاره قبل ما يرفعه */
+.pi-up-stage{display:flex; flex-direction:column; gap:8px}
+.pi-up-prev{position:relative; display:flex; align-items:center; gap:11px;
+  padding:10px; border-radius:14px; background:var(--hm-card); border:1px solid var(--hm-line)}
+.pi-up-prev img, .pi-up-doc{flex:0 0 auto; width:62px; height:62px; border-radius:11px;
+  object-fit:cover; background:var(--hm-sheet); border:1px solid var(--hm-line)}
+.pi-up-doc{display:grid; place-items:center; align-content:center; gap:3px; color:var(--hm-muted)}
+.pi-up-doc svg{width:22px; height:22px}
+.pi-up-doc em{font-style:normal; font-size:.65rem; font-weight:700; letter-spacing:.06em}
+.pi-up-info{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px}
+.pi-up-info b{font-size:.85rem; font-weight:600; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap}
+.pi-up-info small{font-size:.73rem; color:var(--hm-muted); font-variant-numeric:tabular-nums}
+.pi-up-x{flex:0 0 auto; width:32px; height:32px; border-radius:50%; cursor:pointer; padding:0;
+  display:grid; place-items:center; background:var(--hm-sheet);
+  border:1px solid var(--hm-line); color:var(--hm-muted)}
+.pi-up-x svg{width:14px; height:14px}
+.pi-upload input[type=text]{min-height:46px; border-radius:13px; padding:0 14px;
+  border:1px solid var(--hm-line); background:var(--hm-card); font:inherit;
+  font-size:.9rem; color:var(--hm-text)}
+.pi-up-go{min-height:48px; border-radius:13px; cursor:pointer; border:0;
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  background:var(--hm-ink); color:#fff; font:inherit; font-size:.9rem; font-weight:700}
+.pi-up-go svg{width:15px; height:15px; color:var(--hm-gold)}
+.pi-up-go:active{background:var(--hm-ink-2)}
+.pi-up-go[disabled]{opacity:.6}
+
+/* ── إجراءا الإذن في الهيرو (نقلوا من آخر الصفحة بطلب المالك) ────── */
+.pi-hero-acts{display:flex; gap:8px; margin-top:12px}
+.pi-hero-acts a{flex:1; display:inline-flex; align-items:center; justify-content:center;
+  gap:7px; min-height:46px; border-radius:13px; text-decoration:none;
+  background:var(--hm-ink-2); border:1px solid var(--hm-ink-3);
+  color:var(--hm-on-dark); font-size:.88rem; font-weight:700}
+.pi-hero-acts a svg{width:15px; height:15px; color:var(--hm-on-dark-dim); flex:0 0 auto}
+.pi-hero-acts a.is-primary{background:var(--hm-gold); border-color:var(--hm-gold); color:#1A1405}
+.pi-hero-acts a.is-primary svg{color:#1A1405}
+.pi-hero-acts a:active{background:var(--hm-ink-3)}
+.pi-hero-acts a.is-primary:active{background:#C09E2E}
+
+/* رسائل النجاح/الفشل في صفحة التفاصيل (كانت ناقصة تمامًا) */
+.hm-sheet > .flash{margin:0 0 12px; padding:11px 13px; border-radius:12px;
+  font-size:.87rem; font-weight:600}
+.hm-sheet > .flash.ok{background:var(--green-lt,#E4F5EC); border:1px solid #B7E2C9; color:#14653C}
+.hm-sheet > .flash.err{background:#FDECEA; border:1px solid #F3C3BD; color:#9B2318}
+
+/* ── بوب-أب «اتسجّل ✓» بعد حفظ البند ─────────────────────────────── */
+/* ⚠️⚠️ **التوسيط لازم يترجع صراحةً لكل `<dialog>` في البوابة.**
+   المتصفح بيوسّط النافذة المودالية بـ`margin:auto` في ورقته الافتراضية،
+   و`*{margin:0}` في الـreset فوق **بيمسحها** — فالنافذة بتلزق في ركن الشاشة
+   (أعلى اليمين في RTL). بلاغ المالك كان على `.m-done`، لكن `.m-confirm`
+   (تأكيد الحذف) كانت بنفس الباج من قبلها. القاعدة على `dialog` عشان أي نافذة
+   جديدة تاخد التوسيط تلقائيًّا. */
+dialog{
+  position:fixed; inset:0; margin:auto;
+  max-height:calc(100dvh - 40px); max-height:calc(100vh - 40px);
+}
+.m-done{border:0; padding:0; background:transparent; max-width:340px; width:calc(100% - 40px)}
+.m-done::backdrop{background:rgba(10,16,26,.55)}
+.m-done-box{background:var(--hm-card); border-radius:20px; padding:24px 20px 18px;
+  text-align:center; display:flex; flex-direction:column; align-items:center; gap:8px}
+.m-done-ic{width:58px; height:58px; border-radius:50%; display:grid; place-items:center;
+  background:var(--green-lt,#E4F5EC); color:#14653C}
+.m-done-ic svg{width:30px; height:30px}
+.m-done-box b{font-size:1.12rem; font-weight:700}
+.m-done-box p{margin:0; font-size:.88rem; color:var(--hm-muted); line-height:1.6}
+.m-done-acts{display:flex; flex-direction:column; gap:8px; width:100%; margin-top:8px}
+.m-done-acts button, .m-done-acts a{min-height:48px; border-radius:13px; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; text-decoration:none;
+  font:inherit; font-size:.92rem; font-weight:700; border:1px solid var(--hm-line);
+  background:var(--hm-card); color:var(--hm-text)}
+.m-done-acts .is-primary{background:var(--hm-ink); border-color:var(--hm-ink); color:#fff}
+.m-done-acts .is-primary:active{background:var(--hm-ink-2)}
+.m-done-acts a:active{background:var(--hm-sheet)}

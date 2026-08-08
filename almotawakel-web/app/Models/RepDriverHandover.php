@@ -148,7 +148,8 @@ class RepDriverHandover
         $args = [$repId]; $dayW = '';
         if ($day !== null && $day !== '') { $dayW = ' AND handover_date = ?'; $args[] = $day; }
         return round((float) Database::scalar(
-            "SELECT COALESCE(SUM(amount),0) FROM rep_driver_handovers WHERE rep_id = ?$dayW", $args), 2);
+            "SELECT COALESCE(SUM(amount),0) FROM rep_driver_handovers WHERE rep_id = ?$dayW"
+            . RepCustody::epochSql('handover_date'), $args), 2);
     }
 
     /** [تاريخ => إجمالي] لمندوب واحد — لكشف «عهدة كل يوم» (v49). */
@@ -158,7 +159,7 @@ class RepDriverHandover
         $out = [];
         foreach (Database::all(
             "SELECT handover_date d, SUM(amount) total FROM rep_driver_handovers
-             WHERE rep_id = ? GROUP BY handover_date", [$repId]) as $r) {
+             WHERE rep_id = ?" . RepCustody::epochSql('handover_date') . " GROUP BY handover_date", [$repId]) as $r) {
             $out[(string) $r['d']] = round((float) $r['total'], 2);
         }
         return $out;
@@ -169,7 +170,7 @@ class RepDriverHandover
     {
         if (!self::available()) { return 0.0; }
         return round((float) Database::scalar(
-            "SELECT COALESCE(SUM(amount),0) FROM rep_driver_handovers"), 2);
+            "SELECT COALESCE(SUM(amount),0) FROM rep_driver_handovers WHERE 1" . RepCustody::epochSql('handover_date')), 2);
     }
 
     /**
@@ -180,10 +181,11 @@ class RepDriverHandover
     {
         if (!self::available()) { return []; }
         $args = []; $dayW = '';
-        if ($day !== null && $day !== '') { $dayW = ' WHERE handover_date = ?'; $args[] = $day; }
+        if ($day !== null && $day !== '') { $dayW = ' AND handover_date = ?'; $args[] = $day; }
         $out = [];
         foreach (Database::all(
-            "SELECT rep_id, SUM(amount) total FROM rep_driver_handovers$dayW GROUP BY rep_id", $args) as $r) {
+            "SELECT rep_id, SUM(amount) total FROM rep_driver_handovers WHERE 1$dayW"
+            . RepCustody::epochSql('handover_date') . " GROUP BY rep_id", $args) as $r) {
             $out[(int) $r['rep_id']] = round((float) $r['total'], 2);
         }
         return $out;
@@ -203,7 +205,7 @@ class RepDriverHandover
              FROM rep_driver_handovers h
              LEFT JOIN bawalis b ON b.id = h.bawali_id
              LEFT JOIN permits p ON p.id = h.permit_id
-             WHERE $where
+             WHERE $where" . RepCustody::epochSql('h.handover_date') . "
              ORDER BY h.handover_date DESC, h.id DESC$lim", $params);
     }
 

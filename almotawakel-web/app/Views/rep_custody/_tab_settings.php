@@ -13,22 +13,22 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
 ?>
 
 <?php if ($cred): ?>
-  <div class="card mb" style="border:2px solid var(--green);background:var(--green-lt)">
-    <div style="padding:16px 18px">
-      <div class="section-head" style="margin:0 0 10px"><?= icon('check-circle', 17) ?> بيانات الدخول جاهزة — ابعتهاله دلوقتي</div>
+  <div class="card mb rts-ok-box">
+    <div class="oc-pad">
+      <div class="section-head oc-sec"><?= icon('check-circle', 17) ?> بيانات الدخول جاهزة — ابعتهاله دلوقتي</div>
 
-      <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-        <div><div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">اسم الدخول</div>
-          <code style="font-size:var(--fs-4);font-weight:600"><?= e($cred['username']) ?></code></div>
-        <div><div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">الرقم السري</div>
-          <code style="font-size:var(--fs-6);font-weight:700;letter-spacing:.15em"><?= e($cred['pin']) ?></code></div>
-        <div><div style="font-size:var(--fs-1);color:var(--grey);font-weight:500">الرابط</div>
-          <code style="font-size:var(--fs-2)"><?= e($cred['link']) ?></code></div>
+      <div class="rts-row wide">
+        <div><div class="rts-l">اسم الدخول</div>
+          <code class="rts-big"><?= e($cred['username']) ?></code></div>
+        <div><div class="rts-l">الرقم السري</div>
+          <code class="rts-pin"><?= e($cred['pin']) ?></code></div>
+        <div><div class="rts-l">الرابط</div>
+          <code class="rts-sm"><?= e($cred['link']) ?></code></div>
       </div>
 
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <div class="rts-row tight">
         <?php if ($cred['wa'] !== ''): ?>
-          <a class="btn" style="background:#25D366;color:var(--white)" target="_blank" rel="noopener"
+          <a class="btn btn-wa" target="_blank" rel="noopener"
              href="<?= e($cred['wa']) ?>">📱 ابعتهاله على واتساب</a>
         <?php else: ?>
           <span class="pill st-late">مفيش رقم موبايل صح للمندوب —
@@ -37,18 +37,18 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
         <button type="button" class="btn ghost" id="copyCred"><?= icon('clipboard', 14) ?> انسخ الرسالة</button>
       </div>
 
-      <details style="margin-top:12px">
-        <summary style="cursor:pointer;font-size:var(--fs-2);font-weight:500">شوف نص الرسالة</summary>
+      <details class="mt-3">
+        <summary class="rts-click">شوف نص الرسالة</summary>
         <pre id="credMsg" style="white-space:pre-wrap;background:var(--card);border:1px solid var(--line);
              border-radius:var(--radius-2);padding:12px;margin-top:8px;font-family:inherit;font-size:var(--fs-2);line-height:1.7"><?= e($cred['message']) ?></pre>
       </details>
 
-      <div style="margin-top:12px;font-size:var(--fs-2);color:var(--red);font-weight:500">
+      <div class="rts-note danger">
         <?= icon('alert', 14) ?> الرقم السري ده مش هتقدر تشوفه تاني بعد ما تسيب الصفحة — متشفّر في القاعدة.
         لو ضاع منه، دوس «رقم سري جديد» واعمل واحد تاني.
       </div>
       <?php if (!$cred['public']): ?>
-        <div style="margin-top:8px;font-size:var(--fs-2);color:var(--sader);font-weight:500">
+        <div class="rts-note sader">
           <?= icon('alert', 14) ?> الرابط ده محلي — المندوب مش هيقدر يفتحه من برّه المكتب.
           شغّل «تشغيل-عام-على-النت» الأول عشان الرابط يبقى عام، وبعدين ابعت.
         </div>
@@ -69,26 +69,26 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
 <div class="grid-2">
   <!-- حساب الدخول من الموبايل -->
   <div class="card">
-    <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('send', 17) ?> دخول المندوب من موبايله</div>
-    <div style="padding:14px 18px 0" id="account-reset-form">
+    <div class="section-head rts-head"><?= icon('send', 17) ?> دخول المندوب من موبايله</div>
+    <div class="rts-body-t" id="account-reset-form">
       <?= formErrorSummary($resetState['errors']) ?>
-      <form method="post" action="<?= url('rep-custody/' . $repId . '/account/reset') ?>" style="margin:0">
+      <form method="post" action="<?= url('rep-custody/' . $repId . '/account/reset') ?>" >
         <?= csrfField() ?>
         <?= formStateFields($resetState['token'], $resetState['back']) ?>
-        <button class="btn gold" type="submit" style="width:100%" data-primary-submit>
+        <button class="btn gold w-full" type="submit" data-primary-submit>
           <?= icon('zap', 14) ?> <?= $account ? 'رقم سري جديد وابعتهوله' : 'اعمل الحساب وابعتهوله واتساب' ?>
         </button>
       </form>
-      <div style="font-size:var(--fs-1);color:var(--grey);margin-top:6px;text-align:center">
+      <div class="rts-hint center">
         بضغطة واحدة: بيولّد رقم سري ويجهّزلك رسالة الواتساب بالرابط والتعليمات.
       </div>
     </div>
 
-    <div style="padding:14px 18px 16px" id="account-form">
-      <div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px">
-        <hr style="flex:1;border:0;border-top:1px solid var(--line)">
-        <span style="font-size:var(--fs-1);color:var(--grey);font-weight:500">أو اكتبها بنفسك</span>
-        <hr style="flex:1;border:0;border-top:1px solid var(--line)">
+    <div class="rts-body" id="account-form">
+      <div class="rts-row sp">
+        <hr class="rts-rule grow">
+        <span class="rts-l">أو اكتبها بنفسك</span>
+        <hr class="rts-rule grow">
       </div>
 
       <?= formErrorSummary($accountErrors) ?>
@@ -110,7 +110,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
                  placeholder="<?= $account ? 'سيبه فاضي عشان ما يتغيّرش' : 'مثلاً 482630' ?>"<?= fieldErrorAttrs('pin', $accountErrors) ?>>
           <?= fieldError('pin', $accountErrors) ?>
           <?php if ($account): ?>
-            <div style="font-size:var(--fs-1);color:var(--grey);margin-top:5px">
+            <div class="rts-hint">
               سيبه فاضي لو عايز تغيّر <strong>اسم الدخول بس</strong> — الرقم السري هيفضل زي ما هو.
             </div>
           <?php endif; ?>
@@ -122,26 +122,26 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
     <?php if ($account && !empty($account['weak_pin'])): ?>
       <?php /* v48: الرقم السري ده اتعمل أيام قاعدة الـ4 أرقام. مش بنقفل الحساب
                 عشان الشغل الميداني ما يقفش — بننبّه المالك يجدّده بضغطة. */ ?>
-      <div style="margin:0 18px 14px;padding:11px 13px;border:1px solid #e5c86e;border-radius:var(--radius-3);background:#fff8dc;font-size:var(--fs-2);line-height:1.6">
-        <strong style="color:#8a3b22"><?= icon('alert', 14) ?> الرقم السري بتاعه قديم وضعيف (4 أرقام).</strong>
+      <div class="rts-warn">
+        <strong class="rts-warn-tx"><?= icon('alert', 14) ?> الرقم السري بتاعه قديم وضعيف (4 أرقام).</strong>
         دوس <strong>«<?= icon('zap', 14) ?> رقم سري جديد وابعتهوله»</strong> فوق — هيتولّد رقم من <?= \App\Core\RepAuth::PIN_MIN ?> أرقام
         ويتبعتله على الواتساب على طول.
       </div>
     <?php endif; ?>
 
     <?php if ($account): ?>
-      <div style="padding:0 18px 16px;font-size:var(--fs-2);color:var(--grey)">
+      <div class="rts-foot mut">
         الحالة:
         <?= $account['status'] === 'active'
               ? '<span class="pill st-done">شغّال</span>'
               : '<span class="pill st-late">متوقف</span>' ?>
         · آخر دخول: <?= $account['last_login_at'] ? e(dfmt(substr($account['last_login_at'], 0, 10))) : 'عمره ما دخل' ?>
-        <form method="post" action="<?= url('rep-custody/' . $repId . '/account/toggle') ?>" style="display:inline">
+        <form method="post" action="<?= url('rep-custody/' . $repId . '/account/toggle') ?>" >
           <?= csrfField() ?>
           <?= formStateFields(FormState::token(), $back) ?>
           <button class="edit" type="submit"><?= $account['status'] === 'active' ? '⏸ أوقف الدخول' : '▶️ فعّل' ?></button>
         </form>
-        <div style="margin-top:8px">
+        <div class="mt-2">
           الرابط اللي يفتحه: <code><?= e(rtrim(public_base_url() ?: url(''), '/')) ?>/m</code>
         </div>
       </div>
@@ -150,15 +150,15 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
 
   <!-- الصلاحيات -->
   <div class="card">
-    <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('lock', 17) ?> صلاحياته على الموبايل</div>
+    <div class="section-head rts-head"><?= icon('lock', 17) ?> صلاحياته على الموبايل</div>
 
     <?php /* صلاحية فتح إذن من الموبايل (v44) — وصفية بحتة، مالهاش أي أثر مالي.
              المنع الحقيقي في RepPortal::createPermit مش في إخفاء الزرار. */ ?>
-    <div style="padding:14px 18px 16px" id="permit-perm">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="flex:1;min-width:180px">
-          <div style="font-weight:600"><?= icon('file-text', 14) ?> يفتح إذن من موبايله؟</div>
-          <div style="font-size:var(--fs-1);color:var(--grey);margin-top:3px">
+    <div class="rts-body" id="permit-perm">
+      <div class="rts-row">
+        <div class="rts-grow">
+          <div class="dbt-tot"><?= icon('file-text', 14) ?> يفتح إذن من موبايله؟</div>
+          <div class="rts-hint">
             <?php if (!$permPermReady): ?>
               شغّل <code>php bin/migrate_v44.php</code> الأول عشان تتحكّم في الصلاحية دي.
             <?php elseif ($canAddPermit): ?>
@@ -172,7 +172,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
               ? '<span class="pill st-done">مسموح</span>'
               : '<span class="pill st-late">ممنوع</span>' ?>
         <?php if ($permPermReady): ?>
-          <form method="post" action="<?= url('rep-custody/' . $repId . '/permit-perm') ?>" style="margin:0">
+          <form method="post" action="<?= url('rep-custody/' . $repId . '/permit-perm') ?>" >
             <?= csrfField() ?>
             <?= formStateFields(FormState::token(), $back . '#permit-perm') ?>
             <button class="edit" type="submit"><?= $canAddPermit ? '⛔ اسحب الصلاحية' : '✅ اسمح له' ?></button>
@@ -182,12 +182,12 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
     </div>
 
     <?php /* v47 — متابعة المناديب: عرض فقط، الاعتماد والتنزيل يفضلوا هنا في المكتب */ ?>
-    <div style="padding:0 18px 16px" id="watch-perm">
-      <hr style="border:0;border-top:1px solid var(--line);margin:0 0 12px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="flex:1;min-width:180px">
-          <div style="font-weight:600"><?= icon('search', 14) ?> يتابع باقي المناديب من موبايله؟</div>
-          <div style="font-size:var(--fs-1);color:var(--grey);margin-top:3px">
+    <div class="rts-foot" id="watch-perm">
+      <hr class="rts-rule">
+      <div class="rts-row">
+        <div class="rts-grow">
+          <div class="dbt-tot"><?= icon('search', 14) ?> يتابع باقي المناديب من موبايله؟</div>
+          <div class="rts-hint">
             <?php if (!$watchPermReady): ?>
               شغّل <code>php bin/migrate_v47.php</code> الأول عشان تتحكّم في الصلاحية دي.
             <?php elseif ($canWatchTeam): ?>
@@ -201,7 +201,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
               ? '<span class="pill st-done">مسموح</span>'
               : '<span class="pill st-late">ممنوع</span>' ?>
         <?php if ($watchPermReady): ?>
-          <form method="post" action="<?= url('rep-custody/' . $repId . '/watch-perm') ?>" style="margin:0">
+          <form method="post" action="<?= url('rep-custody/' . $repId . '/watch-perm') ?>" >
             <?= csrfField() ?>
             <?= formStateFields(FormState::token(), $back . '#watch-perm') ?>
             <button class="edit" type="submit"><?= $canWatchTeam ? '⛔ اسحب المتابعة' : '✅ خليه يتابع' ?></button>

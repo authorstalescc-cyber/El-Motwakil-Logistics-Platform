@@ -93,8 +93,7 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
   ]); ?>
   <?php partial('stat', [
     'label' => 'خزنة المكتب', 'value' => money0($custody, false), 'unit' => $cur,
-    'icon' => 'briefcase', 'tone' => 'purple', 'secret' => true,
-    'drill' => $drill('custody'), 'title' => 'حركة خزنة المكتب',
+    'icon' => 'briefcase', 'tone' => 'purple', 'drill' => $drill('custody'), 'title' => 'حركة خزنة المكتب',
     'trend' => $ctx['custody']['delta'], 'spark' => $ctx['custody']['spark'],
   ]); ?>
   <?php if ($rp['available']): ?>
@@ -113,8 +112,7 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
     ?>
     <?php partial('stat', [
       'label' => 'فاضل مع المناديب', 'value' => money0($rpDay['day_pocket'], false), 'unit' => $cur,
-      'icon' => 'users', 'tone' => 'sader', 'secret' => true,
-      'drill' => $drill('reps'), 'title' => 'عهدة المناديب في اليوم ده',
+      'icon' => 'users', 'tone' => 'sader', 'drill' => $drill('reps'), 'title' => 'عهدة المناديب في اليوم ده',
       'trend' => $rpTrend,
     ]); ?>
   <?php else: ?>
@@ -170,11 +168,9 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
   foreach ($repsDay as $__r) { $rdDep += (float) ($__r['deposits'] ?? 0); $rdSp += (float) ($__r['spent'] ?? 0); }
   $rdStats = [
     ['label' => 'نزل عهدة النهاردة', 'value' => money0($rdDep, false), 'unit' => $cur,
-     'icon' => 'wallet', 'tone' => 'gold', 'secret' => true,
-     'drill' => $drill('reps_day'), 'title' => 'عهدة كل مندوب في ' . dfmt($date)],
+     'icon' => 'wallet', 'tone' => 'gold', 'drill' => $drill('reps_day'), 'title' => 'عهدة كل مندوب في ' . dfmt($date)],
     ['label' => 'اللي اتصرف النهاردة', 'value' => money0($rdSp, false), 'unit' => $cur,
-     'icon' => 'trending-down', 'tone' => 'red', 'secret' => true,
-     'drill' => $drill('reps_day'), 'title' => 'صرف كل مندوب في ' . dfmt($date)],
+     'icon' => 'trending-down', 'tone' => 'red', 'drill' => $drill('reps_day'), 'title' => 'صرف كل مندوب في ' . dfmt($date)],
   ];
   partial('stat_grid', ['items' => 2, 'class' => 'mb', 'body' => function () use ($rdStats) {
       foreach ($rdStats as $st) { partial('stat', $st); }

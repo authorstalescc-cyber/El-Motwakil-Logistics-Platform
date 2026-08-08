@@ -11,6 +11,7 @@ use App\Models\Permit;
 use App\Models\PermitTrack;
 use App\Models\RepDriverHandover;
 use App\Models\PushNotify;
+use App\Models\RepPin;
 use App\Models\RepPortal;
 use App\Models\RepSubmissionValidationException;
 
@@ -89,11 +90,150 @@ class RepPortalController extends Controller
             //    عهدة اليوم والمدخلات اللي اتدخلت عليها. أي بند أو تنزيل من يوم
             //    تاني بيبان وكأنه خصم من عهدة النهاردة، وده اللي اتشال.
             'pocket'      => RepPortal::dayPocket($repId, $workDate),
-            'permits'     => RepPortal::myPermits($repId),
+            /* ⚠️ الحزمة الكاملة بتتبني على تبويب الأذونات **بس** — على تبويب
+               «بنودي» كانت بتتبني وما تتعرضش خالص (٦ استعلامات ضايعة على كل
+               فتحة). شارة التبويب بتاخد عدّادها من `openPermitCount()` الرخيص. */
+            'permits'     => $tab === 'permits' ? RepPortal::myPermits($repId) : [],
+            'permitCount' => RepPortal::openPermitCount(),
             'submissions' => RepPortal::mySubmissions($repId, 40, $status, $workDate),
             'counts'      => RepPortal::myCounts($repId, $workDate),
             'deposits'    => RepPortal::recentDeposits($repId, 5, $workDate),   // تنبيه «نزلت عهدة» لليوم ده
         ], false);
+    }
+
+    /**
+     * تثبيت / فكّ تثبيت إذن على شاشة المندوب (v63).
+     *
+     * ⚠️ **تفضيل عرض بحت** — ما بيغيّرش مين يشوف إيه ولا مين يكتب على إيه،
+     *    والحدّ الوحيد لسه `permits.status='open'`. عشان كده **مفيش
+     *    `Closing::guard`**: ولا مليم بيتحرّك ولا رصيد مثبَّت بيتغيّر.
+     *
+     * ⚠️ **الحارس في `RepPin::toggle` (الموديل) مش هنا** — بيرفض أي إذن مقفول
+     *    أو مش موجود، فأي فورم مزوّر بيترفض. الكنترولر بيرجّع للمكان اللي جه
+     *    منه وبس.
+     */
+    public function permitPin(string $id): void
+    {
+        $this->requireRep();
+        $this->requireCsrf();
+        $pid = (int) $id;
+        $now = RepPin::toggle(RepAuth::repId(), $pid);
+        flash('success', $now ? 'اتثبّت فوق ✓' : 'اتشال من المثبَّت');
+        redirect(($_POST['back'] ?? '') === 'permit' ? 'm/permit/' . $pid : 'm');
+    }
+
+    /**
+     * بنود يوم تاني — **عرض للقراءة بس** (بند ٦).
+     *
+     * ⚠️⚠️ **ممنوع تلمس يوم العمل من هنا إطلاقًا.** المشكلة اللي الشاشة دي
+     *    بتحلّها إن المندوب كان لازم **يغيّر يوم العمل كله** عشان يتأكد من بند
+     *    إمبارح — وتغيير يوم العمل بيغيّر اليوم اللي هيكتب عليه كمان، فكان
+     *    ممكن يسجّل بند النهاردة على يوم فات بلا ما ياخد باله (نفس عائلة الباج
+     *    الموثَّق في «تاريخ العمل كان بيتجمّد على يوم فات»).
+     *    الشاشة دي بتقرا `$_GET['day']` وبس، و`RepAuth::workDate()` ما بتتلمسش،
+     *    والصفحة **مفيهاش ولا فورم كتابة واحد** (ولا تعديل ولا حذف ولا تسجيل).
+     */
+    public function entriesDay(): void
+    {
+        $this->requireRep();
+        $repId  = RepAuth::repId();
+        $today  = RepAuth::workDate();
+
+        $day = (string) ($_GET['day'] ?? '');
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $day) || !strtotime($day)) { $day = $today; }
+
+        $status = (string) ($_GET['status'] ?? '');
+        if (!in_array($status, ['', 'pending', 'approved', 'rejected'], true)) { $status = ''; }
+
+        $this->render('m/entries_day', [
+            'title'       => 'بنود يوم ' . dfmt($day),
+            'day'         => $day,
+            'workDate'    => $today,
+            'status'      => $status,
+            'submissions' => RepPortal::mySubmissions($repId, 100, $status, $day),
+            'pocket'      => RepPortal::dayPocket($repId, $day),
+        ], false);
+    }
+
+    /**
+     * صفحة تفاصيل الإذن على موبايل المندوب — **قراءة فقط**.
+     *
+     * ⚠️ **ولا رقم بيخصّ العميل** (قاعدة v35): `permitBills` بتختار الأعمدة
+     *    بالاسم فالنولون والعهدة والخصم مش بيتقروا أصلاً، و`permitEntries`
+     *    بتخفي مبلغ بنود الزملاء (الغرض «إيه اتسجّل» مش «هُمّ دفعوا كام»).
+     *
+     * ⚠️ نفس حارس باقي شاشات الإذن: `myPermit` بترجّع null للمقفول أو المش
+     *    موجود، فالمندوب ما يقدرش يفتح تفاصيل إذن مالوش حق فيه.
+     */
+    public function permitInfo(string $id): void
+    {
+        $this->requireRep();
+        $repId  = RepAuth::repId();
+        $pid    = (int) $id;
+        $permit = RepPortal::myPermit($repId, $pid);
+        if (!$permit) { flash('error', 'الإذن ده اتقفل أو مش موجود — كلّم المكتب.'); redirect('m'); }
+
+        $this->render('m/permit_info', [
+            'title'   => 'تفاصيل ' . $permit['type_label'] . ' ' . $permit['no'],
+            'permit'  => $permit,
+            'bills'   => RepPortal::permitBills($pid),
+            'entries' => RepPortal::permitEntries($pid, $repId),
+            'files'   => \App\Models\PermitFile::forPermit($pid),
+            'repId'   => $repId,
+            /* ⚠️ **تقدير مش وعد** (قاعدة v34) — بيرجع null للوجهة المجهولة
+               والشاشة بتقول «مش متحدّدة» بدل ما تعرض رقمًا مخترعًا. */
+            'eta'     => \App\Models\RouteTime::estimate(
+                             (string) ($permit['port'] ?? ''),
+                             (string) ($permit['destination'] ?? '')),
+        ], false);
+    }
+
+    /**
+     * رفع ورقة على الإذن من الموبايل (v64).
+     *
+     * ⚠️ **الحُرّاس في `PermitFile::add` (الموديل)** — نوع الملف وحجمه ووجود
+     *    الإذن. والفورم مش مصدر ثقة، فـ`myPermit` بتترفض للمقفول قبلها.
+     *
+     * ⚠️ **مفيش `Closing::guard`** عن قصد — ورقة وصفية ما بتدخلش أي تقفيل.
+     */
+    public function permitFileStore(string $id): void
+    {
+        $this->requireRep();
+        $this->requireCsrf();
+        $repId = RepAuth::repId();
+        $pid   = (int) $id;
+        if (!RepPortal::myPermit($repId, $pid)) {
+            flash('error', 'الإذن ده اتقفل أو مش موجود — كلّم المكتب.');
+            redirect('m');
+        }
+        try {
+            \App\Models\PermitFile::add(
+                $pid, \App\Models\PermitFile::pickUpload($_FILES),
+                (string) ($_POST['title'] ?? ''), $repId);
+            flash('success', 'الورقة اترفعت ✓');
+        } catch (\RuntimeException $e) {
+            flash('error', $e->getMessage());
+        }
+        redirect('m/permit/' . $pid . '/info#files');
+    }
+
+    /**
+     * حذف ورقة رفعها المندوب.
+     *
+     * ⚠️ **المندوب يشيل بتاعه هو بس** — الحارس في `PermitFile::remove($id, $repId)`
+     *    (الموديل) مش في إخفاء الزرار، فأي فورم مزوّر بيترفض.
+     */
+    public function permitFileDelete(string $id): void
+    {
+        $this->requireRep();
+        $this->requireCsrf();
+        $repId = RepAuth::repId();
+        $row   = \App\Models\PermitFile::find((int) $id);
+        $pid   = (int) ($row['permit_id'] ?? 0);
+        \App\Models\PermitFile::remove((int) $id, $repId)
+            ? flash('success', 'الورقة اتشالت')
+            : flash('error', 'مينفعش تشيل ورقة مش انت رفعتها.');
+        redirect($pid > 0 ? 'm/permit/' . $pid . '/info#files' : 'm');
     }
 
     /**
@@ -361,15 +501,22 @@ class RepPortalController extends Controller
     {
         $this->requireRep();
         $this->requireCsrf();
-        $repId = RepAuth::repId();
-        $pid   = (int) $id;
+        $repId  = RepAuth::repId();
+        $pid    = (int) $id;
+        $stage  = (string) ($_POST['stage_key'] ?? '');
+        $billId = (int) ($_POST['bill_id'] ?? 0);
+
+        /* ⚠️ **قبل** الكتابة: `record` بتعمل `ON DUPLICATE KEY UPDATE` فمستحيل
+           نعرف بعدها هل دي مرحلة جديدة ولا تصحيح لواحدة مسجَّلة. وإعادة تسجيل
+           نفس المرحلة مش «حالة اتغيّرت» فما تستاهلش رنّة. */
+        $isNew = !PermitTrack::hasEvent($pid, $stage, $billId);
 
         try {
             RepPortal::assertAssigned($repId, $pid);
             PermitTrack::record(
                 $pid,
-                (string) ($_POST['stage_key'] ?? ''),
-                (int) ($_POST['bill_id'] ?? 0),
+                $stage,
+                $billId,
                 PermitTrack::SRC_REP,
                 (string) ($_POST['note'] ?? ''),
                 RepAuth::workDate(),
@@ -381,10 +528,18 @@ class RepPortalController extends Controller
             redirect('m/permit/' . $pid . '/track');
         }
 
-        $label = PermitTrack::labelOf((string) ($_POST['stage_key'] ?? ''));
-        $permitNo = (string) \App\Core\Database::scalar('SELECT permit_no FROM permits WHERE id = ?', [$pid]);
+        $label = PermitTrack::labelOf($stage);
         // ⚠️ الإشعار بعد نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
-        PushNotify::trackStage($pid, $permitNo, $label, (string) ($_SESSION['rep_name'] ?? 'مندوب'));
+        if ($isNew) {
+            PushNotify::trackStage([
+                'permit_id' => $pid,
+                'stage_key' => $stage,
+                'bill_id'   => $billId,
+                'source'    => PermitTrack::SRC_REP,
+                'by'        => (string) ($_SESSION['rep_name'] ?? 'مندوب'),
+                'actor_key' => (string) $repId,
+            ]);
+        }
         flash('success', 'الحالة اتحدّثت: ' . $label);
         redirect('m/permit/' . $pid . '/track');
     }
@@ -439,12 +594,20 @@ class RepPortalController extends Controller
         $draftKey = $this->draftKey('new', $permitId);
         $_SESSION['_m_clear_draft'] = $draftKey;
         flash('success', 'اتسجّل ✓ — راح للمكتب للمراجعة.');
+        /* ⚠️ علامة one-shot بتفتح بوب-أب التأكيد على الفورم اللي بعده (طلب
+           المالك): «بند تاني على نفس الإذن؟ ولا رجوع للأذونات؟». بتتقرا
+           وتتمسح في `renderEntry` فما بتفضلش لفتحة تانية. */
+        $_SESSION['_m_saved'] = $permitId;
+        /* ⚠️ الرجوع بقى **لفورم نفس الإذن** لا لقايمة البنود — البوب-أب هناك
+           بيخيّره: بند تاني (الفورم قدّامه فاضي وجاهز) ولا رجوع للأذونات.
+           المسارين (AJAX والعادي) لازم يروحوا **نفس المكان** وإلا البوب-أب
+           يظهر في حالة ويختفي في التانية. */
         if ($this->wantsJson()) {
             $this->json(['ok' => true, 'id' => $subId, 'clearDraft' => $draftKey,
-                         'redirect' => url('m?tab=entries&status=pending')]);
+                         'redirect' => url('m/permit/' . $permitId)]);
             exit;
         }
-        redirect('m?tab=entries&status=pending');
+        redirect('m/permit/' . $permitId);
     }
 
     // ═══════════════════════════════════════════ النثريات (v39)
@@ -618,6 +781,17 @@ class RepPortalController extends Controller
         $day = RepAuth::workDate();
         $permits = RepPortal::myPermits($repId);
 
+        /* ⚠️ `?permit=` بتيجي من زرار «بوليصة جديدة» جوّه الإذن — بتختار الإذن
+           مقدّمًا وبس. **الرابط مش مصدر ثقة**: القيمة بتتقبل بس لو الإذن فعلاً
+           في قايمة المندوب (يعني مفتوح)، والخادم بيعيد كل الفحص وقت الحفظ في
+           `RepPortal::normaliseBill` زي ما هو. */
+        if (!isset($old['permit_id'])) {
+            $wanted = (int) ($_GET['permit'] ?? 0);
+            foreach ($permits as $p) {
+                if ((int) $p['id'] === $wanted) { $old['permit_id'] = $wanted; break; }
+            }
+        }
+
         // سعة الحاويات لكل حركة (والإذن نفسه) بتتحمّل **مرة واحدة** والاختيار
         // بيفلتر بالـJS — شبكة الميناء بطيئة والمندوب ما يستناش تحميل صفحة عند
         // كل تغيير إذن. الخادم بيعيد الفحص وقت الحفظ فالقيم دي إرشاد للعرض بس.
@@ -667,7 +841,20 @@ class RepPortalController extends Controller
                 // bootstrap بيلمّ `container_no[]` في نصّ واحد قبل ما نوصل هنا
                 'container_no'    => (string) ($_POST['container_no'] ?? ''),
                 'driver'          => (string) ($_POST['driver'] ?? ''),
-                'car_no'          => (string) ($_POST['car_no'] ?? ''),
+                /* ⚠️⚠️ **رقم العربية بيوصل في ٤ خانات مش خانة واحدة** (v60):
+                   الشاشة بتبعت `car_l1..3` + `car_digits` و`RepPortal::normaliseBill`
+                   بيقراهم بالأسماء دي ويركّب منهم `«ح ح ح 1234»`. الحزمة هنا كانت
+                   بتبعت `car_no` **اللي الفورم أصلاً مش بيبعته**، والأربعة كانوا
+                   بيتسقطوا — يعني **كل بوليصة المندوب يحاول يضيفها كانت بتترفض**
+                   بـ«اكتب حروف العربية التلاتة» وهو مالي الخانات (اتصاد فعليًّا
+                   2026-08-02 ببلاغ المالك، ومتحقَّق إنه كان على الإنتاج كمان).
+                   ⚠️ **ممنوع ترجّع `car_no` هنا**: الموديل بيبنيه بنفسه بالصيغة
+                      المعتمدة، وأي نصّ جاي من الفورم بيتجاهله — فوجوده بيوهم إن
+                      الحقل واصل وهو مش واصل. */
+                'car_l1'          => (string) ($_POST['car_l1'] ?? ''),
+                'car_l2'          => (string) ($_POST['car_l2'] ?? ''),
+                'car_l3'          => (string) ($_POST['car_l3'] ?? ''),
+                'car_digits'      => (string) ($_POST['car_digits'] ?? ''),
                 'car_owner'       => (string) ($_POST['car_owner'] ?? ''),
                 'custody'         => (string) ($_POST['custody'] ?? ''),
                 // ⚠️ التاريخ من الجلسة مش من الفورم (قاعدة v49)
@@ -998,8 +1185,14 @@ class RepPortalController extends Controller
         $repId = RepAuth::repId();
         $mode = $submission ? 'edit' : 'new';
         $keyId = $submission ? (int) $submission['id'] : (int) $permit['id'];
+        /* ⚠️ one-shot: بتتقرا **وتتمسح** هنا — من غير المسح البوب-أب بيفضل
+           يفتح كل مرة يفتح فيها المندوب الفورم. */
+        $justSaved = (int) ($_SESSION['_m_saved'] ?? 0);
+        unset($_SESSION['_m_saved']);
+
         $this->render('m/entry', [
             'title'       => $submission ? 'تعديل بند' : 'بند جديد',
+            'justSaved'   => $justSaved === (int) $permit['id'],
             'permit'      => $permit,
             'visaCards'   => $this->visaCards(),
             'old'         => $old,

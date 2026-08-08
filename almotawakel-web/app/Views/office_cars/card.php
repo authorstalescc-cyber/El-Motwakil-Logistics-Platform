@@ -11,6 +11,7 @@
  * متغيّرات: $car $period $perf $prevPerf $lifetime $trips $expenses $byCat
  *           $mix $companies $ports $drivers $expState
  */
+use App\Core\FormState;
 use App\Models\OfficeCar;
 
 $cid = (int) $car['id'];
@@ -52,6 +53,8 @@ $aliases = OfficeCar::aliasList($car);
     <span>نولون <?= e(money0($lifetime['freight'])) ?></span>
   </div>
   <div class="car-hero-acts">
+    <a class="btn primary sm" href="<?= url('cars/' . $cid . '/driver') ?>">
+      <?= icon('wallet', 15) ?> بيان السائق</a>
     <a class="btn ghost sm" href="<?= url('cars/' . $cid . '/report' . $qs) ?>" target="_blank" rel="noopener">
       <?= icon('file-text', 15) ?> تقرير للطباعة</a>
     <a class="btn ghost sm" href="<?= url('cars/' . $cid . '/edit') ?>"><?= icon('edit', 15) ?> تعديل</a>
@@ -95,13 +98,17 @@ $aliases = OfficeCar::aliasList($car);
     'drill' => $drill('car_custody'), 'title' => 'العهد اللي اتدفعت على رحلات السيارة',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'مصاريف السيارة', 'value' => money0($perf['expenses']), 'icon' => 'trending-down', 'tone' => 'red',
-    'delta' => $dlt('expenses'), 'delta_label' => $prevLbl, 'delta_good' => 'down',
-    'drill' => $drill('car_expenses'), 'title' => 'سولار وإصلاحات وغيره',
+    /* ⚠️ الرقم هنا **إجمالي المصدرين** (مصاريف مسجَّلة على السيارة + بنود
+       مصروفات البوالص) عشان يطابق المطروح في معادلة الصافي تحت. التفصيل في
+       النافذة، والمعادلة بتفصل المصدرين عشان الازدواج يبان لو حصل. */
+    'label' => 'مصاريف السيارة', 'value' => money0($perf['expenses_total'] ?? $perf['expenses']),
+    'icon' => 'trending-down', 'tone' => 'red',
+    'delta' => $dlt('expenses_total'), 'delta_label' => $prevLbl, 'delta_good' => 'down',
+    'drill' => $drill('car_expenses'), 'title' => 'سولار وإصلاحات وبنود البوالص',
   ]); ?>
   <?php partial('stat', [
     'label' => 'صافي السيارة', 'value' => money0($perf['net']), 'icon' => 'bar-chart', 'tone' => 'purple',
-    'secret' => true, 'delta' => $dlt('net'), 'delta_label' => $prevLbl,
+    'delta' => $dlt('net'), 'delta_label' => $prevLbl,
     'drill' => $drill('car_net'), 'title' => 'إزاي اتحسب الصافي',
   ]); ?>
 <?php }]); ?>
@@ -113,10 +120,12 @@ $aliases = OfficeCar::aliasList($car);
   <span class="car-eq-op">−</span>
   <span class="car-eq-i"><em>عهد للسواق</em><b><?= e(money0($perf['custody'])) ?></b></span>
   <span class="car-eq-op">−</span>
-  <span class="car-eq-i"><em>مصاريف</em><b><?= e(money0($perf['expenses'])) ?></b></span>
+  <span class="car-eq-i"><em>مصاريف مسجَّلة</em><b><?= e(money0($perf['expenses'])) ?></b></span>
+  <span class="car-eq-op">−</span>
+  <span class="car-eq-i"><em>مصروفات البوالص</em><b><?= e(money0($perf['bill_expenses'] ?? 0)) ?></b></span>
   <span class="car-eq-op">=</span>
   <span class="car-eq-i res <?= (float) $perf['net'] < 0 ? 'neg' : '' ?>"><em>الصافي</em>
-    <b data-secret data-val="<?= e(money0($perf['net'])) ?>">••••••</b></span>
+    <b><?= e(money0($perf['net'])) ?></b></span>
 </div>
 <div class="cars-note">
   <?= icon('info', 16) ?>
@@ -258,7 +267,7 @@ $aliases = OfficeCar::aliasList($car);
   'badge'  => $expenses ? ['text' => money0($perf['expenses']), 'tone' => 'red'] : null,
   'scroll' => true,
   'class'  => 'mb',
-  'body'   => function () use ($expenses, $byCat, $cid, $qs) {
+  'body'   => function () use ($expenses, $byCat, $cid, $qs, $q, $editExp) {
     if ($byCat) {
       echo '<div class="car-cats">';
       foreach ($byCat as $c) {
@@ -272,23 +281,33 @@ $aliases = OfficeCar::aliasList($car);
       return;
     }
     foreach ($expenses as $x) {
+      $isEditing = $editExp && (int) $editExp['id'] === (int) $x['id'];
       $meta = array_values(array_filter([
         ['icon' => 'calendar', 'text' => dfmt($x['exp_date'])],
         $x['vendor'] ? ['icon' => 'building', 'text' => $x['vendor']] : null,
         $x['ref_no'] ? ['icon' => 'clipboard', 'text' => 'إيصال ' . $x['ref_no']] : null,
         $x['created_by'] ? ['icon' => 'user', 'text' => $x['created_by']] : null,
       ]));
+      // زر التعديل رابط عادي بيفتح نموذج المصروف على وضع التعديل — بلا
+      // جافاسكريبت، فالرجوع بالمتصفح والفتح في تبويب جديد شغّالين.
+      $editUrl = url('cars/' . $cid . '?' . http_build_query($q + ['edit_exp' => (int) $x['id']]) . '#expense-form');
       partial('row_item', [
         'title'  => \App\Models\OfficeCar::kindLabel($x['category']),
         'icon'   => \App\Models\OfficeCar::kindIcon($x['category']),
         'ref'    => $x['note'] ?: null,
         'meta'   => $meta,
+        'chips'  => $isEditing ? [['icon' => 'edit', 'text' => 'بتعدّله دلوقتي']] : [],
         'amount' => money0($x['amount'], false),
         'amount_tone' => 'ex',
-        'extra'  => '<form method="post" action="' . e(url('cars/expense/' . (int) $x['id'] . '/delete'))
+        'extra'  => '<a class="btn ghost sm" href="' . e($editUrl) . '" aria-label="تعديل المصروف" '
+                  . 'title="تعديل المصروف">' . icon('edit', 14) . '</a>'
+                  . '<form method="post" action="' . e(url('cars/expense/' . (int) $x['id'] . '/delete'))
                   . '" data-confirm="تشيل المصروف ده؟" style="display:inline">'
                   . csrfField()
-                  . '<input type="hidden" name="_back" value="' . e(url('cars/' . $cid . $qs)) . '">'
+                  // ⚠️ `_form_token` **إجباري** — `claimForm` بترفض أي طلب كتابة
+                  //    من غيره برسالة «هذا الطلب نُفّذ أو انتهت صلاحيته»، وده
+                  //    كان بيخلّي زر الحذف ما يشتغلش خالص.
+                  . formStateFields(FormState::token(), 'cars/' . $cid . $qs)
                   . '<button class="btn ghost sm" type="submit" aria-label="حذف المصروف">' . icon('trash', 14) . '</button>'
                   . '</form>',
       ]);
@@ -296,11 +315,24 @@ $aliases = OfficeCar::aliasList($car);
   },
 ]); ?>
 
-<?php /* ═══ نموذج إضافة مصروف ═══ */ ?>
-<div class="card" id="expense-form">
-  <div class="section-head"><?= icon('plus', 17) ?> سجّل مصروف على السيارة</div>
+<?php
+/* ═══ نموذج مصروف — إضافة أو تعديل ═══
+   ⚠️ نموذج واحد للوضعين عن قصد: نسخة تانية للتعديل معناها أول حقل جديد
+      يتضاف في واحد وينسى في التاني فيضيع **بلا أي خطأ ظاهر**. */
+$expOld = $expState['old'] ?: ($editExp ? [
+  'category' => $editExp['category'], 'amount' => $editExp['amount'],
+  'exp_date' => $editExp['exp_date'], 'vendor' => $editExp['vendor'],
+  'ref_no'   => $editExp['ref_no'],   'note'   => $editExp['note'],
+] : []);
+$expAction = $editExp ? url('cars/expense/' . (int) $editExp['id'] . '/update')
+                      : url('cars/' . $cid . '/expense');
+?>
+<div class="card<?= $editExp ? ' editing' : '' ?>" id="expense-form">
+  <div class="section-head">
+    <?= $editExp ? icon('edit', 17) . ' عدّل المصروف' : icon('plus', 17) . ' سجّل مصروف على السيارة' ?>
+  </div>
   <?= formErrorSummary($expState['errors']) ?>
-  <form method="post" action="<?= e(url('cars/' . $cid . '/expense')) ?>" class="js-dirty-form">
+  <form method="post" action="<?= e($expAction) ?>" class="js-dirty-form">
     <?= csrfField() ?>
     <?= formStateFields($expState['token'], $expState['back']) ?>
     <input type="hidden" name="p" value="<?= e($period['kind']) ?>">
@@ -312,7 +344,7 @@ $aliases = OfficeCar::aliasList($car);
         <label for="ce-cat">نوع المصروف *</label>
         <select id="ce-cat" name="category" required<?= fieldErrorAttrs('category', $expState['errors']) ?>>
           <?php foreach (OfficeCar::EXPENSE_KINDS as $k => $lbl): ?>
-            <option value="<?= e($k) ?>"<?= ($expState['old']['category'] ?? 'fuel') === $k ? ' selected' : '' ?>><?= e($lbl) ?></option>
+            <option value="<?= e($k) ?>"<?= ($expOld['category'] ?? 'fuel') === $k ? ' selected' : '' ?>><?= e($lbl) ?></option>
           <?php endforeach; ?>
         </select>
         <?= fieldError('category', $expState['errors']) ?>
@@ -320,29 +352,34 @@ $aliases = OfficeCar::aliasList($car);
       <div class="field">
         <label for="ce-amt">المبلغ *</label>
         <input id="ce-amt" type="number" step="0.01" min="0" name="amount" required
-               value="<?= e($expState['old']['amount'] ?? '') ?>"<?= fieldErrorAttrs('amount', $expState['errors']) ?>>
+               value="<?= e($expOld['amount'] ?? '') ?>"<?= fieldErrorAttrs('amount', $expState['errors']) ?>>
         <?= fieldError('amount', $expState['errors']) ?>
       </div>
       <div class="field">
         <label for="ce-date">التاريخ</label>
-        <input id="ce-date" type="date" name="exp_date" value="<?= e($expState['old']['exp_date'] ?? work_date()) ?>">
+        <input id="ce-date" type="date" name="exp_date" value="<?= e($expOld['exp_date'] ?? work_date()) ?>">
       </div>
       <div class="field">
         <label for="ce-vendor">المحطة / الورشة</label>
-        <input id="ce-vendor" type="text" name="vendor" value="<?= e($expState['old']['vendor'] ?? '') ?>">
+        <input id="ce-vendor" type="text" name="vendor" value="<?= e($expOld['vendor'] ?? '') ?>">
       </div>
       <div class="field">
         <label for="ce-ref">رقم الإيصال</label>
-        <input id="ce-ref" type="text" name="ref_no" value="<?= e($expState['old']['ref_no'] ?? '') ?>">
+        <input id="ce-ref" type="text" name="ref_no" value="<?= e($expOld['ref_no'] ?? '') ?>">
       </div>
       <div class="field">
         <label for="ce-note">بيان</label>
-        <input id="ce-note" type="text" name="note" value="<?= e($expState['old']['note'] ?? '') ?>"
+        <input id="ce-note" type="text" name="note" value="<?= e($expOld['note'] ?? '') ?>"
                placeholder="مثال: تغيير طلمبة سولار">
       </div>
     </div>
     <div class="form-actions">
-      <button class="btn gold" type="submit" data-primary-submit><?= icon('plus', 15) ?> سجّل المصروف</button>
+      <?php if ($editExp): ?>
+        <button class="btn gold" type="submit" data-primary-submit><?= icon('check', 15) ?> احفظ التعديل</button>
+        <a class="btn ghost" href="<?= e(url('cars/' . $cid . $qs . '#expenses-panel')) ?>">إلغاء</a>
+      <?php else: ?>
+        <button class="btn gold" type="submit" data-primary-submit><?= icon('plus', 15) ?> سجّل المصروف</button>
+      <?php endif; ?>
     </div>
   </form>
 </div>

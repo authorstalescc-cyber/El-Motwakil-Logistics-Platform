@@ -10,7 +10,76 @@
  */
 use App\Core\FormState;
 $back = 'rep-custody/' . $repId . '?tab=account';
+$arch = App\Models\RepCustody::archiveBefore($repId);
 ?>
+
+<?php /* ═══ أرشيف ما قبل بداية النظام الجديد (docs/16 المرحلة ١) ═══
+   ⚠️ **القسم ده سبب وجوده إن الحركة القديمة بتختفي من الكارت بعد التفعيل.**
+      من غيره المالك بيفتح الكارت وياخد انطباع إن البيانات اتمسحت — وهي موجودة
+      بالكامل ومستبعدة من الحساب عن قصد (عهد السواقين كانت متخصومة من خزنة
+      المكتب والمندوب هو اللي دفعها، فرصيده فضل متضخّم).
+   ⚠️ بيظهر **بس** لو الميزة مفعّلة وفيه حركة قديمة فعلاً — مفيش لوح فاضي. */ ?>
+<?php if ($arch && $arch['any']): ?>
+  <details class="d-card mb" id="pre-epoch-archive">
+    <summary class="d-card-head" style="cursor:pointer">
+      <?php /* ⚠️ `folder` مش `archive` — `archive` **مش في خريطة `icon()`** فكان
+               بيقع على دايرة فاضية بالسكوت (مسكها `verify_typography` §⑦). */ ?>
+      <h3><?= icon('folder', 18) ?>
+        <span>أرشيف ما قبل <?= dfmt($arch['epoch']) ?></span>
+        <span class="pill warn">مش داخل الحساب</span>
+      </h3>
+    </summary>
+    <div class="d-card-body">
+      <p class="muted" style="margin-top:0">
+        الحركة دي <strong>موجودة بالكامل وما اتمسحتش</strong> — بس مستبعدة من رصيد
+        المندوب عن قصد. قبل <?= dfmt($arch['epoch']) ?> كانت عهدة السائق بتتخصم من
+        <strong>خزنة المكتب</strong> والمندوب هو اللي دفعها من محفظته، فرصيده كان
+        بيتضخّم بمقدار اللي سلّمه للسواقين. النظام الجديد بيبدأ العدّ من التاريخ ده.
+      </p>
+      <?php /* ⚠️ **الأرقام دي كلها محسوبة فوق** — النافذة `#preEpochDrill` جاهزة في
+         الصفحة (وضع inline) مش بتتجاب من الخادم، فمفيش ولا استعلام زيادة.
+         و«ممنوع رقم أصمّ» محفوظة: كل رقم بيفتح نفس التفكيك. */ ?>
+      <?php partial('stat_grid', ['items' => 3, 'body' => function () use ($arch) { ?>
+        <?php partial('stat', ['label' => 'نزل له (قديم)', 'value' => money0($arch['deposits'], true),
+                               'drill' => '#preEpochDrill', 'title' => 'تفكيك أرشيف ما قبل ' . dfmt($arch['epoch'])]); ?>
+        <?php partial('stat', ['label' => 'صرف (قديم)', 'value' => money0($arch['spent'], true),
+                               'drill' => '#preEpochDrill', 'title' => 'تفكيك أرشيف ما قبل ' . dfmt($arch['epoch'])]); ?>
+        <?php partial('stat', ['label' => 'رصيد قديم مستبعَد', 'value' => money0($arch['balance'], true),
+                               'tone'  => $arch['balance'] > 0 ? 'gold' : 'navy',
+                               'drill' => '#preEpochDrill', 'title' => 'تفكيك أرشيف ما قبل ' . dfmt($arch['epoch'])]); ?>
+      <?php }]); ?>
+      <div id="preEpochDrill" hidden>
+        <?php foreach ([
+            'نزل له'            => $arch['deposits'],
+            'استلم من زملاء'    => $arch['transfer_in'],
+            'صرف (بنود + نثريات)' => -$arch['spent'],
+            'حوّل لزملاء'        => -$arch['transfer_out'],
+            'رجّع في تسويات'     => -$arch['returned'],
+        ] as $lbl => $val): if (abs((float) $val) < 0.005) { continue; } ?>
+          <?php partial('row_item', [
+              'title'       => $lbl,
+              'amount'      => money0($val, true),
+              'amount_tone' => $val < 0 ? 'neg' : 'pos',
+          ]); ?>
+        <?php endforeach; ?>
+        <?php partial('row_item', [
+            'title'  => 'الرصيد القديم المستبعَد',
+            'icon'   => 'archive',
+            'meta'   => [['text' => 'موجود في السجل — مش داخل حساب المندوب']],
+            'amount' => money0($arch['balance'], true),
+        ]); ?>
+      </div>
+      <?php if ($arch['pending_cnt']): ?>
+        <p class="muted" style="margin-bottom:0">
+          <?= icon('lock', 14) ?>
+          فيه <strong><?= (int) $arch['pending_cnt'] ?></strong> بند مستني من قبل التاريخ ده
+          (<?= money0($arch['pending'], true) ?>) — <strong>اعتماده مرفوض</strong> لأن عهدته
+          متخصومة أصلاً على بوليصتها، واعتماده هيخصم نفس الفلوس مرتين. سيبه للتوثيق أو ارفضه.
+        </p>
+      <?php endif; ?>
+    </div>
+  </details>
+<?php endif; ?>
 
 <?php /* ═══ عهدة كل يوم (v49) ═══
    ⚠️ كل صف يوم مستقل بذاته — **مفيش عمود «مرحّل»** لأن مفيش ترحيل (قرار المالك:
@@ -62,7 +131,7 @@ $back = 'rep-custody/' . $repId . '?tab=account';
           <?php /* «فاضل معاه» = `pocket` (بعد خصم المستنّي كمان) — نفس تعريف
                    كل شاشات العهدة. `balance` (بعد المعتمد بس) بيبان تحته لو فيه
                    فرق، عشان الفرق يتشرح بدل ما يختفي. */ ?>
-          <td style="font-weight:700;<?= $d['pocket'] < 0 ? 'color:#B3261E' : '' ?>">
+          <td class="p5-b7<?= $d['pocket'] < 0 ? ' neg' : '' ?>">
             <?= money($d['pocket']) ?>
             <?php if ($d['pending'] > 0): ?>
               <div style="font-size:var(--fs-1);font-weight:400;color:var(--grey)">قبل خصم المستني <?= money($d['balance'], false) ?></div>
@@ -123,10 +192,10 @@ $back = 'rep-custody/' . $repId . '?tab=account';
   </form>
 </details>
 
-<?php /* ═══ كل اللي صرفه (تراكمي) ═══
+<?php /* ═══ كل البنود المرتبطة بالمندوب (تراكمي) ═══
    الجدول (٦ أعمدة) اتشال: كل صف هنا **بند** مش سطر مقارنة رقمية. */ ?>
 <?php partial('panel', [
-  'title'  => 'كل اللي دفعه من عهدته',
+  'title'  => 'كل البنود المرتبطة بالمندوب',
   'icon'   => 'clipboard',
   'badge'  => $spending ? ['text' => intf(count($spending)), 'tone' => 'navy'] : null,
   'scroll' => true,
@@ -165,18 +234,106 @@ $back = 'rep-custody/' . $repId . '?tab=account';
       }
       if (!empty($s['ref_no'])) { $meta[] = ['icon' => 'clipboard', 'text' => 'إيصال ' . $s['ref_no']]; }
       if ((int) $s['qty'] > 1) { $meta[] = ['icon' => 'package', 'text' => 'كمية ' . intf((int) $s['qty'])]; }
+      $chips = [];
+      if (!empty($s['is_visa'])) {
+        $chips[] = ['icon' => 'credit-card', 'text' => 'فيزا — مش من العهدة'];
+      }
+      if (!empty($s['unpaid'])) {
+        $chips[] = ['icon' => 'info', 'text' => 'غير مدفوع — مش من العهدة'];
+      }
       partial('row_item', [
         'title'  => $s['note'] ?: $kind,
         'icon'   => $ic,
         'url'    => !empty($s['permit_id']) ? url('permits/' . (int) $s['permit_id']) : null,
         'meta'   => $meta,
-        'chips'  => !empty($s['is_visa']) ? [['icon' => 'credit-card', 'text' => 'فيزا — مش من العهدة']] : [],
+        'chips'  => $chips,
         'amount' => money($s['amount'], false),
-        'amount_tone' => empty($s['is_visa']) ? 'ex' : '',
+        'amount_tone' => empty($s['is_visa']) && empty($s['unpaid']) ? 'ex' : '',
       ]);
     }
   },
 ]); ?>
+
+<?php /* ═══ التحويلات الصادرة لزملاء — سجل مستقل بإجراءات (2026-07-31) ═══
+   ⚠️ **ليه لوح مستقل:** الصادر كان بيبان **جوّه كشف الصرف بس** وسط الإيصالات
+      والمصروفات، **وبلا أي زرار**. فالمالك مش شايفه كسجل ومش قادر يلغيه ولا
+      يعدّله إلا لو راح لكارت المُستقبِل ودوّر عليه. التحويل حركة **خارجة من
+      عهدة المُرسِل**، فمكان إجرائه الطبيعي كارته هو.
+   ⚠️ بيفضل في كشف الصرف كمان (`src='transfer'`) — الكشف لازم يفضل كامل. */ ?>
+<?php if (!empty($transfersOut)): ?>
+  <?php partial('panel', [
+    'title'  => 'تحويلات حوّلها لزملاء',
+    'icon'   => 'shuffle',
+    'id'     => 'transfers-out',
+    'badge'  => ['text' => intf(count($transfersOut)), 'tone' => 'navy'],
+    'scroll' => true,
+    'body'   => function () use ($transfersOut, $back, $activeReps, $repId) {
+      foreach ($transfersOut as $t) {
+        $tid = (int) $t['id'];
+        partial('row_item', [
+          'title'  => $t['note'] ?: 'تحويل لزميل',
+          'icon'   => 'shuffle',
+          'meta'   => [['icon' => 'user', 'text' => 'لـ ' . ($t['other_name'] ?? '—')],
+                       ['icon' => 'calendar', 'text' => dfmt($t['transfer_date'])]],
+          'amount' => money($t['amount'], false),
+          'amount_tone' => 'ex',
+          'extra'  => function () use ($tid) { ?>
+            <?php /* ⚠️ الدرج بيتفتح بـ`<details>` بلا جافاسكريبت — الكارت
+                     بيترندر في تبويبات وروابط حقيقية، فأي خطّاف JS هنا بيبقى
+                     نقطة فشل صامت زيادة. */ ?>
+            <button class="edit" type="button" title="عدّل التحويل"
+                    onclick="var d=document.getElementById('trf-<?= $tid ?>');d.open=!d.open;d.open&&d.scrollIntoView({block:'nearest'})">
+              <?= icon('edit', 13) ?>
+            </button>
+          <?php },
+        ]);
+        ?>
+        <details class="rc-trf-edit" id="trf-<?= $tid ?>">
+          <summary class="rc-trf-sum">تعديل التحويل</summary>
+          <form method="post" action="<?= url('rep-custody/transfer/' . $tid . '/update') ?>" class="rc-trf-form">
+            <?= csrfField() ?>
+            <?= formStateFields(FormState::token(), $back . '#transfers-out') ?>
+            <label class="field">
+              <span>المندوب المستقبِل</span>
+              <select name="to_rep_id">
+                <?php foreach ($activeReps as $rid2 => $rname): ?>
+                  <?php if ((int) $rid2 === (int) $repId) { continue; } ?>
+                  <option value="<?= (int) $rid2 ?>" <?= (int) $rid2 === (int) $t['to_rep_id'] ? 'selected' : '' ?>>
+                    <?= e((string) $rname) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+            <label class="field">
+              <span>المبلغ</span>
+              <input type="number" step="0.01" min="0" name="amount" value="<?= e((string) (float) $t['amount']) ?>">
+            </label>
+            <label class="field">
+              <span>التاريخ</span>
+              <input type="date" name="transfer_date" value="<?= e((string) $t['transfer_date']) ?>">
+            </label>
+            <label class="field">
+              <span>ملاحظة</span>
+              <input type="text" name="note" maxlength="255" value="<?= e((string) ($t['note'] ?? '')) ?>">
+            </label>
+            <div class="rc-trf-acts">
+              <button class="btn sm" type="submit"><?= icon('check', 14) ?> احفظ</button>
+            </div>
+          </form>
+          <?php /* ⚠️ فورم الإلغاء **برّه فورم التعديل** — فورم جوّه فورم ماركب
+                   غير صالح والمتصفح بيفكّه بصمت فالزرار يبعت على المسار الغلط. */ ?>
+          <form method="post" action="<?= url('rep-custody/transfer/' . $tid . '/delete') ?>"
+                class="confirm-delete rc-trf-del" data-confirm="إلغاء التحويل ده؟ هيرجع لعهدة المُرسِل.">
+            <?= csrfField() ?>
+            <?= formStateFields(FormState::token(), $back . '#transfers-out') ?>
+            <button class="btn ghost sm danger" type="submit"><?= icon('trash', 14) ?> ألغي التحويل</button>
+          </form>
+        </details>
+        <?php
+      }
+    },
+  ]); ?>
+<?php endif; ?>
 
 <div class="grid-2">
   <?php /* التحويلات الواردة من زملاء (v46) — بتزيد رصيده، فبتتعرض جنب التنزيلات */ ?>
@@ -220,10 +377,15 @@ $back = 'rep-custody/' . $repId . '?tab=account';
         return;
       }
       foreach ($deposits as $d) {
+        // ⚠️ نفس شارة المصدر بتاعة تبويب اليوم — `RepCustody::sourceBadge()` هي
+        //    المصدر الوحيد، فمستحيل كشف الحساب يقول حاجة والتبويب يقول غيرها.
+        $src  = \App\Models\RepCustody::sourceBadge($d['source'] ?? null);
+        $meta = [['icon' => 'calendar', 'text' => dfmt($d['dep_date'])]];
         partial('row_item', [
           'title'  => $d['note'] ?: 'تنزيل عهدة',
           'icon'   => 'wallet',
-          'meta'   => [['icon' => 'calendar', 'text' => dfmt($d['dep_date'])]],
+          'chips'  => $src ? [['icon' => $src['icon'], 'text' => $src['short']]] : [],
+          'meta'   => $src ? array_merge($meta, [['icon' => 'info', 'text' => $src['effect']]]) : $meta,
           'amount' => money($d['amount'], false),
           'amount_tone' => 'pos',
           'extra'  => function () use ($d, $back) { ?>
@@ -261,6 +423,9 @@ $back = 'rep-custody/' . $repId . '?tab=account';
                         ? (string) $s['note'] : 'بدون أثر على الخزنة']],
           'amount' => money(abs($ret), false),
           'extra'  => function () use ($s, $back) { ?>
+            <?php /* إيصال A4 للطباعة/حفظ PDF — بيتفتح في تبويب جديد فالكارت ما بيضيعش */ ?>
+            <a class="edit" target="_blank" rel="noopener" title="اطبع إيصال التقفيل"
+               href="<?= url('rep-custody/settlement/' . $s['id'] . '/print') ?>"><?= icon('file-text', 13) ?></a>
             <form method="post" action="<?= url('rep-custody/settlement/' . $s['id'] . '/delete') ?>"
                   class="confirm-delete" data-confirm="حذف التسوية دي؟">
               <?= csrfField() ?>

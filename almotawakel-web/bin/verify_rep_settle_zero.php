@@ -44,6 +44,20 @@ function hasnt(string $l, string $file, string $needle): void {
     $src = is_file($p) ? (string) file_get_contents($p) : '';
     !str_contains($src, $needle) ? ok($l) : bad("{$l} — «{$needle}» لسه موجودة في {$file}");
 }
+/**
+ * زي `hasnt` بس **بعد شيل التعليقات** — المصيدة الموثَّقة: التعليق اللي بيوثّق
+ * القاعدة بيذكر النص الممنوع، فالبحث الخام بيفشل بإنذار كاذب.
+ */
+function hasntCode(string $l, string $file, string $needle): void {
+    $p = dirname(__DIR__) . '/' . $file;
+    $src = is_file($p) ? (string) file_get_contents($p) : '';
+    $out = '';
+    foreach (token_get_all($src) as $t) {
+        if (is_array($t) && in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true)) { continue; }
+        $out .= is_array($t) ? $t[1] : $t;
+    }
+    !str_contains($out, $needle) ? ok($l) : bad("{$l} — «{$needle}» لسه في كود {$file}");
+}
 
 echo "فحص تصفية العهدة بضغطة\n" . str_repeat('=', 62) . "\n";
 
@@ -301,6 +315,153 @@ try {
     has('PushNotify::repSettled بتتنادى من البوابة', 'app/Controllers/RepPortalController.php',
         'PushNotify::repSettled');
     has('ومن المكتب كمان', 'app/Controllers/RepCustodyController.php', 'PushNotify::repSettled');
+
+    // ═══════════════════ ٨) الاستلام من شاشة التقفيل (2026-07-31) ═══════════════════
+    sec('٨) «استلمت من المندوب» من شاشة التقفيل');
+
+    /* ⚠️ **الفكرة اللي القسم ده بيحرسها:** الاستلام **تحويل داخلي** بين محفظتين
+       (جيب المندوب ← درج المكتب). في النموذج المجمّع رقم الخزنة = الدرج + جيوب
+       المناديب، فالإجمالي **ما بيتغيّرش** واللي بيتغيّر هو مكان الكاش. لو أي
+       تعديل خلّى الاستلام يزوّد الخزنة، الفلوس بتتعدّ **مرتين**. */
+
+    has('مسار الاستلام موجود', 'public/index.php', "'/closing/receive-rep'");
+    has('الأكشن موجود', 'app/Controllers/DailyClosingController.php', 'function receiveRep');
+    // ⚠️ مفيش خانة مبلغ: الخادم بيحسبه من `settleZero` بعد قفل صف المندوب.
+    hasnt('⚠️ الأكشن مش بياخد مبلغ من الفورم', 'app/Controllers/DailyClosingController.php',
+          "\$_POST['amount']");
+    has('⚠️ بيمرّ على settleZero نفسها (مفيش تعريف تاني للمبلغ)',
+        'app/Controllers/DailyClosingController.php', 'RepCustody::settleZero($repId, $date');
+    has('الشاشة فيها قسم الاستلام', 'app/Views/closing/index.php', 'id="receive"');
+    has('والفورم بيبعت رمز الحماية', 'app/Views/closing/index.php', 'formStateFields');
+
+    /* ⚠️ **ممنوع `rep_settle` يدخل `BLOCKING`** — لو دخل، مجموع الأقسام النقدية
+       هيخالف `Closing::dayView` وقاعدة التطابق بتاعة v50 تتكسر بلا خطأ ظاهر. */
+    !in_array('rep_settle', \App\Models\DailyReview::BLOCKING, true)
+        ? ok('⚠️ قسم «استلمت من المناديب» معلوماتي — مش بيمنع الإقفال')
+        : bad('⚠️⚠️ القسم بقى مانعًا — تطابق v50 هيتكسر');
+
+    // ── فحص سلوكي كامل داخل نفس المعاملة ──────────────────────────────
+    $rid2  = (int) Database::scalar("SELECT id FROM reps WHERE status='active' ORDER BY id LIMIT 1");
+    $last2 = Closing::lastClosedDate();
+    $day2  = $last2 ? date('Y-m-d', strtotime($last2 . ' +1 day')) : work_date();
+    if ($rid2 <= 0) {
+        ok('(اتخطّى الفحص السلوكي — مفيش مندوب نشط)');
+    } else {
+        // ⚠️ البنود المستنية بتوقف التصفية (قرار المالك) — بنزحزحها عشان نفحص
+        //    الاستلام نفسه، مش حارس البنود اللي متفحوص في القسم ٦.
+        Database::exec("UPDATE rep_submissions SET entry_date = DATE_SUB(entry_date, INTERVAL 90 DAY)
+                        WHERE rep_id = ? AND status = 'pending' AND entry_date = ?", [$rid2, $day2]);
+        Database::exec("INSERT INTO rep_custody_deposits (rep_id, dep_date, amount, note, source)
+                        VALUES (?,?,?,?,'bank')", [$rid2, $day2, 9000.00, 'فحص استلام']);
+
+        $safeA = Closing::currentBalance();
+        $walA  = RepCustody::balance($rid2);
+        $dayA  = (float) (RepCustody::dayTotalsByRep($day2)[$rid2]['balance'] ?? 0);
+        /* ⚠️ لقطة «قبل» لأرقام الأقسام التانية — الفحص لازم يكون على **الثابت**
+           (الرقم ما اتغيّرش) مش على قيمة محفوظة بالإيد. أول نسخة كتبت
+           «الفيزا = صفر» وفشلت على الإنتاج لوجود مدفوعات فيزا حقيقية (842). */
+        $visaA = (float) \App\Models\DailyReview::view($day2)['totals']['visa'];
+        /* ⚠️ **لقطة «قبل» للقسم كمان — مش مجموعه المطلق.** الأقسام السابقة في
+           الفاحص نفسه بتزرع تسويات على نفس اليوم، وعلى الإنتاج ممكن تكون فيه
+           تسويات حقيقية. أول نسخة قاست المجموع المطلق فطلع 35,015 بدل 20,195.
+           **افحص الفرق (الثابت) مش الرقم الحالي.** */
+        $settleA = RepCustody::settledTotalOn($day2);
+        $groupA  = (float) \App\Models\DailyReview::view($day2)['groups']['rep_settle']['total'];
+        $res2  = RepCustody::settleZero($rid2, $day2, 'فحص', 'verifier');
+        $safeB = Closing::currentBalance();
+        $walB  = RepCustody::balance($rid2);
+        $dayB  = (float) (RepCustody::dayTotalsByRep($day2)[$rid2]['balance'] ?? 0);
+
+        near('المبلغ المسجَّل = رصيد اليوم قبل الاستلام', (float) $res2['amount'], $dayA);
+        near('⚠️ رصيد اليوم بقى صفر', $dayB, 0);
+        near('⚠️⚠️ إجمالي الخزنة ما اتغيّرش — تحويل داخلي مش دخل جديد', $safeB - $safeA, 0);
+        near('محفظة المندوب نقصت بالمبلغ', $walA - $walB, (float) $res2['amount']);
+        /* ⚠️ الدرج = الخزنة − Σ المحافظ. الاستلام لازم يزوّده بالمبلغ بالظبط —
+           لو زاد بالضعف يبقى فيه صف خزنة اتولّد كمان (التحسيب المزدوج القديم). */
+        near('⚠️ الدرج زاد بالمبلغ مرة واحدة بس (مفيش تحسيب مزدوج)',
+             ($safeB - $walB) - ($safeA - $walA), (float) $res2['amount']);
+        // ⚠️ ممنوع تسوية تولّد صف خزنة (`manual_custody`) — ده كان مصدر الازدواج.
+        near('⚠️ مفيش صف خزنة اتولّد من التسوية',
+             (float) Database::scalar(
+                 "SELECT COUNT(*) FROM rep_custody_settlements
+                   WHERE id IN (" . implode(',', array_map('intval', $res2['ids'])) . ")
+                     AND custody_id IS NOT NULL"), 0);
+
+        $rvS = \App\Models\DailyReview::view($day2);
+        $rvS['groups']['rep_settle']['count'] > 0
+            ? ok('ظهر في قسم «استلمت من المناديب»') : bad('ما ظهرش في قسم الاستلام');
+        near('ومبلغ القسم زاد بالمسجَّل (الفرق لا المجموع المطلق)',
+             (float) $rvS['groups']['rep_settle']['total'] - $groupA, (float) $res2['amount']);
+        near('و`settledTotalOn` زاد بنفس الرقم',
+             RepCustody::settledTotalOn($day2) - $settleA, (float) $res2['amount']);
+        /* ⚠️ قاعدة v50: مجموع الأقسام النقدية = مصروفات + عهد سائقين `Closing`.
+           القسم الجديد معلوماتي فلازم ما يدخلش الرقم ده. */
+        $dv2 = Closing::dayView($day2);
+        near('⚠️ تطابق v50 لسه صح بعد الاستلام',
+             (float) $rvS['totals']['cash'], round($dv2['expenses'] + $dv2['driver'], 2));
+        near('ورقمه في `totals` منفصل عن الفيزا',
+             (float) $rvS['totals']['rep_settle'] - $groupA, (float) $res2['amount']);
+        near('و`visa` ما اتلوّثش بيه (الرقم قبل = بعد)', (float) $rvS['totals']['visa'], $visaA);
+
+        // ═══════════════════════════════════ ⑧ إيصال تقفيل العهدة (A4 للطباعة)
+        sec('⑧ إيصال تقفيل العهدة — ورقة الطباعة');
+
+        has('مسار الطباعة موجود', 'public/index.php', 'settlement/{sid}/print');
+        method_exists(\App\Controllers\RepCustodyController::class, 'settlementPrint')
+            ? ok('RepCustodyController::settlementPrint موجودة')
+            : bad('settlementPrint ناقصة');
+        has('وزرار الطباعة في تبويب «الحساب الكامل»',
+            'app/Views/rep_custody/_tab_account.php', "/print') ?>");
+
+        /* ⚠️⚠️ أهم فحصين في القسم — `deposits_total`/`spent_total` **ممنوع**
+           يتعرضوا في الورقة: العمودان ليهم معنيان مختلفان حسب مسار التقفيل
+           (`settleZero` بتخزّن مجاميع **اليوم** و`settle` بتخزّن **التراكمي**)
+           ومستحيل تفرّق بينهم من الصف بعد كده. اتصاد فعليًّا إن تسوية جزئية
+           مخزَّن فيها «نزل 6,000» بينما اليوم نفسه نزل فيه 3,000 — فعرضهم جنب
+           تاريخ اليوم كان بيخلّي ورقة بتتوقّع للمندوب تقول رقمًا غلط. */
+        hasntCode('⚠️ الورقة ما بتعرضش `deposits_total` (معناه بيختلف حسب مسار التقفيل)',
+                  'app/Views/rep_custody/settlement_print.php', "deposits_total");
+        hasntCode('⚠️ ولا `spent_total` — المعادلة بتتقرا من `dayLedger` الحيّة',
+                  'app/Views/rep_custody/settlement_print.php', "spent_total");
+
+        // رندر فعلي لإيصال حقيقي من التصفية اللي فوق
+        $printId = (int) $res2['ids'][0];
+        $_SESSION['uid'] = $_SESSION['uid'] ?? 1;
+        $_SESSION['role'] = 'owner';
+        ob_start();
+        (new \App\Controllers\RepCustodyController())->settlementPrint((string) $printId);
+        $html = (string) ob_get_clean();
+
+        preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $html)
+            ? bad('⚠️ فيه خطأ PHP جوّه ورقة الطباعة') : ok('الورقة بترندر بلا أي خطأ PHP');
+        str_contains($html, 'إيصال تقفيل عهدة') ? ok('وفيها عنوان الإيصال') : bad('العنوان ناقص');
+        str_contains($html, 'المبلغ بالحروف') ? ok('وفيها التفقيط') : bad('التفقيط ناقص');
+        str_contains($html, 'توقيع المندوب') ? ok('وسطر التوقيع') : bad('سطر التوقيع ناقص');
+
+        /* ⚠️ الرقم البطل لقطة مثبَّتة — لازم يساوي `returned` المخزَّن بالظبط،
+           مش رقمًا بيتحسب من جديد وقت الطباعة (وإلا الورقة اللي المندوب وقّع
+           عليها بتتغيّر تحت إيده أول ما يتعدّل أي بند). */
+        $sRow = RepCustody::findSettlement($printId);
+        str_contains($html, intf(abs((float) $sRow['returned'])))
+            ? ok('⚠️ الرقم البطل = `returned` المخزَّن (لقطة مثبَّتة)')
+            : bad('الرقم البطل مش مطابق للمبلغ المخزَّن');
+
+        /* ⚠️ التفصيل بيمرّ على `spending()` نفسها بتاعة كل الشاشات — لو اتكتب
+           استعلام تاني، الورقة تقول رقمًا والكارت يقول رقمًا تاني. */
+        has('⚠️ التفصيل من `RepCustody::spending()` نفسها',
+            'app/Controllers/RepCustodyController.php', 'RepCustody::spending($repId, $day)');
+        has('⚠️ والمعادلة من `dayLedger()` نفسها',
+            'app/Controllers/RepCustodyController.php', 'RepCustody::dayLedger($repId');
+
+        // قراءة فقط — ولا مليم بيتحرك من فتح الورقة
+        near('⚠️ فتح الورقة ما غيّرش رصيد الخزنة', Closing::currentBalance(), $safeB);
+        near('ولا رصيد محفظة المندوب', RepCustody::balance($rid2), $walB);
+
+        // الفورم مش مصدر ثقة: إيصال مش موجود بيترفض (`notFound` بتعمل exit)
+        $missing = Database::scalar("SELECT COALESCE(MAX(id),0)+1000 FROM rep_custody_settlements");
+        RepCustody::findSettlement((int) $missing) === null
+            ? ok('⚠️ إيصال مش موجود بيرجّع null فالمسار بيرفضه') : bad('إيصال وهمي رجّع صفًّا');
+    }
 
 } catch (\Throwable $e) {
     bad('استثناء غير متوقّع: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());

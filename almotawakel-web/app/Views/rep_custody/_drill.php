@@ -28,20 +28,36 @@ $spendRow = static function (array $s, bool $withRep = true): void {
     if (!empty($s['ref_no'])) { $meta[] = ['icon' => 'clipboard', 'text' => 'إيصال ' . $s['ref_no']]; }
     if ((int) ($s['qty'] ?? 1) > 1) { $meta[] = ['icon' => 'package', 'text' => 'كمية ' . intf((int) $s['qty'])]; }
     if (!empty($s['is_visa'])) { $meta[] = ['icon' => 'credit-card', 'text' => 'فيزا — مش من العهدة']; }
+    if (!empty($s['unpaid'])) { $meta[] = ['icon' => 'info', 'text' => 'غير مدفوع — مش من العهدة']; }
     partial('row_item', [
         'title'  => $s['note'] ?: $kind,
         'icon'   => $ic,
         'url'    => !empty($s['permit_id']) ? url('permits/' . (int) $s['permit_id']) : null,
         'meta'   => $meta,
         'amount' => money($s['amount'], false),
-        'amount_tone' => empty($s['is_visa']) ? 'ex' : '',
+        'amount_tone' => empty($s['is_visa']) && empty($s['unpaid']) ? 'ex' : '',
         'sub'    => !empty($s['d']) ? dfmt($s['d']) : null,
     ]);
 };
 
+/** وسم البنود التي لم تخرج من عهدة المندوب وهي ما زالت في المراجعة. */
+$pendingChips = static function (array $p, bool $locked = false): array {
+    $chips = [];
+    if ($locked) {
+        $chips[] = ['icon' => 'alert', 'text' => 'يوم متقفل — اعتماده هيترفض'];
+    }
+    if (!empty($p['is_visa'])) {
+        $chips[] = ['icon' => 'credit-card', 'text' => 'فيزا — مش من العهدة'];
+    }
+    if (!empty($p['unpaid'])) {
+        $chips[] = ['icon' => 'info', 'text' => 'غير مدفوع — مش من العهدة'];
+    }
+    return $chips;
+};
+
 /* ─── أرقام صندوق المراجعة — على كل الأيام مش على يوم العمل ─── */
 if (str_starts_with($what, 'inbox_')) {
-    $pendRow = static function (array $p): void {
+    $pendRow = static function (array $p) use ($pendingChips): void {
         $kind = match ((string) $p['kind']) {
             'receipt' => ['clipboard', 'إيصال'],
             'misc'    => ['coins', 'نثرية'],
@@ -57,7 +73,7 @@ if (str_starts_with($what, 'inbox_')) {
             'icon'   => $kind[0],
             'url'    => url('rep-custody/inbox'),
             'meta'   => $meta,
-            'chips'  => $locked ? [['icon' => 'alert', 'text' => 'يوم متقفل — اعتماده هيترفض']] : [],
+            'chips'  => $pendingChips($p, $locked),
             'amount' => money($p['amount'], false),
             'amount_tone' => $locked ? 'neg' : 'wait',
         ]);
@@ -96,7 +112,7 @@ if (str_starts_with($what, 'inbox_')) {
     partial('drill', [
         'how'   => $isLockedList
             ? 'البنود دي تاريخها في يوم متقفل، فاعتمادها هيترفض. غيّر تاريخ البند أو افتح إقفال يومه الأول.'
-            : 'كل البنود اللي بعتها المناديب من موبايلاتهم ولسه مستنية اعتمادك — على كل الأيام.',
+            : 'كل البنود اللي بعتها المناديب ولسه مستنية اعتمادك — النقدي فقط يُطرح من «فاضل معاه»، والفيزا و«غير مدفوع» معلوماتيان.',
         'count' => count($rows),
         'total' => ['label' => $isLockedList ? 'على أيام متقفلة' : 'مستني مراجعتك',
                     'value' => money(array_sum(array_column($rows, 'amount')), false)],
@@ -115,18 +131,26 @@ if (str_starts_with($what, 'rep_')) {
     $sum = static fn (array $rs): string => money(array_sum(array_column($rs, 'amount')), false);
 
     if ($what === 'rep_deposits') {
+        /* ⚠️ **الجملة القديمة «تنزيل العهدة ما بيخصمش من خزنة المكتب» بقت غلط**
+           من v61: التنزيل مصدره «درج المكتب» **بيخصم** فعلاً في قاعدة المرحلة ٢.
+           الشرح دلوقتي من `RepCustody::sourceNote()` — نفس النص اللي جنب خانة
+           الإدخال، فبيتغيّر مع النموذج ومستحيل يتفرّع. */
         partial('drill', [
-            'how'   => 'العهدة اللي نزلت لـ' . $name . ' في يوم ' . $dayTxt . '. تنزيل العهدة ما بيخصمش من خزنة المكتب.',
+            'how'   => 'العهدة اللي نزلت لـ' . $name . ' في يوم ' . $dayTxt . '. '
+                     . \App\Models\RepCustody::sourceNote(),
             'count' => count($rows),
             'total' => ['label' => 'نزل له اليوم', 'value' => $sum($rows)],
             'more'  => ['label' => 'كارت المندوب', 'url' => $repUrl],
             'empty' => ['title' => 'مفيش عهدة نزلت له في ' . $dayTxt],
             'body'  => function () use ($rows) {
                 foreach ($rows as $d) {
+                    $src  = \App\Models\RepCustody::sourceBadge($d['source'] ?? null);
+                    $meta = [['icon' => 'calendar', 'text' => dfmt($d['dep_date'])]];
                     partial('row_item', [
                         'title'  => $d['note'] ?: 'تنزيل عهدة',
                         'icon'   => 'wallet',
-                        'meta'   => [['icon' => 'calendar', 'text' => dfmt($d['dep_date'])]],
+                        'chips'  => $src ? [['icon' => $src['icon'], 'text' => $src['short']]] : [],
+                        'meta'   => $src ? array_merge($meta, [['icon' => 'info', 'text' => $src['effect']]]) : $meta,
                         'amount' => money($d['amount'], false),
                         'amount_tone' => 'pos',
                     ]);
@@ -138,12 +162,12 @@ if (str_starts_with($what, 'rep_')) {
 
     if ($what === 'rep_pending') {
         partial('drill', [
-            'how'   => 'بنود بعتها ' . $name . ' من موبايله في ' . $dayTxt . ' ولسه مستنية اعتمادك. الفلوس خرجت من إيده، لكنها ما دخلتش أي حساب لحد ما تعتمدها.',
+            'how'   => 'البنود النقدية التي دفعها ' . $name . ' في ' . $dayTxt . ' ولسه مستنية اعتمادك؛ هي وحدها المطروحة مؤقتًا من «فاضل معاه».',
             'count' => count($rows),
             'total' => ['label' => 'مستني مراجعتك', 'value' => $sum($rows)],
             'more'  => ['label' => 'صندوق المراجعة', 'url' => url('rep-custody/inbox')],
             'empty' => ['title' => 'مفيش بنود معلّقة له في ' . $dayTxt],
-            'body'  => function () use ($rows) {
+            'body'  => function () use ($rows, $pendingChips) {
                 foreach ($rows as $p) {
                     $kind = match ((string) $p['kind']) {
                         'receipt' => ['clipboard', 'إيصال'],
@@ -158,6 +182,7 @@ if (str_starts_with($what, 'rep_')) {
                         'icon'   => $kind[0],
                         'url'    => url('rep-custody/inbox'),
                         'meta'   => $meta,
+                        'chips'  => $pendingChips($p),
                         'amount' => money($p['amount'], false),
                         'amount_tone' => 'wait',
                     ]);
@@ -169,12 +194,13 @@ if (str_starts_with($what, 'rep_')) {
 
     $howMap = [
         'rep_spent'     => 'كل اللي صرفه ' . $name . ' من عهدته في ' . $dayTxt . '.',
-        'rep_receipts'  => 'إيصالات الأذونات اللي دفعها ' . $name . ' في ' . $dayTxt . '.',
-        'rep_expenses'  => 'مصروفات الأذونات (مش إيصالات) اللي دفعها ' . $name . ' في ' . $dayTxt . '.',
+        'rep_receipts'  => 'إيصالات الأذونات اللي سجلها ' . $name . ' في ' . $dayTxt . '، مع توضيح ما خرج فعلًا من عهدته.',
+        'rep_expenses'  => 'مصروفات الأذونات اللي سجلها ' . $name . ' في ' . $dayTxt . '، مع توضيح ما خرج فعلًا من عهدته.',
         'rep_misc'      => 'نثريات ' . $name . ' في ' . $dayTxt . ' — مصروف شركة بلا إذن، ما بيدخلش أي حساب عميل.',
         'rep_handover'  => 'عهد سلّمها ' . $name . ' لسائقين في ' . $dayTxt . ' — بتنقص من عهدته وبس.',
         'rep_transfer'  => 'كاش حوّله ' . $name . ' لزملاء في ' . $dayTxt . ' — بينتقل من محفظة لمحفظة والإجمالي ثابت.',
         'rep_visa'      => 'بنود ' . $name . ' المدفوعة بكارت الفيزا في ' . $dayTxt . ' — اتخصمت من الكارت مش من عهدته.',
+        'rep_unpaid'    => 'بنود ' . $name . ' غير المدفوعة في ' . $dayTxt . ' — مسجلة للتوثيق والفوترة ولم تُخصم من أي محفظة.',
     ];
     partial('drill', [
         'how'   => $howMap[$what] ?? '',
@@ -192,19 +218,25 @@ if (str_starts_with($what, 'rep_')) {
 switch ($what) {
 
 case 'deposits':
+    /* ⚠️ الشرح من `sourceNote()` — الجملة القديمة كانت بتقول إن التنزيل عمره ما
+       بيخصم من الخزنة، وده بقى غلط من v61 («من درج المكتب» بتخصم). */
     partial('drill', [
-        'how'   => 'مجموع كل عهدة نزلت للمناديب بتاريخ ' . $dayTxt . '. تنزيل العهدة ما بيخصمش من خزنة المكتب — الخزنة بتنقص وقت ما المندوب يصرف فعلاً.',
+        'how'   => 'مجموع كل عهدة نزلت للمناديب بتاريخ ' . $dayTxt . '. '
+                 . \App\Models\RepCustody::sourceNote(),
         'count' => count($rows),
         'total' => ['label' => 'نزل اليوم', 'value' => money(array_sum(array_column($rows, 'amount')), false)],
         'more'  => ['label' => 'كل المناديب', 'url' => url('rep-custody')],
         'empty' => ['title' => 'مفيش عهدة نزلت في ' . $dayTxt],
         'body'  => function () use ($rows) {
             foreach ($rows as $r) {
+                $src  = \App\Models\RepCustody::sourceBadge($r['source'] ?? null);
+                $meta = [['icon' => 'file-text', 'text' => $r['note'] ?: 'بلا ملاحظة']];
                 partial('row_item', [
                     'title'  => $r['rep_name'],
                     'icon'   => 'wallet',
                     'url'    => url('rep-custody/' . (int) $r['rep_id'] . '?tab=day'),
-                    'meta'   => [['icon' => 'file-text', 'text' => $r['note'] ?: 'بلا ملاحظة']],
+                    'chips'  => $src ? [['icon' => $src['icon'], 'text' => $src['short']]] : [],
+                    'meta'   => $src ? array_merge($meta, [['icon' => 'info', 'text' => $src['effect']]]) : $meta,
                     'amount' => money($r['amount'], false),
                     'amount_tone' => 'pos',
                 ]);
@@ -215,7 +247,7 @@ case 'deposits':
 
 case 'spent':
     partial('drill', [
-        'how'   => 'كل بند اتصرف من عهدة المناديب بتاريخ ' . $dayTxt . ' — إيصالات ومصروفات أذونات ونثريات وتسليمات سائقين وتحويلات. المدفوع بالفيزا بيظهر للعلم وما بيتخصمش من العهدة.',
+        'how'   => 'الكاش الذي خرج فعلًا من عهدة المناديب بتاريخ ' . $dayTxt . ' — الفيزا و«غير مدفوع» مستبعدان من الرقم والتفاصيل.',
         'count' => count($rows),
         'total' => ['label' => 'صرفوا اليوم', 'value' => money(array_sum(array_column($rows, 'amount')), false)],
         'more'  => ['label' => 'سجل المصروفات', 'url' => url('expenses')],
@@ -228,12 +260,12 @@ case 'spent':
 
 case 'pending':
     partial('drill', [
-        'how'   => 'بنود بعتها المناديب من موبايلاتهم بتاريخ ' . $dayTxt . ' ولسه مستنية اعتمادك. الفلوس خرجت من إيدهم فعلاً، لكنها ما دخلتش أي حساب لحد ما تعتمدها.',
+        'how'   => 'البنود النقدية التي دفعها المناديب بتاريخ ' . $dayTxt . ' ولسه مستنية اعتمادك؛ هي وحدها المطروحة مؤقتًا من «فاضل معاهم».',
         'count' => count($rows),
         'total' => ['label' => 'مستني مراجعتك', 'value' => money(array_sum(array_column($rows, 'amount')), false)],
         'more'  => ['label' => 'صندوق المراجعة', 'url' => url('rep-custody/inbox')],
         'empty' => ['title' => 'مفيش بنود معلّقة في ' . $dayTxt],
-        'body'  => function () use ($rows) {
+        'body'  => function () use ($rows, $pendingChips) {
             foreach ($rows as $p) {
                 $kind = match ((string) $p['kind']) {
                     'receipt' => ['clipboard', 'إيصال'],
@@ -248,6 +280,7 @@ case 'pending':
                     'icon'   => $kind[0],
                     'url'    => url('rep-custody/inbox'),
                     'meta'   => $meta,
+                    'chips'  => $pendingChips($p),
                     'amount' => money($p['amount'], false),
                     'amount_tone' => 'wait',
                 ]);

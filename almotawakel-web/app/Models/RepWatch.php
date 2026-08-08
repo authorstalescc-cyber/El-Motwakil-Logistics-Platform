@@ -139,8 +139,15 @@ class RepWatch
             $tPendCnt += $c['pending_cnt'];
             $tPendSum += $c['pending_sum'];
 
-            // اللي عليه حركة بس — المندوب اللي عمره ما نزلت له عهدة مالوش لازمة هنا
-            if ($dep > 0 || $c['spent'] > 0 || $c['pending_cnt'] > 0) { $reps[] = $c; }
+            // اللي عليه حركة بس — المندوب اللي عمره ما نزلت له عهدة مالوش لازمة هنا.
+            //
+            // ⚠️ **الرصيد شرط دخول برضه** — من غيره المندوب اللي كل حركته «تحويل
+            //    من زميل» (مفيش تنزيل ولا صرف ولا مستني) بيختفي من القايمة
+            //    و**رصيده بيفضل في الإجمالي**، فالشاشة تقول رقمًا ومجموع صفوفها
+            //    يقول رقمًا تاني. اتكشف على الإنتاج بعد خط الفصل: محمد جمال معاه
+            //    17,400 من تحويل وكان مش ظاهر (`verify_v47` مسكها).
+            if ($dep > 0 || $c['spent'] > 0 || $c['pending_cnt'] > 0
+                || abs((float) $c['balance']) > 0.005) { $reps[] = $c; }
         }
 
         // الأهم فوق: المحتاج تنزيل، ثم اللي عنده بنود مستنّية، ثم الأكبر في
@@ -262,7 +269,7 @@ class RepWatch
                     p.permit_no, p.permit_type, p.company, p.client
              FROM rep_submissions s
              LEFT JOIN permits p ON p.id = s.permit_id
-             WHERE $where
+             WHERE $where" . RepCustody::epochSql('s.entry_date') . "
              ORDER BY s.id DESC
              LIMIT " . self::FEED_LIMIT, $args);
     }
@@ -277,7 +284,7 @@ class RepWatch
         $cache = [];
         foreach (Database::all(
             "SELECT rep_id, COUNT(*) cnt FROM rep_submissions
-             WHERE status = 'pending' GROUP BY rep_id") as $r) {
+             WHERE status = 'pending'" . RepCustody::epochSql('entry_date') . " GROUP BY rep_id") as $r) {
             $cache[(int) $r['rep_id']] = (int) $r['cnt'];
         }
         return $cache;
@@ -294,7 +301,8 @@ class RepWatch
         foreach (Database::all(
             "SELECT rep_id, COUNT(*) cnt,
                     SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) pend
-             FROM rep_submissions WHERE entry_date = ? GROUP BY rep_id", [$day]) as $r) {
+             FROM rep_submissions WHERE entry_date = ?" . RepCustody::epochSql('entry_date')
+             . " GROUP BY rep_id", [$day]) as $r) {
             $rid = (int) $r['rep_id'];
             $out['all'][$rid] = (int) $r['cnt'];
             $out['pending'][$rid] = (int) $r['pend'];
@@ -307,7 +315,8 @@ class RepWatch
     {
         $out = [];
         foreach (Database::all(
-            "SELECT rep_id, MAX(entry_date) d FROM rep_submissions GROUP BY rep_id") as $r) {
+            "SELECT rep_id, MAX(entry_date) d FROM rep_submissions WHERE 1" . RepCustody::epochSql('entry_date')
+             . " GROUP BY rep_id") as $r) {
             $out[(int) $r['rep_id']] = $r['d'];
         }
         return $out;

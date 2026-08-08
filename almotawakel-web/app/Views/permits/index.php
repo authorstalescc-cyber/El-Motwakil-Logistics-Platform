@@ -167,7 +167,7 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
             $rcShow = array_slice($rcps, 0, 6); $rcMore = count($rcps) - count($rcShow);
             $ctLbl = Permit::containerLabel($r['ctype_breakdown'], (int)($r['containers']??0), $r['container_type']??null);
             $missTip = $inc ? implode(' · ', $r['missing']) : 'كل البيانات مكتملة';
-            $searchKey = mb_strtolower(trim(($r['permit_no']?:('#'.$r['id'])).' '.($r['company']??'').' '.($r['client']??'')));
+            $searchKey = mb_strtolower(trim(($r['permit_no']?:('#'.$r['id'])).' '.($r['company']??'').' '.($r['client']??'').' '.($r['destination']??'').' '.($r['agency']??'')));
             $url = url('permits/'.$r['id']); ?>
         <?php if ($followGroup==='co'): $gk = (string)($r['company'] ?? ''); if ($gk !== $grpCur): $grpCur = $gk; ?>
           <div class="dkt-grp">
@@ -206,6 +206,12 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
                   <a class="dkt-tag dkt-tag-lnk" href="<?= e($followUrl(['cl'=>$r['client'],'page'=>1])) ?>" onclick="event.stopPropagation()"
                      title="اعرض أذونات هذا الوكيل فقط"><?= icon('user', 14) ?> <?= e($r['client']) ?></a>
                 <?php else: ?><span class="dkt-tag"><?= icon('user', 14) ?> <?= e($r['client']) ?></span><?php endif; ?>
+              <?php endif; ?>
+              <?php if(trim((string)($r['destination'] ?? '')) !== ''): ?>
+                <span class="dkt-tag" title="الجهة"><?= icon('map-pin', 14) ?> <b>الجهة:</b> <?= e($r['destination']) ?></span>
+              <?php endif; ?>
+              <?php if(trim((string)($r['agency'] ?? '')) !== ''): ?>
+                <span class="dkt-tag" title="التوكيل الملاحي"><?= icon('landmark', 14) ?> <b>التوكيل:</b> <?= e($r['agency']) ?></span>
               <?php endif; ?>
               <span class="dkt-tag"><?= icon('calendar', 14) ?> <span class="num"><?= dfmt($r['permit_date']) ?: '—' ?></span></span>
               <span class="dkt-tag"><?= icon('truck', 14) ?> <span class="num"><?= intf($r['bills']) ?></span> بوليصة</span>

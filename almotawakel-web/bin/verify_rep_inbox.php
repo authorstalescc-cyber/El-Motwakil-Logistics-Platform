@@ -127,9 +127,80 @@ try {
                   'ibDoActual' => 'سعر فعلي', 'ibDoReject' => 'رفض'] as $id => $label) {
             chk(str_contains($html, 'id="' . $id . '"'), "إجراء جماعي: $label");
         }
-        foreach (['ibSearch' => 'بحث', 'ibRep' => 'مندوب', 'ibDay' => 'يوم', 'ibOnlyLocked' => 'المتقفل بس'] as $id => $label) {
-            chk(str_contains($html, 'id="' . $id . '"'), "فلتر: $label");
+        /* ⚠️ فلتر المندوب **اتنقل من المتصفح للخادم** (2026-08-02): كان
+           `<select id="ibRep">` بيفلتر الصفوف المرندَرة، فالرابط من كارت
+           المندوب كان بيوَدّي على كل المناديب والمالك يدوّر. بقى شرايح
+           `?rep=` — الرابط يتشارك، والرجوع بالمتصفح يشتغل، وبعد كل اعتماد
+           المالك بيفضل على نفس المندوب. */
+        foreach (['ibSearch' => 'بحث', 'ibDay' => 'يوم', 'ibOnlyLocked' => 'المتقفل بس'] as $id => $label) {
+            chk(str_contains($html, 'id="' . $id . '"'), "فلتر (متصفح): $label");
         }
+        chk(!str_contains($html, 'id="ibRep"'),
+            'مفيش قايمة مندوب في المتصفح — مصدر واحد للفلتر مش اتنين');
+
+        /* ═══ 5ب) عدسة المندوب على الخادم (2026-08-02) ═══
+           الشكوى: «عند الضغط على inbox الخاصة بمراجعة بنود مندوب معين يظهر كل
+           المناديب». الفحص بيقيس **السلوك**: الشرايح موجودة، والرابط بـ`?rep=`
+           بيرجّع بنود المندوب ده بس، والمندوب الوهمي بيرجع لكل المناديب. */
+        sec('5ب) عدسة المندوب — فلترة خادمية');
+        /* ⚠️ الفحص على **الماركب** (`class="ib-lens-chip"`) مش على الاسم المجرّد:
+           الاسم موجود في الـCSS كمان فالبحث المجرّد بينجح كذبًا حتى لو الشرايح
+           ما اترسمتش خالص. */
+        $render = static function (array $q) {
+            $_SESSION = ['uid' => (int) Database::scalar('SELECT MIN(id) FROM users'), 'role' => 'owner',
+                         'uname' => 'فحص', 'last_activity' => time(), 'uid_checked' => time()];
+            $_GET = $q;
+            ob_start();
+            try { (new \App\Controllers\RepCustodyController())->inbox(); $out = (string) ob_get_clean(); }
+            catch (\Throwable $e) { ob_end_clean(); $out = ''; }
+            $_SESSION = []; $_GET = [];
+            return $out;
+        };
+        // مندوب تاني ببند مستني — عشان الفلترة يبقى ليها معنى
+        Database::exec("INSERT INTO reps (name, status) VALUES (?, 'active')", [$tag . ' زميل']);
+        $otherRep = Database::lastId();
+        Database::exec(
+            "INSERT INTO rep_submissions (rep_id, client_token, kind, note, qty, unit_amount, amount, entry_date, status)
+             VALUES (?,?, 'misc', ?, 1, 70, 70, ?, 'pending')",
+            [$otherRep, bin2hex(random_bytes(16)), $tag . ' بند الزميل', $openDay]);
+
+        $mine  = $render(['status' => 'pending', 'rep' => $repId]);
+        $all   = $render(['status' => 'pending']);
+        $ghost = $render(['status' => 'pending', 'rep' => 99999999]);
+
+        chk(substr_count($all, 'class="ib-lens-chip') >= 3,
+            '★ شرايح المناديب اترسمت فعلاً (كل المناديب + مندوبين)');
+        chk(str_contains($all, 'rep=' . $repId), 'وفيها رابط للمندوب صاحب البنود');
+        chk(str_contains($all, $tag . ' بند الزميل') && str_contains($all, $tag . ' تخصيص'),
+            'بلا فلتر: بنود كل المناديب ظاهرة');
+        chk(str_contains($mine, $tag . ' تخصيص') && !str_contains($mine, $tag . ' بند الزميل'),
+            '★ بـ`?rep=`: بنود المندوب ده **بس** — ولا بند لزميله');
+        chk(str_contains($ghost, $tag . ' بند الزميل'),
+            '★ مندوب مش موجود بيرجع لكل المناديب (الرابط مش مصدر ثقة)');
+        chk(str_contains($mine, 'status=pending&amp;rep=' . $repId)
+            || str_contains($mine, 'status=pending&rep=' . $repId),
+            '★ روابط التبويبات بتحافظ على العدسة (مش بترجّعك لكل المناديب)');
+        chk(substr_count($mine, 'class="ib-lens-card"') === 1, 'ورابط لكارت المندوب لما تكون العدسة عليه');
+        chk(str_contains($mine, 'نزل له عهدة اليوم') && str_contains($mine, 'المتبقي من عهدة اليوم')
+            && !str_contains($mine, 'أيام عليها بنود'),
+            '★ عدسة المندوب تعرض العهدة والمتبقي بدل عدد الأيام');
+        $pocket = \App\Models\RepPortal::dayPocket($repId, work_date());
+        chk(str_contains($mine, money0($pocket['deposits']))
+            && str_contains($mine, money0($pocket['pocket'])),
+            'وأرقام الكارتين من `RepPortal::dayPocket` نفسه (عهدة اليوم فقط)');
+
+        /* الترقيم الخادمي — «معتمد» كان بيرندر ٣٤٦ صف على الإنتاج */
+        sec('5ج) الترقيم الخادمي للتبويبات غير المستنية');
+        $listAll = RepInbox::listing('approved', 0, '', 2, 0);
+        chk(count($listAll) <= 2, '★ `listing` بتحترم الحدّ (مفيش رسم كل الصفوف)');
+        chk(RepInbox::countListing('approved') >= count($listAll),
+            'و`countListing` بتعدّ بنفس الفلتر (الترقيم ما يكدبش)');
+        chk(count(RepInbox::listing('pending', $repId)) === count(RepInbox::listing('pending', $repId, '', 0, 0)),
+            'limit=0 = بلا حدّ (السلوك القديم بالحرف)');
+
+        /* N+1: حركات كل الأذونات في استعلام واحد */
+        chk(RepInbox::movementsFor([$permitId])[$permitId][0]['id'] === RepInbox::movementsOf($permitId)[0]['id'],
+            '★ `movementsFor` (استعلام واحد) بترجّع نفس `movementsOf` (كانت N+1)');
 
         sec('6) تنبيه اليوم المتقفل (الاعتماد عليه بيترفض)');
         if ($lockedDay === null) {
@@ -140,7 +211,26 @@ try {
             chk(str_contains($html, 'js-ib-row-date'), 'وفيه زر «غيّر تاريخه» جنب التحذير');
         }
 
-        sec('7) قواعد الواجهة العامة');
+        sec('7) الحذف النهائي — الواجهة');
+        chk(str_contains($html, 'ibDelete(' . $s1 . ')'), '★ كل بند له زرار حذف نهائي');
+        chk(str_contains($html, 'id="d' . $s1 . 'f"'), 'وفورم حذف مستقل برمز FormState بتاعه');
+        chk(str_contains($html, 'id="ibDoDelete"'), '★ وفيه حذف جماعي في شريط الإجراءات');
+        chk(str_contains($html, 'سلة المحذوفات'),
+            '★ التأكيد بيقول إن فيه طريق رجوع (وإلا المالك يتردّد أو يحذف وهو خايف)');
+
+        sec('7ب) الحذف مخفي عن الأدوار اللي مش هتقدر تسترجع');
+        // ⚠️ الإخفاء ده **مش حماية** — المنع الحقيقي في Access::OWNER_MANAGER_ONLY.
+        //    الفحص هنا على الاتنين: القاعدة نفسها، والشاشة اللي بتحترمها.
+        foreach (['owner' => true, 'manager' => true, 'accountant' => false,
+                  'operator' => false, 'read_only' => false] as $role => $may) {
+            chk(\App\Core\Access::allows($role, 'RepCustodyController@deleteSubmission', 'POST') === $may
+                && \App\Core\Access::allows($role, 'RepCustodyController@deleteMany', 'POST') === $may,
+                'دور ' . $role . ': ' . ($may ? 'يقدر يحذف' : 'ما يقدرش يحذف'));
+        }
+        chk(\App\Core\Access::allows('accountant', 'RepCustodyController@approve', 'POST'),
+            'والمحاسب لسه يقدر يعتمد ويرفض (الحذف بس هو اللي اتضيّق)');
+
+        sec('7ج) قواعد الواجهة العامة');
         chk(!preg_match('/style="[^"]*grid-template-columns:\s*repeat\(\s*[4-9]/', $html),
             'مفيش شبكة inline بـ4 أعمدة أو أكتر (بتدهس التجاوب)');
         chk(!preg_match('/\bjson_encode\s*\(/', (string) file_get_contents(
@@ -167,9 +257,66 @@ try {
             RepInbox::approve($sLocked);
             bad('★ اعتماد بند على يوم متقفل عدّى! المفروض يترفض.');
         } catch (\Throwable $e) {
-            chk(str_contains($e->getMessage(), 'متقفل'),
+            /* ⚠️ **إنذار كاذب اتصاد على الإنتاج (2026-08-02):** الفحص كان
+               بيتوقّع كلمة «متقفل» بالحرف، لكن على الإنتاج آخر يوم متقفل
+               (٢٨/٧) واقع **قبل خط الفصل** (٢٩/٧) — فـ`epochBlock` بترفض
+               الاعتماد **الأول** برسالتها هي. الرفض صح في الحالتين، والفحص
+               الصح على **المعنى**: اتـرفض وقال السبب. (القاعدة الموثَّقة:
+               افحص السلوك مش نصّ تسمية بعينه.) */
+            $msg = $e->getMessage();
+            chk(str_contains($msg, 'متقفل') || str_contains($msg, 'النظام الجديد'),
                 '★ واعتماده بيترفض برسالة واضحة — ودي اللي الشاشة بتحذّر منها قبل الضغط');
         }
+    }
+    // ═══ 8ب) الحذف النهائي — السلوك
+    sec('8ب) الحذف النهائي: بينزل السلة، والمعتمد بيترفض');
+    $custodyBeforeDelete = Closing::currentBalance();
+
+    $gone = RepInbox::delete($s3);
+    chk(!Database::scalar('SELECT COUNT(*) FROM rep_submissions WHERE id=?', [$s3]),
+        'البند المستني اتشال من الصندوق');
+    chk((int) ($gone['id'] ?? 0) === $s3, 'والدالة بترجّع صفّه قبل الحذف (الكنترولر محتاجه للإشعار)');
+
+    $trash = Database::row(
+        "SELECT * FROM deleted_records WHERE entity='rep_submissions' AND record_id=? ORDER BY id DESC LIMIT 1",
+        [(string) $s3]);
+    chk((bool) $trash, '★ ونزل سلة المحذوفات (فيه طريق رجوع)');
+    chk(str_contains((string) ($trash['label'] ?? ''), $tag), 'وباسم واضح فيه بيان البند');
+    chk(in_array('rep_submissions', \App\Models\Audit::restorableEntities(), true),
+        '★ والنوع مسجَّل في RESTORABLE — من غيره Audit::trash بترمي استثناء');
+    chk((bool) Database::scalar(
+        "SELECT COUNT(*) FROM audit_logs WHERE entity='rep_submissions' AND action='delete' AND record_id=?",
+        [(string) $s3]), 'واتسجّل في سجل العمليات');
+
+    // ⚠️ نسخة السلة جاية من `RepInbox::find()` اللي بترجّع أعمدة JOIN
+    //    (rep_name/permit_no…). `Audit::restore` بتفلترها بأعمدة الجدول الحقيقية
+    //    قبل الإدخال — من غير الفلترة دي الاسترجاع بيقع بـ«Unknown column».
+    $snap = json_decode((string) $trash['data_json'], true) ?: [];
+    $cols = array_column(Database::all('SHOW COLUMNS FROM rep_submissions'), 'Field');
+    chk(isset($snap['rep_name']) && !isset(array_intersect_key($snap, array_flip($cols))['rep_name']),
+        '★ أعمدة الـJOIN بتتفلتر عند الاسترجاع (وإلا بيقع بـUnknown column)');
+
+    // البند المرفوض بيتحذف برضو — مالوش أي أثر مالي زي المستني بالظبط
+    RepInbox::reject($s2, 'سبب فحص');
+    RepInbox::delete($s2);
+    chk(!Database::scalar('SELECT COUNT(*) FROM rep_submissions WHERE id=?', [$s2]),
+        'والبند المرفوض بيتحذف برضو');
+
+    // ⚠️ الخصم بيتقاس **قبل** الاعتماد اللي بعده — الاعتماد بيغيّر الخزنة فعلاً
+    //    (وده صح)، والمقصود هنا إن **الحذف** لوحده ما بيلمسهاش.
+    chk(abs(Closing::currentBalance() - $custodyBeforeDelete) <= 0.005,
+        '★ ولا خصم من الخزنة بسبب الحذف (البند المستني ما كانش متخصمًا أصلاً)');
+
+    // ⚠️ أهم حارس: البند المعتمد **ما بيتحذفش** — له بند فعلي على الإذن
+    RepInbox::approve($s1);
+    try {
+        RepInbox::delete($s1);
+        bad('★ حذف بند معتمد عدّى! المفروض يترفض.');
+    } catch (\Throwable $e) {
+        chk(str_contains($e->getMessage(), 'معتمد'),
+            '★ حذف البند المعتمد بيترفض برسالة واضحة');
+        chk((bool) Database::scalar('SELECT COUNT(*) FROM rep_submissions WHERE id=?', [$s1]),
+            'وبيفضل مكانه بلا أي تغيير');
     }
 } finally {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }

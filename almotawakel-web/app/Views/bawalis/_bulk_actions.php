@@ -9,6 +9,10 @@ $bulkAllowOwner   = $bulkAllowOwner ?? true;
   <span>المحدّد: <b id="bulkSelectedCount">0</b> بوليصة</span>
   <?php if ($bulkAllowFreight): ?><button type="button" class="btn gold sm" id="openFreightBulk" disabled><?= icon('plus', 14) ?> إضافة نولون</button><?php endif; ?>
   <?php if ($bulkAllowOwner): ?><button type="button" class="btn ghost sm" id="openOwnerBulk" disabled><?= icon('user', 14) ?> تغيير صاحب البيان</button><?php endif; ?>
+  <?php /* ⚠️ كشف الحساب **لصاحب بيان واحد** — الزرار بيتفعّل بس لو كل المحدّد
+           لنفس الاسم، وبيقول ليه لو لأ. `OwnerStatement::form` بتسحب بوالص
+           الاسم بنفسها، فاللي بنبعته هو الاسم مش قايمة البوالص. */ ?>
+  <a class="btn ghost sm is-off" id="openStatementBulk" href="#" aria-disabled="true"><?= icon('receipt', 14) ?> إصدار كشف حساب</a>
   <button type="button" class="btn ghost sm" id="clearBillBulk" disabled>إلغاء التحديد</button>
 </div>
 
@@ -70,9 +74,36 @@ $bulkAllowOwner   = $bulkAllowOwner ?? true;
   var buttons = ['openFreightBulk','openOwnerBulk','clearBillBulk'].map(function(id){ return document.getElementById(id); });
   var master = document.querySelector('.js-bill-pick-all');
 
+  var stBtn = document.getElementById('openStatementBulk');
+  var stBase = <?= js_json(url('statements/form')) ?>;
+
+  /* ⚠️ كشف الحساب لصاحب بيان **واحد** — `OwnerStatement::form` بتاخد `?owner=`
+     وبتسحب بوالصه بنفسها. فلو المحدّد لأكتر من اسم الزرار بيتقفل ويقول السبب،
+     ولو الاسم فاضي كمان (بوليصة بلا صاحب بيان مالهاش كشف). */
+  function refreshStatement(n){
+    if(!stBtn) return;
+    var names = {}, blank = 0;
+    selected().forEach(function(c){
+      var o = (c.getAttribute('data-owner')||'').trim();
+      if(o==='') { blank++; } else { names[o] = 1; }
+    });
+    var keys = Object.keys(names), ok = n>0 && keys.length===1 && blank===0;
+    stBtn.classList.toggle('is-off', !ok);
+    stBtn.setAttribute('aria-disabled', ok ? 'false' : 'true');
+    if(ok){
+      stBtn.href = stBase + '?owner=' + encodeURIComponent(keys[0]);
+      stBtn.title = 'كشف حساب: ' + keys[0];
+    } else {
+      stBtn.removeAttribute('href');
+      stBtn.title = n===0 ? 'علّم بوالص الأول'
+        : (blank ? 'فيه بوالص بلا صاحب بيان' : 'المحدّد لأكتر من صاحب بيان — اختار اسم واحد');
+    }
+  }
+
   function refresh(){
     var n=selected().length; count.textContent=n; buttons.forEach(function(b){ if(b)b.disabled=!n; });
     if(master){ master.checked=picks().length>0&&n===picks().length; master.indeterminate=n>0&&n<picks().length; }
+    refreshStatement(n);
     document.dispatchEvent(new CustomEvent('billselectionchange'));
   }
   picks().forEach(function(c){ c.addEventListener('change',refresh); });

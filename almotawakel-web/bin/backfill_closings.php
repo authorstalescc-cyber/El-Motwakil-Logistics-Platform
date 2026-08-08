@@ -23,6 +23,7 @@ use App\Core\Database;
 use App\Models\Closing;
 use App\Models\Permit;
 use App\Models\RepBillCustody;
+use App\Models\RepCustody;
 use App\Models\RepMiscExpense;
 
 function say(string $s, string $c=''){ $x=['ok'=>"\033[32m",'hi'=>"\033[36m",'y'=>"\033[33m",'err'=>"\033[31m"];
@@ -45,16 +46,25 @@ say("═════════════════════════
 // كل الأيام التي بها حركة مالية مؤثّرة (عهد مضافة / مصروفات / عهد سائقين)، حتى تاريخ النهاية
 $expSql = Permit::expenseSql('s');
 // v45: الكاش بس — النثرية المدفوعة بالفيزا ما بتحرّكش الخزنة فما بتفتحش يوم تقفيل.
+// ⚠️ المرحلة ٢ (docs/16): صرف المندوب بعد بداية القاعدة الجديدة مبقاش حركة خزنة،
+//    والتنزيل من الدرج بقى حركة. الشرطان من `RepCustody` — ممنوع يتكتبوا بالإيد.
 $miscDatesSql = RepMiscExpense::available()
     ? 'UNION SELECT exp_date FROM rep_misc_expenses WHERE ' . RepMiscExpense::cashOnlySql()
+      . RepCustody::safeChargeSql('exp_date')
+    : '';
+$depDatesSql = RepCustody::newSafeRuleActive()
+    ? 'UNION SELECT dep_date FROM rep_custody_deposits WHERE 1' . RepCustody::officeDepositSql()
     : '';
 $dates = Database::all(
     "SELECT d FROM (
         SELECT cust_date d FROM manual_custody
-        UNION SELECT s.entry_date FROM permit_stages s WHERE $expSql AND " . Permit::cashOutSql('s') . "
+        UNION SELECT s.entry_date FROM permit_stages s WHERE $expSql AND " . Permit::cashOutSql('s')
+        . \App\Models\RepCustody::safeChargeSql('s.entry_date', 's.paid_by_rep_id')
+        . " AND " . \App\Models\OfficeDriverStatement::stageSafeAmountSql('s') . " <> 0
         UNION SELECT exp_date FROM manual_expenses WHERE is_visa=0
         UNION SELECT bill_date FROM bawalis WHERE custody>0" . RepBillCustody::officeExcludeSql() . "
         $miscDatesSql
+        $depDatesSql
      ) t WHERE d IS NOT NULL AND d <= ? ORDER BY d",
     [$end]
 );

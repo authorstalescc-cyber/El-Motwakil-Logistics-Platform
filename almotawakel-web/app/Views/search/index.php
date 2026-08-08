@@ -135,11 +135,11 @@ $anyFuzzy = false; foreach (($results ?? []) as $g) { if (!empty($g['fuzzy'])) {
       <table class="data search-table">
         <thead>
           <tr>
-            <th style="width:110px">التاريخ</th>
+            <th class="w110">التاريخ</th>
             <th class="txt">البيان</th>
-            <th style="width:90px">النوع</th>
-            <th style="width:130px">المبلغ</th>
-            <th style="width:70px"></th>
+            <th class="w90">النوع</th>
+            <th class="w130">المبلغ</th>
+            <th class="w70"></th>
           </tr>
         </thead>
         <tbody>

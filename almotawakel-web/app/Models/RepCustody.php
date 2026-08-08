@@ -1,6 +1,7 @@
 <?php
 namespace App\Models;
 
+use App\Core\App;
 use App\Core\Auth;
 use App\Core\Database;
 
@@ -68,6 +69,317 @@ class RepCustody
         return $ok;
     }
 
+    // ─────────────────────────────────────────────── خط الفصل (بداية النظام الجديد)
+
+    /** كاش تاريخ الفصل داخل الطلب. '' = الميزة مطفية (سلوك قديم بالحرف). */
+    private static ?string $epoch = null;
+
+    /**
+     * تاريخ بداية عهدة المناديب في النظام الجديد (إعداد `rep_custody_epoch`).
+     *
+     * ⚠️ **السبب:** الفلوس قبل التاريخ ده كانت متسجّلة بنموذج غلط — عهدة السائق
+     *    كانت بتتخصم من خزنة المكتب والمندوب هو اللي دفعها، فرصيد كل مندوب
+     *    متضخّم بمقدار اللي سلّمه للسواقين (مقيس: ~690,500 على مستوى المناديب).
+     *    بدل ما نمسح أو نعدّل صفوفًا قديمة (وده بيضيّع تاريخ الشغل ويخالف قرار
+     *    المالك «البنود ما تتلمسش إطلاقًا»)، بنبدأ العدّ من تاريخ معلوم.
+     *
+     * ⚠️ بترجّع '' لو الإعداد مش موجود أو شكله غلط ⇒ **السلوك القديم بالحرف**،
+     *    فالنظام يشتغل عادي قبل التفعيل، والتراجع = مسح الإعداد وبس.
+     */
+    public static function epoch(): string
+    {
+        if (self::$epoch === null) {
+            $v = trim((string) App::setting('rep_custody_epoch', ''));
+            self::$epoch = preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : '';
+        }
+        return self::$epoch;
+    }
+
+    /**
+     * ⚠️ **المصدر الوحيد لشرط «الحركة دي بعد بداية النظام الجديد؟»**
+     *
+     * بترجّع جزء SQL جاهز للّزق بعد شرط قائم، مثال:
+     *     "... WHERE rep_id = ?" . RepCustody::epochSql('dep_date')
+     *     "... WHERE 1" . RepCustody::epochSql('h.handover_date')
+     *
+     * ⚠️ **ممنوع تكتب شرط التاريخ ده بإيدك في أي مكان.** لازم يتنادى في **كل**
+     *    نقطة بتحسب رصيد مندوب — تنزيلات · بنود · نثريات · تسليمات سائقين ·
+     *    عهد بوالص · تسويات · تحويلات · بنود مستنية. نسيان موضع واحد = كارت
+     *    بيقول رقم وكشف بيقول رقم تاني **بلا أي خطأ ظاهر**
+     *    (نفس نمط `RepBillCustody::officeExcludeSql` و`RepMiscExpense::cashOnlySql`).
+     *    `bin/verify_custody_epoch.php` بيفشل لو أي موضع اتنسي.
+     *
+     * ⚠️ **النطاق: محافظ المناديب بس.** ممنوع تستخدمها في `Closing` أو `Custody`
+     *    (خزنة المكتب) — الخزنة مربوطة بـ`daily_closings` ويوم 2026-07-28 متقفل
+     *    فعلاً، والقفل هو اللي بيجمّد كل اللي قبل خط الفصل.
+     *
+     * التاريخ متحقَّق من شكله في `epoch()` (YYYY-MM-DD حرفيًّا) فلزقه آمن.
+     */
+    public static function epochSql(string $col): string
+    {
+        $e = self::epoch();
+        return $e === '' ? '' : " AND $col >= '$e'";
+    }
+
+    /**
+     * ⚠️ بتصفّر كاش `epoch()`. **إلزامية في أي ترحيل بيكتب الإعداد** — الكاش
+     *    بيتقرا قبل الكتابة (وقت قياس الأرصدة) فبيفضل بالقيمة القديمة بعدها،
+     *    فتحقّق ما بعد الترحيل يفشل بإنذار كاذب (مصيدة v57 الموثَّقة).
+     */
+    public static function refreshEpoch(): void
+    {
+        self::$epoch = null;
+        self::epoch();
+    }
+
+    // ───────────────────────── قاعدة الخزنة الجديدة (المرحلة ٢ من docs/16)
+
+    /**
+     * كاش جاهزية عمود `source`.
+     * ⚠️ **خاصية ساكنة مش `static $x` جوّه الدالة** عن قصد — دي الطريقة الوحيدة
+     *    اللي تخلّي `refreshSourceReady()` تقدر تصفّرها (مصيدة v57 الموثَّقة).
+     */
+    private static ?bool $sourceReady = null;
+
+    /** هل عمود `rep_custody_deposits.source` موجود؟ (المصدر الوحيد لفحص v61) */
+    public static function sourceReady(): bool
+    {
+        if (self::$sourceReady === null) {
+            self::$sourceReady = (bool) Database::scalar(
+                "SELECT COUNT(*) FROM information_schema.columns
+                  WHERE table_schema = DATABASE() AND table_name = 'rep_custody_deposits'
+                    AND column_name = 'source'");
+        }
+        return self::$sourceReady;
+    }
+
+    /** ⚠️ إلزامية في `migrate_v61` — الكاش بيتقرا قبل الـALTER فيفضل false بعده. */
+    public static function refreshSourceReady(): void
+    {
+        self::$sourceReady = null;
+        self::sourceReady();
+    }
+
+    /** كاش تاريخ بداية قاعدة الخزنة الجديدة. '' = القاعدة مطفية (سلوك v42). */
+    private static ?string $safeRuleFrom = null;
+
+    /**
+     * تاريخ بداية **قاعدة الخزنة الجديدة** (إعداد `rep_safe_rule_from`).
+     *
+     * ⚠️⚠️ **إعداد منفصل عن `rep_custody_epoch` عن قصد — والسبب مصيدة نشر حقيقية.**
+     *    خط الفصل مفعّل على الإنتاج من 2026-07-30، فلو ربطنا القاعدة الجديدة بيه
+     *    كان **رصيد الخزنة هيتغيّر لحظة وصول الملفات** — قبل الترحيل وقبل أي
+     *    مراجعة. ولو ربطناها بوجود عمود `source` كان الترحيل نفسه هو اللي يقلب
+     *    الفلوس، وتحقّق «الرصيد قبل = بعد» جوّه الترحيل يفشل.
+     *    بالمفتاح المنفصل: **الرفع خامل · الترحيل خامل · التفعيل قرار صريح
+     *    مراجَع، والتراجع = مسح إعداد واحد** (نفس نمط المرحلة ١ بالحرف).
+     *
+     * ⚠️ والسؤالان مختلفان فعلاً: `rep_custody_epoch` = «أنهي حركة تتحسب في رصيد
+     *    المندوب»، و`rep_safe_rule_from` = «من إمتى الدرج بطّل يمتصّ صرف المندوب».
+     *    بيتصادفوا على نفس التاريخ، بس ما ينفعش يبقوا مفتاحًا واحدًا.
+     */
+    public static function safeRuleFrom(): string
+    {
+        if (self::$safeRuleFrom === null) {
+            $v = trim((string) App::setting('rep_safe_rule_from', ''));
+            self::$safeRuleFrom = preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : '';
+        }
+        return self::$safeRuleFrom;
+    }
+
+    /** ⚠️ إلزامية في أي سكربت بيكتب الإعداد (مصيدة v57 الموثَّقة). */
+    public static function refreshSafeRule(): void
+    {
+        self::$safeRuleFrom = null;
+        self::safeRuleFrom();
+    }
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لشرط «البند ده لسه بيتخصم من خزنة المكتب؟»** بعد
+     *    قلب قاعدة v42 (المرحلة ٢).
+     *
+     * ═══ إيه اللي اتقلب وليه ═══
+     * v42 كانت بتقول: تنزيل العهدة مالوش أثر على الخزنة، و**صرف المندوب بيتخصم
+     * من الخزنة يوم صرفه**. ده كان صح **بس** طول ما كل تنزيل معاه توب-أب مرايا
+     * في `manual_custody`. ولمّا الفلوس بقت تيجي من البنك للمندوب على طول (وده
+     * الواقع الفعلي)، الخزنة بقت تتخصم لفلوس **عمرها ما دخلت الدرج** فبتنزل
+     * سالب. القاعدة الجديدة: **المندوب محفظة مستقلة، وصرفه ما بيمسّ الدرج**، واللي
+     * بيمسّ الدرج هو التنزيل **لو طلع منه فعلاً** (`source='office'`).
+     *
+     * ⚠️⚠️ **الشرط محكوم بخط الفصل عن قصد، والحدّ على عمود التاريخ بتاع الصف
+     *    نفسه — وده اللي بيخلّي الأيام المتقفلة تفضل صح تلقائيًّا.**
+     *    `Closing::refreshLockedChainFrom()` بتعيد حساب أي يوم متقفل من الصفوف
+     *    الخام (وبتتنفّذ لوحدها مع «الدخول الحر»)، فلو الحدّ كان على «النهاردة»
+     *    أو على إعداد عام، إعادة الحساب كانت هتطبّق القاعدة الجديدة على أيام
+     *    قديمة و**تعيد كتابة تاريخ مقفول بالسكوت**. بالشكل ده الصف القديم بيفضل
+     *    داخل الحساب دايمًا والجديد بره دايمًا، مهما اتعاد الحساب كام مرة.
+     *
+     * ⚠️ بترجّع `''` لو خط الفصل مطفي ⇒ **سلوك v42 بالحرف**، فالكود ينفع يترفع
+     *    قبل التفعيل والتراجع = مسح إعداد واحد.
+     *
+     * @param string $dateCol عمود تاريخ الصف (`s.entry_date` · `exp_date` …)
+     * @param string $repCol  عمود المندوب لو الجدول بيخلط بنود المكتب والمندوب
+     *                        (`s.paid_by_rep_id`)، أو '' لو **كل** صفوفه للمندوب.
+     */
+    public static function safeChargeSql(string $dateCol, string $repCol = ''): string
+    {
+        if (!self::newSafeRuleActive()) { return ''; }
+        $e = self::safeRuleFrom();
+        return $repCol === ''
+            ? " AND $dateCol < '$e'"
+            : " AND ($repCol IS NULL OR $dateCol < '$e')";
+    }
+
+    /**
+     * ⚠️ **الاتجاه التاني للقاعدة الجديدة** — شرط «التنزيل ده طلع من درج المكتب
+     *    فعلاً»، للجمع كمصروف في `Closing`.
+     *
+     * ⚠️⚠️ **الاتجاهان لازم يمشوا مع بعض**: `safeChargeSql` بتشيل صرف المندوب من
+     *    الخزنة، ودي بتضيف التنزيل المكتبي. تطبيق الأولى بلا التانية = الخزنة
+     *    بتقول رقمًا أعلى من الحقيقة لأن الكاش اللي طلع من الدرج مش متسجّل خروجه.
+     *
+     * بترجّع `''` لو العمود مش موجود أو خط الفصل مطفي ⇒ صفر أثر (السلوك القديم).
+     */
+    public static function officeDepositSql(string $dateCol = 'dep_date'): string
+    {
+        if (!self::newSafeRuleActive()) { return ''; }
+        return " AND source = 'office' AND $dateCol >= '" . self::safeRuleFrom() . "'";
+    }
+
+    // ─────────────── «الخزنة = كل كاش الشركة» (قرار المالك 2026-07-30)
+
+    /** كاش تاريخ بداية اعتبار عهدة المندوب إضافة للخزنة. '' = مطفي. */
+    private static ?string $bankTopupFrom = null;
+
+    /**
+     * تاريخ بداية قاعدة **«أي عهدة تنزل للمندوب تتحسب إضافة للخزنة»**
+     * (إعداد `rep_bank_topup_from` — قرار المالك الحرفي: «أي عهدة يتم إضافتها
+     * للمندوب كأنها في الدرج»).
+     *
+     * ═══ الفرق بين النموذجين ═══
+     *   • **الخزنة = الدرج بس** (المرحلة ٢): التنزيل مالوش أثر، وصرف المندوب
+     *     مالوش أثر. الرقم = الكاش اللي في درج المكتب وتقدر تعدّه بإيدك.
+     *   • **الخزنة = كل كاش الشركة** (ده): التنزيل من البنك **بيزوّد** الخزنة،
+     *     وصرف المندوب **بيخصم** منها. الرقم = كل الكاش برّه البنك (درج +
+     *     جيوب المناديب)، وتفكيكه بيبان في قسم «الكاش برّه البنك» تحت الشاشة.
+     *
+     * ⚠️⚠️ **`carry` و`office` عمرهم ما بيزوّدوا الخزنة — ودي مش تفصيلة:**
+     *   • `office` = كاش اتنقل **من الدرج لجيب المندوب**. الاتنين جوّه الرقم،
+     *     فالإجمالي ما اتغيّرش ⇒ تحويل داخلي بلا أثر.
+     *   • `carry` = رصيد كان مع المندوب **من قبل**، وهو متحسوب خلاص في المرحّل
+     *     بتاع اليوم السابق. لو زوّدناه تاني بيتعدّ **مرتين**.
+     *   يعني **`bank` بس** هي الفلوس الجديدة الداخلة للشركة.
+     *
+     * ⚠️ إعداد منفصل عشان الرفع يفضل خامل والتفعيل قرار مراجَع (نفس نمط
+     *    `rep_safe_rule_from` و`rep_custody_epoch`).
+     */
+    public static function bankTopupFrom(): string
+    {
+        if (self::$bankTopupFrom === null) {
+            $v = trim((string) App::setting('rep_bank_topup_from', ''));
+            self::$bankTopupFrom = preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : '';
+        }
+        return self::$bankTopupFrom;
+    }
+
+    /** ⚠️ إلزامية في أي سكربت بيكتب الإعداد (مصيدة v57 الموثَّقة). */
+    public static function refreshBankTopup(): void
+    {
+        self::$bankTopupFrom = null;
+        self::bankTopupFrom();
+    }
+
+    /** هل قاعدة «عهدة المندوب إضافة للخزنة» فعّالة؟ */
+    public static function bankTopupActive(): bool
+    {
+        return self::bankTopupFrom() !== '' && self::sourceReady();
+    }
+
+    /**
+     * ⚠️ **المصدر الوحيد لشرط «التنزيل ده إضافة للخزنة؟»** — للجمع في
+     *    `Closing::sumTopups`. `bank` بس، ومن تاريخ التفعيل ورايح.
+     *
+     * بترجّع `''` لو القاعدة مطفية ⇒ صفر أثر (السلوك السابق بالحرف).
+     */
+    public static function bankTopupSql(string $dateCol = 'dep_date'): string
+    {
+        if (!self::bankTopupActive()) { return ''; }
+        /* ⚠️ `company` (v67) معاها زي `bank` بالحرف: الاتنين فلوس داخلة جيب
+           المندوب **من برّه الدرج**، فلازم يزوّدوا الإجمالي في النموذج المجمّع.
+           لو `company` اتنست هنا، الفلوس بتتخصم من خزنة الشركة وما تظهرش في أي
+           خزنة تانية ⇒ **بتتبخّر** (نفس مصيدة الفيزا الموثَّقة في v45). */
+        $in = "'" . implode("','", self::TOPUP_SOURCES) . "'";
+        return " AND source IN ($in) AND $dateCol >= '" . self::bankTopupFrom() . "'";
+    }
+
+    /**
+     * هل قاعدة الخزنة الجديدة فعّالة؟ — **إعداد التفعيل + عمود المصدر مع بعض.**
+     *
+     * ⚠️ الشرطان مربوطان عن قصد: القاعدة بتشيل صرف المندوب من الخزنة **و**بتضيف
+     *    التنزيل المكتبي. بلا عمود `source` مفيش طريقة نعرف بيها أي تنزيل طلع من
+     *    الدرج، فتفعيل النص الأول لوحده = الخزنة بتقول رقمًا أعلى من الحقيقة.
+     */
+    public static function newSafeRuleActive(): bool
+    {
+        return self::safeRuleFrom() !== '' && self::sourceReady();
+    }
+
+    /**
+     * أرشيف ما **قبل** خط الفصل لمندوب — قراءة فقط، للعرض وبس.
+     *
+     * ⚠️ **ليه موجودة:** أول ما نفعّل خط الفصل، كل حركة قبله بتختفي من الكارت.
+     *    من غير القسم ده المالك بيفتح كارت مندوب وياخد انطباع إن **البيانات
+     *    اتمسحت** — وهي موجودة بالكامل، بس مستبعدة من الحساب عن قصد. القسم
+     *    بيقول الرقم ويشرح سببه، فالاختفاء يبقى مفهومًا بدل ما يبقى مقلقًا.
+     *
+     * ⚠️ **بتكتب شرط التاريخ بإيدها عن قصد — وهي الاستثناء الوحيد المسموح.**
+     *    `epochSql` بترجّع «من خط الفصل ورايح»، وإحنا عايزين **العكس** بالظبط.
+     *    ولإنها عرض بحت ما بتدخلش أي رصيد، فما فيش خطر تزامن.
+     *
+     * @return array|null null لو الميزة مطفية (مفيش أرشيف أصلاً).
+     */
+    public static function archiveBefore(int $repId): ?array
+    {
+        $e = self::epoch();
+        if ($e === '' || !self::available()) { return null; }
+        $one = static fn (string $sql, array $a): float
+            => round((float) Database::scalar($sql, $a), 2);
+
+        $dep = $one("SELECT COALESCE(SUM(amount),0) FROM rep_custody_deposits
+                     WHERE rep_id = ? AND dep_date < ?", [$repId, $e]);
+        $spent = $one("SELECT COALESCE(SUM(amount),0) FROM permit_stages
+                       WHERE paid_by_rep_id = ? AND " . Permit::cashOutSql('') . "
+                         AND entry_date < ?", [$repId, $e]);
+        $misc = $one("SELECT COALESCE(SUM(amount),0) FROM rep_misc_expenses
+                      WHERE rep_id = ? AND " . RepMiscExpense::cashOnlySql() . "
+                        AND exp_date < ?", [$repId, $e]);
+        $ret = $one("SELECT COALESCE(SUM(returned),0) FROM rep_custody_settlements
+                     WHERE rep_id = ? AND settle_date < ?", [$repId, $e]);
+        $tin = $one("SELECT COALESCE(SUM(amount),0) FROM rep_custody_transfers
+                     WHERE to_rep_id = ? AND transfer_date < ?", [$repId, $e]);
+        $tout = $one("SELECT COALESCE(SUM(amount),0) FROM rep_custody_transfers
+                      WHERE from_rep_id = ? AND transfer_date < ?", [$repId, $e]);
+        $pend = $one("SELECT COALESCE(SUM(amount),0) FROM rep_submissions
+                      WHERE rep_id = ? AND status = 'pending' AND " . RepPortal::pendingCashSql() . "
+                        AND entry_date < ?", [$repId, $e]);
+        $pendCnt = (int) Database::scalar("SELECT COUNT(*) FROM rep_submissions
+                      WHERE rep_id = ? AND status = 'pending' AND entry_date < ?", [$repId, $e]);
+
+        $spentAll = round($spent + $misc, 2);
+        return [
+            'epoch'       => $e,
+            'deposits'    => $dep,
+            'spent'       => $spentAll,
+            'returned'    => $ret,
+            'transfer_in' => $tin,
+            'transfer_out' => $tout,
+            'balance'     => round($dep + $tin - $spentAll - $ret - $tout, 2),
+            'pending'     => $pend,
+            'pending_cnt' => $pendCnt,
+            'any'         => ($dep || $spentAll || $ret || $tin || $tout || $pendCnt) ? true : false,
+        ];
+    }
+
     // ─────────────────────────────────────────────── الرصيد
 
     /**
@@ -89,9 +401,13 @@ class RepCustody
      */
     private static function dayClause(string $col, ?string $day, array &$args): string
     {
-        if ($day === null || $day === '') { return ''; }
+        // ⚠️ خط الفصل بيتلزق **دايمًا**، سواء طلبنا يومًا واحد أو التراكمي:
+        //    التراكمي لازم يبدأ من بداية النظام الجديد، واليوم الواحد لازم يرفض
+        //    أي تاريخ قبله بدل ما يعرض أرقام العهد القديمة الغلط.
+        $epoch = self::epochSql($col);
+        if ($day === null || $day === '') { return $epoch; }
         $args[] = $day;
-        return " AND $col = ?";
+        return " AND $col = ?" . $epoch;
     }
 
     /** إجمالي المنزَّل للمندوب ($day = يوم واحد، null = كل الأيام). */
@@ -245,18 +561,19 @@ class RepCustody
 
         $add($pairs(Database::all(
             "SELECT dep_date d, SUM(amount) total FROM rep_custody_deposits
-             WHERE rep_id = ? GROUP BY dep_date", [$repId])), 'deposits');
+             WHERE rep_id = ?" . self::epochSql('dep_date') . " GROUP BY dep_date", [$repId])), 'deposits');
 
         $add($pairs(Database::all(
             "SELECT entry_date d, SUM(amount) total FROM permit_stages
-             WHERE paid_by_rep_id = ? AND " . Permit::cashOutSql('') . " GROUP BY entry_date", [$repId])), 'spent');
+             WHERE paid_by_rep_id = ? AND " . Permit::cashOutSql('')
+             . self::epochSql('entry_date') . " GROUP BY entry_date", [$repId])), 'spent');
         $add(RepMiscExpense::totalsByDay($repId), 'spent');
         $add(RepDriverHandover::totalsByDay($repId), 'spent');
         $add(RepBillCustody::totalsByDay($repId), 'spent');   // v60 — عهدة بوليصة من محفظته
 
         $add($pairs(Database::all(
             "SELECT settle_date d, SUM(returned) total FROM rep_custody_settlements
-             WHERE rep_id = ? GROUP BY settle_date", [$repId])), 'returned');
+             WHERE rep_id = ?" . self::epochSql('settle_date') . " GROUP BY settle_date", [$repId])), 'returned');
 
         $add(RepTransfer::inTotalsByDay($repId), 'transfer_in');
         $add(RepTransfer::outTotalsByDay($repId), 'transfer_out');
@@ -264,10 +581,12 @@ class RepCustody
         // المستنّي اعتماده كاش: خرج من إيد المندوب فعلاً في اليوم ده وإن كان
         // لسه ما اتحسبش في `spent` (بيتحسب وقت الاعتماد). عشان كده الشاشات
         // بتعرض `pocket` (= balance − pending) كـ«الفاضل معاه»، و`balance`
-        // بيفضل الرصيد المحاسبي بعد المعتمد بس.
+        // بيفضل الرصيد المحاسبي بعد المعتمد بس. الفيزا و«غير مدفوع» معلوماتيان
+        // ولا يدخلان `pending` لأنهما لم يخرجا من عهدة المندوب.
         $add($pairs(Database::all(
             "SELECT entry_date d, SUM(amount) total FROM rep_submissions
-             WHERE rep_id = ? AND status = 'pending' AND is_visa = 0
+             WHERE rep_id = ? AND status = 'pending' AND " . RepPortal::pendingCashSql()
+             . self::epochSql('entry_date') . "
              GROUP BY entry_date", [$repId])), 'pending');
 
         krsort($days, SORT_STRING);
@@ -311,19 +630,22 @@ class RepCustody
         };
 
         $merge($byRep("SELECT rep_id rid, SUM(amount) total FROM rep_custody_deposits
-                       WHERE dep_date = ? GROUP BY rep_id"), 'deposits');
+                       WHERE dep_date = ?" . self::epochSql('dep_date') . " GROUP BY rep_id"), 'deposits');
         $merge($byRep("SELECT paid_by_rep_id rid, SUM(amount) total FROM permit_stages
-                       WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " AND entry_date = ?
+                       WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " AND entry_date = ?"
+                       . self::epochSql('entry_date') . "
                        GROUP BY paid_by_rep_id"), 'spent');
         $merge(RepMiscExpense::totalsByRep($day), 'spent');
         $merge(RepDriverHandover::totalsByRep($day), 'spent');
         $merge(RepBillCustody::totalsByRep($day), 'spent');   // v60
         $merge($byRep("SELECT rep_id rid, SUM(returned) total FROM rep_custody_settlements
-                       WHERE settle_date = ? GROUP BY rep_id"), 'returned');
+                       WHERE settle_date = ?" . self::epochSql('settle_date') . " GROUP BY rep_id"), 'returned');
         $merge(RepTransfer::inTotalsByRep($day), 'transfer_in');
         $merge(RepTransfer::outTotalsByRep($day), 'transfer_out');
         $merge($byRep("SELECT rep_id rid, SUM(amount) total FROM rep_submissions
-                       WHERE status = 'pending' AND is_visa = 0 AND entry_date = ?
+                       WHERE status = 'pending' AND " . RepPortal::pendingCashSql()
+                       . " AND entry_date = ?"
+                       . self::epochSql('entry_date') . "
                        GROUP BY rep_id"), 'pending');
 
         foreach ($out as $rid => $row) {
@@ -355,6 +677,7 @@ class RepCustody
         foreach (self::dayTotalsByRep($day) as $rid => $row) {
             if (($row['spent'] ?? 0) <= 0) { continue; }
             foreach (self::spending((int) $rid, $day) as $s) {
+                if (!empty($s['is_visa']) || !empty($s['unpaid'])) { continue; }
                 $s['rep_id'] = (int) $rid;
                 $s['rep_name'] = $names[(int) $rid] ?? '';
                 $out[] = $s;
@@ -372,7 +695,7 @@ class RepCustody
             "SELECT d.*, r.name AS rep_name
              FROM rep_custody_deposits d
              JOIN reps r ON r.id = d.rep_id
-             WHERE d.dep_date = ?
+             WHERE d.dep_date = ?" . self::epochSql('d.dep_date') . "
              ORDER BY d.amount DESC, d.id DESC", [$day]);
     }
 
@@ -396,12 +719,15 @@ class RepCustody
                     COALESCE(d.last_date, NULL) AS last_deposit
              FROM reps r
              LEFT JOIN (SELECT rep_id, SUM(amount) total, MAX(dep_date) last_date
-                        FROM rep_custody_deposits GROUP BY rep_id) d ON d.rep_id = r.id
+                        FROM rep_custody_deposits WHERE 1" . self::epochSql('dep_date') . "
+                        GROUP BY rep_id) d ON d.rep_id = r.id
              LEFT JOIN (SELECT paid_by_rep_id rid, SUM(amount) total
-                        FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . "
+                        FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('')
+                        . self::epochSql('entry_date') . "
                         GROUP BY paid_by_rep_id) s ON s.rid = r.id
              LEFT JOIN (SELECT rep_id, SUM(returned) total
-                        FROM rep_custody_settlements GROUP BY rep_id) t ON t.rep_id = r.id
+                        FROM rep_custody_settlements WHERE 1" . self::epochSql('settle_date') . "
+                        GROUP BY rep_id) t ON t.rep_id = r.id
              $w
              ORDER BY r.status='inactive', r.name", $args);
 
@@ -438,11 +764,13 @@ class RepCustody
     public static function totalOutstanding(): float
     {
         if (!self::available()) { return 0.0; }
-        $dep = (float) Database::scalar("SELECT COALESCE(SUM(amount),0) FROM rep_custody_deposits");
+        $dep = (float) Database::scalar(
+            "SELECT COALESCE(SUM(amount),0) FROM rep_custody_deposits WHERE 1" . self::epochSql('dep_date'));
         $spent = (float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM permit_stages
-             WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql(''));
-        $ret = (float) Database::scalar("SELECT COALESCE(SUM(returned),0) FROM rep_custody_settlements");
+             WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . self::epochSql('entry_date'));
+        $ret = (float) Database::scalar(
+            "SELECT COALESCE(SUM(returned),0) FROM rep_custody_settlements WHERE 1" . self::epochSql('settle_date'));
         // ⚠️ v46: التحويلات بين المناديب **بتلغي بعضها في الإجمالي** — كل تحويل
         //    بيزوّد محفظة ويخصم من تانية بنفس المبلغ، فالفلوس ما خرجتش من نظام
         //    عهدة المناديب. مضيفينها بطرفيها للتوثيق (net = 0) مش لتغيير الرقم.
@@ -459,18 +787,252 @@ class RepCustody
         return Database::row("SELECT * FROM rep_custody_deposits WHERE id = ?", [$id]);
     }
 
-    /** تنزيل عهدة جديد. **لا يمسّ الخزنة** (زي شحن كارت الفيزا). */
-    public static function createDeposit(int $repId, float $amount, ?string $date, string $note = ''): int
+    /** مصادر تنزيل العهدة (v61) — قايمة مقفولة، الفورم مش مصدر ثقة. */
+    public const SOURCES = [
+        'bank'    => 'من البنك للمندوب على طول',
+        'office'  => 'من درج المكتب',
+        'carry'   => 'كان معاه من قبل (رصيد مرحَّل)',
+        // v67 — بيتولّد من `/company-safe` بس (نوع الحركة `to_rep`). حسابيًّا زي
+        // `bank` بالحرف، والاسم منفصل عشان المالك يعرف الفلوس جت منين فعلاً.
+        'company' => 'من خزنة الشركة',
+    ];
+
+    /** المصادر اللي بتتحسب «فلوس جديدة داخلة» في نموذج «الخزنة = كل كاش الشركة». */
+    private const TOPUP_SOURCES = ['bank', 'company'];
+
+    /** الافتراضي — الحالة الغالبة، ومالهاش أثر على الدرج (قرار المالك Q2). */
+    public const SOURCE_DEFAULT = 'bank';
+
+    /**
+     * ⚠️⚠️ **المصادر اللي المستخدم يقدر يختارها بإيده من فورم تنزيل العهدة.**
+     *
+     * `company` **مش منها عن قصد** — بيتولّد من `/company-safe` بس (نوع الحركة
+     * `to_rep`) اللي **بيخصم المبلغ من خزنة الشركة في نفس المعاملة**. لو اتحطّ
+     * في الفورم، أي حد يقدر ينزّل عهدة «من خزنة الشركة» **بلا ما تتخصم منها**
+     * ⇒ فلوس بتتولّد من العدم في محفظة المندوب. نفس منطق استبعاد `from_client`
+     * من `CompanySafe::MANUAL_KINDS`.
+     */
+    public const MANUAL_SOURCES = ['bank', 'office', 'carry'];
+
+    /** خيارات الفورم (مفتاح ⇒ تسمية) — المصدر الوحيد لأي `<select>` مصدر. */
+    public static function manualSources(): array
     {
+        return array_intersect_key(self::SOURCES, array_flip(self::MANUAL_SOURCES));
+    }
+
+    /**
+     * ⚠️ **نسخة `cleanSource` للمدخلات الجاية من فورم** — بترجّع الافتراضي لأي
+     *    قيمة برّه `MANUAL_SOURCES`، بما فيها `company` الصالحة تقنيًّا. الفورم
+     *    مش مصدر ثقة، والفرق بينها وبين `cleanSource` هو الحاجز الوحيد اللي
+     *    بيمنع تنزيل «من خزنة الشركة» بلا خصم منها.
+     */
+    public static function cleanManualSource(?string $v): string
+    {
+        $v = trim((string) $v);
+        return in_array($v, self::MANUAL_SOURCES, true) ? $v : self::SOURCE_DEFAULT;
+    }
+
+    /**
+     * ⚠️ **الفورم مش مصدر ثقة**: أي قيمة برّه `SOURCES` بترجع للافتراضي `bank`.
+     *    قيمة غلط كانت هتتخزَّن في enum فترفضها MySQL ويقع الحفظ، أو الأسوأ —
+     *    لو `office` اتكتبت بالغلط الخزنة تتخصم مبلغًا ما خرجش من الدرج.
+     */
+    public static function cleanSource(?string $v): string
+    {
+        $v = trim((string) $v);
+        return isset(self::SOURCES[$v]) ? $v : self::SOURCE_DEFAULT;
+    }
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لسؤال «خانة المصدر ليها أثر على الخزنة دلوقتي؟»** —
+     *    وهو اللي بيقرّر تظهر في الفورم ولا لأ.
+     *
+     * ═══ ليه النموذجان مع بعض مش `newSafeRuleActive()` لوحده ═══
+     * الخانة كانت مشروطة بقاعدة المرحلة ٢ بس، فلما اتفعّل نموذج **«الخزنة = كل
+     * كاش الشركة»** (`rep_bank_topup_from`) لوحده على الإنتاج، الخانة فضلت
+     * **مخفية** — يعني كل تنزيل بيتسجّل `bank` غصبًا، وده **بيزوّد الخزنة**
+     * (`Closing::sumBankDeposits`). فالمالك اللي بياخد كاش من الدرج ويسلّمه
+     * لمندوب كان بيلاقي الخزنة **زادت** بالمبلغ وهو ما دخلش أصلاً — الفلوس
+     * تتقري مرتين. الصح إن الخانة تظهر في **أي** نموذج المصدر بيفرق فيه.
+     *
+     * بترجّع false لو النموذجين مطفيين ⇒ كل المصادر واحدة فعلاً، والخانة ساعتها
+     * تشتيت بلا أثر (السلوك الأصلي).
+     */
+    public static function sourceMatters(): bool
+    {
+        return self::bankTopupActive() || self::newSafeRuleActive();
+    }
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لسؤال «التنزيل ده بيغيّر رصيد الخزنة؟»** — وهو اللي
+     *    بيقرّر نحتاج `Closing::guard` ولا لأ (الإنشاء **والحذف**).
+     *
+     *   • `office` مع قاعدة المرحلة ٢ → كاش خرج من الدرج ⇒ **مصروف** يوم تنزيله.
+     *   • `bank`   مع نموذج «الخزنة = كل كاش الشركة» → فلوس جديدة ⇒ **إضافة**.
+     *   • `carry`  → عمره ما يمسّ الخزنة (متحسوب خلاص في مرحّل امبارح).
+     *   • `office` مع النموذج المجمّع → **تحويل داخلي**: الدرج بينقص وجيب المندوب
+     *     بيزيد والاتنين جوّه الرقم ⇒ الخزنة ما بتتغيّرش، فمفيش حارس.
+     *
+     * ⚠️ من غير الحارس ده، تنزيل مؤرَّخ على **يوم متقفل** بيغيّر رصيدًا مثبَّتًا
+     *    (`refreshLockedChainFrom` بتعيد الحساب من الصفوف الخام) **بلا أي خطأ ظاهر**.
+     */
+    public static function depositAffectsSafe(string $source): bool
+    {
+        $src = self::cleanSource($source);
+        if ($src === 'office') { return self::newSafeRuleActive(); }
+        /* ⚠️ `company` (v67) نفس حساب `bank` بالضبط — الاتنين فلوس بتدخل جيب
+           المندوب من برّه الدرج. الاسم بس هو اللي بيفرق (للعرض والتتبّع). */
+        if (in_array($src, self::TOPUP_SOURCES, true)) { return self::bankTopupActive(); }
+        return false;   // carry
+    }
+
+    /**
+     * شرط «التنزيل ده مصدره كذا؟» — **للعرض والتصنيف، مش للحساب**.
+     *
+     * ⚠️⚠️ **ما تخلطهاش بـ`officeDepositSql()`**: دي بتقول «الصف مصدره الدرج»
+     *    وبس، وتلك بتقول «الصف ده كاش خرج من الدرج **ويتحسب مصروفًا**» — فبتزوّد
+     *    حدّ خط الفصل وبترجّع `''` لو القاعدة مطفية. استخدام الغلط منهم في مكان
+     *    الحساب بيكسر مطابقة `Closing` بلا أي خطأ ظاهر.
+     *
+     * ⚠️ قبل `migrate_v61` مفيش عمود `source` وكل الصفوف ضمنيًّا `bank` — فالسؤال
+     *    عن أي مصدر تاني بيرجّع شرطًا **مستحيل** (` AND 0`) مش شرطًا فاضيًا،
+     *    وإلا كان هيطابق **كل** الصفوف ويعرضهم على إنهم من الدرج.
+     */
+    public static function sourceIsSql(string $source, string $col = 'source'): string
+    {
+        $src = self::cleanSource($source);
+        if (self::sourceReady()) { return " AND $col = '$src'"; }
+        return $src === self::SOURCE_DEFAULT ? '' : ' AND 0';
+    }
+
+    /**
+     * تنزيلات يوم مقسومة بالمصدر — **للعرض بس** (سطر «منها كذا من الدرج»).
+     *
+     * ⚠️ نفس نطاق `dayDeposits`/`deposits` بالحرف (خط الفصل + المندوب لو محدَّد)
+     *    فمجموع المفاتيح = الرقم المعروض فوقها بالمليم. أي شرط مختلف هنا بيخلّي
+     *    سطر التفكيك يخالف الكارت اللي تحته.
+     * ⚠️ بترجّع مصفوفة فاضية قبل `migrate_v61` — مفيش عمود مصدر يتقسّم عليه.
+     *
+     * @return array<string,float> مفاتيحها من `SOURCES` والقيمة > 0 فقط
+     */
+    public static function depositSourceTotals(string $day, ?int $repId = null): array
+    {
+        if (!self::available() || !self::sourceReady() || $day === '') { return []; }
+        $args = [$day];
+        $repW = '';
+        if ($repId !== null) { $repW = ' AND rep_id = ?'; $args[] = $repId; }
+        $out = [];
+        foreach (Database::all(
+            "SELECT source, COALESCE(SUM(amount),0) AS total FROM rep_custody_deposits
+             WHERE dep_date = ?$repW" . self::epochSql('dep_date') . ' GROUP BY source', $args
+        ) as $r) {
+            $v = round((float) $r['total'], 2);
+            if (abs($v) > 0.005) { $out[self::cleanSource($r['source'])] = $v; }
+        }
+        return $out;
+    }
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لعرض «التنزيل ده جاي منين»** — شارة قصيرة + أيقونة +
+     *    أثره على الخزنة، لكل شاشة بتعرض صف تنزيل عهدة.
+     *
+     * ═══ ليه دي موجودة (بلاغ المالك 2026-08-08) ═══
+     * `source` بيتسجّل من v61 و**عمره ما اتعرض في أي مكان**: كشف حساب المندوب
+     * وكارت اليوم ونوافذ التفاصيل كلها كانت بتعرض «تنزيل عهدة» + التاريخ + المبلغ
+     * وبس. فالمالك يبص على ٢٠ ألف نازلة لمندوب ومايعرفش طلعت من الدرج اللي
+     * بيعدّه بإيده ولا اتسحبت من البنك — وهو الفرق اللي **بيحدّد رصيد الخزنة**.
+     *
+     * ⚠️ **الأثر بيتبع النموذج الفعّال** (`depositAffectsSafe` هي الحكم، مش اسم
+     *    المصدر): نفس التنزيل `office` بيبقى «خصم من الخزنة» في قاعدة المرحلة ٢
+     *    و«تحويل داخلي» في النموذج المجمّع. نص ثابت هنا كان هيكدب في نموذج منهم.
+     *
+     * ⚠️ بترجّع `null` قبل `migrate_v61` — مفيش عمود `source` أصلاً، وادّعاء
+     *    «من البنك» على صف ما اتسألش عنه أسوأ من عدم العرض.
+     *
+     * @return array{key:string,label:string,short:string,icon:string,effect:string}|null
+     */
+    public static function sourceBadge(?string $source): ?array
+    {
+        if (!self::sourceReady()) { return null; }
+        $key = self::cleanSource($source);
+        $meta = [
+            'bank'    => ['short' => 'من البنك',       'icon' => 'building'],
+            'office'  => ['short' => 'من درج المكتب',  'icon' => 'landmark'],
+            'carry'   => ['short' => 'رصيد مرحَّل',     'icon' => 'undo'],
+            'company' => ['short' => 'من خزنة الشركة', 'icon' => 'home'],
+        ][$key];
+
+        if ($key === 'carry') {
+            $effect = 'كان معاه من قبل — مش إضافة جديدة';
+        } elseif ($key === 'company') {
+            /* ⚠️ نفس حساب `bank` (شوف `depositAffectsSafe`) بس الجملة بتقول
+               الفلوس خرجت منين — ودي كل فايدة إن ليه مصدرًا منفصل. */
+            $effect = self::bankTopupActive()
+                ? 'خرجت من خزنة الشركة ودخلت الخزنة — الإجمالي زي ما هو'
+                : 'خرجت من خزنة الشركة — ما دخلتش درج المكتب';
+        } elseif ($key === 'office') {
+            $effect = self::newSafeRuleActive()
+                ? 'اتخصمت من الخزنة يوم التنزيل'
+                : (self::bankTopupActive()
+                    ? 'تحويل داخلي — الدرج نقص والخزنة زي ما هي'
+                    : 'ما بتمسّش خزنة المكتب');
+        } else {
+            $effect = self::bankTopupActive()
+                ? 'فلوس جديدة داخلة — الخزنة زادت'
+                : (self::newSafeRuleActive()
+                    ? 'ما دخلتش الدرج — برّه رصيد الخزنة'
+                    : 'ما بتمسّش خزنة المكتب');
+        }
+
+        return ['key' => $key, 'label' => self::SOURCES[$key], 'short' => $meta['short'],
+                'icon' => $meta['icon'], 'effect' => $effect];
+    }
+
+    /**
+     * شرح «الخانة دي بتعمل إيه» بالعامية — **نص واحد للشاشتين** (كارت المندوب
+     * وصفحة الخزنة) عشان ما يتفرّعش نصّان يقولوا كلامًا مختلفًا لنفس الإجراء.
+     */
+    public static function sourceNote(): string
+    {
+        if (self::newSafeRuleActive()) {
+            return '«من درج المكتب» هي الوحيدة اللي بتخصم من الخزنة يوم التنزيل. '
+                 . 'اللي بيتسحب من البنك ويتسلّم للمندوب على طول ما بيدخلش الدرج أصلاً.';
+        }
+        if (self::bankTopupActive()) {
+            return 'الخزنة = كل كاش الشركة (الدرج + اللي مع المناديب). '
+                 . '«من البنك» فلوس جديدة داخلة ⇒ الخزنة بتزيد. '
+                 . '«من درج المكتب» تحويل داخلي ⇒ الخزنة زي ما هي والدرج بس هو اللي بينقص.';
+        }
+        return 'ما بيخصمش من خزنة المكتب — عهدة المناديب حساب منفصل.';
+    }
+
+    /**
+     * تنزيل عهدة جديد.
+     *
+     * ⚠️ **أثره على الخزنة بيتحدّد من `$source` (v61 — المرحلة ٢):**
+     *   • `bank`/`carry` → **مالوش أثر على الدرج** (سلوك v42 القديم بالحرف).
+     *   • `office`       → **بيتخصم من الدرج يوم التنزيل** (`Closing::sumOfficeDeposits`).
+     *  والقاعدة كلها مطفية لو `newSafeRuleActive()` = false، فالسلوك القديم يفضل.
+     */
+    public static function createDeposit(int $repId, float $amount, ?string $date, string $note = '',
+                                        string $source = self::SOURCE_DEFAULT): int
+    {
+        $src = self::cleanSource($source);
         $pdo = Database::conn();
         $own = !$pdo->inTransaction();
         if ($own) { $pdo->beginTransaction(); }
         try {
             self::lockRep($repId);
+            // ⚠️ العمود بيتخطّى قبل migrate_v61 — إدخاله كان هيكسر كل تنزيل.
+            $cols = self::sourceReady() ? ', source' : '';
+            $vals = self::sourceReady() ? ',?' : '';
+            $args = [$repId, $date ?: null, round(abs($amount), 2),
+                     $note !== '' ? $note : null, Auth::user()];
+            if (self::sourceReady()) { $args[] = $src; }
             Database::exec(
-                "INSERT INTO rep_custody_deposits (rep_id, dep_date, amount, note, created_by)
-                 VALUES (?,?,?,?,?)",
-                [$repId, $date ?: null, round(abs($amount), 2), $note !== '' ? $note : null, Auth::user()]
+                "INSERT INTO rep_custody_deposits (rep_id, dep_date, amount, note, created_by$cols)
+                 VALUES (?,?,?,?,?$vals)",
+                $args
             );
             $id = Database::lastId();
             if ($own) { $pdo->commit(); }
@@ -542,7 +1104,7 @@ class RepCustody
                     p.id AS permit_id, p.permit_no, p.permit_type, p.company, p.client
              FROM permit_stages s
              JOIN permits p ON p.id = s.permit_id
-             WHERE s.paid_by_rep_id = ?", [$repId]);
+             WHERE s.paid_by_rep_id = ?" . self::epochSql('s.entry_date'), [$repId]);
 
         foreach (RepMiscExpense::forRep($repId) as $m) {
             $rows[] = [
@@ -575,14 +1137,17 @@ class RepCustody
             ];
         }
 
-        // v60 — عهدة بوليصة أضافها المندوب ودفعها من محفظته. المبلغ هنا
-        // **العهدة كاملة** مش «العهدة − 100»: الـ100 قاعدة خزنة المكتب،
-        // والمندوب سلّم السائق المبلغ كامل من جيبه.
+        // v60 — عهدة بوليصة دفعها المندوب من محفظته.
+        // ⚠️ **المبلغ = `العهدة − 100`** (`Custody::billDeduction`) مش العهدة
+        //    كاملة: الـ100 رقم ورقي بيتساب لصاحب البوليصة، والسائق بياخد الباقي
+        //    فعلاً (تصحيح 2026-07-30). لازم يطابق `RepBillCustody::totalFor`
+        //    بالمليم وإلا الكشف يقول رقم والرصيد يقول رقم تاني.
         foreach (RepBillCustody::forRep($repId) as $b) {
             $rows[] = [
                 'id' => (int) $b['id'], 'src' => 'bill', 'd' => $b['bill_date'],
                 'note' => $b['bill_number'] ? ('بوليصة ' . $b['bill_number']) : null,
-                'qty' => 1, 'amount' => $b['custody'],
+                'qty' => 1, 'amount' => Custody::billDeduction((float) $b['custody'], $b['car_no'] ?? null),
+                'gross_custody' => round((float) $b['custody'], 2),
                 'ref_no' => $b['bill_number'], 'stage_key' => 'custom', 'direction' => 'expense',
                 'category' => 'عهدة سائق على بوليصة',
                 // العهدة كاش دايمًا — مفيش فيزا في عهدة اليد
@@ -626,11 +1191,11 @@ class RepCustody
      * فمستحيل الأعداد تخالف كشف الصرف نفسه.
      *
      * التصنيف: إيصال (`stage_key='receipts'`) · مصروف إذن · نثرية · تسليم سائق ·
-     * تحويل لزميل. و`visa` بند مدفوع بكارت المكتب — **بيتعرض للعلم وما بيتخصمش
-     * من عهدة المندوب** (قاعدة v45)، عشان كده `cash` منفصل عن `total`.
+     * تحويل لزميل. و`visa`/`unpaid` بندان معلوماتيان — **بيتعرضا للعلم وما
+     * بيتخصموش من عهدة المندوب**، عشان كده `cash` منفصل عن `total`.
      *
      * @return array{receipts:array,expenses:array,misc:array,handover:array,
-     *               transfer:array,visa:array,cash:float,total:float,rows:array}
+     *               transfer:array,visa:array,unpaid:array,cash:float,total:float,rows:array}
      */
     public static function dayActivity(int $repId, string $day): array
     {
@@ -638,7 +1203,7 @@ class RepCustody
         $out = [
             'receipts' => $bucket(), 'expenses' => $bucket(), 'misc' => $bucket(),
             'handover' => $bucket(), 'bill' => $bucket(), 'transfer' => $bucket(),
-            'visa' => $bucket(),
+            'visa' => $bucket(), 'unpaid' => $bucket(),
             'cash' => 0.0, 'total' => 0.0, 'rows' => [],
         ];
         if (!self::available() || $day === '') { return $out; }
@@ -655,7 +1220,10 @@ class RepCustody
             };
             $out[$key]['cnt']++;
             $out[$key]['sum'] = round($out[$key]['sum'] + $amt, 2);
-            if (!empty($r['is_visa'])) {
+            if (!empty($r['unpaid'])) {
+                $out['unpaid']['cnt']++;
+                $out['unpaid']['sum'] = round($out['unpaid']['sum'] + $amt, 2);
+            } elseif (!empty($r['is_visa'])) {
                 $out['visa']['cnt']++;
                 $out['visa']['sum'] = round($out['visa']['sum'] + $amt, 2);
             } else {
@@ -677,8 +1245,40 @@ class RepCustody
     {
         if (!self::available()) { return []; }
         return Database::all(
-            "SELECT * FROM rep_custody_settlements WHERE rep_id = ?
+            "SELECT * FROM rep_custody_settlements WHERE rep_id = ?" . self::epochSql('settle_date') . "
              ORDER BY settle_date DESC, id DESC", [$repId]);
+    }
+
+    /**
+     * تسويات يوم واحد **عبر كل المناديب** — «استلمت كام من المناديب النهاردة».
+     *
+     * ⚠️ **التاريخ هو `settle_date` مش وقت التسجيل** — التصفية بتتسجّل بتاريخ
+     *    اليوم اللي بتقفله (قاعدة 2026-07-27)، فالمالك اللي واقف على تقفيل يوم
+     *    D بيشوف اللي استلمه عن يوم D بالظبط.
+     *
+     * ⚠️ **المبلغ ممكن يطلع سالب** ومعناه إن المكتب **دفع** للمندوب (كان فارش
+     *    من جيبه أكتر من عهدة اليوم). ممنوع يتقصّ على صفر (قاعدة docs/16 §10.5).
+     *
+     * @return array<int,array> صفوف التسوية + `rep_name`
+     */
+    public static function settlementsOn(string $day): array
+    {
+        if (!self::available() || $day === '') { return []; }
+        return Database::all(
+            "SELECT s.*, r.name AS rep_name
+               FROM rep_custody_settlements s
+               LEFT JOIN reps r ON r.id = s.rep_id
+              WHERE s.settle_date = ?" . self::epochSql('s.settle_date') . "
+              ORDER BY s.id", [$day]);
+    }
+
+    /** إجمالي اللي اتستلم من المناديب في يوم (السالب بيعدّي زي ما هو). */
+    public static function settledTotalOn(string $day): float
+    {
+        if (!self::available() || $day === '') { return 0.0; }
+        return round((float) Database::scalar(
+            "SELECT COALESCE(SUM(returned),0) FROM rep_custody_settlements
+              WHERE settle_date = ?" . self::epochSql('settle_date'), [$day]), 2);
     }
 
     /**
@@ -711,7 +1311,8 @@ class RepCustody
         $cnt = [];
         foreach (Database::all(
             "SELECT entry_date d, COUNT(*) c FROM rep_submissions
-             WHERE rep_id = ? AND status = 'pending' GROUP BY entry_date", [$repId]) as $r) {
+             WHERE rep_id = ? AND status = 'pending'" . self::epochSql('entry_date') . "
+             GROUP BY entry_date", [$repId]) as $r) {
             $cnt[(string) $r['d']] = (int) $r['c'];
         }
         foreach ($rows as &$row) { $row['pending_cnt'] = $cnt[(string) $row['day']] ?? 0; }
@@ -952,9 +1553,15 @@ class RepCustody
         $pendingSum = $miscVisaReady
             ? 'SUM(CASE WHEN is_visa=0 THEN amount ELSE 0 END)'
             : 'SUM(amount)';
+        // ⚠️ خط الفصل هنا كمان — الجوين ده كان **آخر نقطة مزامنة اتنست**، فكان
+        //    بيطرح نثريات **كل الأيام** من رصيد مفلتر ⇒ «برّه مع المناديب» في
+        //    الداشبورد بيقلّ عن `totalOutstanding()` بمقدار النثريات القديمة
+        //    (مقيس على الإنتاج: 81,000 مقابل 54,805 = فرق 26,195 بالظبط).
+        //    `bin/verify_rep_dashboard.php` هو اللي مسكها.
         $miscJoin = $miscReady
             ? "LEFT JOIN (SELECT rep_id, SUM(amount) total FROM rep_misc_expenses WHERE "
-                . RepMiscExpense::cashOnlySql() . " GROUP BY rep_id) x ON x.rep_id=r.id"
+                . RepMiscExpense::cashOnlySql() . self::epochSql('exp_date')
+                . " GROUP BY rep_id) x ON x.rep_id=r.id"
             : '';
         $miscSelect = $miscReady ? 'COALESCE(x.total,0)' : '0';
         $loadCards = static function (string $handoverSelect, string $handoverJoin) use (
@@ -971,19 +1578,19 @@ class RepCustody
                     COALESCE(p.cnt,0) _pending_cnt,
                     COALESCE(p.total,0) _pending_sum,
                     s.last_spend _last_spend,
-                    (SELECT COUNT(*) FROM rep_submissions WHERE entry_date=?) _sent_cnt,
-                    (SELECT COALESCE(SUM(amount),0) FROM rep_submissions WHERE entry_date=?) _sent_sum,
-                    (SELECT COUNT(*) FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " AND entry_date=?) _paid_cnt,
-                    (SELECT COALESCE(SUM(amount),0) FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " AND entry_date=?) _paid_sum
+                    (SELECT COUNT(*) FROM rep_submissions WHERE entry_date=?" . self::epochSql('entry_date') . ") _sent_cnt,
+                    (SELECT COALESCE(SUM(amount),0) FROM rep_submissions WHERE entry_date=?" . self::epochSql('entry_date') . ") _sent_sum,
+                    (SELECT COUNT(*) FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " AND entry_date=?" . self::epochSql('entry_date') . ") _paid_cnt,
+                    (SELECT COALESCE(SUM(amount),0) FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " AND entry_date=?" . self::epochSql('entry_date') . ") _paid_sum
                  FROM reps r
                  LEFT JOIN (SELECT rep_id, SUM(amount) total, MAX(dep_date) last_date
-                            FROM rep_custody_deposits GROUP BY rep_id) d ON d.rep_id=r.id
+                            FROM rep_custody_deposits WHERE 1" . self::epochSql('dep_date') . " GROUP BY rep_id) d ON d.rep_id=r.id
                  LEFT JOIN (SELECT paid_by_rep_id rep_id, SUM(amount) total, MAX(entry_date) last_spend
-                            FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . " GROUP BY paid_by_rep_id) s ON s.rep_id=r.id
+                            FROM permit_stages WHERE paid_by_rep_id IS NOT NULL AND " . Permit::cashOutSql('') . self::epochSql('entry_date') . " GROUP BY paid_by_rep_id) s ON s.rep_id=r.id
                  LEFT JOIN (SELECT rep_id, SUM(returned) total
-                            FROM rep_custody_settlements GROUP BY rep_id) t ON t.rep_id=r.id
+                            FROM rep_custody_settlements WHERE 1" . self::epochSql('settle_date') . " GROUP BY rep_id) t ON t.rep_id=r.id
                  LEFT JOIN (SELECT rep_id, COUNT(*) cnt, $pendingSum total
-                            FROM rep_submissions WHERE status='pending' GROUP BY rep_id) p ON p.rep_id=r.id
+                            FROM rep_submissions WHERE status='pending'" . self::epochSql('entry_date') . " GROUP BY rep_id) p ON p.rep_id=r.id
                  $miscJoin
                  $handoverJoin
                  ORDER BY r.status='inactive', r.name",
@@ -994,7 +1601,8 @@ class RepCustody
         try {
             $allCards = $loadCards(
                 'COALESCE(h.total,0)',
-                'LEFT JOIN (SELECT rep_id, SUM(amount) total FROM rep_driver_handovers GROUP BY rep_id) h ON h.rep_id=r.id'
+                'LEFT JOIN (SELECT rep_id, SUM(amount) total FROM rep_driver_handovers WHERE 1'
+                . self::epochSql('handover_date') . ' GROUP BY rep_id) h ON h.rep_id=r.id'
             );
         } catch (\PDOException $error) {
             if ((string) $error->getCode() === '42S02') {
@@ -1024,7 +1632,8 @@ class RepCustody
         $dayPendCnt = [];
         foreach (Database::all(
             "SELECT rep_id rid, COUNT(*) cnt FROM rep_submissions
-             WHERE status = 'pending' AND entry_date = ? GROUP BY rep_id", [$day]) as $r) {
+             WHERE status = 'pending' AND entry_date = ?" . self::epochSql('entry_date') . "
+             GROUP BY rep_id", [$day]) as $r) {
             $dayPendCnt[(int) $r['rid']] = (int) $r['cnt'];
         }
         $daySummary = $allCards[0] ?? [];
@@ -1106,7 +1715,7 @@ class RepCustody
              FROM rep_submissions s
              JOIN reps r ON r.id = s.rep_id
              LEFT JOIN permits p ON p.id = s.permit_id
-             WHERE s.entry_date = ?
+             WHERE s.entry_date = ?" . self::epochSql('s.entry_date') . "
              ORDER BY s.id DESC LIMIT " . max(1, $feedLimit), [$day]);
 
         return [

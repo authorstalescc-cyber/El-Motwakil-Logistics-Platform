@@ -38,7 +38,10 @@ $value     = trim((string) ($value ?? ''));
 $blank     = $blank     ?? '— اختر —';
 $attrs     = $attrs     ?? '';
 $labelHtml = $labelHtml ?? (!empty($label) ? e((string) $label) : '');
-$options   = $options   ?? Lookup::ofType($type);
+// ⚠️ `allowedFor` مش `ofType`: هي **نفس** المصدر اللي الخادم بيقبل منه
+//    (`Controller::strictListError` · `RepPortal::strictValue`). لو اتفرّقوا،
+//    الشاشة تعرض خيارًا والخادم يرفضه.
+$options   = $options   ?? Lookup::allowedFor($type);
 
 // القيمة الحالية مش في القائمة؟ تتضاف كخيار موسوم عشان ما تضيعش
 $key    = Maintenance::normkey($value);

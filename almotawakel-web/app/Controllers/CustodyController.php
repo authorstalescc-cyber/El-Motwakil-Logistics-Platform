@@ -1,10 +1,13 @@
 <?php
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\FormState;
 use App\Models\Closing;
 use App\Models\Custody;
+use App\Models\PushNotify;
+use App\Models\RepCustody;
 
 /**
  * رصيد عهدة المكتب (محفظة العهدة) — صفحة مستقلة.
@@ -19,6 +22,9 @@ class CustodyController extends Controller
         $state = FormState::consume('custody.topup.create', 'custody');
         $this->render('custody/index', [
             'title'      => 'رصيد العهدة',
+            // نزّل عهدة لمندوب من الدرج — بتظهر بس لو فيه مناديب نشطين
+            'repList'    => RepCustody::available() ? RepCustody::activeReps() : [],
+            'repDepState'=> FormState::consume('custody.repdep.create', 'custody'),
             'balance'    => Custody::balance(),
             'topups'     => Custody::topupsTotal(),
             'driverOut'  => Custody::driverCustodyOut(),
@@ -99,6 +105,51 @@ class CustodyController extends Controller
         Custody::deleteTopup((int) $id);
         flash('success', 'تم حذف الإضافة.');
         redirect('custody');
+    }
+
+    // ───────────────────── نزّل عهدة لمندوب **من درج المكتب** (المصدر = office)
+
+    /**
+     * الكاش بيخرج من الدرج لجيب المندوب — **من صفحة الخزنة نفسها** بدل ما المالك
+     * يفتح كارت المندوب ويفتكر يختار المصدر صح.
+     *
+     * ⚠️⚠️ **المصدر مثبَّت `office` في الكود مش جاي من الفورم** — الشاشة دي معناها
+     *    «الفلوس دي طلعت من الدرج اللي قدّامي»، فقبول مصدر من الفورم كان بيسمح
+     *    بتسجيل `bank` (فلوس جديدة داخلة) من مكان بيقول العكس.
+     *
+     * ⚠️ **مفيش منطق حساب جديد هنا**: نفس `RepCustody::createDeposit()` ونفس
+     *    `depositAffectsSafe()` بتوع كارت المندوب بالحرف — الشاشة نقطة دخول تانية
+     *    لنفس الإجراء، مش مسار تاني ممكن يفترق عنه.
+     */
+    public function storeRepDeposit(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+
+        $repId  = (int) ($_POST['rep_id'] ?? 0);
+        $amount = round((float) ($_POST['amount'] ?? 0), 2);
+        $date   = trim((string) ($_POST['dep_date'] ?? ''));
+        $date   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : work_date();
+        $note   = trim((string) ($_POST['note'] ?? ''));
+        $fail   = fn (array $errors) => $this->formFailure(
+            'custody.repdep.create', 'custody#rep-deposit', $_POST, $errors, 'custody');
+
+        // الفورم مش مصدر ثقة: لازم مندوب **نشط** موجود فعلاً
+        if (!isset(RepCustody::activeReps()[$repId])) { $fail(['rep_id' => 'اختار المندوب الأول.']); }
+        if ($amount <= 0) { $fail(['amount' => 'اكتب مبلغ العهدة (أكبر من صفر).']); }
+
+        $source = 'office';
+        if (RepCustody::depositAffectsSafe($source) && ($lock = Closing::guard($date)) !== null) {
+            $fail(['dep_date' => $lock]);
+        }
+
+        $this->claimForm('custody#rep-deposit');
+        RepCustody::createDeposit($repId, $amount, $date, $note, $source);
+        // ⚠️ الإشعار بعد نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
+        PushNotify::repDeposit($repId, (string) (RepCustody::activeReps()[$repId] ?? 'مندوب'),
+                               $amount, $date, (string) (Auth::user() ?? 'المكتب'));
+        $this->done('نزلت عهدة ' . money($amount, false) . ' من الدرج لـ'
+                    . (RepCustody::activeReps()[$repId] ?? 'المندوب') . '.', 'custody', 'rep-deposit');
     }
 
     private function collect(): array

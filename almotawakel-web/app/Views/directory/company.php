@@ -23,8 +23,8 @@ $p = $summary['permits']; $inv = $summary['invoices'];
   <div class="stat-item"><div class="si-ic teal"><?= icon('receipt', 14) ?></div><div><b><?= intf($inv['cnt']) ?></b><span>فواتير — <?= money($inv['total'],false) ?></span></div></div>
 </div>
 
-<div class="card" style="padding:20px;margin-bottom:16px">
-  <div class="section-head"><?= icon('user', 17) ?> الوكلاء الذين يمثّلون هذه الشركة <span style="color:var(--grey);font-weight:400">(<?= count($agents) ?>)</span></div>
+<div class="card dag-pad-lg mb">
+  <div class="section-head"><?= icon('user', 17) ?> الوكلاء الذين يمثّلون هذه الشركة <span class="dag-mut">(<?= count($agents) ?>)</span></div>
   <?php if($agents): ?>
     <div class="co-grid">
       <?php foreach($agents as $a): ?>
@@ -40,8 +40,8 @@ $p = $summary['permits']; $inv = $summary['invoices'];
   <?php endif; ?>
 </div>
 
-<div class="card" style="margin-bottom:16px">
-  <div class="section-head" style="padding:18px 20px 0"><?= icon('folder', 17) ?> الأذونات الصادرة لصالح هذه الشركة <span style="color:var(--grey);font-weight:400">(<?= count($permits) ?>)</span></div>
+<div class="card mb">
+  <div class="section-head dag-head-p"><?= icon('folder', 17) ?> الأذونات الصادرة لصالح هذه الشركة <span class="dag-mut">(<?= count($permits) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">النوع</th><th class="g-identity">الرقم</th><th class="g-identity">التاريخ</th>
@@ -51,12 +51,12 @@ $p = $summary['permits']; $inv = $summary['invoices'];
       <?php if(!$permits): ?>
         <tr><td colspan="6"><div class="empty-soft">لا أذونات مسجّلة لصالح هذه الشركة.</div></td></tr>
       <?php else: foreach($permits as $r): ?>
-        <tr onclick="location.href='<?= url('permits/'.$r['id']) ?>'" style="cursor:pointer">
+        <tr onclick="location.href='<?= url('permits/'.$r['id']) ?>'" class="pointer">
           <td><span class="pill pill-<?= e($r['permit_type']) ?>"><?= $r['permit_type']==='warid'?'شهادة':'إذن' ?></span></td>
-          <td style="font-weight:600"><?= e($r['permit_no'] ?: '#'.$r['id']) ?></td>
+          <td class="dbt-tot"><?= e($r['permit_no'] ?: '#'.$r['id']) ?></td>
           <td><?= dfmt($r['permit_date']) ?></td>
-          <td style="text-align:right"><?= e($r['client'] ?: '—') ?></td>
-          <td style="text-align:right"><?= e($r['destination'] ?: '—') ?></td>
+          <td class="txt"><?= e($r['client'] ?: '—') ?></td>
+          <td class="txt"><?= e($r['destination'] ?: '—') ?></td>
           <td><span class="pill <?= $r['status']==='closed'?'st-paid':'st-partial' ?>"><?= $r['status']==='closed'?'مقفول':'جارٍ' ?></span></td>
         </tr>
       <?php endforeach; endif; ?>
@@ -66,7 +66,7 @@ $p = $summary['permits']; $inv = $summary['invoices'];
 
 <?php if($invoices): ?>
 <div class="card">
-  <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير شامل <span style="color:var(--grey);font-weight:400">(<?= count($invoices) ?>)</span></div>
+  <div class="section-head dag-head-p"><?= icon('receipt', 17) ?> فواتير شامل <span class="dag-mut">(<?= count($invoices) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">التاريخ</th><th class="g-identity">رقم الفاتورة</th><th class="g-identity">الوكيل</th>
@@ -76,8 +76,8 @@ $p = $summary['permits']; $inv = $summary['invoices'];
       <?php foreach($invoices as $r): ?>
         <tr>
           <td><?= dfmt($r['invoice_date']) ?></td>
-          <td style="font-weight:600"><?= e($r['invoice_no'] ?: '#'.$r['id']) ?></td>
-          <td style="text-align:right"><?= e($r['client'] ?: '—') ?></td>
+          <td class="dbt-tot"><?= e($r['invoice_no'] ?: '#'.$r['id']) ?></td>
+          <td class="txt"><?= e($r['client'] ?: '—') ?></td>
           <td class="pos"><?= money($r['invoice_total'],false) ?></td>
           <td><?= money($r['payments'],false) ?></td>
           <td class="g-result"><?= money($r['account_total'],false) ?></td>
@@ -89,9 +89,9 @@ $p = $summary['permits']; $inv = $summary['invoices'];
 <?php endif; ?>
 
 <?php $pinv = $permitInvoices ?? []; if($pinv): ?>
-<div class="card" style="margin-top:16px">
-  <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير الأذونات
-    <span style="color:var(--grey);font-weight:400">(<?= count($pinv) ?> — إجمالي <?= money($permitInvSum['total'] ?? 0,false) ?>)</span></div>
+<div class="card mt-4">
+  <div class="section-head dag-head-p"><?= icon('receipt', 17) ?> فواتير الأذونات
+    <span class="dag-mut">(<?= count($pinv) ?> — إجمالي <?= money($permitInvSum['total'] ?? 0,false) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">رقم المستند</th><th class="g-identity">النوع</th><th class="g-identity">التاريخ</th>
@@ -101,12 +101,12 @@ $p = $summary['permits']; $inv = $summary['invoices'];
     <tbody>
       <?php foreach($pinv as $iv): ?>
         <tr>
-          <td style="font-weight:600"><?= e($iv['doc_no'] ?: '#'.$iv['id']) ?></td>
+          <td class="dbt-tot"><?= e($iv['doc_no'] ?: '#'.$iv['id']) ?></td>
           <td><span class="pill <?= $iv['doc_kind']==='statement'?'st-partial':'st-paid' ?>"><?= e(\App\Models\PermitInvoice::kindLabel($iv['doc_kind'])) ?><?= $iv['taxable']?' • ضريبية':'' ?></span></td>
           <td><?= dfmt($iv['invoice_date']) ?></td>
           <td><?= e($iv['client'] ?: '—') ?></td>
           <td><?php if($iv['permit_id']): ?><a href="<?= url('permits/'.$iv['permit_id']) ?>"><?= e($iv['permit_no'] ?: '#'.$iv['permit_id']) ?></a><?php else: ?><?= e($iv['permit_no'] ?: '—') ?><?php endif; ?></td>
-          <td class="pos" style="font-weight:600"><?= money($iv['total'],false) ?></td>
+          <td class="pos dbt-tot"><?= money($iv['total'],false) ?></td>
           <td><a class="edit" href="<?= url('permits/invoice/'.$iv['id']) ?>" target="_blank" title="طباعة"><?= icon('file-text', 14) ?></a></td>
         </tr>
       <?php endforeach; ?>

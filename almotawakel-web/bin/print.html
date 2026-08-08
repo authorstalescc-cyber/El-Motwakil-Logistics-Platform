@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>التقفيل اليومي — 09/07/2026 — شركة المتوكل</title>
+<style>
+  /* الوجه مكرَّر عن قصد (المستند مستقل) — نفس ملفات `app.css` بالظبط */
+  @font-face{font-family:'Cairo';font-style:normal;font-weight:200 1000;font-display:swap;size-adjust:103%;
+    src:url('bin/assets/fonts/cairo-arabic.woff2') format('woff2')}
+  @font-face{font-family:'Cairo';font-style:normal;font-weight:200 1000;font-display:swap;size-adjust:103%;
+    src:url('bin/assets/fonts/cairo-latin.woff2') format('woff2')}
+  :root{
+    /* هوية الشركة — نفس قيم app.css */
+    --navy:#15355B; --navy2:#1e4a7a; --gold:#C9A227; --gold-l:#f3e6bd; --gold-d:#8a6d10;
+    --ink:#1A2433; --muted:#5A6472; --line:#E2E7EE; --bg:#F4F6FA;
+    --red:#B4383E; --green:#1f7a52;
+    --sader:#a76a1e; --warid:#1e4a7a;
+    --font:'Cairo',system-ui,-apple-system,Tahoma,Arial,sans-serif;
+  }
+</style>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--ink);
+    font-family:var(--font);direction:rtl;text-align:right;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;position:relative;
+    box-shadow:0 10px 40px rgba(21,53,91,.15);overflow:hidden}
+  .pad{padding:14mm 12mm}
+  .topbar{height:8px;background:linear-gradient(90deg,var(--gold),var(--navy))}
+  /* الترويسة */
+  .head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;
+    padding-bottom:16px;border-bottom:2px solid var(--line)}
+  .brand{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .brandlogo{height:78px;width:auto;max-width:230px;object-fit:contain}
+  .brand .logo{width:78px;height:78px;border-radius:var(--radius-3);background:var(--navy);color:var(--gold);
+    display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:600}
+  .brand .cap{color:var(--navy);font-size:14px;font-weight:600;letter-spacing:.5px}
+  .doc-tag{text-align:left;min-width:210px}
+  .doc-tag .word{display:inline-block;background:var(--navy);color:#fff;font-size:20px;font-weight:600;
+    padding:9px 22px;border-radius:var(--radius-2);letter-spacing:1px}
+  .doc-tag .meta{margin-top:12px;font-size:12.5px;color:var(--muted);line-height:2}
+  .doc-tag .meta b{color:var(--navy);font-size:14px}
+  /* بطاقات الملخص */
+  .sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}
+  .sum .b{border:1px solid var(--line);border-radius:var(--radius-2);padding:11px 10px;text-align:center;
+    border-top:3px solid var(--navy);background:#fcfdfe}
+  .sum .b.gold{border-top-color:var(--gold);background:var(--gold-l)}
+  .sum .l{font-size:10.5px;color:var(--muted);font-weight:500}
+  .sum .v{font-size:16px;font-weight:600;color:var(--navy);margin-top:4px;font-variant-numeric:tabular-nums}
+  .sum .b.gold .v{color:#8a6d10}
+  /* عناوين الأقسام */
+  .sec{display:flex;align-items:center;gap:8px;margin:20px 0 8px;color:var(--navy);
+    font-size:14px;font-weight:600}
+  .sec::before{content:"";width:5px;height:18px;background:var(--gold);border-radius:var(--radius-1)}
+  .sec .c{color:var(--muted);font-size:11.5px;font-weight:500}
+  /* الجداول */
+  table.data{width:100%;border-collapse:collapse;font-size:10.5px;
+    border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden}
+  table.data thead th{background:var(--navy);color:#fff;padding:8px 6px;font-weight:500;text-align:center;
+    white-space:nowrap}
+  table.data thead th.bayan{text-align:right}
+  table.data tbody td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:center;
+    vertical-align:top;word-break:break-word}
+  table.data tbody td.bayan{text-align:right}
+  table.data tbody td.num{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:500}
+  table.data tbody td.pno{font-weight:600;color:var(--navy);white-space:nowrap}
+  table.data tbody tr:nth-child(even){background:#f8fafc}
+  table.data tbody td.empty{color:var(--muted);padding:12px;text-align:center}
+  table.data tfoot td{background:var(--navy);color:var(--gold);font-weight:600;padding:8px 6px;text-align:center}
+  table.data tfoot td.lbl{text-align:right;color:#fff}
+  table.visa{max-width:100%;font-size:10.5px;margin-top:2px}
+  /* صندوق الحساب الختامي */
+  .calc{margin-top:18px;display:grid;grid-template-columns:1.1fr .9fr;gap:16px;align-items:start}
+  .calc .note-words{border:1px dashed var(--gold);background:var(--gold-l);border-radius:var(--radius-2);padding:14px 16px}
+  .calc .note-words .t{font-size:11px;color:#8a6d10;font-weight:600;margin-bottom:6px}
+  .calc .note-words .v{font-size:13px;font-weight:500;color:var(--navy);line-height:1.9}
+  .sumbox{border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden}
+  .sumbox .r{display:flex;justify-content:space-between;padding:9px 14px;font-size:12.5px;border-bottom:1px solid var(--line)}
+  .sumbox .r .l{color:var(--muted)}
+  .sumbox .r .v{font-weight:500;font-variant-numeric:tabular-nums}
+  .sumbox .r.sub{background:#f8fafc}
+  .sumbox .r.neg .v{color:var(--red)}
+  .sumbox .r.grand{background:var(--gold);color:var(--navy);font-size:15px;padding:13px 14px;border:none;font-weight:600}
+  .sumbox .r.grand .l{color:#7a5f0e}
+  /* التوقيعات + التواصل */
+  .foot{margin-top:24px;padding-top:16px;border-top:2px solid var(--line);
+    display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:end}
+  .sign{text-align:center}
+  .sign .line{margin-top:28px;border-top:1.5px dashed var(--muted);padding-top:6px;color:var(--muted);font-size:12.5px;font-weight:500}
+  .contact-bar{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);
+    display:flex;gap:24px;flex-wrap:wrap}
+  .contact .cline{font-size:12px;color:var(--ink);font-weight:500;line-height:1.7}
+  .contact .ci{display:inline-block;width:20px;color:var(--navy)}
+  .pagefoot{text-align:center;color:var(--muted);font-size:10.5px;padding:10px 0 16px}
+  .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:340px;font-weight:700;color:rgba(21,53,91,.035);pointer-events:none;z-index:0}
+  .pad>*{position:relative;z-index:1}
+  .bar{max-width:210mm;margin:0 auto;display:flex;gap:10px;justify-content:center;padding:6px}
+  .btn{padding:10px 22px;border:none;border-radius:var(--radius-2);font-weight:600;font-size:14px;cursor:pointer;
+    font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+  .btn.gold{background:var(--gold);color:var(--navy)}
+  .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
+  @media print{
+    @page{size:A4;margin:0}
+    html,body{background:#fff}
+    .noprint{display:none!important}
+    .sheet{margin:0;box-shadow:none;width:auto;min-height:auto}
+    table{page-break-inside:auto}
+    tr{page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<div class="bar noprint">
+  <button class="btn gold" onclick="window.print()"><svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8M16 17H8M10 9H8"/></svg> طباعة / حفظ PDF</button>
+  <a class="btn ghost" href="bin/closing?date=2026-07-09">‹ رجوع</a>
+</div>
+
+<div class="sheet">
+  <div class="topbar"></div>
+  <div class="wm">م</div>
+  <div class="pad">
+
+    <!-- الترويسة -->
+    <div class="head">
+      <div class="brand">
+                  <img class="brandlogo" src="bin/assets/img/logo.png" alt="شركة المتوكل">
+                <div class="cap">لمقاولات النقل</div>
+      </div>
+      <div class="doc-tag">
+        <span class="word">التقفيل اليومي</span>
+        <div class="meta">
+          تاريخ اليوم: <b>09/07/2026</b><br>
+          بنود المصروفات: <b>60</b> &nbsp;•&nbsp; عهد السائقين: <b>23</b>
+        </div>
+      </div>
+    </div>
+
+    <!-- بطاقات الملخص -->
+    <div class="sum">
+      <div class="b"><div class="l">باقي رصيد سابق</div><div class="v">18,745.00</div></div>
+      <div class="b"><div class="l">عهد السائقين</div><div class="v">224,800.00</div></div>
+      <div class="b"><div class="l">إجمالي الصادر اليوم</div><div class="v">288,475.00</div></div>
+      <div class="b gold"><div class="l">رصيد مرحّل للغد</div><div class="v">23,770.00</div></div>
+    </div>
+
+    <!-- عهد السائقين — أول قسم في الورقة (طلب المالك 2026-08-03) -->
+    <div class="sec"><svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg> عهد السائقين <span class="c">23 بوليصة</span></div>
+    <table class="data">
+      <thead><tr>
+        <th>البوليصة</th><th style="width:58px">رقم الأذون</th><th class="bayan">السائق</th>
+        <th class="bayan">الشركة</th><th class="bayan" style="width:82px">سلّمها</th>
+        <th style="width:84px">العهدة</th><th style="width:84px">المخصوم</th>
+      </tr></thead>
+      <tbody>
+                  <tr>
+            <td class="pno">3045</td>
+            <td class="pno">CFA0933086</td>
+            <td class="bayan">عبدالله عيد</td>
+            <td class="bayan">لوجيا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">10,100.00</td>
+            <td class="num">10,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3044</td>
+            <td class="pno">CFA0933086</td>
+            <td class="bayan">سامي رمضان</td>
+            <td class="bayan">لوجيا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">10,100.00</td>
+            <td class="num">10,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3466</td>
+            <td class="pno">334243</td>
+            <td class="bayan">جلال حسني</td>
+            <td class="bayan">ايتامكو</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">3,800.00</td>
+            <td class="num">3,800.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3046</td>
+            <td class="pno">CFA0928874</td>
+            <td class="bayan">عبد الرحمن محمد</td>
+            <td class="bayan">اكما</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">10,100.00</td>
+            <td class="num">10,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3346</td>
+            <td class="pno">9020970580</td>
+            <td class="bayan">جمال على</td>
+            <td class="bayan">ميجا بورت</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">8,100.00</td>
+            <td class="num">8,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3534</td>
+            <td class="pno">273904755</td>
+            <td class="bayan">احمد صديق</td>
+            <td class="bayan">بلوم باك</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">8,100.00</td>
+            <td class="num">8,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3533</td>
+            <td class="pno">272803277</td>
+            <td class="bayan">محمد ابراهيم</td>
+            <td class="bayan">ريجينا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">7,100.00</td>
+            <td class="num">7,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3537</td>
+            <td class="pno">272803277</td>
+            <td class="bayan">محمد السيد</td>
+            <td class="bayan">ريجينا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">9,100.00</td>
+            <td class="num">9,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3536</td>
+            <td class="pno">272803277</td>
+            <td class="bayan">يسرى الصيفى</td>
+            <td class="bayan">ريجينا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">9,100.00</td>
+            <td class="num">9,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3535</td>
+            <td class="pno">272803277</td>
+            <td class="bayan">احمد يحيى</td>
+            <td class="bayan">ريجينا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">9,100.00</td>
+            <td class="num">9,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3532</td>
+            <td class="pno">272803277</td>
+            <td class="bayan">الحسينى محمد</td>
+            <td class="bayan">ريجينا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">9,100.00</td>
+            <td class="num">9,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3531</td>
+            <td class="pno">272803277</td>
+            <td class="bayan">ابراهيم محمد</td>
+            <td class="bayan">ريجينا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">9,100.00</td>
+            <td class="num">9,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3530</td>
+            <td class="pno">272803277</td>
+            <td class="bayan">محمد مجدي</td>
+            <td class="bayan">ريجينا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">9,100.00</td>
+            <td class="num">9,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3441</td>
+            <td class="pno">CFA0928874</td>
+            <td class="bayan">محمد البحيري</td>
+            <td class="bayan">اكما</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">12,100.00</td>
+            <td class="num">12,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3440</td>
+            <td class="pno">CFA0928874</td>
+            <td class="bayan">فتحي احمد</td>
+            <td class="bayan">اكما</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">12,100.00</td>
+            <td class="num">12,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3442</td>
+            <td class="pno">CFA0928874</td>
+            <td class="bayan">عيد ابو العزم</td>
+            <td class="bayan">اكما</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">12,100.00</td>
+            <td class="num">12,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3439</td>
+            <td class="pno">CFA0933086</td>
+            <td class="bayan">جلال حسني</td>
+            <td class="bayan">لوجيا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">6,000.00</td>
+            <td class="num">6,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3438</td>
+            <td class="pno">CFA0933086</td>
+            <td class="bayan">هاني الحجري</td>
+            <td class="bayan">لوجيا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">12,100.00</td>
+            <td class="num">12,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3433</td>
+            <td class="pno">CFA0933086</td>
+            <td class="bayan">السيد عبد العزيز</td>
+            <td class="bayan">لوجيا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">12,100.00</td>
+            <td class="num">12,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3434</td>
+            <td class="pno">CFA0933086</td>
+            <td class="bayan">كريم الغامرى</td>
+            <td class="bayan">لوجيا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">12,100.00</td>
+            <td class="num">12,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3435</td>
+            <td class="pno">CFA0933086</td>
+            <td class="bayan">باسم</td>
+            <td class="bayan">لوجيا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">12,100.00</td>
+            <td class="num">12,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3436</td>
+            <td class="pno">CFA0933086</td>
+            <td class="bayan">باسم</td>
+            <td class="bayan">لوجيا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">12,100.00</td>
+            <td class="num">12,000.00</td>
+          </tr>
+                  <tr>
+            <td class="pno">3437</td>
+            <td class="pno">CFA0933086</td>
+            <td class="bayan">اشرف الحجرى</td>
+            <td class="bayan">لوجيا</td>
+                        <td class="bayan">الدرج</td>
+            <td class="num">12,100.00</td>
+            <td class="num">12,000.00</td>
+          </tr>
+                      </tbody>
+            <tfoot><tr><td class="lbl" colspan="5">الإجمالي</td><td class="num">226,900.00</td><td class="num">224,800.00</td></tr></tfoot>
+          </table>
+
+              <div class="sec"><svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8M16 17H8M10 9H8"/></svg> الإيصالات <span class="c">50 بند</span></div>
+      <table class="data">
+        <thead><tr>
+          <th class="bayan">الشركة</th>
+          <th class="bayan">البيان</th>
+          <th style="width:90px">المبلغ</th>
+        </tr></thead>
+        <tbody>
+                      <tr>
+              <td class="bayan">ميما فودز</td>
+                            <td class="bayan">ايصال جيش</td>
+              <td class="num">1,100.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ميما فودز</td>
+                            <td class="bayan">ايصال هيئة</td>
+              <td class="num">455.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">الكرنك</td>
+                            <td class="bayan">ايصال جيش</td>
+              <td class="num">1,100.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">الكرنك</td>
+                            <td class="bayan">ايصال اشعاع</td>
+              <td class="num">220.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">الكرنك</td>
+                            <td class="bayan">إيصال هيئة</td>
+              <td class="num">430.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ايتامكو</td>
+                            <td class="bayan">إيصال هيئة</td>
+              <td class="num">225.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ايتامكو</td>
+                            <td class="bayan">إيصال هيئة</td>
+              <td class="num">200.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ايتامكو</td>
+                            <td class="bayan">ايصال نبطشية</td>
+              <td class="num">860.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">جيست وان</td>
+                            <td class="bayan">تعتيق</td>
+              <td class="num">1,470.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">جيست وان</td>
+                            <td class="bayan">ايصال جيش</td>
+              <td class="num">1,105.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اتش دي</td>
+                            <td class="bayan">ايصال نبطشية</td>
+              <td class="num">860.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اتش دي</td>
+                            <td class="bayan">ايصال جيش</td>
+              <td class="num">10,000.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اتش دي</td>
+                            <td class="bayan">ايصال تعتيق</td>
+              <td class="num">2,050.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اتش دي</td>
+                            <td class="bayan">ايصال مخالفة مرور بروز</td>
+              <td class="num">300.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">نيو بيبى</td>
+                            <td class="bayan">تعتيق</td>
+              <td class="num">1,255.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">نيوبيبي</td>
+                            <td class="bayan">ايصال تعتيق</td>
+              <td class="num">1,255.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">نيوبيبي</td>
+                            <td class="bayan">ايصال تعتيق</td>
+              <td class="num">1,255.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">2 ايصال محافظة</td>
+              <td class="num">200.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">2 ايصال طرق وكباري</td>
+              <td class="num">1,120.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">إيصال هيئة</td>
+              <td class="num">370.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">ايصال هيئة</td>
+              <td class="num">370.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">ايصال جيش</td>
+              <td class="num">2,700.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">السويدي</td>
+                            <td class="bayan">إيصال سحب إذن</td>
+              <td class="num">350.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">ايصال هيئة</td>
+              <td class="num">375.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">ايصال محافظة</td>
+              <td class="num">100.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">ايصال طرق وكباري</td>
+              <td class="num">490.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ريجينا</td>
+                            <td class="bayan">ايصال نبطشية</td>
+              <td class="num">860.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">بلوم باك</td>
+                            <td class="bayan">ايصال نبطشية</td>
+              <td class="num">860.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">بريلي</td>
+                            <td class="bayan">ايصال سحب إذن</td>
+              <td class="num">950.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">ايصال تخصيص</td>
+              <td class="num">2,570.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">ايصال هيئة فوارغ</td>
+              <td class="num">155.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">الفرسان</td>
+                            <td class="bayan">ايصال تخصيص</td>
+              <td class="num">3,000.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">لوجيا</td>
+                            <td class="bayan">ايصال تخصيص</td>
+              <td class="num">5,780.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">لوجيا</td>
+                            <td class="bayan">ايصال هيئة فوارغ</td>
+              <td class="num">100.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">لوجيا</td>
+                            <td class="bayan">ايصال نبطشية</td>
+              <td class="num">860.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">لوجيا</td>
+                            <td class="bayan">ايصال هيئة فوارغ</td>
+              <td class="num">55.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ريجينا</td>
+                            <td class="bayan">ايصال تحويل</td>
+              <td class="num">2,500.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ريجينا</td>
+                            <td class="bayan">إيصال هيئة</td>
+              <td class="num">460.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ريجينا</td>
+                            <td class="bayan">ايصال ميزان</td>
+              <td class="num">60.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ريجينا</td>
+                            <td class="bayan">ايصال جيش</td>
+              <td class="num">1,130.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ريجينا</td>
+                            <td class="bayan">ايصال جيش</td>
+              <td class="num">1,130.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">سوفتكس</td>
+                            <td class="bayan">ايصال جيش</td>
+              <td class="num">1,100.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">سوفتكس</td>
+                            <td class="bayan">إيصال هيئة</td>
+              <td class="num">475.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">مودرن</td>
+                            <td class="bayan">ايصال تخصيص</td>
+              <td class="num">750.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">عرب ستيل</td>
+                            <td class="bayan">ايصال تحويلة</td>
+              <td class="num">2,500.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">عرب ستيل</td>
+                            <td class="bayan">ايصال جيش</td>
+              <td class="num">1,100.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">عرب ستيل</td>
+                            <td class="bayan">ايصال اشعاع</td>
+              <td class="num">215.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">عرب ستيل</td>
+                            <td class="bayan">مصاريف بوصلة</td>
+              <td class="num">120.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ماي فارم</td>
+                            <td class="bayan">ايصال جيش</td>
+              <td class="num">1,105.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">ماي فارم</td>
+                            <td class="bayan">ايصال هيئة</td>
+              <td class="num">800.00</td>
+            </tr>
+                            </tbody>
+                <tfoot><tr><td class="lbl" colspan="2">إجمالي الإيصالات</td><td class="num">58,850.00</td></tr></tfoot>
+              </table>
+          <div class="sec"><svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg> النثريات والمصروفات <span class="c">10 بند</span></div>
+      <table class="data">
+        <thead><tr>
+          <th class="bayan">الشركة</th>
+          <th class="bayan">البيان</th>
+          <th style="width:90px">المبلغ</th>
+        </tr></thead>
+        <tbody>
+                      <tr>
+              <td class="bayan">ايتامكو</td>
+                            <td class="bayan">مستخلص إكرامية</td>
+              <td class="num">100.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اتش دي</td>
+                            <td class="bayan">مثمن فك التعذر</td>
+              <td class="num">100.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">انالسيز</td>
+                            <td class="bayan">ايصال لا مانع</td>
+              <td class="num">30.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">انالسيز</td>
+                            <td class="bayan">أمانة</td>
+              <td class="num">300.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">اكما</td>
+                            <td class="bayan">اكرامية مأمور جمرك</td>
+              <td class="num">200.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">—</td>
+                            <td class="bayan">تصوير الأسبوع</td>
+              <td class="num">3,495.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">—</td>
+                            <td class="bayan">إذن المتحدة</td>
+              <td class="num">315.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">—</td>
+                            <td class="bayan">ميدل ايست - ورق</td>
+              <td class="num">135.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">—</td>
+                            <td class="bayan">اكرامية مأمور جمرك</td>
+              <td class="num">100.00</td>
+            </tr>
+                      <tr>
+              <td class="bayan">—</td>
+                            <td class="bayan">اكرامية أمن CMA</td>
+              <td class="num">50.00</td>
+            </tr>
+                            </tbody>
+                <tfoot><tr><td class="lbl" colspan="2">إجمالي النثريات والمصروفات</td><td class="num">4,825.00</td></tr></tfoot>
+              </table>
+    
+    <!-- مدفوعات الفيزا (إن وُجدت) -->
+          <div class="sec"><svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg> مدفوعات الفيزا <span class="c">مدفوعة بالفيزا لا نقدًا — لا تُخصم من الرصيد</span></div>
+      <table class="data visa">
+        <thead><tr>
+          <th style="width:58px">رقم الأذون</th>
+          <th class="bayan">الشركة</th>
+          <th>البند</th>
+          <th class="bayan">البيان</th>
+          <th style="width:90px">المبلغ</th>
+        </tr></thead>
+        <tbody>
+                      <tr>
+              <td class="pno">07879</td>
+              <td class="bayan">ميما فودز</td>
+              <td>إيصالات</td>
+              <td class="bayan">ايصال تعتيق صينية</td>
+              <td class="num">5,826.00</td>
+            </tr>
+                      <tr>
+              <td class="pno">272803277</td>
+              <td class="bayan">ريجينا</td>
+              <td>إيصالات</td>
+              <td class="bayan">ايصال حمولة</td>
+              <td class="num">27,391.00</td>
+            </tr>
+                      <tr>
+              <td class="pno">272803277</td>
+              <td class="bayan">ريجينا</td>
+              <td>إيصالات</td>
+              <td class="bayan">ايصال تخصيص</td>
+              <td class="num">3,210.00</td>
+            </tr>
+                      <tr>
+              <td class="pno">273904755</td>
+              <td class="bayan">بلوم باك</td>
+              <td>إيصالات</td>
+              <td class="bayan">ايصال حمولة</td>
+              <td class="num">2,295.00</td>
+            </tr>
+                      <tr>
+              <td class="pno">273904755</td>
+              <td class="bayan">بلوم باك</td>
+              <td>إيصالات</td>
+              <td class="bayan">ايصال تخصيص</td>
+              <td class="num">500.00</td>
+            </tr>
+                      <tr>
+              <td class="pno">273904755</td>
+              <td class="bayan">بلوم باك</td>
+              <td>إيصالات</td>
+              <td class="bayan">ايصال تعتيق صينية</td>
+              <td class="num">4,615.00</td>
+            </tr>
+                      <tr>
+              <td class="pno">9020970580</td>
+              <td class="bayan">ميجا بورت</td>
+              <td>إيصالات</td>
+              <td class="bayan">ايصال مستودعات</td>
+              <td class="num">39.90</td>
+            </tr>
+                      <tr>
+              <td class="pno">CFA0928874</td>
+              <td class="bayan">اكما</td>
+              <td>إيصالات</td>
+              <td class="bayan">ايصال مستودعات</td>
+              <td class="num">319.20</td>
+            </tr>
+                      <tr>
+              <td class="pno">CFA0933086</td>
+              <td class="bayan">لوجيا</td>
+              <td>إيصالات</td>
+              <td class="bayan">ايصال مستودعات</td>
+              <td class="num">718.20</td>
+            </tr>
+                  </tbody>
+        <tfoot><tr><td class="lbl" colspan="4">إجمالي مدفوعات الفيزا</td><td class="num">44,914.30</td></tr></tfoot>
+      </table>
+    
+
+    <!-- الحساب الختامي -->
+    <div class="calc">
+      <div class="note-words">
+        <div class="t">الرصيد المرحّل للغد بالحروف</div>
+        <div class="v">فقط ثلاثة وعشرون ألف وسبعمئة وسبعون جنيهاً لا غير</div>
+      </div>
+      <div class="sumbox">
+        <div class="r sub"><span class="l">باقي رصيد سابق</span><span class="v">18,745.00</span></div>
+                          <div class="r"><span class="l">+ عهدة مضافة للدرج</span><span class="v">293,500.00</span></div>
+                                  <div class="r sub"><span class="l">= المتاح</span><span class="v">312,245.00</span></div>
+                                                <div class="r neg"><span class="l">− مصروفات نقدية</span><span class="v">63,675.00</span></div>
+        <div class="r neg"><span class="l">− عهد السائقين</span><span class="v">224,800.00</span></div>
+        <div class="r grand"><span class="l">= رصيد مرحّل لليوم التالي</span><span class="v">23,770.00</span></div>
+      </div>
+    </div>
+
+    <!-- التوقيعات -->
+    <div class="foot">
+      <div class="sign"><div class="line">توقيع المسؤول</div></div>
+      <div class="sign"><div class="line">المحاسب / الختم</div></div>
+    </div>
+
+    <!-- التواصل -->
+        <div class="contact-bar">
+      <div class="contact">
+        <div class="cline"><span class="ci"><svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.54 21.69a.5.5 0 0 0 .94-.02l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.02.94l7.93 3.18a2 2 0 0 1 1.11 1.11z"/><path d="m21.85 2.15-10.94 10.94"/></svg></span> <bdi dir="ltr">+01278093616</bdi></div>        <div class="cline"><span class="ci"><svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.54 21.69a.5.5 0 0 0 .94-.02l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.02.94l7.93 3.18a2 2 0 0 1 1.11 1.11z"/><path d="m21.85 2.15-10.94 10.94"/></svg></span> <bdi dir="ltr">almutawakkil.co@gmail.com</bdi></div>        <div class="cline"><span class="ci"><svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span> ٣ ش علي بك جنينة - متفرع من شارع السكة الجديدة أمام شارع حمام الورشة - المنشية - الإسكندرية</div>      </div>
+    </div>
+    
+  </div>
+  <div class="pagefoot">
+    شركة المتوكل — لمقاولات النقل &nbsp;•&nbsp; تقفيل يوم 09/07/2026    &nbsp;•&nbsp; صدر بتاريخ 03/08/2026  </div>
+</div>
+
+</body>
+</html>

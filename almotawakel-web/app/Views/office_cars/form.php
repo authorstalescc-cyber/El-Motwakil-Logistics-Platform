@@ -77,6 +77,8 @@ $errors = $errors ?? [];
     <form method="post" action="<?= e(url('cars/' . (int) $row['id'] . '/delete')) ?>"
           data-confirm="متأكد إنك عايز تشيل السيارة دي ومصاريفها؟">
       <?= csrfField() ?>
+      <?php /* ⚠️ `_form_token` إجباري — `claimForm` بترفض الطلب من غيره. */ ?>
+      <?= formStateFields(\App\Core\FormState::token(), 'cars') ?>
       <button class="btn ghost" type="submit"><?= icon('trash', 15) ?> احذف السيارة</button>
     </form>
   </div>

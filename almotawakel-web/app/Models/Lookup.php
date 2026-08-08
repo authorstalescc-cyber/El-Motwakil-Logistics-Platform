@@ -53,6 +53,48 @@ class Lookup
         return in_array($type, self::STRICT, true);
     }
 
+    /**
+     * **المصدر الوحيد للقيم المسموحة في حقل قائمة مقفولة** — يقرأه المكوّن
+     * `partials/lookup_select.php` (اللي بيرسم الخيارات) و`Controller::strictListError`
+     * و`RepPortal::strictValue` (اللي بيقبلوا أو يرفضوا) **مع بعض**.
+     *
+     * ⚠️ لو القارئين دول اتفرّقوا، الشاشة بتعرض خيارًا والخادم يرفضه — أسوأ من
+     *    المنع نفسه لأن المستخدم مش فاهم غلط في إيه.
+     *
+     * ⚠️⚠️ **شركة الشحن = الوكيل في أغلب الأحوال (قرار المالك 2026-08-02).**
+     *    مقيس على الإنتاج: **٥٦ من ٨٧ إذن** شركة الشحن فيهم = العميل بالحرف،
+     *    و**٢٦ من ٣٦** شركة شحن مستخدمة هي أصلاً وكيل مسجَّل. كانت القائمة
+     *    المقفولة (v58) بتمنعه يختار الوكيل لأنه مش مضاف كشركة شحن، فيضطر يروح
+     *    `/settings` يضيفه — وده اللي المالك سمّاه «بيحجمني».
+     *    الحل **مش** فتح الحقل (بيرجّع تلوّث الإدخال) — الحل إن **الوكلاء جزء من
+     *    المسموح**: القيمة لسه لازم تطابق اسمًا معروفًا، فحماية الأخطاء الإملائية
+     *    باقية. الوكلاء بيجوا من `agents` (السجل القانوني — تحذير ٣) لا من قائمة
+     *    `client` المتعلّمة، عشان ما نضيفش تهجئات مكرَّرة للخيارات.
+     */
+    public static function allowedFor(string $type): array
+    {
+        $list = self::ofType($type);
+        if ($type !== 'shipping_co') { return $list; }
+
+        /* كاش داخل الطلب الواحد: الشاشة بتنادي القائمة مرتين على الأقل (المكوّن
+           لما يرسم الخيارات، والخادم لما يتحقّق). مفيش شاشة بتضيف وكيلًا وتعرض
+           قائمة شركات الشحن في نفس الطلب، فالكاش ده مالوش نقطة إبطال. */
+        static $agents = null;
+        if ($agents === null) {
+            $agents = array_column(Database::all('SELECT name FROM agents ORDER BY name'), 'name');
+        }
+
+        $seen = [];
+        foreach ($list as $v) { $seen[Maintenance::normkey((string) $v)] = true; }
+        foreach ($agents as $name) {
+            $k = Maintenance::normkey((string) $name);
+            if ($k === '' || isset($seen[$k])) { continue; }
+            $seen[$k] = true;
+            $list[] = (string) $name;
+        }
+        return $list;
+    }
+
     /** كل القوائم مجمّعة حسب النوع */
     public static function allGrouped(): array
     {

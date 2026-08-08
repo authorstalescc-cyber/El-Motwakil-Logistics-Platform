@@ -9,16 +9,16 @@ $errors = $errors ?? [];
 $old    = $old ?? [];
 ?>
 <div class="toolbar">
-  <div class="section-head" style="margin:0"><?= icon('bell', 17) ?> الإشعارات</div>
+  <div class="section-head" ><?= icon('bell', 17) ?> الإشعارات</div>
   <div class="spacer"></div>
   <span class="count-badge"><?= (int) $counts['office'] ?> جهاز مكتب · <?= (int) $counts['rep'] ?> جهاز مندوب</span>
 </div>
 
 <?php if (!$ready): ?>
-  <div class="card mb" style="border-inline-start:4px solid var(--red)">
-    <div style="padding:16px 18px">
+  <div class="card mb p5-edge-red">
+    <div class="oc-pad">
       <b>الإشعارات مش جاهزة على السيرفر.</b>
-      <p style="margin:6px 0 0;color:var(--grey)">شغّل <code>php bin/migrate_v51.php</code> عشان تتولّد مفاتيح الإشعارات.</p>
+      <p class="p5-p-t">شغّل <code>php bin/migrate_v51.php</code> عشان تتولّد مفاتيح الإشعارات.</p>
     </div>
   </div>
 <?php endif; ?>
@@ -29,10 +29,10 @@ $old    = $old ?? [];
          **تطبيق المندوب** بس، فإشعارات المكتب ما توصلوش — الاتنين اشتراكان
          منفصلان لأنهما تطبيقان مختلفان على الجهاز. */ ?>
 <?php if ((int) $counts['office'] === 0): ?>
-  <div class="card mb" style="border-inline-start:4px solid var(--gold)">
-    <div style="padding:16px 18px">
+  <div class="card mb p5-edge-gold">
+    <div class="oc-pad">
       <b><?= icon('alert', 14) ?> مفيش ولا جهاز مكتب مفعّل الإشعارات.</b>
-      <p style="margin:6px 0 0;color:var(--grey)">
+      <p class="p5-p-t">
         يعني إشعارات <b>الإذن الجديد والتقفيل والبند المستنّي مراجعة والبوليصة الجديدة</b> مش هتوصل لحد.
         <?php if ((int) $counts['rep'] > 0): ?>
           فيه <?= (int) $counts['rep'] ?> جهاز مفعّل من <b>تطبيق المندوب</b> — وده اشتراك تاني منفصل
@@ -48,18 +48,18 @@ $old    = $old ?? [];
 
 <!-- ① الجهاز الحالي ------------------------------------------------------ -->
 <div class="card mb">
-  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('send', 17) ?> الجهاز اللي انت عليه دلوقتي</div>
-  <div style="padding:14px 18px 18px">
-    <p id="pushState" style="margin:0 0 12px;color:var(--grey)">بنشوف حالة الإشعارات على الجهاز ده…</p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
+  <div class="section-head rts-head"><?= icon('send', 17) ?> الجهاز اللي انت عليه دلوقتي</div>
+  <div class="p5-pad-lg">
+    <p id="pushState" class="set-p">بنشوف حالة الإشعارات على الجهاز ده…</p>
+    <div class="p5-row">
       <button type="button" class="btn gold" id="pushEnable" hidden><?= icon('bell', 14) ?> فعّل الإشعارات على الجهاز ده</button>
       <button type="button" class="btn ghost" id="pushDisable" hidden>🔕 اقفل الإشعارات على الجهاز ده</button>
-      <form method="post" action="<?= url('push/test') ?>" class="no-confirm" style="margin:0">
+      <form method="post" action="<?= url('push/test') ?>" class="no-confirm" >
         <?= csrfField() ?>
         <button type="submit" class="btn ghost"><?= icon('inbox', 14) ?> ابعت إشعار تجربة لكل الأجهزة</button>
       </form>
     </div>
-    <p style="margin:12px 0 0;font-size:var(--fs-2);color:var(--grey)">
+    <p class="p5-p-mt">
       كل واحد لازم يفعّلها من موبايله هو — مفيش طريقة نفعّلها له من هنا (ده شرط المتصفح مش نقص في النظام).
       وعلى الآيفون لازم يكون <b>ثبّت التطبيق على الشاشة الرئيسية</b> الأول.
     </p>
@@ -68,8 +68,8 @@ $old    = $old ?? [];
 
 <!-- ② إرسال إشعار -------------------------------------------------------- -->
 <div class="card mb">
-  <div class="section-head" style="padding:16px 18px 0;margin:0">✍️ ابعت إشعار</div>
-  <form method="post" action="<?= url('push/send') ?>" style="padding:14px 18px 18px" class="no-confirm">
+  <div class="section-head rts-head">✍️ ابعت إشعار</div>
+  <form method="post" action="<?= url('push/send') ?>" class="p5-pad-lg" class="no-confirm">
     <?= csrfField() ?>
     <?= formStateFields($formToken ?? '', $back ?? 'push') ?>
     <div class="form-grid two">
@@ -101,7 +101,7 @@ $old    = $old ?? [];
       <input type="text" name="url" maxlength="120" value="<?= e($old['url'] ?? '') ?>"
              placeholder="مثال: permits  أو  closing — سيبها فاضية عشان يفتح الرئيسية">
     </label>
-    <div style="margin-top:12px">
+    <div class="mt-3">
       <button type="submit" class="btn gold"><?= icon('send', 14) ?> ابعت الإشعار</button>
     </div>
   </form>
@@ -112,11 +112,11 @@ $old    = $old ?? [];
      ⚠ **«اتقرا فعلاً» أهم رقم في الصفحة:** السجل القديم كان بيقول «وصل ٣ فشل ٠»
         وبس — يعني الرسالة وصلت الجهاز، مش إن حد شافها. -->
 <div class="card mb">
-  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('bar-chart', 17) ?> صحة الإشعارات — آخر <?= intf($health['days']) ?> أيام</div>
+  <div class="section-head rts-head"><?= icon('bar-chart', 17) ?> صحة الإشعارات — آخر <?= intf($health['days']) ?> أيام</div>
   <?php if (!$health['ready']): ?>
     <?php partial('empty', ['emoji' => '🧾', 'title' => 'سجل الإشعارات لسه ما اتفعّلش',]); ?>
   <?php else: ?>
-  <div style="padding:14px 18px 18px">
+  <div class="p5-pad-lg">
     <div class="nh-grid">
       <div class="nh-box <?= $health['delivery_rate'] >= 95 ? 'good' : ($health['delivery_rate'] > 0 ? 'bad' : '') ?>">
         <b><?= e((string) $health['delivery_rate']) ?>%</b>
@@ -134,18 +134,18 @@ $old    = $old ?? [];
       <div class="nh-box"><b><?= intf($health['burst']) ?></b><span>اتكتموا بحارس الانفجار<br></span></div>
       <div class="nh-box"><b><?= intf($health['muted']) ?></b><span>مقفولين بتفضيل شخصي</span></div>
       <div class="nh-box <?= $health['last_run'] ? 'good' : 'bad' ?>">
-        <b style="font-size:var(--fs-3)"><?= $health['last_run'] ? e((string) $health['last_run']) : 'مفيش' ?></b>
+        <b class="p5-fs3"><?= $health['last_run'] ? e((string) $health['last_run']) : 'مفيش' ?></b>
         <span>آخر تشغيل للعامل (الكرون)</span>
       </div>
     </div>
 
     <?php if ($health['errors']): ?>
-      <div class="section-head" style="margin:0 0 8px"><?= icon('alert', 15) ?> آخر أسباب الفشل</div>
+      <div class="section-head p5-mb-sm"><?= icon('alert', 15) ?> آخر أسباب الفشل</div>
       <div class="table-wrap"><table class="data">
         <thead><tr><th>السبب</th><th>عدد</th></tr></thead>
         <tbody>
         <?php foreach ($health['errors'] as $er): ?>
-          <tr><td style="font-size:var(--fs-2)"><?= e((string) $er['err']) ?></td><td><?= intf((int) $er['c']) ?></td></tr>
+          <tr><td class="rts-sm"><?= e((string) $er['err']) ?></td><td><?= intf((int) $er['c']) ?></td></tr>
         <?php endforeach; ?>
         </tbody>
       </table></div>
@@ -154,7 +154,7 @@ $old    = $old ?? [];
     <?php if ($readStats): ?>
       <?php /* ⚠️ الفايدة الحقيقية: النوع اللي نسبة قراءته صفر معناه إشعار مالوش
                لازمة — يتقفل من «إعداداتي» بدل ما يفضل يزنّ. */ ?>
-      <div class="section-head" style="margin:14px 0 8px"><?= icon('bar-chart', 15) ?> أنهي إشعارات بتتقرا فعلاً (٣٠ يوم)</div>
+      <div class="section-head p5-my"><?= icon('bar-chart', 15) ?> أنهي إشعارات بتتقرا فعلاً (٣٠ يوم)</div>
       <div class="table-wrap"><table class="data">
         <thead><tr><th>النوع</th><th>اتبعت</th><th>اتقرا</th><th>النسبة</th></tr></thead>
         <tbody>
@@ -175,7 +175,7 @@ $old    = $old ?? [];
 
 <!-- ③ الأجهزة المفعّلة ---------------------------------------------------- -->
 <div class="card mb">
-  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('send', 17) ?> الأجهزة المفعّلة</div>
+  <div class="section-head rts-head"><?= icon('send', 17) ?> الأجهزة المفعّلة</div>
   <?php if (!$devices): ?>
     <?php partial('empty', ['emoji' => '📭', 'title' => 'مفيش أي جهاز فعّل الإشعارات لسه',]); ?>
   <?php else: ?>
@@ -188,7 +188,7 @@ $old    = $old ?? [];
       <tr>
         <td><?= e($d['rep_name'] ?? $d['user_name'] ?? '—') ?></td>
         <td><?= $d['audience'] === 'rep' ? 'مندوب' : 'مكتب' ?></td>
-        <td style="font-size:var(--fs-2);color:var(--grey)"><?= e(mb_substr((string) $d['user_agent'], 0, 60)) ?></td>
+        <td class="dbt-sub"><?= e(mb_substr((string) $d['user_agent'], 0, 60)) ?></td>
         <td><?= $d['last_ok_at'] ? e((string) $d['last_ok_at']) : '—' ?></td>
         <td><?= (int) $d['is_active'] ? '<span class="pill ok">شغّال</span>' : '<span class="pill off">متوقف</span>' ?></td>
       </tr>
@@ -200,7 +200,7 @@ $old    = $old ?? [];
 
 <!-- ④ سجل الإشعارات ------------------------------------------------------ -->
 <div class="card">
-  <div class="section-head" style="padding:16px 18px 0;margin:0"><?= icon('file-text', 17) ?> ️ آخر الإشعارات اللي اتبعتت</div>
+  <div class="section-head rts-head"><?= icon('file-text', 17) ?> ️ آخر الإشعارات اللي اتبعتت</div>
   <?php if (!$log): ?>
     <?php partial('empty', ['emoji' => '🕊️', 'title' => 'لسه مفيش إشعارات اتبعتت']); ?>
   <?php else: ?>
@@ -209,8 +209,8 @@ $old    = $old ?? [];
     <tbody>
     <?php foreach ($log as $m): ?>
       <tr>
-        <td style="white-space:nowrap"><?= e(dtfmt($m['created_at'], 'd/m/Y H:i:s')) ?></td>
-        <td><b><?= e($m['title']) ?></b><br><span style="color:var(--grey);font-size:var(--fs-2)"><?= e($m['body']) ?></span></td>
+        <td class="nowrap"><?= e(dtfmt($m['created_at'], 'd/m/Y H:i:s')) ?></td>
+        <td><b><?= e($m['title']) ?></b><br><span class="dbt-sub"><?= e($m['body']) ?></span></td>
         <td><?= e($m['audience']) ?></td>
         <td class="pos"><?= (int) $m['ok_count'] ?></td>
         <td class="<?= (int) $m['fail_count'] ? 'neg' : '' ?>"><?= (int) $m['fail_count'] ?></td>

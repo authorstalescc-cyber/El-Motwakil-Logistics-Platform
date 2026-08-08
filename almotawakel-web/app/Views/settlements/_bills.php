@@ -21,7 +21,7 @@ $payOld = $payState['old'];
     <div class="table-wrap">
       <table class="data" id="billsTable">
         <thead><tr>
-          <th class="g-result" style="width:38px"><input type="checkbox" id="selAll" class="bill-pick js-bill-pick-all" title="تحديد كل بوالص الجدول"></th>
+          <th class="g-result col-pick" data-no-sort><input type="checkbox" id="selAll" class="bill-pick js-bill-pick-all" title="تحديد كل بوالص الجدول"></th>
           <th class="g-identity">التاريخ</th>
           <th class="g-identity">النوع</th>
           <th class="g-identity">رقم البوليصة</th>
@@ -35,7 +35,7 @@ $payOld = $payState['old'];
           <th class="g-revenue">المدفوع</th>
           <th class="g-expense">المتبقّي</th>
           <th class="g-identity">الحالة</th>
-          <th class="g-revenue" style="min-width:130px">دفعة الآن</th>
+          <th class="g-revenue col-pay">دفعة الآن</th>
           <th class="g-identity">تفاصيل</th>
         </tr></thead>
         <tbody>
@@ -54,16 +54,16 @@ $payOld = $payState['old'];
                 data-freight="<?= e(number_format((float)($b['freight'] ?? 0),2,'.','')) ?>" data-legacy="<?= (int)($b['is_legacy'] ?? 0) ?>" title="تحديد البوليصة"></td>
               <td><?= dfmt($b['bill_date']) ?></td>
               <td><span class="pill pill-<?= e($b['bill_type']) ?>"><?= $typeLabel($b['bill_type']) ?></span></td>
-              <td style="font-weight:500"><?= e($b['bill_number'] ?: '—') ?><?php if ((int)($b['is_legacy'] ?? 0) === 1): ?> <span class="legacy-settle">قديم</span><?php endif; ?></td>
+              <td class="mv-ref"><?= e($b['bill_number'] ?: '—') ?><?php if ((int)($b['is_legacy'] ?? 0) === 1): ?> <span class="legacy-settle">قديم</span><?php endif; ?></td>
               <td><?= e($ref ?: '—') ?></td>
               <?php if ($showOwner): ?>
-                <td style="text-align:right;max-width:150px;overflow:hidden;text-overflow:ellipsis">
+                <td class="txt clip-150">
                   <a class="lnk" href="<?= url('settlements') ?>?owner=<?= urlencode($own) ?>"><?= e($own !== '' ? $own : '(بدون صاحب بيان)') ?></a>
                 </td>
               <?php endif; ?>
-              <td style="text-align:right;max-width:170px;overflow:hidden;text-overflow:ellipsis"><?= e($b['company'] ?: '—') ?></td>
+              <td class="txt clip-170"><?= e($b['company'] ?: '—') ?></td>
               <td><?= e($b['destination'] ?: '—') ?></td>
-              <td style="text-align:right;max-width:150px;overflow:hidden;text-overflow:ellipsis"><?= e($cont ?: '—') ?></td>
+              <td class="txt clip-150"><?= e($cont ?: '—') ?></td>
               <td><?= e($b['car_no'] ?: '—') ?></td>
               <td><?= money($b['debt'], false) ?></td>
               <td class="pos"><?= money($b['paid'], false) ?></td>
@@ -72,15 +72,14 @@ $payOld = $payState['old'];
               <td>
                 <?php if ($due): ?>
                   <input type="number" step="0.01" min="0" max="<?= e(number_format($rem, 2, '.', '')) ?>"
-                         name="amount[<?= $b['id'] ?>]" value="<?= e($payOld['amount'][$b['id']] ?? '') ?>" class="pay-amt" placeholder="0"
-                         style="width:118px;border:1px solid var(--line2);border-radius:var(--radius-1);padding:6px 8px;text-align:center"<?= fieldErrorAttrs('amount.'.(int)$b['id'], $payState['errors']) ?>>
+                         name="amount[<?= $b['id'] ?>]" value="<?= e($payOld['amount'][$b['id']] ?? '') ?>" class="pay-amt" placeholder="0" class="st-pay-in"<?= fieldErrorAttrs('amount.'.(int)$b['id'], $payState['errors']) ?>>
                   <?= fieldError('amount.'.(int)$b['id'], $payState['errors']) ?>
                 <?php elseif ($b['pay_status'] === Bill::STATUS_PAID): ?>
-                  <span style="color:var(--green)"><?= icon('check', 14) ?> مكتمل</span>
+                  <span class="st-ok"><?= icon('check', 14) ?> مكتمل</span>
                 <?php elseif ($b['pay_status'] === Bill::STATUS_PENDING): ?>
-                  <span style="color:var(--grey)" title="لم يُدخَل النولون بعد — ليست ديناً"><?= icon('hourglass', 14) ?> بانتظار النولون</span>
+                  <span class="dbt-none" title="لم يُدخَل النولون بعد — ليست ديناً"><?= icon('hourglass', 14) ?> بانتظار النولون</span>
                 <?php else: ?>
-                  <span style="color:var(--grey)">—</span>
+                  <span class="dbt-none">—</span>
                 <?php endif; ?>
               </td>
               <td><a class="btn ghost sm" href="<?= url('settlements/' . $b['id']) ?>" title="سجل الدفعات">↗</a></td>
@@ -96,26 +95,18 @@ $payOld = $payState['old'];
         <span>المحدّد: <b id="selCount">0</b> بوليصة</span>
         <span>الإجمالي: <b id="selTotal" class="pos">0.00</b> ج.م</span>
       </div>
-      <span style="flex:1"></span>
+      <span class="ps-sp"></span>
       <button type="button" class="btn ghost sm" id="btnAllDue">تحديد كل غير المسدّد</button>
       <button type="button" class="btn ghost sm" id="btnFillRem">دفع كامل المتبقّي للمحدّد</button>
-      <label style="font-weight:500;color:var(--grey)">تاريخ الدفع</label>
-      <span class="field" style="margin:0"><input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>" style="border:1px solid var(--line2);border-radius:var(--radius-1);padding:8px 10px"<?= fieldErrorAttrs('pay_date', $payState['errors']) ?>><?= fieldError('pay_date', $payState['errors']) ?></span>
-      <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)" style="border:1px solid var(--line2);border-radius:var(--radius-1);padding:8px 10px;width:150px">
+      <label class="st-lbl">تاريخ الدفع</label>
+      <span class="field flush"><input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>" class="st-date-in"<?= fieldErrorAttrs('pay_date', $payState['errors']) ?>><?= fieldError('pay_date', $payState['errors']) ?></span>
+      <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)" class="st-note-in">
       <button class="btn gold" type="submit" id="btnPay" data-primary-submit disabled><?= icon('download', 14) ?> دفع المحدّد</button>
     </div>
   </div>
 </form>
 
-<style>
-table.data tr.bill-row.on{background:var(--gold-light)!important}
-table.data tr.bill-row.on td{border-color:#e6d9a8}
-.legacy-settle{display:inline-block;background:#7a5f0e;color:#fff;border-radius:999px;padding:1px 7px;font-size:var(--fs-1);font-weight:600}
-.pay-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-top:2px solid var(--line2);background:var(--zebra);position:sticky;bottom:0;z-index:5}
-.pay-bar-info{display:flex;gap:18px;font-weight:500;color:var(--navy)}
-.pay-bar-info b{font-size:var(--fs-4)}
-.pay-bar .btn[disabled]{opacity:.5;cursor:not-allowed}
-</style>
+
 
 <script>
 (function(){

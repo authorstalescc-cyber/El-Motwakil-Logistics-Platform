@@ -20,26 +20,26 @@ $fmt = function(string $type, $v) {
 ?>
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('legacy') ?>">‹ رجوع للأرشيف</a>
-  <span style="flex:1"></span>
-  <span class="pill" style="background:var(--gold-light);color:var(--navy);font-size:var(--fs-3);padding:6px 16px">
+  <span class="ps-sp"></span>
+  <span class="pill bs-pill bg-gold">
     <?= icon('inbox',15) ?> أرشيف قديم — للقراءة فقط
   </span>
 </div>
 
-<div class="flash" style="background:var(--gold-light);border-color:var(--gold);color:var(--navy)">
+<div class="flash p5-chip-on">
   <?= icon('alert',18) ?>
   بوليصة تاريخية مستوردة من النظام القديم (صف Excel رقم <?= intf($bill['src_row']) ?>).
-  <span style="color:var(--grey)">لا تدخل في أي حساب من حسابات البرنامج الحالي (العهدة/التقفيل/المديونيات/التقارير).</span>
+  <span class="dbt-none">لا تدخل في أي حساب من حسابات البرنامج الحالي (العهدة/التقفيل/المديونيات/التقارير).</span>
 </div>
 
-<div class="card mb" style="padding:0;overflow:hidden">
+<div class="card mb" >
   <?php foreach ($groups as $gk => $gLabel): if (empty($byGroup[$gk])) continue; ?>
     <div class="form-group-title gt-<?= $gk ?>"><?= e($gLabel) ?></div>
-    <div class="grid-auto g4" style="gap:0">
+    <div class="grid-auto g4 g0">
       <?php foreach ($byGroup[$gk] as [$key, $label, $type]): ?>
-        <div style="padding:11px 16px;border-bottom:1px solid var(--line);border-inline-start:1px solid var(--line)">
-          <div style="font-size:var(--fs-1);color:var(--grey);font-weight:500;margin-bottom:3px"><?= e($label) ?></div>
-          <div style="font-weight:500;<?= $type==='money'?'color:var(--navy)':'' ?>"><?= $fmt($type, $key==='classification' ? container_norm($bill[$key] ?? '') : ($bill[$key] ?? '')) ?></div>
+        <div class="bs-fact">
+          <div class="bs-fact-l"><?= e($label) ?></div>
+          <div class="bs-fact-v<?= $type==='money'?' num':'' ?>"><?= $fmt($type, $key==='classification' ? container_norm($bill[$key] ?? '') : ($bill[$key] ?? '')) ?></div>
         </div>
       <?php endforeach; ?>
     </div>

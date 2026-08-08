@@ -101,16 +101,34 @@ $dl = function (string $id, string $lookupType) use ($lookups) {
     </div>
     <?php endforeach; ?>
 
-    <?php foreach ([
-      ['shipping_co', 'التوكيل الملاحي', 'dl_shipping'],
-      ['agency',      'التوكيل',         'dl_agency'],
-      ['port',        'الميناء',         'dl_port'],
-    ] as [$name, $label, $listId]): ?>
+    <?php
+    /* ⚠️⚠️ **التسميتان كانتا غلط** (اتصلّحوا 2026-08-02 — بلاغ المالك «تكرار
+       للتوكيل مرة باسم التوكيل ومرة باسم التوكيل الملاحي»): `shipping_co` كان
+       مكتوب عليه «التوكيل الملاحي» و`agency` «التوكيل»، فالمندوب يشوف حقلين
+       اسمهم واحد. التسمية المعتمدة هي بتاعة شاشة المكتب بالحرف:
+       `shipping_co` = **شركة الشحن** · `agency` = **التوكيل الملاحي**.
+       ممنوع تتفرّق التسمية بين الشاشتين — نفس العمود لازم يبقى له اسم واحد.
+
+       ⚠️ والحقول دي **قوائم مقفولة** (v58): كانت `<input list=…>` فالمندوب يكتب
+       قيمة والخادم يرفضها بعد ما يبعت. بقت `lookup_select` زي المكتب — بيختار
+       من الموجود وخلاص. */
+    foreach ([
+      ['shipping_co', '🚢 شركة الشحن',  'اختياري — غالبًا نفس العميل'],
+      ['agency',      '⚓ التوكيل الملاحي', 'اختياري'],
+      ['port',        '🏗 الميناء',        'اختياري'],
+    ] as [$name, $label, $sub]): ?>
     <div class="field" id="field-<?= $name ?>" <?= $err($name) ? 'data-error="1"' : '' ?>>
-      <label for="f_<?= $name ?>"><?= e($label) ?> <span class="optional">اختياري</span></label>
-      <input type="text" id="f_<?= $name ?>" name="<?= $name ?>" maxlength="120" list="<?= $listId ?>"
-             enterkeyhint="next" autocomplete="off" value="<?= $o($name) ?>"
-             aria-describedby="err-<?= $name ?>" <?= $err($name) ? 'aria-invalid="true"' : '' ?>>
+      <label for="f_<?= $name ?>"><?= e($label) ?> <span class="optional"><?= e($sub) ?></span></label>
+      <?php partial('lookup_select', [
+        'name'  => $name,
+        'type'  => $name,
+        'value' => html_entity_decode((string) $o($name), ENT_QUOTES, 'UTF-8'),
+        'blank' => '— اختر —',
+        'attrs' => 'id="f_' . $name . '" aria-describedby="err-' . $name . '"'
+                 /* شركة الشحن بتتملى من العميل تلقائيًا (lookup-autofill.js) */
+                 . ($name === 'shipping_co' ? ' data-autofill-from="client"' : '')
+                 . ($err($name) ? ' aria-invalid="true"' : ''),
+      ]); ?>
       <p class="field-error" id="err-<?= $name ?>" <?= $err($name) ? '' : 'hidden' ?>><?= e($err($name)) ?></p>
     </div>
     <?php endforeach; ?>
@@ -152,10 +170,6 @@ $dl = function (string $id, string $lookupType) use ($lookups) {
       $dl('dl_company',  'company');
       $dl('dl_client',   'client');
       $dl('dl_dest',     'destination');
-      $dl('dl_shipping', 'shipping_co');
-      $dl('dl_agency',   'agency');
-      $dl('dl_port',     'port');
-      $dl('dl_ctype',    'container_type');
     ?>
   </div>
 

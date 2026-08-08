@@ -73,18 +73,53 @@ $busyDay = Database::scalar(
 ) ?: work_date();
 $view = DailyReview::view($busyDay);
 $day  = Closing::dayView($busyDay);
+/* ⚠️ **المجموع مشتقّ من `BLOCKING` مش مكتوب بالإيد.** كان `['permits','general',
+   'custody']` حرفيًّا، فلما المرحلة ٢ ضافت قسم `rep_deposit` (وهو داخل
+   `Closing::sumExpenses` فعلاً) فَلَت من المطابقة **بالسكوت** — وما بانش لأن
+   مفيش تنزيل من الدرج في البيانات لسه. والاشتقاق بيستثني `dir='in'` (الإضافات)
+   لأن المقارنة على **الخارج** بس. */
 $cashOut = 0.0;
-foreach (['permits', 'general', 'custody'] as $g) { $cashOut += (float) $view['groups'][$g]['total']; }
+foreach (DailyReview::BLOCKING as $g) {
+    if (($view['groups'][$g]['dir'] ?? '') === 'out') { $cashOut += (float) $view['groups'][$g]['total']; }
+}
 echo "  ℹ️  يوم $busyDay: بنود = " . (int) $view['totals']['count'] . "\n";
 $chk('إجمالي الأقسام النقدية = مصروفات اليوم + عهد السائقين في Closing (' . number_format($cashOut, 2) . ')',
     $near($cashOut, (float) $day['expenses'] + (float) $day['driver']));
-$chk('قسم «عهدة مضافة» = topups في Closing',
-    $near((float) $view['groups']['topups']['total'], (float) $day['topups']));
+/* ⚠️ **المقارنة على بنود الدرج بس مش على مجموع القسم.** بطلب المالك بقت عهدة
+   المناديب تنزل في نفس القسم (الفلوس داخلة برضه، بس لجيب المندوب مش للدرج)،
+   فمجموع القسم بقى أكبر من `Closing::sumTopups` عن قصد. القاعدة اللي بتتحرس:
+   **بنود الدرج بالظبط = topups في Closing** — ودي اللي بتضمن إن المرحّل صح. */
+/* ⚠️ **المقارنة على البنود اللي بتتحسب فعلاً**: الدرج + عهدة المندوب من البنك.
+   بنود `carry` معروضة للتوثيق بس (رصيد متحسوب خلاص في مرحّل امبارح) فمستثناة —
+   لو دخلت الحساب بتتعدّ مرتين. */
+$countedTopups = 0.0;
+/* ⚠️⚠️ **القايمة مشتقّة من `DailyReview::countedTopupTypes()` مش مكتوبة بالإيد**
+   (تصحيح 2026-08-01): أنهي نوع بيتحسب في `Closing::sumTopups` بيعتمد على النموذج
+   الفعّال — عهدة البنك محسوبة في «الخزنة = كل كاش الشركة» ومستثناة في «الدرج بس».
+   القايمة الثابتة كانت هتنجح في نموذج وتفشل في التاني بإنذار كاذب. */
+$topupTypes = DailyReview::countedTopupTypes();
+foreach ($view['groups']['topups']['items'] as $it) {
+    if (in_array($it['type'] ?? '', $topupTypes, true)) { $countedTopups += (float) $it['amount']; }
+}
+$chk('بنود «عهدة مضافة» المحسوبة (درج + بنك) = topups في Closing',
+    $near($countedTopups, (float) $day['topups']));
+$chk('وتفكيك القسم بيفصل الدرج عن المناديب عن المرحَّل',
+    $near($countedTopups, (float) (($view['totals']['topups_drawer'] ?? 0) + ($view['totals']['rep_bank'] ?? 0))));
 $chk('قسم «عهد السائقين» = driver في Closing (المخصوم بعد الخصم مش العهدة الخام)',
     $near((float) $view['groups']['custody']['total'], (float) $day['driver']));
 $chk('قسم الفيزا معلوماتي — مش داخل المجموع النقدي',
     $view['groups']['visa']['kind'] === 'info'
     && !in_array('visa', DailyReview::BLOCKING, true));
+/* ⚠️ المرحلة ٢ من docs/16 — قسمان جديدان، وتصنيفهما هو اللي بيحفظ المطابقة فوق:
+     • `rep_wallet` = دفعها المندوب من محفظته ⇒ **معلوماتي** (ما خرجش من الدرج).
+     • `rep_deposit` = كاش نزل من الدرج للمندوب ⇒ **نقدي ومانع** (خرج فعلاً).
+   قلب أي واحد منهم بيخلّي مجموع الأقسام يخالف مصروفات `Closing` بالسكوت. */
+$chk('قسم «دفعها المندوب من عهدته» معلوماتي — مش مانع للإقفال',
+    ($view['groups']['rep_wallet']['kind'] ?? '') === 'info'
+    && !in_array('rep_wallet', DailyReview::BLOCKING, true));
+$chk('قسم «عهدة نزلت للمناديب من الدرج» نقدي ومانع للإقفال',
+    ($view['groups']['rep_deposit']['kind'] ?? '') === 'cash'
+    && in_array('rep_deposit', DailyReview::BLOCKING, true));
 
 // ── تفاصيل البند اللي المالك بيراجع بيها (طلب صريح): الإذن والإيصال والمندوب
 //    والتصنيف والسعر الفعلي وتفاصيل البوليصة.

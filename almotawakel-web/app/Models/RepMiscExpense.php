@@ -139,7 +139,8 @@ class RepMiscExpense
         if ($day !== null && $day !== '') { $dayW = ' AND exp_date = ?'; $args[] = $day; }
         return round((float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM rep_misc_expenses
-             WHERE rep_id = ? AND " . self::cashOnlySql() . $dayW, $args), 2);
+             WHERE rep_id = ? AND " . self::cashOnlySql() . $dayW
+             . RepCustody::epochSql('exp_date'), $args), 2);
     }
 
     /** [تاريخ => إجمالي كاش] لمندوب واحد — لكشف «عهدة كل يوم» (v49). */
@@ -149,7 +150,8 @@ class RepMiscExpense
         $out = [];
         foreach (Database::all(
             "SELECT exp_date d, SUM(amount) total FROM rep_misc_expenses
-             WHERE rep_id = ? AND " . self::cashOnlySql() . " GROUP BY exp_date", [$repId]) as $r) {
+             WHERE rep_id = ? AND " . self::cashOnlySql() . RepCustody::epochSql('exp_date')
+             . " GROUP BY exp_date", [$repId]) as $r) {
             $out[(string) $r['d']] = round((float) $r['total'], 2);
         }
         return $out;
@@ -160,7 +162,8 @@ class RepMiscExpense
     {
         if (!self::available()) { return 0.0; }
         return round((float) Database::scalar(
-            "SELECT COALESCE(SUM(amount),0) FROM rep_misc_expenses WHERE " . self::cashOnlySql()), 2);
+            "SELECT COALESCE(SUM(amount),0) FROM rep_misc_expenses WHERE " . self::cashOnlySql()
+            . RepCustody::epochSql('exp_date')), 2);
     }
 
     /**
@@ -175,7 +178,8 @@ class RepMiscExpense
         $out = [];
         foreach (Database::all(
             "SELECT rep_id, SUM(amount) total FROM rep_misc_expenses
-             WHERE " . self::cashOnlySql() . $dayW . " GROUP BY rep_id", $args) as $r) {
+             WHERE " . self::cashOnlySql() . $dayW . RepCustody::epochSql('exp_date')
+             . " GROUP BY rep_id", $args) as $r) {
             $out[(int) $r['rep_id']] = round((float) $r['total'], 2);
         }
         return $out;
@@ -186,7 +190,7 @@ class RepMiscExpense
     {
         if (!self::available()) { return []; }
         return Database::all(
-            "SELECT * FROM rep_misc_expenses WHERE rep_id = ?
+            "SELECT * FROM rep_misc_expenses WHERE rep_id = ?" . RepCustody::epochSql('exp_date') . "
              ORDER BY exp_date DESC, id DESC", [$repId]);
     }
 

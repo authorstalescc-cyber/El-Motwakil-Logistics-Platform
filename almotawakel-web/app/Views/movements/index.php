@@ -25,13 +25,18 @@
     </tr></thead>
     <tbody>
       <?php if(!$rows): ?>
-        <tr><td colspan="13"><div class="empty"><div class="ic"><?= icon('inbox', 14) ?></div><b>مفيش حركات</b><span>الحركات بتتعمل من جوّه الإذن نفسه، مش من هنا.</span><a class="btn sm" href="<?= url('permits') ?>">افتح الأذونات</a></div></td></tr>
+        <?php /* ⚠️ زر التصرّف بيوصّل **للمكان اللي بتتعمل فيه الحركة فعلاً**
+                 (جوّه الإذن) — الشاشة دي عرض بس. الحالة كانت بتقول «اضغط
+                 حركة جديدة» والزرار ده **مش موجود في الصفحة أصلاً**، و
+                 `verify_ux` بيحرس إنه ما يرجعش. */ ?>
+        <tr><td colspan="13"><?php partial('empty', ['icon' => 'inbox', 'title' => 'مفيش حركات',
+              'action' => ['label' => 'افتح الأذونات', 'url' => url('permits'), 'class' => 'btn sm']]); ?></td></tr>
       <?php else: $i=0; foreach($rows as $r): $i++; ?>
         <tr>
           <td><?= $i ?></td>
           <td><?= dfmt($r['movement_date']) ?></td>
-          <td style="font-weight:500"><?= e($r['bill_number'] ?: '—') ?></td>
-          <td style="text-align:right"><?= e($r['company'] ?: '') ?></td>
+          <td class="mv-ref"><?= e($r['bill_number'] ?: '—') ?></td>
+          <td class="txt"><?= e($r['company'] ?: '') ?></td>
           <td><?= e($r['driver']) ?></td>
           <td><?= e($r['car_owner']) ?></td>
           <td><?= e($r['shipping_co']) ?></td>
@@ -42,7 +47,7 @@
           <td><?= money($r['total_discount'],false) ?></td>
           <td><div class="actions">
             <a class="edit" href="<?= url('movements/'.$r['id'].'/edit') ?>" title="تعديل"><?= icon('edit', 14) ?></a>
-            <form class="confirm-delete" method="post" action="<?= url('movements/'.$r['id'].'/delete') ?>" style="margin:0">
+            <form class="confirm-delete" method="post" action="<?= url('movements/'.$r['id'].'/delete') ?>">
               <?= csrfField() ?><button class="del" type="submit" title="حذف"><?= icon('trash', 14) ?></button>
             </form>
           </div></td>

@@ -7,3 +7,7 @@
          هتفضل بترجع لأول الصفحة بعد كل حفظ. defer عشان الـDOM يبقى جاهز. */ ?>
 <?php $rsJs = \App\Core\App::basePath('public/assets/js/resume-scroll.js'); ?>
 <script defer src="<?= url('assets/js/resume-scroll.js') ?>?v=<?= is_file($rsJs) ? filemtime($rsJs) : 1 ?>"></script>
+<?php $laJs = \App\Core\App::basePath('public/assets/js/lookup-autofill.js'); ?>
+<?php /* شركة الشحن = العميل تلقائيًا — ملف مشترك بين المكتب وبوابة المندوب
+         (`/m` ما بتحمّلش app.js — نفس سبب `resume-scroll.js`). */ ?>
+<script defer src="<?= url('assets/js/lookup-autofill.js') ?>?v=<?= is_file($laJs) ? filemtime($laJs) : 1 ?>"></script>

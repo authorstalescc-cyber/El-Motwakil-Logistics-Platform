@@ -117,13 +117,22 @@ $eq = static function (string $label, $value, string $cls = '') {
         </button>
       <?php endforeach; ?>
     </div>
-    <?php if ($act['visa']['cnt'] > 0): ?>
+    <?php if ($act['visa']['cnt'] > 0 || $act['unpaid']['cnt'] > 0): ?>
       <div class="note" style="margin:0 18px 16px;font-size:var(--fs-1)">
-        <?= icon('credit-card', 14) ?> منهم
-        <button type="button" class="lnk-drill" data-drill="<?= e($rd('rep_visa')) ?>"
-                data-drill-title="بنود الفيزا — <?= e($dayLabel) ?>"><b><?= intf($act['visa']['cnt']) ?></b> بند
-          بـ<b><?= money($act['visa']['sum'], false) ?></b></button>
-        مدفوع بكارت الفيزا — <b>ما اتخصمش من عهدته</b> (خرج من كارت المكتب).
+        <?php if ($act['visa']['cnt'] > 0): ?>
+          <?= icon('credit-card', 14) ?> منهم
+          <button type="button" class="lnk-drill" data-drill="<?= e($rd('rep_visa')) ?>"
+                  data-drill-title="بنود الفيزا — <?= e($dayLabel) ?>"><b><?= intf($act['visa']['cnt']) ?></b> بند
+            بـ<b><?= money($act['visa']['sum'], false) ?></b></button>
+          مدفوع بكارت الفيزا — ما اتخصمش من عهدته.
+        <?php endif; ?>
+        <?php if ($act['unpaid']['cnt'] > 0): ?>
+          <?= icon('info', 14) ?> و
+          <button type="button" class="lnk-drill" data-drill="<?= e($rd('rep_unpaid')) ?>"
+                  data-drill-title="بنود غير مدفوعة — <?= e($dayLabel) ?>"><b><?= intf($act['unpaid']['cnt']) ?></b> بند
+            بـ<b><?= money($act['unpaid']['sum'], false) ?></b></button>
+          غير مدفوع — ما اتخصمش من أي محفظة.
+        <?php endif; ?>
         الكاش اللي طلع من إيده فعلاً: <b><?= money($act['cash'], false) ?></b>.
       </div>
     <?php endif; ?>
@@ -134,11 +143,11 @@ $eq = static function (string $label, $value, string $cls = '') {
    ⚠️ الجدول (٦ أعمدة مليانة `—`) اتشال لصالح `row_item`: البند كيان مش صف
    أرقام للمقارنة، والصف بيتقرا بنظرة وبيشتغل على الموبايل بلا تمرير أفقي. */ ?>
 <?php partial('panel', [
-  'title'  => 'اللي دفعه اليوم',
+  'title'  => 'بنود المندوب اليوم',
   'icon'   => 'clipboard',
   'badge'  => $act['rows'] ? ['text' => intf(count($act['rows'])), 'tone' => 'navy'] : null,
-  'action' => $act['rows'] ? ['label' => 'كل البنود', 'drill' => $rd('rep_spent'),
-                              'title' => 'كل اللي صرفه في ' . $dayLabel] : null,
+  'action' => $act['cash'] > 0 ? ['label' => 'الصرف من العهدة', 'drill' => $rd('rep_spent'),
+                                  'title' => 'الكاش اللي صرفه من عهدته في ' . $dayLabel] : null,
   'scroll' => true,
   'class'  => 'mb',
   'body'   => function () use ($act, $day, $kindOf) {
@@ -171,15 +180,21 @@ $eq = static function (string $label, $value, string $cls = '') {
       }
       if (!empty($s['ref_no'])) { $meta[] = ['icon' => 'clipboard', 'text' => 'إيصال ' . $s['ref_no']]; }
       if ((int) $s['qty'] > 1) { $meta[] = ['icon' => 'package', 'text' => 'كمية ' . intf((int) $s['qty'])]; }
+      $chips = [];
+      if (!empty($s['is_visa'])) {
+        $chips[] = ['icon' => 'credit-card', 'text' => 'فيزا — مش من العهدة'];
+      }
+      if (!empty($s['unpaid'])) {
+        $chips[] = ['icon' => 'info', 'text' => 'غير مدفوع — مش من العهدة'];
+      }
       partial('row_item', [
         'title'  => $s['note'] ?: $kLbl,
         'icon'   => $kIc,
         'url'    => !empty($s['permit_id']) ? url('permits/' . (int) $s['permit_id']) : null,
         'meta'   => $meta,
-        'chips'  => !empty($s['is_visa'])
-            ? [['icon' => 'credit-card', 'text' => 'فيزا — مش من العهدة']] : [],
+        'chips'  => $chips,
         'amount' => money($s['amount'], false),
-        'amount_tone' => empty($s['is_visa']) ? 'ex' : '',
+        'amount_tone' => empty($s['is_visa']) && empty($s['unpaid']) ? 'ex' : '',
       ]);
     }
   },
@@ -208,12 +223,19 @@ $eq = static function (string $label, $value, string $cls = '') {
         }
         if ((int) $p['qty'] > 1) { $meta[] = ['icon' => 'package', 'text' => 'كمية ' . intf((int) $p['qty'])]; }
         if (!empty($p['photo'])) { $meta[] = ['icon' => 'clipboard', 'text' => 'مرفق صورة']; }
+        $chips = [];
+        if (!empty($p['is_visa'])) {
+          $chips[] = ['icon' => 'credit-card', 'text' => 'فيزا — مش من العهدة'];
+        }
+        if (!empty($p['unpaid'])) {
+          $chips[] = ['icon' => 'info', 'text' => 'غير مدفوع — مش من العهدة'];
+        }
         partial('row_item', [
           'title'  => $p['note'] ?: $lbl,
           'icon'   => $ic,
           'url'    => url('rep-custody/inbox'),
           'meta'   => $meta,
-          'chips'  => !empty($p['is_visa']) ? [['icon' => 'credit-card', 'text' => 'فيزا']] : [],
+          'chips'  => $chips,
           'amount' => money($p['amount'], false),
           'amount_tone' => 'wait',
         ]);
@@ -238,11 +260,36 @@ $eq = static function (string $label, $value, string $cls = '') {
         <input type="date" name="dep_date" value="<?= e($depositOld['dep_date'] ?? $day) ?>"<?= fieldErrorAttrs('dep_date', $depositErrors) ?>>
         <?= fieldError('dep_date', $depositErrors) ?>
         <div class="hint">الافتراضي يوم العمل المختار — العهدة بتتحسب على اليوم ده لوحده.</div></div>
+      <?php /* ═══ v61 (المرحلة ٢) — «الفلوس جاية منين؟»
+               ⚠️ دي الخانة الوحيدة اللي بتحدّد أثر التنزيل على الخزنة. الغالب
+                  «من البنك» (قرار المالك) وهو الافتراضي.
+               ⚠️ الظهور من `sourceMatters()` **مش** من `newSafeRuleActive()`:
+                  في نموذج «الخزنة = كل كاش الشركة» المصدر بيفرق برضه (`bank`
+                  بيزوّد الخزنة و`office` تحويل داخلي)، وإخفاؤها هناك كان بيخلّي
+                  كل تنزيل يتسجّل `bank` غصبًا فالفلوس تتقري مرتين. */ ?>
+      <?php if (\App\Models\RepCustody::sourceMatters()): ?>
+        <?php $srcNow = $depositOld['source'] ?? \App\Models\RepCustody::SOURCE_DEFAULT; ?>
+        <div class="field"><label>الفلوس جاية منين؟</label>
+          <select name="source">
+            <?php /* ⚠️ `manualSources()` مش `SOURCES` — مصدر `company` (v67)
+                     بيتولّد من `/company-safe` بس لأنه بيخصم من خزنة الشركة في
+                     نفس المعاملة. عرضه هنا = تنزيل عهدة بلا خصم = فلوس من العدم. */ ?>
+            <?php foreach (\App\Models\RepCustody::manualSources() as $k => $lbl): ?>
+              <option value="<?= e($k) ?>" <?= $srcNow === $k ? 'selected' : '' ?>><?= e($lbl) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <?php /* ⚠️ الشرح من `sourceNote()` — نص واحد للشاشتين (هنا وصفحة الخزنة)
+                   عشان ما يتفرّعش نصّان يقولوا كلامًا مختلفًا لنفس الإجراء. */ ?>
+          <div class="hint"><?= e(\App\Models\RepCustody::sourceNote()) ?></div></div>
+      <?php endif; ?>
       <div class="field"><label>ملاحظة (اختياري)</label>
         <input type="text" name="note" maxlength="255" placeholder="عهدة يوم…"
                value="<?= e($depositOld['note'] ?? '') ?>"></div>
       <button class="btn gold" type="submit" data-primary-submit><?= icon('plus', 15) ?> نزّل العهدة</button>
-      <div class="hint">ما بيخصمش من خزنة المكتب — عهدة المناديب حساب منفصل.</div>
+      <?php /* الشرح فوق جنب خانة المصدر لو ظاهرة — مايتكررش هنا. */ ?>
+      <?php if (!\App\Models\RepCustody::sourceMatters()): ?>
+        <div class="hint"><?= e(\App\Models\RepCustody::sourceNote()) ?></div>
+      <?php endif; ?>
     </form>
   </div>
 
@@ -260,10 +307,16 @@ $eq = static function (string $label, $value, string $cls = '') {
         return;
       }
       foreach ($dayDeposits as $d) {
+        /* ⚠️ **مصدر التنزيل لازم يبان في كل صف** — المصدر الوحيد للصياغة
+           `RepCustody::sourceBadge()` (بيعرف أثر التنزيل على الخزنة حسب النموذج
+           الفعّال). ممنوع تكتب «من البنك/من الدرج» بالإيد في أي شاشة. */
+        $src  = \App\Models\RepCustody::sourceBadge($d['source'] ?? null);
+        $meta = [['icon' => 'calendar', 'text' => dfmt($d['dep_date'])]];
         partial('row_item', [
           'title'  => $d['note'] ?: 'تنزيل عهدة',
           'icon'   => 'wallet',
-          'meta'   => [['icon' => 'calendar', 'text' => dfmt($d['dep_date'])]],
+          'chips'  => $src ? [['icon' => $src['icon'], 'text' => $src['short']]] : [],
+          'meta'   => $src ? array_merge($meta, [['icon' => 'info', 'text' => $src['effect']]]) : $meta,
           'amount' => money($d['amount'], false),
           'amount_tone' => 'pos',
           // زر الحذف جوّه الصف نفسه — مكوّن `row_item` بيوفّر خانة `extra` لده

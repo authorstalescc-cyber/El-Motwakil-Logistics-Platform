@@ -98,7 +98,10 @@ class PushNotify
             'actor_type'   => str_starts_with($by, 'مندوب') ? 'rep' : 'user',
             'subject_type' => 'permit',
             'subject_id'   => $permitId,
-            'meta'         => ['permit_no' => $permitNo, 'company' => $company, 'client' => $client],
+            /* ⚠️ `rep_url` إلزامي لأي حدث جمهوره `both` — من غيره المندوب
+               بيدوس على الإشعار ويتقذف على شاشة دخول المكتب (باج قديم). */
+            'meta'         => ['permit_no' => $permitNo, 'company' => $company, 'client' => $client,
+                               'rep_url' => 'm/permit/' . $permitId],
         ]);
     }
 
@@ -253,23 +256,87 @@ class PushNotify
     }
 
     /**
-     * المندوب حدّث حالة رحلة الشحنة من الميدان — للمكتب (v62).
+     * حالة رحلة الشحنة اتحدّثت — للمكتب (v62).
+     *
+     * ⚠️ **المصدر الوحيد لنصّ الإشعار** — بيتنادى من التلات مسارات (المكتب:
+     *    تسجيل وتراجع · المندوب: تسجيل) فمستحيل الرسالة تختلف حسب الشاشة.
+     *    السياق بيجي من `PermitTrack::eventContext()` وحدها.
      *
      * ⚠️ **ولا مبلغ في الرسالة** — الحالة تشغيلية بحتة، والقاعدة إن أي رقم
      *    بيخصّ العميل ممنوع يعدّي في مسار المندوب (v35).
+     *
+     * @param array{permit_id:int,stage_key:string,bill_id?:int,by?:string,
+     *              source?:string,undo?:bool} $d
      */
-    public static function trackStage(int $permitId, string $permitNo, string $stageLabel, string $by): void
+    public static function trackStage(array $d): void
     {
-        Notify::emit('track.stage', [
-            'title'        => '📍 ' . $stageLabel,
-            'body'         => 'إذن ' . ($permitNo !== '' ? $permitNo : '#' . $permitId) . ' · حدّثها ' . $by,
-            'url'          => 'permits/' . $permitId,
+        $pid    = (int) ($d['permit_id'] ?? 0);
+        $billId = (int) ($d['bill_id'] ?? 0);
+        $undo   = !empty($d['undo']);
+        $by     = trim((string) ($d['by'] ?? '')) ?: 'النظام';
+
+        $c = PermitTrack::eventContext($pid, (string) ($d['stage_key'] ?? ''), $billId);
+        if ($c === null) { return; }
+
+        $noun = ($c['type'] === 'warid' ? 'شهادة ' : 'إذن ')
+              . ($c['permit_no'] !== '' ? $c['permit_no'] : '#' . $pid);
+
+        // العنوان: المرحلة أولاً — دي اللي المستخدم بيقراها من شاشة القفل
+        if ($undo)              { $head = '↩️ رجعت الحالة قبل «' . $c['label'] . '»'; }
+        elseif ($c['terminal']) { $head = '🏁 خلصت الرحلة: ' . $c['label']; }
+        else                    { $head = '📍 ' . $c['label']; }
+
+        // الجسم: العربية والسائق أهم حاجة لو الحدث على بوليصة بعينها
+        $bits = [];
+        if ($billId > 0) {
+            $car = trim($c['car_no'] . ($c['driver'] !== '' ? ' — ' . $c['driver'] : ''));
+            $bits[] = 'بوليصة ' . ($c['bill_number'] !== '' ? $c['bill_number'] : '#' . $billId);
+            if ($car !== '') { $bits[] = $car; }
+        } elseif ($c['client'] !== '') {
+            $bits[] = $c['client'];
+        }
+        if ($c['destination'] !== '') { $bits[] = '➜ ' . $c['destination']; }
+        if (!$undo) { $bits[] = 'مرحلة ' . ($c['index'] + 1) . ' من ' . $c['total']; }
+        $bits[] = ($undo ? 'شالها ' : 'حدّثها ') . $by;
+
+        $src = (string) ($d['source'] ?? '');
+
+        /* ⚠️ الحدث جمهوره `both` (قرار المالك) — والمندوب ما بيفتحش صفحات
+           المكتب، فلازم يتخزّن معاه **رابط بوابته**. `Notify::urlFor` هي اللي
+           بتختار المناسب لكل طرف، والغيابه بيخلّي الإشعار بلا وجهة عنده. */
+        $meta = [
+            'stage'   => (string) ($d['stage_key'] ?? ''),
+            'label'   => $c['label'],
+            'bill_id' => $billId,
+            'step'    => $c['index'] + 1,
+            'total'   => $c['total'],
+            'undo'    => $undo,
+            'rep_url' => 'm/permit/' . $pid . '/track',
+        ];
+
+        $emit = [
+            'title'        => $head . ' — ' . $noun,
+            'body'         => implode(' · ', $bits),
+            // `#journey` بيفتح على لوح الرحلة مباشرةً بدل ما يدوّر في الصفحة
+            'url'          => 'permits/' . $pid . '#journey',
+            'severity'     => $undo ? 'warn' : 'info',
             'actor_name'   => $by,
-            'actor_type'   => 'rep',
+            'actor_type'   => $src === PermitTrack::SRC_REP ? 'rep'
+                            : ($src === PermitTrack::SRC_SYSTEM ? 'system' : 'user'),
             'subject_type' => 'permit',
-            'subject_id'   => $permitId,
-            'meta'         => ['stage' => $stageLabel],
-        ]);
+            'subject_id'   => $pid,
+            'meta'         => $meta,
+        ];
+
+        /* اللي لسه دايس الزرار شايف النتيجة قدّامه — رنّة عليه ضوضاء صافية. */
+        if (!empty($d['actor_key'])) {
+            $emit['exclude'] = [
+                'type' => $src === PermitTrack::SRC_REP ? 'rep' : 'user',
+                'key'  => (string) $d['actor_key'],
+            ];
+        }
+
+        Notify::emit('track.stage', $emit);
     }
 
     /** تحصيل من عميل — للمكتب. */
@@ -474,10 +541,17 @@ class PushNotify
             foreach ($send as $r) {
                 $nid = (int) $r['notification_id'];
                 $n   = $notifs[$nid];
+                /* ⚠️ نفس مصدر الرابط بتاع الجرس والصفحة — لو اتكتب هنا بإيدنا،
+                   المندوب ياخد رابط مكتب ميت في الرنّة ورابط سليم في الجرس. */
+                $path = \App\Models\Notify::urlFor($n, $partyType);
+                /* ⚠️⚠️ الاحتياطي **لازم** يمرّ على `fallbackUrlFor` — كان
+                   `url('')` (لوحة المكتب) فالمندوب كان بيتقذف على شاشة دخول
+                   المكتب مع كل إشعار بلا `rep_url`. التفاصيل جوّه الدالة. */
                 $res = WebPush::send($devices, [
                     'title' => (string) $n['title'],
                     'body'  => (string) $n['body'],
-                    'url'   => $n['url'] ? url((string) $n['url']) : url(''),
+                    'url'   => url($path !== '' ? $path
+                                   : \App\Models\Notify::fallbackUrlFor($partyType)),
                     'kind'  => (string) $n['kind'],
                     'tag'   => (string) $n['kind'] . ':' . $nid,
                 ]);
@@ -503,7 +577,8 @@ class PushNotify
                 WebPush::send($devices, [
                     'title' => '🔔 و' . $more . ' إشعار كمان',
                     'body'  => 'حصلت حاجات كتير مع بعض — افتح النظام تشوفها كلها.',
-                    'url'   => url('notifications'),
+                    // ⚠️ صفحة إشعارات **نفس الطرف** — `notifications` بترندر تخطيط المكتب
+                    'url'   => url(\App\Models\Notify::fallbackUrlFor($partyType)),
                     'kind'  => 'burst',
                     'tag'   => 'burst',
                 ]);
@@ -671,10 +746,27 @@ class PushNotify
         $job = ['kind' => 'test', 'audience' => $audience, 'title' => $title, 'body' => $body, 'url' => $url, 'by' => $by];
         if (!$subs) { self::log($job, 0, 0); return ['total' => 0, 'ok' => 0, 'fail' => 0, 'errors' => []]; }
 
-        $res = WebPush::send($subs, [
-            'title' => $title, 'body' => $body,
-            'url'   => $url ? url($url) : url(''), 'kind' => 'test', 'tag' => 'test',
-        ]);
+        /* ⚠️ الجمهور ممكن يبقى مختلطًا (`all`)، ورابط واحد لكل الأجهزة معناه إن
+           المندوب ياخد رابط صفحة مكتب فيتقذف على شاشة دخول المكتب. عشان كده
+           بنبعت **دفعة لكل طرف** برابطه، والنتايج بترجع لمكانها الأصلي عشان
+           `$errors` تفضل مسمّية الجهاز الصح. */
+        $res = [];
+        $byAud = [];
+        foreach ($subs as $i => $sub) {
+            $byAud[($sub['audience'] ?? '') === 'rep' ? 'rep' : 'user'][$i] = $sub;
+        }
+        foreach ($byAud as $partyType => $group) {
+            $path = $url !== null && trim($url) !== ''
+                  ? \App\Models\Notify::urlFor(['url' => $url], $partyType)
+                  : '';
+            $r = WebPush::send(array_values($group), [
+                'title' => $title, 'body' => $body,
+                'url'   => url($path !== '' ? $path
+                               : \App\Models\Notify::fallbackUrlFor($partyType)),
+                'kind'  => 'test', 'tag' => 'test',
+            ]);
+            foreach (array_keys($group) as $pos => $orig) { $res[$orig] = $r[$pos] ?? null; }
+        }
         $ok = 0; $fail = 0; $errors = [];
         foreach ($subs as $i => $sub) {
             $r = $res[$i] ?? ['ok' => false, 'gone' => false, 'status' => 0, 'error' => ''];

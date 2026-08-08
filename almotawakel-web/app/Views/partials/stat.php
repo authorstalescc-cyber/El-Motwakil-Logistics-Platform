@@ -18,7 +18,6 @@
  *   icon   ?string  اسم أيقونة من `icon()` — **مش إيموجي**
  *   tone   ?string  navy|green|gold|purple|teal|red|sader
  *   unit   ?string  العملة أو الوحدة جنب الرقم
- *   secret ?bool    الرقم يتقنّع لحد ما المالك يضغط «إظهار الأرصدة»
  *   delta  ?float   نسبة التغيّر عن فترة سابقة (موجب = زيادة). null = بلا مقارنة.
  *   delta_label ?string  اسم الفترة اللي بنقارن بيها («عن الشهر اللي قبله»)
  *   delta_good  ?string  'up' (الزيادة كويسة — الافتراضي) أو 'down' (المصروفات)
@@ -39,32 +38,40 @@
 $label = $label ?? '';
 $value = (string) ($value ?? '');
 $drill = trim((string) ($drill ?? ''));
+$url   = trim((string) ($url ?? ''));
 $title = $title ?? $label;
 $icon  = $icon  ?? 'bar-chart';
 $tone  = $tone  ?? 'navy';
 $unit  = $unit  ?? null;
-$secret = !empty($secret);
 $delta  = isset($delta) && $delta !== null ? (float) $delta : null;
 $deltaLabel = $delta_label ?? null;
 $deltaGood  = ($delta_good ?? 'up') === 'down' ? 'down' : 'up';
 $trend = (is_array($trend ?? null) && ($trend['text'] ?? '') !== '') ? $trend : null;
 $spark = array_values(array_filter((array) ($spark ?? []), 'is_numeric'));
 
-if ($drill === '') {
+if ($drill === '' && $url === '') {
     // الفشل ظاهر في مصدر الصفحة بدل ما يعدّي بالسكوت (نفس أسلوب `partial()`)
     echo '<!-- ⚠️ stat بلا drill: «' . e((string) $label) . '» — ممنوع رقم أصمّ -->';
     return;
 }
+/* ⚠️ **وضعان للوصول للبنود، والاتنين بيحققوا «ممنوع رقم أصمّ»:**
+     • `drill` → نافذة تفاصيل سريعة (الافتراضي، وأرخص).
+     • `url`   → **شاشة كاملة مفلترة** — وده **أقوى** لما البنود ليها شاشة
+       فيها فلاتر وتصدير وترتيب (زي `permits?view=records&st=open`). النافذة
+       هنا كانت هتبقى نسخة أفقر من شاشة موجودة أصلاً.
+   `drill` بتكسب لو الاتنين اتبعتوا. الشكل واحد في الحالتين — الفرق في الوسم
+   بس (`<button>` مقابل `<a>`) عشان السلوك يبقى صح للكيبورد وفتح تبويب جديد. */
+$asLink = ($drill === '');
+$tag    = $asLink ? 'a' : 'button';
+$open   = $asLink
+    ? '<a class="d-kpi ' . e($tone) . '" href="' . e($url) . '">'
+    : '<button type="button" class="d-kpi ' . e($tone) . '"'
+      . ' data-drill="' . e($drill) . '" data-drill-title="' . e((string) $title) . '">';
 ?>
-<button type="button" class="d-kpi <?= e($tone) ?>"
-        data-drill="<?= e($drill) ?>" data-drill-title="<?= e((string) $title) ?>">
+<?= $open ?>
   <span class="d-kpi-ic"><?= icon($icon, 20) ?></span>
   <div class="d-kpi-val">
-    <?php if ($secret): ?>
-      <span data-secret data-val="<?= e($value) ?>">••••••</span>
-    <?php else: ?>
-      <?= e($value) ?>
-    <?php endif; ?>
+    <?= e($value) ?>
     <?php if ($unit): ?><span class="d-kpi-suf"><?= e($unit) ?></span><?php endif; ?>
   </div>
   <?php if ($delta !== null):
@@ -90,7 +97,9 @@ if ($drill === '') {
       <b><?= e((string) $trend['text']) ?></b>
     </div>
   <?php endif; ?>
-  <div class="d-kpi-lbl"><?= e((string) $label) ?> <span class="d-kpi-eye"><?= icon('search', 12) ?></span></div>
+  <?php /* العدسة = «بيفتح نافذة تفاصيل» · السهم = «بينقلك لشاشة كاملة».
+           الرمزان مختلفان عن قصد عشان المستخدم يعرف هيحصل إيه قبل ما يضغط. */ ?>
+  <div class="d-kpi-lbl"><?= e((string) $label) ?> <span class="d-kpi-eye"><?= icon($asLink ? 'chevron' : 'search', 12) ?></span></div>
   <?php if (count($spark) >= 2):
       /* رسم خطّي صغير — SVG مرسوم على الخادم بلا أي مكتبة (Chart.js اتشالت
          في المرحلة ٤ عشان ٢٠٠KB على كل فتحة). الرسم **زخرفي**: الرقم والمقارنة
@@ -113,4 +122,4 @@ if ($drill === '') {
       <circle cx="100" cy="<?= e((string) round(22 - (((float) end($spark) - $min) / $range) * 20, 2)) ?>" r="1.8" fill="currentColor"/>
     </svg>
   <?php endif; ?>
-</button>
+</<?= $tag ?>>

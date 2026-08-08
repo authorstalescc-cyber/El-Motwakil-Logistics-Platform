@@ -40,7 +40,8 @@ abstract class CrudController extends Controller
         $dir    = strtolower(trim($_GET['dir'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
         $page   = max(1, (int)($_GET['page'] ?? 1));
 
-        [$where, $params] = $this->buildWhere($ent, $q, $year, $month, $source, $legacy);
+        $flt = self::readFilters($ent);
+        [$where, $params] = $this->buildWhere($ent, $q, $year, $month, $source, $legacy, $flt);
 
         $total = (int) Database::scalar("SELECT COUNT(*) FROM `$table` $where", $params);
         $pages = max(1, (int) ceil($total / $this->perPage));
@@ -68,10 +69,9 @@ abstract class CrudController extends Controller
             $sums = $sumRow ?: [];
         }
 
-        // سنوات متاحة للفلتر
-        $years = Database::all("SELECT DISTINCT YEAR(`$dateField`) y FROM `$table`
-                                WHERE `$dateField` IS NOT NULL ORDER BY y DESC");
-
+        /* ⚠️ استعلام «السنوات المتاحة» اتشال مع فلتر السنة (2026-08-03) — كان
+           بيتنفّذ مع كل فتحة للصفحة وبقى بلا قارئ. مدى التاريخ في الفلترة
+           المتقدّمة بيغطّيه. */
         $this->render('crud/index', [
             'title'   => $ent['title'],
             'ent'     => $ent,
@@ -87,7 +87,8 @@ abstract class CrudController extends Controller
             'legacy'  => $legacy,
             'sort'    => $sort,
             'dir'     => $dir,
-            'years'   => array_column($years, 'y'),
+            'flt'        => $flt,
+            'filterSpec' => self::filterSpec($ent),
             'lookups' => Lookup::allGrouped(),
             'ownerOptions' => !empty($ent['has_legacy']) ? Bill::ownerOptions() : [],
             // إعادة تعبئة نافذة لصق الإكسل بعد الفشل — كان اللصق كله بيضيع
@@ -95,17 +96,104 @@ abstract class CrudController extends Controller
         ]);
     }
 
-    private function buildWhere(array $ent, string $q, string $year, string $month, string $source, string $legacy = ''): array
+    /**
+     * وصف الفلاتر المتقدّمة المشتقّ من `Schema` — **المصدر الوحيد** لأي فلتر.
+     * بيحدّد لكل حقل نوع الفلتر المناسب من نوع الحقل نفسه، فأي حقل جديد بياخد
+     * فلتره تلقائيًّا بلا تعديل هنا.
+     *
+     * ⚠️ ده كمان **القائمة البيضا**: `applyFilters` بترفض أي مفتاح مش هنا، فاسم
+     *    العمود اللي بيتحقن في SQL بييجي من `Schema` لا من المستخدم أبدًا.
+     *
+     * @return array<string,array{key:string,label:string,kind:string,group:string,lookup?:string}>
+     */
+    public static function filterSpec(array $ent): array
+    {
+        $KIND = [
+            'billtype'   => 'choice', 'status'  => 'choice', 'select' => 'choice', 'source' => 'choice',
+            'text'       => 'text',   'containers' => 'text',
+            'money'      => 'range',  'int'     => 'range',  'pct' => 'range',
+            'date'       => 'daterange',
+        ];
+        $out = [];
+        foreach ($ent['fields'] as $f) {
+            $kind = $KIND[$f['type']] ?? null;
+            if ($kind === null) { continue; }                      // rep_payer وغيره: مالوش فلتر
+            if ($f['key'] === $ent['date_field']) { continue; }    // ليه from/to الرئيسيين
+            $out[$f['key']] = [
+                'key'   => $f['key'],
+                'label' => $f['label'],
+                'kind'  => $kind,
+                'group' => $f['group'] ?? 'identity',
+                'lookup'=> $f['lookup'] ?? null,
+                'type'  => $f['type'],
+            ];
+        }
+        return $out;
+    }
+
+    /** قراءة الفلاتر المتقدّمة من الرابط بعد تنقيتها بالقائمة البيضا. */
+    public static function readFilters(array $ent): array
+    {
+        $spec = self::filterSpec($ent);
+        $get  = fn(string $k) => is_array($_GET[$k] ?? null) ? $_GET[$k] : [];
+        $keep = function (array $raw, array $allow) use ($spec) {
+            $o = [];
+            foreach ($raw as $k => $v) {
+                if (!isset($spec[$k]) || !in_array($spec[$k]['kind'], $allow, true)) { continue; }
+                $v = is_array($v) ? '' : trim((string) $v);
+                if ($v !== '') { $o[$k] = $v; }
+            }
+            return $o;
+        };
+        $d = fn(string $k) => preg_match('/^\d{4}-\d{2}-\d{2}$/', trim((string) ($_GET[$k] ?? ''))) ? trim($_GET[$k]) : '';
+        return [
+            'fs'   => $keep($get('fs'), ['choice']),
+            'ft'   => $keep($get('ft'), ['text']),
+            'fmin' => $keep($get('fmin'), ['range']),
+            'fmax' => $keep($get('fmax'), ['range']),
+            'from' => $d('from'),
+            'to'   => $d('to'),
+        ];
+    }
+
+    private function buildWhere(array $ent, string $q, string $year, string $month, string $source, string $legacy = '', array $flt = []): array
     {
         $conds = [];
         $params = [];
-        if ($q !== '' && !empty($ent['search'])) {
-            $ors = [];
-            foreach ($ent['search'] as $col) {
-                $ors[] = "`$col` LIKE ?";
-                $params[] = '%' . $q . '%';
+
+        /* ── الفلاتر المتقدّمة ── أسماء الأعمدة من `filterSpec` (Schema) لا من المستخدم */
+        if ($flt) {
+            $spec = self::filterSpec($ent);
+            foreach ($flt['fs'] ?? [] as $k => $v) {
+                $conds[] = "`$k` = ?"; $params[] = $v;
             }
-            $conds[] = '(' . implode(' OR ', $ors) . ')';
+            foreach ($flt['ft'] ?? [] as $k => $v) {
+                [$sql, $sp] = \App\Models\Search::likeWhere([$k], $v);
+                if ($sql !== '') { $conds[] = $sql; $params = array_merge($params, $sp); }
+            }
+            foreach ($flt['fmin'] ?? [] as $k => $v) {
+                if (is_numeric($v)) { $conds[] = "`$k` >= ?"; $params[] = (float) $v; }
+            }
+            foreach ($flt['fmax'] ?? [] as $k => $v) {
+                if (is_numeric($v)) { $conds[] = "`$k` <= ?"; $params[] = (float) $v; }
+            }
+            unset($spec);
+            $df = $ent['date_field'];
+            if (($flt['from'] ?? '') !== '') { $conds[] = "`$df` >= ?"; $params[] = $flt['from']; }
+            if (($flt['to'] ?? '')   !== '') { $conds[] = "`$df` <= ?"; $params[] = $flt['to']; }
+        }
+        /* ⚠️ البحث بيمرّ على `Search::likeWhere()` — **نفس محرّك البحث الشامل**
+           (تطبيع الألف/التاء المربوطة/الياء/الهمزات/التشكيل/الأرقام العربية +
+           تقطيع لكلمات: كل كلمة في أي عمود، وكل الكلمات مطلوبة). ممنوع نرجع
+           لـ`LIKE '%$q%'` الخام: كان بيرجّع **صفر** لـ«الإسماعيلية» بينما
+           المخزَّن «الاسماعيليه»، و«جلال العاشر» ما كانتش تلاقي حاجة لأنها
+           كانت بتتبحث كتلة واحدة جوّه عمود واحد. */
+        if ($q !== '' && !empty($ent['search'])) {
+            [$sql, $sp] = \App\Models\Search::likeWhere($ent['search'], $q);
+            if ($sql !== '') {
+                $conds[] = $sql;
+                $params = array_merge($params, $sp);
+            }
         }
         $df = $ent['date_field'];
         if ($year !== '') { $conds[] = "YEAR(`$df`) = ?"; $params[] = (int)$year; }
@@ -310,9 +398,25 @@ abstract class CrudController extends Controller
         $data = [];
         foreach ($ent['fields'] as $f) {
             if (!empty($f['calc'])) { continue; }
+            // ⚠️ الدافع بيتخطّى بالكامل قبل migrate_v60 — العمود مش موجود،
+            //    فإدخاله في الـINSERT/UPDATE كان هيكسر حفظ أي بوليصة.
+            if (($f['type'] ?? '') === 'rep_payer' && !\App\Models\RepBillCustody::ready()) { continue; }
             $key = $f['key'];
             $val = $_POST[$key] ?? null;
             $data[$key] = match ($f['type']) {
+                // ⚠️ **الفورم مش مصدر ثقة** — نفس حارس `PermitController::custodyPayerId`:
+                //    أي قيمة مش مندوب **نشط** بترجع NULL (خزنة المكتب). لو اتخزّن id
+                //    وهمي، العهدة بتتستثنى من الخزنة وما تظهرش في محفظة أي مندوب —
+                //    يعني فلوس بتتبخّر بلا أي خطأ ظاهر.
+                // ⚠️ ونفس السبب بالظبط بيمنع الوسم على بوليصة **قبل خط الفصل**:
+                //    جانب المحفظة بيمرّ على خط الفصل وجانب الخزنة لأ. المصدر
+                //    الوحيد للفحص `RepBillCustody::payerAllowed()`.
+                'rep_payer' => ((int) $val) > 0
+                    && (float) ($_POST['custody'] ?? 0) > 0
+                    && \App\Models\RepBillCustody::payerAllowed((string) ($_POST['bill_date'] ?? ''))
+                    && Database::scalar(
+                        "SELECT id FROM reps WHERE id = ? AND status = 'active'", [(int) $val])
+                        ? (int) $val : null,
                 'money' => $val === '' || $val === null ? 0 : (float)$val,
                 'int'   => $val === '' || $val === null ? 0 : (int)$val,
                 'date'  => $val ?: null,

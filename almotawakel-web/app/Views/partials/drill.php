@@ -44,7 +44,9 @@ $rendered = trim(is_callable($body) ? (string) (function ($b) { ob_start(); $b()
       <span class="drill-total"><?= e((string) ($total['label'] ?? 'الإجمالي')) ?>:
         <b><?= e((string) ($total['value'] ?? '')) ?></b></span>
     <?php endif; ?>
-    <?php if ($count !== null): ?><span style="color:var(--grey);font-size:var(--fs-1)"><?= intf((int) $count) ?> بند</span><?php endif; ?>
+    <?php /* كلاس لا `style=` inline: المكوّن ده بيترندر في **كل** نافذة تفاصيل
+             في النظام، فأي inline هنا بيتضاعف على ٢٤ نوع تفاصيل. */ ?>
+    <?php if ($count !== null): ?><span class="drill-count"><?= intf((int) $count) ?> بند</span><?php endif; ?>
     <?php if (is_array($more) && !empty($more['url'])): ?>
       <a class="btn ghost sm" href="<?= e($more['url']) ?>"><?= e((string) ($more['label'] ?? 'افتح الشاشة الكاملة')) ?> <?= icon('external', 14) ?></a>
     <?php endif; ?>

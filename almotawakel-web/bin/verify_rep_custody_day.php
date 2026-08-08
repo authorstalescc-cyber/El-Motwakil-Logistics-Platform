@@ -226,6 +226,32 @@ try {
     chk($a !== '' && str_contains($a, $tag . ' إيصال إمبارح'),
         'بند إمبارح موجود في تبويب «الحساب الكامل» (ما اتشالش من النظام)');
     chk($a !== '' && str_contains($a, 'id="settle-form"'), 'فورم التسوية في تبويب الحساب');
+
+    /* ⚠️ **لوح التحويلات الصادرة (2026-07-31).** قبله كان الصادر بيبان **جوّه
+       كشف الصرف بس** وسط الإيصالات والمصروفات و**بلا أي زرار** — فالمالك
+       مايقدرش يلغيه ولا يعدّله إلا لو راح لكارت المُستقبِل ودوّر عليه. التحويل
+       حركة خارجة من عهدة المُرسِل، فمكان إجرائه كارته هو. الفحص بيزرع تحويل
+       حقيقي ويتأكد إنه بيرندر بإجراءاته. */
+    $peer = (int) Database::scalar(
+        "SELECT id FROM reps WHERE status='active' AND id <> ? ORDER BY id LIMIT 1", [$repId]);
+    if ($peer > 0) {
+        \App\Models\RepTransfer::create($repId, [
+            'to_rep_id' => $peer, 'amount' => '120', 'transfer_date' => $day, 'note' => $tag . ' تحويل']);
+        $_GET = ['tab' => 'account'];
+        $a2 = $render(static fn () => $ctrl->card((string) $repId));
+        $_GET = [];
+        $noPhpError($a2, 'تبويب الحساب بعد تحويل صادر');
+        chk(str_contains($a2, 'id="transfers-out"'), '⚠️ لوح «تحويلات حوّلها لزملاء» ظاهر');
+        chk(str_contains($a2, $tag . ' تحويل'), 'والتحويل نفسه ظاهر فيه');
+        chk(str_contains($a2, '/update'), '⚠️ وفيه فورم تعديل (مش عرض بس)');
+        chk(substr_count($a2, 'transfer/') >= 2, '⚠️ وفيه فورم إلغاء كمان');
+        /* ⚠️ فورم الإلغاء لازم يفضل **برّه** فورم التعديل — فورم جوّه فورم
+           ماركب غير صالح والمتصفح بيفكّه بصمت فالزرار يبعت على المسار الغلط. */
+        chk(!preg_match('~<form[^>]*/update"[^>]*>(?:(?!</form>).)*<form~s', $a2),
+            '⚠️ فورم الإلغاء مش متداخل جوّه فورم التعديل');
+    } else {
+        ok('(اتخطّى فحص التحويلات — مفيش مندوب تاني نشط)');
+    }
     chk(($tabHtml['permits'] ?? '') !== '' && str_contains($tabHtml['permits'], 'id="assign-form"'),
         'فورم تنزيل الأذونات في تبويب الأذونات');
     chk(($tabHtml['settings'] ?? '') !== '' && str_contains($tabHtml['settings'], 'id="account-form"')
@@ -306,29 +332,56 @@ try {
     chk(str_contains($drillSrc, "\$this->notFound('المندوب ده مش موجود.')"),
         '⚠️ وتفاصيل مندوب لازم `?rep=` لمندوب موجود فعلاً');
 
-    // ═══ ⑩ باج متحقَّق: الأرصدة كانت مقنّعة للأبد بلا زرار يكشفها
-    sec('⑩ إظهار الأرصدة — معالج واحد عام');
-    $appJs   = (string) file_get_contents(__DIR__ . '/../public/assets/js/app.js');
-    $officeV = (string) file_get_contents(__DIR__ . '/../app/Views/office/index.php');
-    chk(str_contains($appJs, 'secretValues'),
-        'معالج [data-secret] في app.js — بيخدم كل الشاشات مش شاشة واحدة');
-    chk(!preg_match('/data-secret\][^\n]*forEach[\s\S]{0,400}secret-toggle/', $officeV),
-        'مفيش نسخة تانية من المعالج في office/index.php (الضغطة كانت هتتنفّذ مرتين)');
-    foreach (['index.php', 'card.php'] as $f) {
-        $v = (string) file_get_contents(__DIR__ . '/../app/Views/rep_custody/' . $f);
-        /* التقنيع بقى من مكوّن `stat`/`entity_card` (`'secret' => true`) بعد
-           التحويل، فالفحص بيقبل الاتنين — المهم إن الرقم مقنّع وله زرار كشف. */
-        chk((str_contains($v, 'data-secret') || str_contains($v, "'secret' => true"))
-            && str_contains($v, 'secret-toggle'),
-            "rep_custody/$f فيها زرار كشف الأرصدة (كانت `••••••` للأبد قبل كده)");
+    /* ═══ ⑩ إخفاء الأرصدة **اتشال خالص** — قرار المالك (2026-08-02) ═══
+       التوقّع **اتقلب عن قصد مش ترخية**: الفحص القديم كان بيتأكد إن الرقم
+       مقنّع `••••••` وإن له زرار كشف (كان بيحرس باجًا حقيقيًّا: المعالج كان
+       محليًّا في `office/index.php` فالأرقام في شاشات تانية تفضل مقنّعة للأبد).
+       المالك قال «مش عايز إخفاء أرصدة»، فالميزة اتشالت من جذرها — والفحص
+       دلوقتي بيحرس **إنها ما ترجعش نص-نص**: أي `data-secret` أو `'secret'`
+       بلا معالج بيرجّع نفس الباج القديم بالظبط. */
+    sec('⑩ إخفاء الأرصدة — اتشال بالكامل');
+    $appJs = (string) file_get_contents(__DIR__ . '/../public/assets/js/app.js');
+    chk(!str_contains($appJs, 'secretValues') && !str_contains($appJs, 'secret-toggle'),
+        'معالج التقنيع اتشال من app.js');
+    $leaks = [];
+    foreach (glob(__DIR__ . '/../app/Views/**/*.php') ?: [] as $f) {
+        $v = (string) file_get_contents($f);
+        if (str_contains($v, 'data-secret') || str_contains($v, "'secret' => true")
+            || str_contains($v, 'secret-toggle')) {
+            $leaks[] = basename(dirname($f)) . '/' . basename($f);
+        }
+    }
+    chk($leaks === [], 'ولا شاشة لسه بتقنّع رقم' . ($leaks ? ' — ' . implode(' · ', $leaks) : ''));
+    foreach (['stat.php', 'entity_card.php'] as $f) {
+        $v = (string) file_get_contents(__DIR__ . '/../app/Views/partials/' . $f);
+        chk(!str_contains($v, 'secret'), "مكوّن $f بلا خيار تقنيع");
     }
 
-    // ═══ ⑨ العزل المالي — قاعدة v42 بالحرف
-    sec('⑨ العزل المالي (قاعدة v42)');
-    chk(abs($treasuryAfterDeposits - $treasuryBefore) < 0.005,
-        'تنزيل العهدة (8,000) ما مسّش خزنة المكتب — تحويل داخلي');
-    chk(abs(Closing::currentBalance() - ($treasuryBefore - 1450)) < 0.005,
-        'صرف المندوب المعتمَد (1,450) اتخصم من الخزنة يوم صرفه — إعادة التصميم ما غيّرتش ده');
+    /* ═══ ⑨ العزل المالي
+       ⚠️ **التوقّع اتقلب مع المرحلة ٢ من docs/16** (مش ترخية — قلب مقصود):
+          قاعدة v42 كانت «صرف المندوب المعتمَد بيتخصم من الخزنة يوم صرفه»، وكانت
+          صح **بس** طول ما كل تنزيل معاه توب-أب مرايا في `manual_custody`. لمّا
+          الفلوس بقت تيجي من البنك للمندوب على طول، الخزنة بقت تتخصم لفلوس عمرها
+          ما دخلت الدرج. القاعدة الجديدة: **محفظة المندوب مستقلة وصرفه ما بيمسّ
+          الدرج**، واللي بيمسّه هو التنزيل لو طلع منه (`source='office'`).
+          الفحص هنا بقى على **السلوك الساري** بدل توقّع محفوظ. */
+    sec('⑨ العزل المالي');
+    /* ⚠️ **التوقّع واعي بالنموذج** — قرار المالك (2026-07-30): «أي عهدة تتضاف
+   للمندوب كأنها في الدرج»، فتنزيل البنك بقى **بيزوّد** رصيد الخزنة.
+   `RepCustody::bankTopupActive()` هي المصدر الوحيد للفحص. */
+    $depAdds = \App\Models\RepCustody::bankTopupActive();
+    chk(abs($treasuryAfterDeposits - $treasuryBefore - ($depAdds ? 8000 : 0)) < 0.005,
+        $depAdds ? 'تنزيل العهدة (8,000) زوّد خزنة المكتب (الخزنة = كل كاش الشركة)'
+                 : 'تنزيل العهدة (8,000) من البنك ما مسّش خزنة المكتب');
+    $newRule = \App\Models\RepCustody::newSafeRuleActive()
+             && $day >= \App\Models\RepCustody::safeRuleFrom();
+    /* ⚠️ الأساس هو الخزنة **بعد التنزيل** مش قبله — لما التنزيل بقى بيزوّد
+       الخزنة (قرار المالك) الفرق ده بقى فارقًا. */
+    $expected = $newRule ? $treasuryAfterDeposits : $treasuryAfterDeposits - 1450;
+    chk(abs(Closing::currentBalance() - $expected) < 0.005,
+        $newRule
+            ? 'صرف المندوب المعتمَد (1,450) **ما مسّش** الخزنة — محفظته مستقلة (المرحلة ٢)'
+            : 'صرف المندوب المعتمَد (1,450) اتخصم من الخزنة يوم صرفه (قاعدة v42)');
 
     $_SESSION = [];
 } finally {

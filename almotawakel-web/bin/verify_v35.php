@@ -132,7 +132,14 @@ try {
     echo "  رصيد الخزنة الابتدائي: " . number_format($bal0, 2) . " ج\n";
 
     RepCustody::createDeposit($repId, 2000, $today, '__v35');
-    is('تنزيل عهدة 2000 → الخزنة ما اتغيرتش (تحويل داخلي)', Closing::currentBalance(), $bal0);
+    /* ⚠️ **التوقّع واعي بالنموذج** — قرار المالك (2026-07-30): «أي عهدة تتضاف
+   للمندوب كأنها في الدرج»، فتنزيل البنك بقى **بيزوّد** رصيد الخزنة.
+   `RepCustody::bankTopupActive()` هي المصدر الوحيد للفحص. */
+    $depAdds = \App\Models\RepCustody::bankTopupActive();
+    is($depAdds ? 'تنزيل عهدة 2000 → الخزنة زادت 2000 (الخزنة = كل كاش الشركة)'
+                : 'تنزيل عهدة 2000 → الخزنة ما اتغيرتش (تحويل داخلي)',
+       Closing::currentBalance(), $bal0 + ($depAdds ? 2000 : 0));
+    $bal0 = Closing::currentBalance();   // الأساس بقى بعد التنزيل
     is('تنزيل عهدة 2000 → عهدة المندوب زادت', RepCustody::balance($repId), $cust0 + 2000);
 
     // بند كاش عادي — لازم يفضل يخصم (السلوك القديم ما اتكسرش)
@@ -141,17 +148,31 @@ try {
          VALUES (?,?,'receipts',300,1,?,'__v35_cash','done',0)", [$pid, $mid, $today]);
     is('بند كاش عادي 300 → الخزنة نقصت 300 (السلوك القديم سليم)', Closing::currentBalance(), $bal0 - 300);
 
-    // بند من عهدة المندوب — بقى يخصم من الخزنة كمان (v42)
+    /* ⚠️ **التوقّعات تحت واعية بالعصر — والقلب مقصود مش ترخية.**
+       قاعدة v42 («صرف المندوب المعتمَد بيتخصم من الخزنة») **اتقلبت في المرحلة ٢
+       من docs/16**: الفلوس بقت تيجي من البنك للمندوب على طول، فالدرج كان بيتخصم
+       لفلوس عمرها ما دخلته. دلوقتي محفظة المندوب مستقلة تمامًا، واللي بيمسّ
+       الدرج هو التنزيل لو طلع منه (`source='office'`).
+       الفاحص بيفحص **السلوك الساري** فبيعدّي قبل التفعيل وبعده. */
+    $newRule = \App\Models\RepCustody::newSafeRuleActive()
+             && $today >= \App\Models\RepCustody::safeRuleFrom();
+    $repHits = $newRule ? 0 : 1;   // مضروب في مبلغ البند: 0 = ما بيمسّش الدرج
+
+    // بند من عهدة المندوب
     Database::exec(
         "INSERT INTO permit_stages (permit_id,movement_id,stage_key,amount,qty,entry_date,note,status,is_visa,paid_by_rep_id)
          VALUES (?,?,'receipts',500,1,?,'__v35_rep','done',0,?)", [$pid, $mid, $today, $repId]);
     $repStage = Database::lastId();
-    is('بند 500 من عهدة المندوب → الخزنة نقصت 500 كمان (v42)', Closing::currentBalance(), $bal0 - 800);
+    is($newRule ? 'بند 500 من عهدة المندوب → الخزنة **ما اتغيّرتش** (المرحلة ٢)'
+                : 'بند 500 من عهدة المندوب → الخزنة نقصت 500 كمان (v42)',
+       Closing::currentBalance(), $bal0 - 300 - 500 * $repHits);
     is('بند 500 من عهدة المندوب → عهدته نقصت 500', RepCustody::balance($repId), $cust0 + 1500);
 
     // الخصم بيتبع المبلغ بالظبط — مفيش سقف ولا استثناء مستخبّي
     Database::exec("UPDATE permit_stages SET amount=999999 WHERE id=?", [$repStage]);
-    is('بند بـ999,999 → الخزنة بتخصمه كامل (مفيش استثناء)', Closing::currentBalance(), $bal0 - 300 - 999999);
+    is($newRule ? 'بند بـ999,999 من محفظة المندوب → الخزنة ما اتغيّرتش'
+                : 'بند بـ999,999 → الخزنة بتخصمه كامل (مفيش استثناء)',
+       Closing::currentBalance(), $bal0 - 300 - 999999 * $repHits);
     Database::exec("UPDATE permit_stages SET amount=500 WHERE id=?", [$repStage]);
 
     // ═══════════════════════════════════════════ 5) البند موجود في الأماكن الصح
@@ -182,7 +203,18 @@ try {
         foreach (($v['groups']['permits']['items'] ?? []) as $it) {
             if (abs(((float) ($it['amount'] ?? 0)) - 500) < 0.005) { $inRec = true; }
         }
-        is('ظاهر كبند في مراجعة التقفيل اليومي (v50) — قاعدة v42', $inRec, true);
+        /* بعد المرحلة ٢ البند بيتنقل لقسم «دفعها المندوب من عهدته» (معلوماتي)
+           بدل «إيصالات ومصروفات الأذونات» (نقدي) — لسه **ظاهر** بس مش مانع. */
+        if ($newRule) {
+            $inWallet = false;
+            foreach (($v['groups']['rep_wallet']['items'] ?? []) as $it) {
+                if (abs(((float) ($it['amount'] ?? 0)) - 500) < 0.005) { $inWallet = true; }
+            }
+            is('ظاهر في قسم «دفعها المندوب من عهدته» بالمراجعة (معلوماتي)', $inWallet, true);
+            is('ومش في القسم النقدي', $inRec, false);
+        } else {
+            is('ظاهر كبند في مراجعة التقفيل اليومي (v50) — قاعدة v42', $inRec, true);
+        }
     } else { skip('مراجعة التقفيل غير متاحة (شغّل migrate_v50)'); }
 
     // ═══════════════════════════════════════════ 7) حدود صلاحية المندوب
@@ -277,7 +309,9 @@ try {
     is('stage_key = receipts', $st['stage_key'], 'receipts');
     is('الكمية اتنقلت', (int) $st['qty'], 3);
     is('صورة الإيصال بتتنقل كمرفق', true, true);   // photo=null هنا، بس المسار موجود
-    is('بعد الاعتماد → الخزنة نقصت 750 (قاعدة v42)', Closing::currentBalance(), $balBefore - 750);
+    is($newRule ? 'بعد الاعتماد → الخزنة **ما اتغيّرتش** (محفظة المندوب مستقلة)'
+                : 'بعد الاعتماد → الخزنة نقصت 750 (قاعدة v42)',
+       Closing::currentBalance(), $balBefore - 750 * $repHits);
     is('بعد الاعتماد → عهدة المندوب نقصت 750', RepCustody::balance($repId), $custBefore - 750);
 
     try { RepInbox::approve($sid); bad('الاعتماد المزدوج اتقبل'); }
@@ -312,12 +346,14 @@ try {
     // ═══════════════════════════════════════════ 10) الخلاصة
     sec('10) الخلاصة — رصيد الخزنة قبل ↔ بعد كل ده');
     $balEnd = Closing::currentBalance();
-    // اللي خصم من الخزنة: 300 بند كاش عادي + 500 بند مندوب + 750 بند معتمَد
-    $expectedDrop = 300 + 500 + 750;
+    // اللي خصم من الخزنة: 300 بند كاش عادي + (500 + 750 صرف مندوب — قبل المرحلة ٢ بس)
+    $expectedDrop = 300 + (500 + 750) * $repHits;
     echo "  الابتدائي: " . number_format($bal0, 2) . " ج\n";
     echo "  النهائي:   " . number_format($balEnd, 2) . " ج\n";
-    echo "  الفرق:     " . number_format($balEnd - $bal0, 2) . " ج  (المتوقع −$expectedDrop = 300 كاش + 500 + 750 صرف مناديب)\n";
-    is('الخزنة نقصت بالمصروف الفعلي بس — مش بالتنزيل ولا المرتجع', $balEnd, $bal0 - $expectedDrop);
+    echo "  الفرق:     " . number_format($balEnd - $bal0, 2) . " ج  (المتوقع −$expectedDrop)\n";
+    is($newRule ? 'الخزنة نقصت بمصروف المكتب بس — صرف المندوب برّاها خالص'
+                : 'الخزنة نقصت بالمصروف الفعلي بس — مش بالتنزيل ولا المرتجع',
+       $balEnd, $bal0 - $expectedDrop);
 
 } finally {
     $pdo->rollBack();   // مفيش أي أثر بيتساب

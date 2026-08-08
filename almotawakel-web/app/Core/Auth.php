@@ -17,6 +17,40 @@ class Auth
     /** كل قد إيه نتأكد إن المستخدم لسه موجود ودوره ما اتغيّرش (بالثواني). */
     private const REVALIDATE_SECONDS = 120;
 
+    /**
+     * ⚠️⚠️ **عمر كوكي الجلسة وملفها — السبب الجذري لباج «المندوب بيتطرد وهو
+     *    بيرفق إيصال» (2026-08-02).**
+     *
+     * كان `'lifetime' => 0` يعني **كوكي جلسة متصفح**: بيتمسح لحظة ما «جلسة
+     * المتصفح» تنتهي. وده بالظبط اللي بيحصل في تطبيق PWA مثبَّت على الموبايل:
+     * أول ما المندوب يدوس «أرفق إيصال» بيتفتح **الكاميرا/معرض الصور** والتطبيق
+     * بيروح للخلفية — و**نظام الموبايل بيقفل التطبيق** عشان يفضّي ذاكرة
+     * (سلوك معروف وشائع على آيفون). أول ما يرجع، التطبيق بيبدأ من جديد
+     * **بلا كوكي** ⇒ `RepAuth::check()` بترجّع false ⇒ `redirect('m/login')`
+     * ⇒ **المندوب لقى نفسه برّه البرنامج والصورة والبيانات راحوا**.
+     *
+     * الدليل المقيس على الإنتاج قبل الإصلاح:
+     *   • **٣٨٧ بند مندوب في ١٤ يوم و«صفر» صورة** — ولا صورة واحدة اتحفظت أبدًا.
+     *   • `storage/private_uploads` **فاضي تمامًا** و٧١٥ بند إذن بصفر مرفق.
+     *   • ٢٦–٤٥ **دخول ناجح في اليوم** لخمس حسابات — ده معدّل إعادة دخول مش
+     *     معدّل استخدام.
+     *   • والنقل نفسه **سليم**: اختبار رفع حقيقي على الإنتاج رجّع
+     *     `$_FILES[...]['error'] = 0` و`finfo` كشف `image/jpeg` صح — يعني
+     *     الطلب عمره ما وصل ومعاه صورة أصلاً.
+     *
+     * ⚠️ **`session.gc_maxlifetime` كان ١٤٤٠ ثانية (٢٤ دقيقة) — سبب تاني كامن**
+     *    كان بيلغي سياسة النظام نفسها بالسكوت: الكود بيقول إن جلسة المندوب
+     *    ٨ ساعات (`RepAuth::IDLE_MINUTES`) وجلسة المكتب ساعتين، وPHP بتمسح ملف
+     *    الجلسة بعد ٢٤ دقيقة خمول. لازم عمر الملف ≥ أطول نافذة خمول.
+     *
+     * ⚠️⚠️ **ده مش تخفيف أمني — الحد الحقيقي خادمي ومكانه ما اتغيّرش:**
+     *    `Auth::check()` لسه بترمي جلسة المكتب بعد ساعتين خمول و`RepAuth::check()`
+     *    بترمي جلسة المندوب بعد ٨ ساعات، والاتنين بيعيدوا التأكّد إن الحساب لسه
+     *    مفعّل كل دقيقتين. الكوكي الأطول **ما بيدّيش دقيقة وصول زيادة** — هو بس
+     *    بيمنع إن قفلة نظام التشغيل للتطبيق تتقري «خروج».
+     */
+    public const SESSION_LIFETIME = 28800;   // ٨ ساعات = أطول نافذة خمول في النظام
+
     private static string $lastFailure = 'invalid';
     private static ?bool $securitySchemaReady = null;
     private static ?bool $revalidated = null;
@@ -26,16 +60,44 @@ class Auth
         if (session_status() === PHP_SESSION_NONE) {
             ini_set('session.use_strict_mode', '1');
             ini_set('session.use_only_cookies', '1');
+            // ⚠️ لازم **قبل** session_start — بعدها مالهاش أي تأثير على الطلب ده.
+            ini_set('session.gc_maxlifetime', (string) self::SESSION_LIFETIME);
             session_name(App::config('session_name') ?? 'almotawakel_session');
-            session_set_cookie_params([
-                'lifetime' => 0,
-                'path' => '/',
-                'secure' => SecurityHeaders::isHttps(),
-                'httponly' => true,
-                'samesite' => 'Lax',
-            ]);
+            session_set_cookie_params(self::cookieParams());
             session_start();
+            self::refreshCookie();
         }
+    }
+
+    /** إعدادات كوكي الجلسة — مصدر واحد للبداية وللتجديد. */
+    private static function cookieParams(): array
+    {
+        return [
+            'lifetime' => self::SESSION_LIFETIME,
+            'path'     => '/',
+            'secure'   => SecurityHeaders::isHttps(),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ];
+    }
+
+    /**
+     * يمدّد الكوكي مع كل طلب فتبقى النافذة **متحرّكة** مع نشاط المستخدم بدل
+     * ما تنتهي بعد ٨ ساعات من *الدخول* حتى لو شغّال.
+     *
+     * ⚠️ **بس للجلسة اللي فيها حاجة فعلاً** — الزائر على شاشة الدخول أو السائق
+     *    على `/t/{token}` ماياخدش كوكي دايمة على الفاضي.
+     * ⚠️ و**بعد فحص `headers_sent()`**: أي مخرَج سابق بيخلّي `setcookie` ترمي
+     *    تحذيرًا **جوّه جسم الرد** فيبوّظ أي JSON (نفس باج v50 الموثَّق).
+     */
+    private static function refreshCookie(): void
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE || headers_sent()) { return; }
+        if (empty($_SESSION)) { return; }
+        $p = self::cookieParams();
+        $p['expires'] = time() + self::SESSION_LIFETIME;
+        unset($p['lifetime']);
+        setcookie(session_name(), session_id(), $p);
     }
 
     public static function attempt(string $username, string $password): bool

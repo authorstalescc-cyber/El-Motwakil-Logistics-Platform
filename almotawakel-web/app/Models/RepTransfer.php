@@ -122,6 +122,122 @@ class RepTransfer
     }
 
     /**
+     * **تعديل تحويل قايم** — المبلغ · التاريخ · المستقبِل · الملاحظة.
+     *
+     * ⚠️⚠️ **التعديل بينقل الفلوس مش بيكرّرها.** الصف واحد بيوصف الاتجاهين
+     *    (−من المُرسِل · +للمُستقبِل)، فـ`UPDATE` واحدة بتحرّك الطرفين مع بعض —
+     *    مستحيل مبلغ يتحسب مرتين أو يضيع من الاتنين. **ممنوع** يتعمل بحذف
+     *    وإنشاء: بينهم لحظة رصيد المُستقبِل فيها ناقص، وأي فحص متزامن بيقرا رقمًا
+     *    غلط، وسجل التدقيق بيبان كأنه عمليتين.
+     *
+     * ⚠️ **تلات حُرّاس لازم يفضلوا مع بعض:**
+     *   ① المُرسِل لازم يكفي **بعد** رجوع التحويل القديم لرصيده — وإلا يبعت
+     *      أكتر مما معاه (بنقيس `balance + old − new`).
+     *   ② المُستقبِل القديم ما يقعش تحت الصفر لما نسحب منه (يعني ما صرفهاش) —
+     *      نفس حارس `delete()` بالظبط.
+     *   ③ **اليومان** (القديم والجديد) لازم يكونوا مفتوحين: التعديل بيغيّر عهدة
+     *      اليومين، فقفل أي واحد فيهم بيمنع (قاعدة v49).
+     *
+     * ⚠️ الحُرّاس هنا في **الموديل** مش في الكنترولر — الفورم مش مصدر ثقة.
+     *
+     * @throws RepSubmissionValidationException رسايل عربية لكل حقل
+     */
+    public static function update(int $id, array $d): void
+    {
+        if (!self::available()) {
+            throw new RuntimeException('شغّل php bin/migrate_v46.php الأول.');
+        }
+        $pdo = Database::conn();
+        $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            $old = Database::row('SELECT * FROM rep_custody_transfers WHERE id = ? FOR UPDATE', [$id]);
+            if (!$old) { throw new RuntimeException('التحويل ده مش موجود.'); }
+
+            $fromRepId = (int) $old['from_rep_id'];
+            $oldTo     = (int) $old['to_rep_id'];
+            $oldAmount = round((float) $old['amount'], 2);
+            $oldDate   = (string) $old['transfer_date'];
+
+            $toRepId = (int) ($d['to_rep_id'] ?? $oldTo);
+            $errors  = [];
+
+            if ($toRepId <= 0) {
+                $errors['to_rep_id'] = 'اختر المندوب اللي بتحوّل له.';
+            } elseif ($toRepId === $fromRepId) {
+                $errors['to_rep_id'] = 'ما ينفعش تحوّل لنفسك.';
+            } elseif (Database::scalar("SELECT status FROM reps WHERE id = ?", [$toRepId]) !== 'active') {
+                $errors['to_rep_id'] = 'المندوب ده مش موجود أو متوقف.';
+            }
+
+            $raw = strtr(ar2en_digits(trim((string) ($d['amount'] ?? ''))), [
+                ',' => '', '٬' => '', ' ' => '', '٫' => '.',
+            ]);
+            $amount = round((float) $raw, 2);
+            if ($raw === '' || $amount <= 0) { $errors['amount'] = 'اكتب المبلغ اللي بتحوّله.'; }
+            elseif ($amount > self::MAX_AMOUNT) { $errors['amount'] = 'المبلغ أكبر من الحد المسموح.'; }
+
+            $date = trim((string) ($d['transfer_date'] ?? ''));
+            if (!self::validDate($date)) { $errors['transfer_date'] = 'اكتب تاريخ تحويل صحيح.'; }
+            elseif ($date > date('Y-m-d')) { $errors['transfer_date'] = 'تاريخ التحويل ما ينفعش يكون في المستقبل.'; }
+            else {
+                // ⚠️ اليومان: القديم بيتفضّى والجديد بيتملا، فالاتنين لازم مفتوحين.
+                foreach (array_unique([$oldDate, $date]) as $chk) {
+                    if (($lock = RepCustody::dayLockReason($chk)) !== null) {
+                        $errors['transfer_date'] = $lock; break;
+                    }
+                }
+            }
+
+            $note = preg_replace('/\s+/u', ' ', trim((string) ($d['note'] ?? '')));
+            if (mb_strlen($note) > 255) { $errors['note'] = 'الملاحظة لازم تكون 255 حرف أو أقل.'; }
+
+            if ($errors) { throw new RepSubmissionValidationException($errors); }
+
+            // ── الحارس ①: رصيد المُرسِل بعد رجوع القديم ──
+            Database::row('SELECT id FROM reps WHERE id = ? FOR UPDATE', [$fromRepId]);
+            $avail = round(RepCustody::balance($fromRepId) + $oldAmount, 2);
+            if ($amount > $avail + 0.005) {
+                throw new RepSubmissionValidationException([
+                    'amount' => 'المبلغ أكبر من اللي معاه (' . number_format(max(0, $avail), 2) . ' ج).',
+                ]);
+            }
+
+            /* ── الحارس ②: المُستقبِل القديم ما يقعش تحت الصفر ──
+               بنسحب منه `oldAmount` وبنرجّع له `amount` لو هو نفسه المستقبِل
+               الجديد. لو صرف الفرق، التعديل بيترفض بنفس منطق `delete()`. */
+            $pull = $toRepId === $oldTo ? round($oldAmount - $amount, 2) : $oldAmount;
+            if ($pull > 0.005) {
+                Database::row('SELECT id FROM reps WHERE id = ? FOR UPDATE', [$oldTo]);
+                if (RepCustody::balance($oldTo) - $pull < -0.005) {
+                    throw new RepSubmissionValidationException([
+                        'amount' => 'المندوب المستقبِل صرف المبلغ ده — مش هينفع تقلّله ولا تغيّره.',
+                    ]);
+                }
+            }
+
+            Database::exec(
+                "UPDATE rep_custody_transfers
+                    SET to_rep_id = ?, amount = ?, transfer_date = ?, note = ?
+                  WHERE id = ?",
+                [$toRepId, $amount, $date, $note !== '' ? $note : null, $id]);
+
+            $saved = self::find($id);
+            Audit::log('update', 'rep_custody_transfers', $id, $old, $saved,
+                'تعديل تحويل عهدة ' . number_format($oldAmount, 2, '.', ',') . ' ← '
+                . number_format($amount, 2, '.', ',') . ' من '
+                . (RepCustody::repName($fromRepId) ?: '#' . $fromRepId) . ' لـ '
+                . (RepCustody::repName($toRepId) ?: '#' . $toRepId),
+                ['rep_id' => $fromRepId, 'to_rep_id' => $toRepId, 'record_date' => $date]);
+
+            if ($own) { $pdo->commit(); }
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $e;
+        }
+    }
+
+    /**
      * حذف تحويل. بيترفض لو المُستقبِل صرف المبلغ (إلغاؤه هيخلّي رصيده سالب).
      */
     public static function delete(int $id): void
@@ -193,7 +309,8 @@ class RepTransfer
         $args = [$repId]; $dayW = '';
         if ($day !== null && $day !== '') { $dayW = ' AND transfer_date = ?'; $args[] = $day; }
         return round((float) Database::scalar(
-            "SELECT COALESCE(SUM(amount),0) FROM rep_custody_transfers WHERE $col = ?$dayW", $args), 2);
+            "SELECT COALESCE(SUM(amount),0) FROM rep_custody_transfers WHERE $col = ?$dayW"
+            . RepCustody::epochSql('transfer_date'), $args), 2);
     }
 
     /** [rep_id => إجمالي محوَّل] — لصفحة الكروت بلا استعلام لكل مندوب. */
@@ -224,10 +341,11 @@ class RepTransfer
     {
         if (!self::available()) { return []; }
         $args = []; $dayW = '';
-        if ($day !== null && $day !== '') { $dayW = ' WHERE transfer_date = ?'; $args[] = $day; }
+        if ($day !== null && $day !== '') { $dayW = ' AND transfer_date = ?'; $args[] = $day; }
         $out = [];
         foreach (Database::all(
-            "SELECT $col rid, SUM(amount) total FROM rep_custody_transfers$dayW GROUP BY $col", $args) as $r) {
+            "SELECT $col rid, SUM(amount) total FROM rep_custody_transfers WHERE 1$dayW"
+            . RepCustody::epochSql('transfer_date') . " GROUP BY $col", $args) as $r) {
             $out[(int) $r['rid']] = round((float) $r['total'], 2);
         }
         return $out;
@@ -239,7 +357,7 @@ class RepTransfer
         $out = [];
         foreach (Database::all(
             "SELECT transfer_date d, SUM(amount) total FROM rep_custody_transfers
-             WHERE $col = ? GROUP BY transfer_date", [$repId]) as $r) {
+             WHERE $col = ?" . RepCustody::epochSql('transfer_date') . " GROUP BY transfer_date", [$repId]) as $r) {
             $out[(string) $r['d']] = round((float) $r['total'], 2);
         }
         return $out;
@@ -252,7 +370,8 @@ class RepTransfer
     public static function totalAll(): float
     {
         if (!self::available()) { return 0.0; }
-        return round((float) Database::scalar("SELECT COALESCE(SUM(amount),0) FROM rep_custody_transfers"), 2);
+        return round((float) Database::scalar(
+            "SELECT COALESCE(SUM(amount),0) FROM rep_custody_transfers WHERE 1" . RepCustody::epochSql('transfer_date')), 2);
     }
 
     /** تحويلات مندوب مُرسِل (الأحدث أولاً) + اسم المستقبِل — لكشفه وموبايله. */
@@ -266,7 +385,7 @@ class RepTransfer
         return Database::all(
             "SELECT t.*, r.name AS other_name
              FROM rep_custody_transfers t JOIN reps r ON r.id = t.to_rep_id
-             WHERE $where ORDER BY t.transfer_date DESC, t.id DESC$lim", $params);
+             WHERE $where" . RepCustody::epochSql('t.transfer_date') . " ORDER BY t.transfer_date DESC, t.id DESC$lim", $params);
     }
 
     /** تحويلات وصلت لمندوب مُستقبِل (الأحدث أولاً) + اسم المُرسِل — لكشفه. */
@@ -277,7 +396,7 @@ class RepTransfer
         return Database::all(
             "SELECT t.*, r.name AS other_name
              FROM rep_custody_transfers t JOIN reps r ON r.id = t.from_rep_id
-             WHERE t.to_rep_id = ? ORDER BY t.transfer_date DESC, t.id DESC$lim", [$repId]);
+             WHERE t.to_rep_id = ?" . RepCustody::epochSql('t.transfer_date') . " ORDER BY t.transfer_date DESC, t.id DESC$lim", [$repId]);
     }
 
     private static function validDate(string $v): bool

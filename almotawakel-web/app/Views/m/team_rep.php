@@ -223,11 +223,16 @@ $spendRow = function (array $s) use ($num) {
         <p>التنزيل بيتعمل من المكتب — والشاشة دي عرض بس.</p>
       </div>
     <?php else: foreach ($d['deposits'] as $dep2): ?>
+      <?php /* ⚠️ مصدر التنزيل من `RepCustody::sourceBadge()` زي شاشات المكتب —
+               نفس الصياغة بالحرف. و**الأثر على الخزنة مش معروض هنا** عن قصد:
+               رصيد الدرج شغل مكتب، والمشرف محتاج يعرف الفلوس جت منين وبس. */ ?>
+      <?php $src2 = \App\Models\RepCustody::sourceBadge($dep2['source'] ?? null); ?>
       <article class="hm-slip">
         <span class="hm-slip-ic" aria-hidden="true"><?= icon('coins', 14) ?></span>
         <div class="hm-slip-mid">
           <b><?= e($dep2['note'] ?: 'تنزيل عهدة') ?></b>
-          <div class="hm-slip-meta"><span><?= e(dfmt($dep2['dep_date'])) ?></span></div>
+          <div class="hm-slip-meta"><span><?= e(dfmt($dep2['dep_date'])) ?></span><?php
+            if ($src2): ?><span><?= e($src2['short']) ?></span><?php endif; ?></div>
         </div>
         <div class="hm-slip-end"><span class="hm-slip-amt"><?= $num($dep2['amount']) ?></span></div>
       </article>

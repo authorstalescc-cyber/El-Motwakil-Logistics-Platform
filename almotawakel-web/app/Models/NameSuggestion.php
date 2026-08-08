@@ -169,6 +169,17 @@ class NameSuggestion
         $nk = Maintenance::normkey($raw);
         if ($nk === '') { return $out; }
 
+        // قرار دمج صريح سابق يغلب أي تخمين إملائي: «جلال الزين» مثلًا لا
+        // يشبه «جلال حسني» حسابيًا، لكن المالك أكد أنه الاسم نفسه.
+        if (($canonical = DataAlias::canonical($type, $raw)) !== null) {
+            return [
+                'value'    => $canonical,
+                'snapped'  => $canonical !== $raw,
+                'conflict' => null,
+                'reason'   => null,
+            ];
+        }
+
         // ⚠️ الجهات ليها **سجل مرجعي** (`destination_points`) فيه الاسم المعتمد
         //    وأسماء بديلة. التطابق التام أو البديل بيوحّد فورًا — ده اللي بيخلّي
         //    «ط التحدى» تتحفظ «طريق التحدي» **للأبد** بدل ما تتدمج بالإيد كل شوية.
@@ -344,7 +355,12 @@ class NameSuggestion
     /** @var array<string,list<string>> كاش داخل الطلب — `resolve` بتتنادى لكل حقل في نفس الحفظة. */
     private static array $namesCache = [];
 
-    public static function clearNamesCache(): void { self::$namesCache = []; self::$tokenFreq = []; }
+    public static function clearNamesCache(): void
+    {
+        self::$namesCache = [];
+        self::$tokenFreq = [];
+        DataAlias::clearCache();
+    }
 
     /**
      * كل الأسماء المعروفة للنوع، **مرتَّبة بالأولوية**: الاسم القانوني أولاً، ثم الأكثر

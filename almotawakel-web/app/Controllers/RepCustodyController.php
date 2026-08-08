@@ -11,6 +11,7 @@ use App\Models\RepAssignment;
 use App\Models\RepCustody;
 use App\Models\PushNotify;
 use App\Models\RepInbox;
+use App\Models\RepPortal;
 
 /**
  * عهدة المناديب (v35) — الفلوس النازلة للمناديب عشان يدفعوا بيها إيصالات الأذونات.
@@ -122,7 +123,8 @@ class RepCustodyController extends Controller
     private const DRILL_ALL = ['deposits', 'spent', 'pending', 'balance'];
     private const DRILL_REP = [
         'rep_deposits', 'rep_spent', 'rep_pending', 'rep_receipts',
-        'rep_expenses', 'rep_misc', 'rep_handover', 'rep_bill', 'rep_transfer', 'rep_visa',
+        'rep_expenses', 'rep_misc', 'rep_handover', 'rep_bill', 'rep_transfer',
+        'rep_visa', 'rep_unpaid',
     ];
     /** تفاصيل أرقام صندوق المراجعة — على **كل الأيام** مش على يوم العمل. */
     private const DRILL_INBOX = ['inbox_pending', 'inbox_locked', 'inbox_reps'];
@@ -159,7 +161,8 @@ class RepCustodyController extends Controller
                 'rep_deposits' => RepCustody::deposits($repId, $day),
                 'rep_pending'  => array_values(array_filter(
                     RepInbox::listing('pending', $repId),
-                    static fn ($p) => (string) $p['entry_date'] === $day)),
+                    static fn ($p) => (string) $p['entry_date'] === $day
+                        && RepPortal::pendingIsCash($p))),
                 default        => self::repSpendRows($repId, $day, $what),
             };
             if (!headers_sent()) {
@@ -175,7 +178,9 @@ class RepCustodyController extends Controller
         $rows = match ($what) {
             'deposits' => RepCustody::dayDeposits($day),
             'spent'    => RepCustody::daySpending($day),
-            'pending'  => RepInbox::listing('pending', 0, $day),
+            'pending'  => array_values(array_filter(
+                RepInbox::listing('pending', 0, $day),
+                static fn ($p) => RepPortal::pendingIsCash($p))),
             default    => self::dayBalanceRows($day),
         };
 
@@ -231,7 +236,9 @@ class RepCustodyController extends Controller
                 'rep_bill'     => $src === 'bill',
                 'rep_transfer' => $src === 'transfer',
                 'rep_visa'     => !empty($r['is_visa']),
-                default        => true,          // rep_spent — كل اللي صرفه
+                'rep_unpaid'   => !empty($r['unpaid']),
+                // rep_spent = الكاش اللي خرج من عهدته فعلًا، مش كل بند ظاهر.
+                default        => empty($r['is_visa']) && empty($r['unpaid']),
             };
         }));
     }
@@ -327,6 +334,12 @@ class RepCustodyController extends Controller
             $data['deposits']    = RepCustody::deposits($repId);
             $data['settlements'] = RepCustody::settlements($repId);
             $data['transfersIn'] = \App\Models\RepTransfer::incomingFor($repId);   // v46
+            /* ⚠️ **الصادر كان بيبان جوّه كشف الصرف بس وبلا أي إجراء** — المالك
+               مايقدرش يلغيه ولا يعدّله إلا لو راح لكارت المُستقبِل ودوّر عليه.
+               اللوح المستقل ده هو مكان الإجراء الطبيعي (التحويل حركة من عهدة
+               المُرسِل). القايمة بتفضل في الكشف كمان عشان الكشف ما ينقصش بند. */
+            $data['transfersOut'] = \App\Models\RepTransfer::outgoingFor($repId);
+            $data['activeReps']   = RepCustody::activeReps();
         } else {   // settings
             $data['canAddPermit']   = Rep::canCreatePermit($repId);   // v44
             $data['permPermReady']  = Rep::permitPermReady();
@@ -353,6 +366,29 @@ class RepCustodyController extends Controller
 
     // ═══════════════════════════════════════════ صندوق المراجعة
 
+    /** عدد بنود الصفحة في التبويبات المترقّمة (معتمد/مرفوض/الكل). */
+    private const INBOX_PER_PAGE = 50;
+
+    /**
+     * مسار الصندوق **بعدسته كاملة** — المصدر الوحيد لبناء الرابط.
+     *
+     * ⚠️ كل رابط وكل رجوع بعد أي إجراء لازم يمرّ من هنا. لو إجراء رجّع
+     *    `rep-custody/inbox?status=pending` بس، المالك اللي بيراجع بنود مندوب
+     *    معيّن بيتقذف على كل المناديب بعد أول اعتماد — وهي بالظبط اللغبطة اللي
+     *    الشغل ده اتعمل عشانها.
+     *
+     * ⚠️ **`public` عشان الشاشات التانية تنادّيها** — شاشة التقفيل بتوصّل لبنود
+     *    مندوب بعينه («راجع البنود» جنب رصيده)، وكتابة الرابط بالإيد هناك كانت
+     *    بتوَدّيه على كل المناديب. أي شاشة محتاجة رابط الصندوق تنادي دي.
+     */
+    public static function inboxUrl(string $status = 'pending', int $repId = 0, string $day = ''): string
+    {
+        $out = 'rep-custody/inbox?status=' . rawurlencode($status);
+        if ($repId > 0) { $out .= '&rep=' . $repId; }
+        if ($day !== '') { $out .= '&day=' . rawurlencode($day); }
+        return $out;
+    }
+
     /** بنود المناديب المستنية الاعتماد — مجمّعة بالمندوب واليوم. */
     public function inbox(): void
     {
@@ -363,14 +399,59 @@ class RepCustodyController extends Controller
         }
         $status = (string) ($_GET['status'] ?? 'pending');
         if (!in_array($status, ['pending', 'approved', 'rejected', 'all'], true)) { $status = 'pending'; }
-        $inboxBack = 'rep-custody/inbox?status=' . $status;
+
+        /* ═══ عدسة المندوب — الشكوى اللي اتبنى عليها الشغل ده ═══
+           كان الرابط من كارت المندوب بيوَدّي على **كل** المناديب، فالمالك يدوس
+           «راجع بنوده» ويلاقي نفسه بيدوّر وسط الكل. الفلترة بقت على الخادم عشان
+           الرابط يبقى قابل للمشاركة والرجوع بالمتصفح.
+           ⚠️ الرابط **مش مصدر ثقة**: مندوب مش موجود = بنرجع لكل المناديب بدل
+              ما نعرض صفحة فاضية بلا سبب مفهوم. ودي **عدسة عرض بحتة** — كل
+              حُرّاس الاعتماد/الرفض/الحذف في `RepInbox` زي ما هي. */
+        $repId = (int) ($_GET['rep'] ?? 0);
+        if ($repId > 0 && !Rep::find($repId)) { $repId = 0; }
+        $day = (string) ($_GET['day'] ?? '');
+        if ($day !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $day)) { $day = ''; }
+
+        $byRep    = RepInbox::pendingByRep();
+        $repName  = '';
+        foreach ($byRep as $r) { if ($r['rep_id'] === $repId) { $repName = $r['name']; } }
+        if ($repId > 0 && $repName === '') {
+            $repName = (string) (Rep::find($repId)['name'] ?? '');
+        }
+
+        $inboxBack  = self::inboxUrl($status, $repId, $day);
         $inboxState = FormState::consume('rep_custody.inbox', $inboxBack);
+
+        /* ترقيم خادمي للتبويبات غير المستنية: «معتمد» فيه ٣٤٦ بند على الإنتاج
+           وكانوا بيترسموا كلهم في صفحة واحدة. «مستني» بيفضل كامل لأنه إجراء
+           (لازم تعلّم وتعتمد بالجملة) وعدده صغير بطبيعته. */
+        $rows = []; $pager = null;
+        if ($status !== 'pending') {
+            $st    = $status === 'all' ? '' : $status;
+            $total = RepInbox::countListing($st, $repId, $day);
+            $page  = max(1, (int) ($_GET['page'] ?? 1));
+            $pages = max(1, (int) ceil($total / self::INBOX_PER_PAGE));
+            if ($page > $pages) { $page = $pages; }
+            $rows  = RepInbox::listing($st, $repId, $day, self::INBOX_PER_PAGE, ($page - 1) * self::INBOX_PER_PAGE);
+            $pager = ['page' => $page, 'pages' => $pages, 'total' => $total, 'per' => self::INBOX_PER_PAGE];
+        }
 
         $this->render('rep_custody/inbox', [
             'title'   => 'مراجعة بنود المناديب',
             'status'  => $status,
-            'groups'  => $status === 'pending' ? RepInbox::pendingGrouped() : [],
-            'rows'    => $status === 'pending' ? [] : RepInbox::listing($status === 'all' ? '' : $status),
+            'repId'   => $repId,
+            'repName' => $repName,
+            'dayFilter' => $day,
+            'byRep'   => $byRep,
+            // في عدسة مندوب واحد نعرض **عهدة اليوم فقط**. لو الصندوق مفلتر
+            // بتاريخ، الكارتان يتبعانه؛ وإلا يتبعان يوم العمل الحالي.
+            // `dayPocket` يخصم البنود الكاش المستنية من الفاضل الواقعي.
+            'repDayPocket' => $repId > 0
+                ? \App\Models\RepPortal::dayPocket($repId, $day !== '' ? $day : work_date())
+                : null,
+            'groups'  => $status === 'pending' ? RepInbox::pendingGrouped($repId, $day) : [],
+            'rows'    => $rows,
+            'pager'   => $pager,
             'pending' => RepInbox::pendingCount(),
             'inboxState' => $inboxState,
             // آخر يوم متقفل: البند اللي تاريخه فيه أو قبله **اعتماده هيترفض**
@@ -378,6 +459,9 @@ class RepCustodyController extends Controller
             // المالك يضغط اعتماد ويستغرب الرفض — ودي أكتر لغبطة كانت بتحصل.
             'lockedThrough' => \App\Models\Closing::lastClosedDate(),
             'workDate'      => work_date(),
+            // ⚠️ إخفاء الزرار **مش حماية** — المنع الحقيقي في Access::OWNER_MANAGER_ONLY.
+            //    ده بس عشان الدور اللي هيترفض ما يشوفش زرارًا بيدّي 403.
+            'canDelete'     => \App\Core\Access::allows(Auth::role(), 'RepCustodyController@deleteSubmission', 'POST'),
         ]);
     }
 
@@ -484,6 +568,57 @@ class RepCustodyController extends Controller
             flash('success', "تم رفض $n بند — المندوب هيشوف السبب على موبايله.");
         } catch (\Throwable $e) {
             $this->inboxFailure('reject-many', ['ids' => $ids, 'reason' => $reason, '_group' => $group],
+                ['_form' => $e->getMessage()], $group);
+        }
+        redirect($this->inboxBack());
+    }
+
+    // ═══════════════════════════════════════════ الحذف النهائي من الصندوق
+
+    /**
+     * حذف بند نهائيًّا — للبند اللي مالوش لزمة خالص (اتبعت غلط/اتكرّر).
+     * الصف بيروح **سلة المحذوفات** فالمالك يقدر يسترجعه من `/audit`.
+     *
+     * ⚠️ الحارس الحقيقي في `RepInbox::delete` (بيرفض البند المعتمد) مش هنا،
+     *    والصلاحية في `Access::OWNER_MANAGER_ONLY` — اللي يقدر يسترجع من
+     *    السلة هو بس اللي يقدر يحذف.
+     */
+    public function deleteSubmission(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $id = (int) $sid;
+        $this->claimForm($this->inboxBack());
+        try {
+            $gone = RepInbox::delete($id);
+            $this->notifyDeleted($gone);
+            flash('success', 'اتشال البند نهائيًّا — تلاقيه في سلة المحذوفات لو عايز ترجّعه.');
+        } catch (\Throwable $e) {
+            $this->inboxFailure('delete', ['submission_id' => $id], ['_form' => $e->getMessage()], 'submission-' . $id);
+        }
+        redirect($this->inboxBack());
+    }
+
+    /** حذف دفعة معلَّمة — كلها أو ولا واحدة. */
+    public function deleteMany(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $ids = $this->postedIds();
+        $group = trim((string) ($_POST['_group'] ?? ''));
+        if (!$ids) {
+            $this->inboxFailure('delete-many', ['ids' => [], '_group' => $group],
+                ['ids' => 'علّم بندًا واحدًا على الأقل.'], $group);
+        }
+        $this->claimForm($this->inboxBack());
+        // بنقرا الصفوف **قبل** الحذف — بعده مش هيبقى فيه بيان ولا مبلغ للإشعار.
+        $before = $this->repRows($ids);
+        try {
+            $n = RepInbox::deleteMany($ids);
+            foreach ($before as $row) { $this->notifyDeleted($row); }
+            flash('success', "اتشال $n بند نهائيًّا — تلاقيهم في سلة المحذوفات لو عايز ترجّعهم.");
+        } catch (\Throwable $e) {
+            $this->inboxFailure('delete-many', ['ids' => $ids, '_group' => $group],
                 ['_form' => $e->getMessage()], $group);
         }
         redirect($this->inboxBack());
@@ -719,6 +854,38 @@ class RepCustodyController extends Controller
     }
 
     /**
+     * المالك بيعدّل تحويل عهدة بين مندوبين — المبلغ · التاريخ · المستقبِل · الملاحظة.
+     *
+     * ⚠️ **كل الحُرّاس في `RepTransfer::update()`** (رصيد المُرسِل · المُستقبِل ما
+     *    صرفهاش · اليومان مفتوحان) — الكنترولر بيمرّر وبيعرض الرسالة بس، والفورم
+     *    مش مصدر ثقة.
+     * ⚠️ الرجوع **لكارت المُرسِل** لأن التحويل حركة خارجة من عهدته.
+     */
+    public function updateTransfer(string $tid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $row  = \App\Models\RepTransfer::find((int) $tid);
+        if (!$row) { $this->notFound('التحويل ده مش موجود.'); }
+        $back = self::cardUrl((int) $row['from_rep_id'], self::TAB_ACCOUNT, 'transfers-out');
+
+        try {
+            \App\Models\RepTransfer::update((int) $tid, [
+                'to_rep_id'     => $_POST['to_rep_id']     ?? null,
+                'amount'        => $_POST['amount']        ?? null,
+                'transfer_date' => $_POST['transfer_date'] ?? null,
+                'note'          => $_POST['note']          ?? null,
+            ]);
+        } catch (\App\Models\RepSubmissionValidationException $e) {
+            // ⚠️ رسالة الحقل نفسها للمالك — «حصل خطأ» ما بتقولش إيه اللي يتصلّح.
+            $this->fail(implode(' · ', $e->errors()), $back);
+        } catch (\Throwable $e) {
+            $this->fail($e->getMessage(), $back);
+        }
+        $this->done('اتعدّل التحويل — الفلوس اتنقلت عند الطرفين.', $back);
+    }
+
+    /**
      * المالك بيدّي/بيسحب حق «فتح إذن من الموبايل» لمندوب واحد (v44).
      * ⚠️ وصفي بحت — مفيش أي أثر مالي، والمنع الحقيقي بيتفرض في
      *    `RepPortal::createPermit` مش في إخفاء الزرار.
@@ -885,6 +1052,12 @@ class RepCustodyController extends Controller
         $amount = round((float) ($_POST['amount'] ?? 0), 2);
         $date   = trim((string) ($_POST['dep_date'] ?? '')) ?: work_date();
         $note   = trim((string) ($_POST['note'] ?? ''));
+        /* v61 — «الفلوس دي جاية منين؟». الفورم مش مصدر ثقة.
+           ⚠️ **`cleanManualSource` مش `cleanSource`** (v67): `company` مصدر
+              صالح تقنيًّا لكنه بيتولّد من `/company-safe` بس — اللي بيخصم المبلغ
+              من خزنة الشركة في نفس المعاملة. قبوله من هنا = عهدة بتنزل للمندوب
+              بلا ما تتخصم من أي خزنة ⇒ **فلوس بتتولّد من العدم**. */
+        $source = RepCustody::cleanManualSource($_POST['source'] ?? null);
 
         if ($amount <= 0) {
             $this->formFailure('rep_custody.deposit.' . $repId, self::cardUrl($repId, self::TAB_DAY, 'deposit-form'),
@@ -894,9 +1067,24 @@ class RepCustodyController extends Controller
             $this->formFailure('rep_custody.deposit.' . $repId, self::cardUrl($repId, self::TAB_DAY, 'deposit-form'),
                 $_POST, ['dep_date' => 'التاريخ غير صحيح.'], self::cardUrl($repId, self::TAB_DAY));
         }
-        // ملحوظة: مفيش Closing::guard هنا عن قصد — تنزيل العهدة ما بيمسّش الخزنة إطلاقًا.
+        /* ⚠️⚠️ **الحارس مشروط بالمصدر — وده تصحيح لقاعدة قديمة (مرّتين).**
+           (١) كان مكتوب هنا «مفيش `Closing::guard` عن قصد لأن التنزيل ما بيمسّش
+               الخزنة إطلاقًا» — وده بقى غلط بعد المرحلة ٢.
+           (٢) وبعدها الحارس اتكتب على `office` **بس**، فلما اتفعّل نموذج «الخزنة
+               = كل كاش الشركة» لوحده، التنزيل `bank` بقى **يزوّد الخزنة** وهو
+               بلا حارس ⇒ تنزيل على يوم متقفل بيعيد كتابة رصيد مثبَّت بالسكوت.
+           المصدر الوحيد للقرار دلوقتي `RepCustody::depositAffectsSafe()` —
+           **ممنوع تكتب شرط المصدر هنا بإيدك** (لازم يمشي مع الحذف تحت بالحرف). */
+        if (RepCustody::depositAffectsSafe($source)
+            && ($lock = \App\Models\Closing::guard($date)) !== null) {
+            $this->formFailure('rep_custody.deposit.' . $repId,
+                self::cardUrl($repId, self::TAB_DAY, 'deposit-form'), $_POST,
+                ['dep_date' => $lock . ' — والتنزيل ده بيغيّر رصيد الخزنة، '
+                             . 'فراجع «الفلوس جاية منين؟» أو افتح الإقفال الأول.'],
+                self::cardUrl($repId, self::TAB_DAY));
+        }
         $this->claimForm(self::cardUrl($repId, self::TAB_DAY, 'deposit-form'));
-        RepCustody::createDeposit($repId, $amount, $date, $note);
+        RepCustody::createDeposit($repId, $amount, $date, $note, $source);
         // ⚠️ الإشعار **بعد** نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
         PushNotify::repDeposit($repId, (string) (Rep::find($repId)['name'] ?? 'مندوب'),
                                $amount, $date, (string) (\App\Core\Auth::user() ?? 'المكتب'));
@@ -913,6 +1101,23 @@ class RepCustodyController extends Controller
         $repId = (int) $dep['rep_id'];
         // الزرار موجود في تبويبين (اليوم والحساب) — نرجّع المالك للتبويب اللي حذف منه.
         $back = safe_back(self::cardUrl($repId, self::TAB_ACCOUNT), $_POST['_back'] ?? null);
+        /* ⚠️ نفس قاعدة الإنشاء بالحرف: التنزيل اللي بيغيّر رصيد الخزنة، حذفه
+           بيغيّره برضه — فحذفه من يوم متقفل بيعيد كتابة رصيد مثبَّت. المصدر
+           الوحيد `RepCustody::depositAffectsSafe()`. */
+        $src = RepCustody::cleanSource($dep['source'] ?? RepCustody::SOURCE_DEFAULT);
+        /* ⚠️⚠️ التنزيل اللي جاي من خزنة الشركة (v67) له صف مقابل في
+           `company_safe_entries`. حذفه من هنا كان هيسيب خزنة الشركة قايلة إنها
+           حوّلت والمحفظة مافيهاش حاجة ⇒ **الفلوس تتبخّر**. المسار الصح حذف
+           الحركة من `/company-safe` وهي بتشيل الاتنين في معاملة واحدة — نفس
+           منطق رفض حذف `from_client` في `CompanySafe::delete`. */
+        if ($src === 'company') {
+            $this->fail('التنزيل ده اتولّد من خزنة الشركة. امسحه من صفحة «خزنة الشركة» '
+                      . 'عشان المبلغ يرجع لها — الحذف من هنا كان هيضيّع الفلوس.', $back);
+        }
+        if (RepCustody::depositAffectsSafe($src)
+            && ($lock = \App\Models\Closing::guard($dep['dep_date'] ?? null)) !== null) {
+            $this->fail($lock . ' — والتنزيل ده داخل في حساب الخزنة، فحذفه بيغيّر رصيد اليوم.', $back);
+        }
         $this->claimForm($back);
         RepCustody::deleteDeposit((int) $depId);
         flash('success', 'تم حذف تنزيل العهدة.');
@@ -1003,6 +1208,57 @@ class RepCustodyController extends Controller
         return $msg;
     }
 
+    /**
+     * **إيصال تقفيل العهدة — ورقة A4 للطباعة/حفظ PDF.**
+     *
+     * ⚠️ **الرقم البطل (المبلغ المستلم) لقطة مثبَّتة** — بيتقرا من `returned`
+     *    المخزَّن زي ما اتثبّت لحظة التقفيل (نفس قاعدة فاتورة الأذونات v20)،
+     *    فالورقة اللي المندوب وقّع عليها ما بتتغيّرش تحت إيده لو اتعدّل بند بعدين.
+     *
+     * ⚠️⚠️ **`deposits_total` و`spent_total` متعمّد إنهم مش في الورقة.** العمودان
+     *    ليهم **معنيان مختلفان حسب مسار التقفيل**: `settleZero` بتخزّن فيهم
+     *    مجاميع **اليوم**، و`settle` (التسوية الجزئية) بتخزّن فيهم **التراكمي** —
+     *    ومستحيل تفرّق بينهم من الصف بعد كده. (اتصاد فعليًّا: تسوية #30 مخزَّن
+     *    فيها «نزل 6,000» بينما اليوم نفسه نزل فيه 3,000.) عرضهم جنب تاريخ اليوم
+     *    كان بيخلّي الورقة تقول رقمًا غلط، فالمعادلة المساعدة بتتقرا من
+     *    **`RepCustody::dayLedger()` نفسها** بتاعة كل الشاشات ومعنونة «وقت الطباعة».
+     *
+     * ⚠️ التفصيل بيمرّ على **`RepCustody::spending($rep, $day)` نفسها**، وإجمالي
+     *    الكاش من نفس صف `dayLedger` — مفيش تعريف تاني للصرف ينفع يختلف عن كارت
+     *    المندوب.
+     *
+     * قراءة فقط — ولا مليم بيتحرك، ومفيش `Closing::guard` (مفيش كتابة أصلاً).
+     */
+    public function settlementPrint(string $sid): void
+    {
+        $this->requireAuth();
+        $row = RepCustody::findSettlement((int) $sid);
+        if (!$row) { $this->notFound('إيصال التقفيل ده مش موجود أو اتمسح.'); }
+
+        $repId = (int) $row['rep_id'];
+        $rep   = Rep::find($repId);
+        if (!$rep) { $this->notFound('المندوب بتاع التقفيل ده مش موجود.'); }
+
+        $day = (string) $row['settle_date'];
+        // صف اليوم من كشف العهدة — نفس المصدر اللي بيغذّي تبويب «اليوم» والداشبورد
+        $led = null;
+        foreach (RepCustody::dayLedger($repId, 400) as $d) {
+            if ((string) $d['day'] === $day) { $led = $d; break; }
+        }
+        $led ??= ['day' => $day, 'deposits' => 0.0, 'spent' => 0.0, 'returned' => 0.0,
+                  'transfer_in' => 0.0, 'transfer_out' => 0.0, 'pending' => 0.0,
+                  'balance' => 0.0, 'pocket' => 0.0, 'locked' => false];
+
+        $this->render('rep_custody/settlement_print', [
+            'title' => 'إيصال تقفيل عهدة — ' . $rep['name'],
+            'rep'   => $rep,
+            's'     => $row,
+            'day'   => $day,
+            'led'   => $led,
+            'rows'  => RepCustody::spending($repId, $day),
+        ], false);   // بلا layout — صفحة طباعة مستقلة
+    }
+
     public function deleteSettlement(string $sid): void
     {
         $this->requireAuth();
@@ -1052,6 +1308,14 @@ class RepCustodyController extends Controller
      *    بياخد حدثه باسمه ومبلغه، والتقليل بيحصل في **قناة الموبايل بس**
      *    (`PushNotify::deliverMany` → حارس الانفجار) فالسجل يفضل مفصَّلًا.
      */
+    /** البند اتشال — المندوب لازم يعرف عشان ما يفضلش فاكر إنه مسجَّل. */
+    private function notifyDeleted(?array $sub): void
+    {
+        if (!$sub) { return; }
+        PushNotify::submissionDeleted((int) $sub['rep_id'], (string) $sub['note'],
+            (float) $sub['amount'], (string) ($sub['permit_no'] ?? ''), (string) ($sub['entry_date'] ?? ''));
+    }
+
     private function notifyBulk(array $rows, bool $approved, string $reason = ''): void
     {
         foreach ($rows as $row) {

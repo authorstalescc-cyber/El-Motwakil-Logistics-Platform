@@ -31,9 +31,28 @@ use App\Models\RepPortal;
  *    الزرار المربوط بفورم بـ`form=""` بيبعت قيمته **حتى لو مدوستش عليه** (متحقَّق
  *    فعليًا في v37)، فكان كل تعديل بيتعتمد غصب.
  *
+ * ⚠️ **الحذف النهائي** (زرار 🗑): بيشيل البند من الصندوق خالص وبينزّله سلة
+ *    المحذوفات في `/audit`. متاح للمالك والمدير بس (`$canDelete` — والمنع
+ *    الحقيقي في `Access::OWNER_MANAGER_ONLY` مش في الإخفاء ده)، و**البند
+ *    المعتمد بيترفض** لأن له بند فعلي على الإذن.
+ *
+ * ⚠️ **عدسة المندوب `?rep=` على الخادم** (2026-08-02): كان الرابط من كارت
+ *    المندوب بيوَدّي على كل المناديب فالمالك يدوّر وسطهم. الفلترة بقت على
+ *    الخادم عشان الرابط يتشارك ويشتغل مع الرجوع بالمتصفح، وشرايح المناديب فوق
+ *    بتنقّل بينهم بضغطة. الفلاتر التانية (بحث/يوم/متقفل) لسه في المتصفح فوقها.
+ *
  * @var string $status @var array $groups @var array $rows @var int $pending
  * @var array $inboxState @var ?string $lockedThrough @var string $workDate
+ * @var bool $canDelete @var int $repId @var string $repName @var string $dayFilter
+ * @var array $byRep @var ?array $repDayPocket @var ?array $pager
  */
+$canDelete = $canDelete ?? false;
+$repId     = (int) ($repId ?? 0);
+$repName   = (string) ($repName ?? '');
+$dayFilter = (string) ($dayFilter ?? '');
+$byRep     = $byRep ?? [];
+$repDayPocket = $repDayPocket ?? null;
+$pager     = $pager ?? null;
 
 $inboxState  = $inboxState ?? ['token' => FormState::token(), 'old' => [], 'errors' => [], 'back' => 'rep-custody/inbox?status=' . $status];
 $inboxOld    = $inboxState['old'];
@@ -48,15 +67,28 @@ $bulkFailed   = in_array($failedAction, ['approve-many', 'bulk-edit', 'reject-ma
 $rowToken = static fn(string $action, int $sid): string =>
     $failedAction === $action && $failedSid === $sid ? $inboxState['token'] : FormState::token();
 
+/* ⚠️ **كل رابط لازم يحمل العدسة** (`rep`/`day`): من غير كده تبديل التبويب
+     بيرجّع المالك لكل المناديب وهو أصلاً بيراجع مندوبًا واحدًا. */
+$lens = static function (string $st, ?int $rep = null, ?string $dy = null) use ($repId, $dayFilter): string {
+    $r = $rep ?? $repId;
+    $d = $dy  ?? $dayFilter;
+    $q = 'rep-custody/inbox?status=' . rawurlencode($st);
+    if ($r > 0)  { $q .= '&rep=' . (int) $r; }
+    if ($d !== '') { $q .= '&day=' . rawurlencode($d); }
+    return url($q);
+};
+
 $tab = static fn(string $k, string $lbl): string =>
-    '<a class="btn ' . ($status === $k ? '' : 'ghost') . '" href="' . url('rep-custody/inbox?status=' . $k) . '">' . $lbl . '</a>';
+    '<a class="btn ' . ($status === $k ? '' : 'ghost') . '" href="' . $lens($k) . '">' . $lbl . '</a>';
 
 $today     = date('Y-m-d');
 $yesterday = date('Y-m-d', strtotime('-1 day'));
 $isLocked  = static fn(?string $d): bool => $lockedThrough !== null && $d !== null && $d <= $lockedThrough;
 
 // إجماليات الشاشة + عدّ البنود اللي اعتمادها هيترفض بسبب يوم متقفل
-$totAll = 0.0; $cntAll = 0; $lockedCnt = 0; $miscCnt = 0;
+// ⚠️ ونجمّع أرقام الأذونات في نفس اللفّة عشان نجيب حركاتها **في استعلام واحد**:
+//    `RepInbox::movementsOf()` كانت بتتنادى جوّه لوب البنود (N+1).
+$totAll = 0.0; $cntAll = 0; $lockedCnt = 0; $miscCnt = 0; $permitIds = [];
 foreach ($groups as $g) {
     $totAll += $g['total'];
     $cntAll += $g['count'];
@@ -64,13 +96,17 @@ foreach ($groups as $g) {
         foreach ($d['rows'] as $r) {
             if ($isLocked((string) $r['entry_date'])) { $lockedCnt++; }
             if (RepPortal::isMisc((string) $r['kind'])) { $miscCnt++; }
+            elseif ((int) $r['permit_id'] > 0) { $permitIds[] = (int) $r['permit_id']; }
         }
     }
 }
+$movsByPermit = RepInbox::movementsFor($permitIds);
 ?>
 
 <div class="toolbar">
-  <div class="section-head" style="margin:0"><?= icon('inbox', 18) ?> مراجعة بنود المناديب</div>
+  <div class="section-head" style="margin:0">
+    <?= icon('inbox', 18) ?> مراجعة بنود المناديب<?= $repId > 0 && $repName !== '' ? ' — ' . e($repName) : '' ?>
+  </div>
   <div class="spacer"></div>
   <?= $tab('pending', '⏳ مستني' . ($pending ? " ($pending)" : '')) ?>
   <?= $tab('approved', '✓ معتمد') ?>
@@ -79,16 +115,38 @@ foreach ($groups as $g) {
   <a class="btn ghost" href="<?= url('rep-custody') ?>">عهدة المناديب</a>
 </div>
 
+<?php /* ═══ شرايح المناديب — عدسة خادمية بضغطة ═══
+   ⚠️ **روابط حقيقية مش تبديل بجافاسكريبت**: الرابط يتشارك، والرجوع بالمتصفح
+      يشتغل، وبعد أي اعتماد المالك يفضل على نفس المندوب. */ ?>
+<?php if ($byRep && (count($byRep) > 1 || $repId > 0)): ?>
+  <nav class="ib-lens" aria-label="فلترة بالمندوب">
+    <a class="ib-lens-chip<?= $repId === 0 ? ' on' : '' ?>" href="<?= $lens($status, 0) ?>">
+      <?= icon('users', 14) ?> كل المناديب
+      <b><?= intf(array_sum(array_column($byRep, 'count'))) ?></b>
+    </a>
+    <?php foreach ($byRep as $rp): ?>
+      <a class="ib-lens-chip<?= $repId === $rp['rep_id'] ? ' on' : '' ?>" href="<?= $lens($status, $rp['rep_id']) ?>">
+        <?= e($rp['name']) ?> <b><?= intf($rp['count']) ?></b>
+      </a>
+    <?php endforeach; ?>
+    <?php if ($repId > 0): ?>
+      <a class="ib-lens-card" href="<?= url('rep-custody/' . $repId) ?>"><?= icon('briefcase', 14) ?> كارت المندوب</a>
+    <?php endif; ?>
+  </nav>
+<?php endif; ?>
+
 <?php if ($status === 'pending'): ?>
 
   <?php if ($cntAll): ?>
-    <?php /* ⚠️ **ممنوع رقم أصمّ**: كل رقم بيفتح بنوده في النافذة العامة.
-             أهمهم «على أيام متقفلة» — بيوري بالظبط أنهي بنود اعتمادها هيترفض
-             قبل ما المالك يدوس ويتفاجئ. */ ?>
-    <?php $ibd = static fn (string $w): string => url('rep-custody/drill/' . $w); ?>
-    <?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($cntAll, $totAll, $groups, $lockedCnt, $ibd) { ?>
+    <?php /* ⚠️ **ممنوع رقم أصمّ**: أرقام الصندوق تفتح تفاصيلها، وأرقام محفظة
+             المندوب تنقله إلى حسابه الكامل لأنها أرقام تراكمية وليست قائمة
+             البنود الظاهرة فقط. */ ?>
+    <?php
+      $ibd = static fn (string $w): string => url('rep-custody/drill/' . $w);
+    ?>
+    <?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($cntAll, $totAll, $groups, $lockedCnt, $ibd, $repId, $repDayPocket) { ?>
       <?php partial('stat', [
-        'label' => 'مستني مراجعتك', 'value' => intf($cntAll), 'unit' => 'بند',
+        'label' => $repId > 0 ? 'مستني مراجعتك عنده' : 'مستني مراجعتك', 'value' => intf($cntAll), 'unit' => 'بند',
         'icon' => 'hourglass', 'tone' => 'gold',
         'drill' => $ibd('inbox_pending'), 'title' => 'كل البنود المستنية مراجعتك',
       ]); ?>
@@ -97,36 +155,50 @@ foreach ($groups as $g) {
         'icon' => 'banknote', 'tone' => 'navy',
         'drill' => $ibd('inbox_pending'), 'title' => 'البنود المستنية ومبالغها',
       ]); ?>
-      <?php partial('stat', [
-        'label' => 'مناديب', 'value' => intf(count($groups)), 'unit' => 'مندوب',
-        'icon' => 'users', 'tone' => 'teal',
-        'drill' => $ibd('inbox_reps'), 'title' => 'المستنّي مقسّمًا على المناديب',
-      ]); ?>
-      <?php partial('stat', [
-        'label' => 'على أيام متقفلة', 'value' => intf($lockedCnt), 'unit' => $lockedCnt ? 'اعتمادها هيترفض' : 'كله تمام',
-        'icon' => $lockedCnt ? 'alert' : 'check-circle', 'tone' => $lockedCnt ? 'red' : 'green',
-        'drill' => $ibd('inbox_locked'), 'title' => 'بنود تاريخها في يوم متقفل',
-      ]); ?>
+      <?php if ($repId > 0 && $repDayPocket !== null): ?>
+        <?php $accountUrl = url('rep-custody/' . $repId . '?tab=account'); ?>
+        <?php partial('stat', [
+          'label' => 'نزل له عهدة اليوم', 'value' => money0($repDayPocket['deposits']),
+          'icon' => 'wallet', 'tone' => 'green',
+          'url' => $accountUrl, 'title' => 'العهدة اللي نزلت له في ' . dfmt($repDayPocket['day']),
+        ]); ?>
+        <?php partial('stat', [
+          'label' => 'المتبقي من عهدة اليوم', 'value' => money0($repDayPocket['pocket']),
+          'icon' => 'briefcase', 'tone' => $repDayPocket['pocket'] < 0 ? 'red' : 'teal',
+          'url' => $accountUrl, 'title' => 'المتبقي الفعلي في ' . dfmt($repDayPocket['day']) . ' بعد البنود المستنية',
+        ]); ?>
+      <?php else: ?>
+        <?php partial('stat', [
+          'label' => 'مناديب', 'value' => intf(count($groups)), 'unit' => 'مندوب',
+          'icon' => 'users', 'tone' => 'teal',
+          'drill' => $ibd('inbox_reps'), 'title' => 'المستنّي مقسّمًا على المناديب',
+        ]); ?>
+        <?php partial('stat', [
+          'label' => 'على أيام متقفلة', 'value' => intf($lockedCnt), 'unit' => $lockedCnt ? 'اعتمادها هيترفض' : 'كله تمام',
+          'icon' => $lockedCnt ? 'alert' : 'check-circle', 'tone' => $lockedCnt ? 'red' : 'green',
+          'drill' => $ibd('inbox_locked'), 'title' => 'بنود تاريخها في يوم متقفل',
+        ]); ?>
+      <?php endif; ?>
     <?php }]); ?>
   <?php endif; ?>
 
-  <div class="note mb ib-note">
-    💡 تقدر <strong>تعدّل البند وتصلّحه</strong> قبل ما تعتمده — أحسن من إنك ترفضه وتستنى المندوب يعيده.
-    البند اللي تعتمده بيتحط على <strong>تايم لاين الإذن</strong> وبيدخل <strong>فاتورة العميل والمصروفات</strong>،
-    و<strong>بيتخصم من الخزنة بتاريخ الصرف ومن عهدة المندوب في كشفه</strong>.
-    <br><?= icon('anchor', 14) ?> أما <strong>النثرية</strong> فمالهاش إذن ولا عميل: بتروح <strong>للمصروفات وبس</strong>
-    (تصنيف «نثريات المناديب» في <a href="<?= url('expenses') ?>">سجل المصروفات</a>)
-    وبتتخصم من الخزنة وعهدة المندوب برضو — <strong>وعمرها ما تدخل حساب أي عميل</strong>.
-    <?php if ($lockedThrough !== null): ?>
-      <br><?= icon('alert', 14) ?> الأيام لحد <strong><?= e(dfmt($lockedThrough)) ?></strong> متقفلة —
-      أي بند تاريخه فيها لازم <strong>تغيّر تاريخه</strong> أو
-      <a href="<?= url('closing') ?>">تفتح إقفال يومه</a> قبل ما تعتمده.
-    <?php endif; ?>
-  </div>
+  <?php /* ⚠️ لوح الشرح الستة أسطر اتشال (قانون التصميم: **صفر جملة تعليمية**).
+           اللي فضل تحذير **وظيفي** واحد: الأيام المتقفلة اعتماد بنودها بيترفض —
+           ودي معلومة المالك محتاجها **قبل** ما يدوس مش بعد ما يترفض. */ ?>
+  <?php if ($lockedThrough !== null && $lockedCnt > 0): ?>
+    <div class="note mb ib-note">
+      <?= icon('alert', 14) ?> <strong><?= intf($lockedCnt) ?> بند</strong> تاريخهم في يوم متقفل
+      (لحد <?= e(dfmt($lockedThrough)) ?>) — غيّر تاريخهم أو
+      <a href="<?= url('closing') ?>">افتح الإقفال</a>، وإلا الاعتماد هيترفض.
+    </div>
+  <?php endif; ?>
 
   <?php if (!$groups): ?>
     <div class="card"><div class="empty"><div class="ic"><?= icon('check', 14) ?></div>
-      مفيش بنود مستنية. كل حاجة اتراجعت.
+      <?= $repId > 0 ? 'مفيش بنود مستنية عند ' . e($repName) . '.' : 'مفيش بنود مستنية. كل حاجة اتراجعت.' ?>
+      <?php if ($repId > 0 || $dayFilter !== ''): ?>
+        <div class="mt"><a class="btn ghost sm" href="<?= url('rep-custody/inbox?status=pending') ?>">شوف كل المناديب</a></div>
+      <?php endif; ?>
     </div></div>
   <?php else: ?>
 
@@ -140,15 +212,9 @@ foreach ($groups as $g) {
         <span><?= icon('search', 14) ?> بحث</span>
         <input type="search" id="ibSearch" placeholder="بحث" autocomplete="off">
       </label>
-      <label>
-        <span>المندوب</span>
-        <select id="ibRep">
-          <option value="">الكل</option>
-          <?php foreach ($groups as $g): ?>
-            <option value="<?= (int) $g['rep_id'] ?>"><?= e($g['rep_name']) ?> (<?= intf($g['count']) ?>)</option>
-          <?php endforeach; ?>
-        </select>
-      </label>
+      <?php /* ⚠️ قايمة المندوب اتشالت من هنا — بقت **شرايح خادمية** فوق
+               الصفحة. قايمة منسدلة تانية لنفس الفلتر كانت هتدّي مصدرين
+               للحقيقة: تختار من هنا وتفضل العدسة الخادمية على «الكل». */ ?>
       <label>
         <span>اليوم</span>
         <select id="ibDay">
@@ -218,12 +284,15 @@ foreach ($groups as $g) {
                   <?php
                     $sid    = (int) $r['id'];
                     $isMisc = RepPortal::isMisc((string) $r['kind']);
-                    $movs   = $isMisc ? [] : RepInbox::movementsOf((int) $r['permit_id']);
+                    $movs   = $isMisc ? [] : ($movsByPermit[(int) $r['permit_id']] ?? []);
                     $eid    = 'e' . $sid;
                     $hasActual  = !$isMisc && $r['actual_unit'] !== null && $r['actual_unit'] !== '';
                     $rowFailed  = $failedSid === $sid;
                     $editFailed = $rowFailed && $failedAction === 'edit';
                     $rowLocked  = $isLocked((string) $r['entry_date']);
+                    // ⚠️ قبل خط الفصل = اعتماده **بيترفض دايمًا** (`epochBlock`).
+                    //    الشاشة بتقول ده قبل الضغط بدل ما المالك يدوس ويستغرب.
+                    $preEpoch   = RepInbox::isPreEpoch((string) $r['entry_date']);
                     $inReview   = !empty($r['review_started_at']);
                     // نص البحث الحيّ — كله في سمة واحدة عشان الفلترة تبقى سطرًا واحدًا
                     // ⚠️ `search_norm` مش `mb_strtolower`: توحيد الألف والتاء المربوطة
@@ -292,9 +361,20 @@ foreach ($groups as $g) {
                           <?php if ($inReview): ?>
                             <span class="pill st-partial" title="<?= e($r['review_started_by'] ?: '') ?>"><?= icon('alert', 14) ?> قيد المراجعة</span>
                           <?php endif; ?>
+                          <?php if ($preEpoch): ?>
+                            <span class="pill st-late" title="تاريخه قبل بداية النظام الجديد — عهد سواقين متخصومة أصلاً على بوالصها، فاعتماده هيخصم نفس الفلوس مرتين."><?= icon('alert', 14) ?> مش هيتعتمد</span>
+                          <?php endif; ?>
                         </div>
 
                         <div class="ib-meta">
+                          <?php if (!empty($r['created_at'])): ?>
+                            <span class="ib-submitted"
+                                  title="وقت إدخال البند من المندوب: <?= e(dtfmt($r['created_at'], 'd/m/Y H:i:s')) ?>">
+                              <?= icon('clock', 14) ?>
+                              <span>إدخال المندوب</span>
+                              <bdi dir="ltr"><?= e(dtfmt($r['created_at'], 'd/m/Y · H:i')) ?></bdi>
+                            </span>
+                          <?php endif; ?>
                           <?php if ($isMisc): ?>
                             <span>مصروف عام بلا إذن — هيروح للمصروفات</span>
                           <?php else: ?>
@@ -343,6 +423,10 @@ foreach ($groups as $g) {
                                 onclick="ibToggle('<?= $eid ?>')"><?= icon('edit', 14) ?></button>
                         <button class="ib-btn no" type="button" title="ارفض البند"
                                 onclick="ibReject(<?= $sid ?>)"><?= icon('x', 14) ?></button>
+                        <?php if ($canDelete): ?>
+                          <button class="ib-btn del" type="button" title="احذف البند نهائيًّا"
+                                  onclick="ibDelete(<?= $sid ?>)"><?= icon('trash', 14) ?></button>
+                        <?php endif; ?>
                       </div>
                     </div>
 
@@ -479,6 +563,9 @@ foreach ($groups as $g) {
         <button type="button" class="btn" id="ibDoDate"><?= icon('calendar', 14) ?> غيّر التاريخ</button>
         <button type="button" class="btn ghost" id="ibDoActual"><?= icon('coins', 14) ?> حط الفعلي للعميل</button>
         <button type="button" class="btn ghost" id="ibDoReject"><?= icon('x', 14) ?> ارفض</button>
+        <?php if ($canDelete): ?>
+          <button type="button" class="btn ghost ib-bar-del" id="ibDoDelete"><?= icon('trash', 14) ?> احذف نهائيًّا</button>
+        <?php endif; ?>
         <button type="button" class="btn ghost" id="ibClearPick">شيل التعليم</button>
       </div>
     </div>
@@ -521,17 +608,32 @@ foreach ($groups as $g) {
           <input type="hidden" name="reason" value="">
         <?php endif; ?>
       </form>
+      <?php if ($canDelete): ?>
+        <form method="post" id="d<?= $sid ?>f" action="<?= url('rep-custody/' . $sid . '/delete') ?>" hidden>
+          <?= csrfField() ?><?= formStateFields($rowToken('delete', $sid), $inboxState['back']) ?>
+        </form>
+      <?php endif; ?>
     <?php endforeach; endforeach; endforeach; ?>
 
   <?php endif; ?>
 
 <?php else: ?>
 
-  <?php /* المعتمد/المرفوض — جدول عادي بأدوات الجداول العامة (ترتيب/إخفاء أعمدة) */ ?>
+  <?php /* المعتمد/المرفوض — جدول عادي بأدوات الجداول العامة (ترتيب/إخفاء أعمدة)
+           ⚠️ **مترقّم على الخادم**: «معتمد» فيه ٣٤٦ بند على الإنتاج وكانوا
+              بيترسموا كلهم. و«مفيش قطع صامت» — العدّاد بيقول المعروض من الكل. */ ?>
+  <?php if ($pager && $pager['total'] > 0): ?>
+    <?php partial('count_note', [
+      'shown' => count($rows),
+      'total' => (int) $pager['total'],
+      'unit'  => 'بند',
+    ]); ?>
+  <?php endif; ?>
   <div class="card">
     <div class="table-wrap"><table class="data">
       <thead><tr>
-        <th class="g-identity">التاريخ</th>
+        <th class="g-identity">تاريخ البند</th>
+        <th class="g-identity">وقت إدخال المندوب</th>
         <th class="g-identity">المندوب</th>
         <th class="g-identity">البيان</th>
         <th class="g-identity">الإذن</th>
@@ -539,13 +641,27 @@ foreach ($groups as $g) {
         <th class="g-expense">المبلغ</th>
         <th class="g-identity">الحالة</th>
         <th class="g-identity">المراجِع</th>
+        <?php if ($canDelete): ?><th class="g-identity" data-no-sort data-no-hide></th><?php endif; ?>
       </tr></thead>
       <tbody>
+        <?php $cols = $canDelete ? 10 : 9; ?>
         <?php if (!$rows): ?>
-          <tr><td colspan="8"><div class="empty">مفيش بنود هنا.</div></td></tr>
+          <tr><td colspan="<?= $cols ?>"><div class="empty">مفيش بنود هنا.</div></td></tr>
         <?php else: foreach ($rows as $r): ?>
           <tr>
             <td><?= e(dfmt($r['entry_date'])) ?></td>
+            <td>
+              <?php if (!empty($r['created_at'])): ?>
+                <span class="ib-table-time"
+                      title="لحظة وصول البند للنظام">
+                  <?= icon('clock', 14) ?>
+                  <bdi dir="ltr"><?= e(dtfmt($r['created_at'], 'd/m/Y')) ?></bdi>
+                  <small><bdi dir="ltr"><?= e(dtfmt($r['created_at'], 'H:i')) ?></bdi></small>
+                </span>
+              <?php else: ?>
+                <span class="ib-del-na">—</span>
+              <?php endif; ?>
+            </td>
             <td style="text-align:right"><a href="<?= url('rep-custody/' . $r['rep_id']) ?>"><?= e($r['rep_name']) ?></a></td>
             <td style="text-align:right"><?= e($r['note']) ?></td>
             <td style="text-align:right">
@@ -576,9 +692,25 @@ foreach ($groups as $g) {
               <?php endif; ?>
             </td>
             <td style="font-size:var(--fs-2);color:var(--grey)"><?= e($r['reviewed_by'] ?: '—') ?></td>
+            <?php if ($canDelete): ?>
+              <td>
+                <?php /* ⚠️ المعتمد بلا زرار: له بند فعلي على الإذن، ومسحه من تايم لاين
+                         الإذن هو المسار الصح (RepInbox::delete بترفضه على الخادم كمان). */ ?>
+                <?php if ($r['status'] !== 'approved'): ?>
+                  <form method="post" action="<?= url('rep-custody/' . (int) $r['id'] . '/delete') ?>"
+                        class="confirm-delete inline-form"
+                        data-confirm="هيتشال البند «<?= e($r['note']) ?>» خالص. تلاقيه في سلة المحذوفات لو عايز ترجّعه.">
+                    <?= csrfField() ?><?= formStateFields(FormState::token(), $inboxState['back']) ?>
+                    <button class="ib-btn del" type="submit" title="احذف البند نهائيًّا"><?= icon('trash', 14) ?></button>
+                  </form>
+                <?php else: ?>
+                  <span class="ib-del-na" title="البند معتمد وله بند فعلي على الإذن — امسحه من تايم لاين الإذن">—</span>
+                <?php endif; ?>
+              </td>
+            <?php endif; ?>
           </tr>
           <?php if ($r['status'] === 'rejected' && $r['review_note']): ?>
-            <tr><td colspan="8" style="text-align:right;font-size:var(--fs-2);color:var(--red);background:var(--red-lt)">
+            <tr><td colspan="<?= $cols ?>" style="text-align:right;font-size:var(--fs-2);color:var(--red);background:var(--red-lt)">
               سبب الرفض: <?= e($r['review_note']) ?>
             </td></tr>
           <?php endif; ?>
@@ -586,6 +718,22 @@ foreach ($groups as $g) {
       </tbody>
     </table></div>
   </div>
+
+  <?php if ($pager): ?>
+    <?php partial('pager', [
+      'page'  => (int) $pager['page'],
+      'pages' => (int) $pager['pages'],
+      'label' => 'صفحات البنود',
+      /* ⚠️ الترقيم لازم يحافظ على العدسة كلها، وإلا «التالي» بيرجّعك لكل
+         المناديب من أول صفحة ٢. */
+      'qs'    => static function (array $o) use ($status, $repId, $dayFilter): string {
+          $q = ['status' => $status];
+          if ($repId > 0)    { $q['rep'] = $repId; }
+          if ($dayFilter !== '') { $q['day'] = $dayFilter; }
+          return http_build_query($q + $o);
+      },
+    ]); ?>
+  <?php endif; ?>
 
 <?php endif; ?>
 
@@ -595,6 +743,20 @@ foreach ($groups as $g) {
 .kpi-grid.four{grid-template-columns:repeat(4,1fr)}
 @media (max-width:900px){ .kpi-grid.four{grid-template-columns:repeat(2,1fr)} }
 .kpi.danger{border-color:#F3C4C4;background:#FFF6F6}
+
+/* شرايح عدسة المندوب — فلترة خادمية بضغطة */
+.ib-lens{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 var(--space-3)}
+.ib-lens-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;
+  border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--card);
+  color:var(--ink);font-size:var(--fs-2);font-weight:var(--fw-med);text-decoration:none;min-height:38px}
+.ib-lens-chip:hover{border-color:var(--navy);background:var(--zebra)}
+.ib-lens-chip b{font-weight:var(--fw-bold);color:var(--grey);font-size:var(--fs-1)}
+.ib-lens-chip.on{background:var(--navy);border-color:var(--navy);color:var(--white)}
+.ib-lens-chip.on b{color:var(--white);opacity:.85}
+.ib-lens-card{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;min-height:38px;
+  font-size:var(--fs-1);color:var(--grey);text-decoration:none;margin-inline-start:auto}
+.ib-lens-card:hover{color:var(--navy);text-decoration:underline}
+@media (max-width:640px){ .ib-lens-card{margin-inline-start:0} }
 
 /* الفلاتر */
 .ib-filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;padding:13px 16px}
@@ -636,6 +798,16 @@ foreach ($groups as $g) {
 .ib-meta{font-size:var(--fs-1);color:var(--grey);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap}
 .ib-meta a{font-weight:500;color:var(--navy)}
 .ib-meta .ib-co{font-weight:600;color:var(--navy)}
+.ib-submitted{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;
+  border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--zebra);
+  color:var(--ink-mut);font-weight:var(--fw-med);white-space:nowrap}
+.ib-submitted svg{color:var(--teal);flex:none}
+.ib-submitted bdi{color:var(--ink);font-weight:var(--fw-bold);font-variant-numeric:tabular-nums}
+.ib-table-time{display:inline-grid;grid-template-columns:auto auto;align-items:center;column-gap:6px;
+  color:var(--ink);font-weight:var(--fw-med);white-space:nowrap}
+.ib-table-time svg{grid-row:1/3;color:var(--teal)}
+.ib-table-time small{color:var(--grey);font-size:var(--fs-1);font-weight:var(--fw-med);
+  font-variant-numeric:tabular-nums;text-align:start}
 .ib-warn{margin:6px 0 0;font-size:var(--fs-1);font-weight:500;color:#8E1F1F;line-height:1.6}
 .ib-link{background:0;border:0;padding:0;font:inherit;font-weight:700;color:#8E1F1F;text-decoration:underline;cursor:pointer}
 .pill.ib-misc{background:#FBF3D9;color:#6B540A;border:1px solid #E6D49B}
@@ -658,6 +830,11 @@ foreach ($groups as $g) {
 .ib-btn.ok:hover{background:var(--green);color:#fff}
 .ib-btn.no{color:var(--red)}
 .ib-btn.no:hover{background:var(--red-lt);border-color:var(--red)}
+/* الحذف النهائي: باهت لحد ما تقرب منه — إجراء نادر مش خطوة يومية */
+.ib-btn.del{color:var(--grey);opacity:.7}
+.ib-btn.del:hover{opacity:1;color:var(--red);background:var(--red-lt);border-color:var(--red)}
+.ib-bar-del:hover{border-color:#F3C4C4;color:#FFD7D7}
+.ib-del-na{color:var(--grey);opacity:.5}
 
 .ib-row-error{padding:10px 18px 0}
 .ib-retry{display:flex;align-items:end;gap:8px;padding:10px 0;flex-wrap:wrap}
@@ -803,7 +980,6 @@ body.ib-has-bar{padding-bottom:78px}
 
   // ── الفلترة (كلها في المتصفح)
   var fSearch = document.getElementById('ibSearch');
-  var fRep    = document.getElementById('ibRep');
   var fDay    = document.getElementById('ibDay');
   var fLocked = document.getElementById('ibOnlyLocked');
   var counter = document.getElementById('ibCount');
@@ -811,11 +987,10 @@ body.ib-has-bar{padding-bottom:78px}
   var ibNorm = window.almSearchNorm || function (v) { return String(v || '').trim().toLowerCase(); };
   function applyFilters() {
     var q = ibNorm(fSearch.value || '');
-    var rep = fRep.value, day = fDay.value, onlyLocked = fLocked.checked;
+    var day = fDay.value, onlyLocked = fLocked.checked;
     var shown = 0;
     form.querySelectorAll('.ib-item').forEach(function (item) {
       var ok = (!q || (item.dataset.search || '').indexOf(q) !== -1)
-            && (!rep || item.dataset.rep === rep)
             && (!day || item.dataset.day === day)
             && (!onlyLocked || item.dataset.locked === '1');
       item.classList.toggle('is-hidden', !ok);
@@ -834,12 +1009,12 @@ body.ib-has-bar{padding-bottom:78px}
     counter.textContent = shown === total ? '' : ('ظاهر ' + shown + ' من ' + total);
     syncBar();
   }
-  [fSearch, fRep, fDay, fLocked].forEach(function (el) {
+  [fSearch, fDay, fLocked].forEach(function (el) {
     el.addEventListener('input', applyFilters);
     el.addEventListener('change', applyFilters);
   });
   document.getElementById('ibClearFilters').addEventListener('click', function () {
-    fSearch.value = ''; fRep.value = ''; fDay.value = ''; fLocked.checked = false;
+    fSearch.value = ''; fDay.value = ''; fLocked.checked = false;
     applyFilters();
   });
 
@@ -991,10 +1166,40 @@ body.ib-has-bar{padding-bottom:78px}
     }, { title: 'سبب رفض ' + n + ' بند', okText: 'ارفض البنود' });
   });
 
+  var delBtn = document.getElementById('ibDoDelete');
+  if (delBtn) {
+    delBtn.addEventListener('click', function () {
+      var sel = picked();
+      if (!sel.length) { window.AppUI.notice('علّم بند واحد على الأقل.'); return; }
+      var sum = 0;
+      sel.forEach(function (b) { sum += parseFloat(b.dataset.amount || '0') || 0; });
+      window.AppUI.confirm(
+        'هيتشال ' + sel.length + ' بند بإجمالي ' + money(sum) + ' ج من الصندوق خالص. '
+        + 'مش هيتخصموا من الخزنة ولا من عهدة المندوب (ما اتخصموش أصلاً)، '
+        + 'وتلاقيهم في سلة المحذوفات في سجل العمليات لو عايز ترجّعهم.',
+        function () { submitBulk('<?= url('rep-custody/delete-many') ?>'); },
+        { title: 'حذف ' + sel.length + ' بند نهائيًّا', okText: 'احذف', danger: true });
+    });
+  }
+
   // ── إجراءات البند الواحد
   window.ibToggle = function (id) {
     var el = document.getElementById(id);
     if (el) { el.hidden = !el.hidden; }
+  };
+  // ⚠️ الحذف بيشيل البند من الصندوق خالص — فالتأكيد بيقول إنه بينزل السلة،
+  //    عشان المالك يعرف إن فيه طريق رجوع بدل ما يتردّد أو يحذف وهو خايف.
+  window.ibDelete = function (sid) {
+    var f = document.getElementById('d' + sid + 'f');
+    if (!f) { return; }
+    var item = document.getElementById('submission-' + sid);
+    var note = item ? (item.querySelector('.ib-note') || {}).textContent : '';
+    window.AppUI.confirm(
+      'هيتشال البند «' + (note || '').trim() + '» من الصندوق خالص. '
+      + 'مش هيتخصم من الخزنة ولا من عهدة المندوب (ما اتخصمش أصلاً)، '
+      + 'وتلاقيه في سلة المحذوفات في سجل العمليات لو عايز ترجّعه.',
+      function () { if (f.requestSubmit) { f.requestSubmit(); } else { f.submit(); } },
+      { title: 'حذف البند نهائيًّا', okText: 'احذف', danger: true });
   };
   window.ibReject = function (sid) {
     window.AppUI.ask('المندوب هيشوف السبب على موبايله.', function (why) {

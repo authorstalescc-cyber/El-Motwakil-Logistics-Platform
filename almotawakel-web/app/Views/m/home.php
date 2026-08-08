@@ -43,35 +43,149 @@ $officeTel = preg_replace('/[^\d+]/', '', ar2en_digits($officePhone));
 
 $num = fn($v) => number_format((float) $v, 0);
 
+/**
+ * ختم الميناء — علامة بتترسم في ركن الكارت.
+ *
+ * ⚠️ **رسمة بالكود لا صورة** (قرار المالك بعد المفاضلة): صفر كيلوبايت، حادّة
+ *    على أي شاشة، وبتاخد لون السمة تلقائيًّا. صور الموانئ كانت هتخلّي ٧٨٪ من
+ *    الكروت بنفس الصورة (٢٩ إذن من ٣٧ على نفس الميناء) وتزوّد ~٩٠٠ك على موبايل
+ *    المندوب في الميدان.
+ *
+ * ⚠️ المطابقة بـ`Maintenance::normkey` (بتشيل التشكيل وتوحّد الألف والتاء
+ *    المربوطة) — «ميناء أبوقير» و«ميناء ابو قير» لازم يدّوا نفس الختم.
+ */
+$portMark = function (string $port): string {
+    $k = \App\Models\Maintenance::normkey($port);
+    if ($k === '') { return ''; }
+    foreach ([
+        'اسكندر'  => 'lighthouse',   // المنارة — علامة الإسكندرية
+        'دخيله'   => 'crane',
+        'ابوقير'  => 'anchor',
+        'ابو قير' => 'anchor',
+        'ادبيه'   => 'containers',
+        'سخنه'    => 'ship',
+        'شرق'     => 'containers',
+        'غرب'     => 'ship',
+        'بورسعيد' => 'anchor',
+        'دمياط'   => 'crane',
+    ] as $needle => $mark) {
+        if (str_contains($k, $needle)) { return $mark; }
+    }
+    return 'anchor';                  // ميناء معروف بلا علامة مخصّصة
+};
+
+/** الإذن فيه حاويات مبرّدة؟ — `normkey` بتشيل الشدّة فـ«مبرّد» تطابق «مبرد». */
+$isReefer = function (array $p): bool {
+    $hay = \App\Models\Maintenance::normkey(
+        implode(' ', $p['container_parts'] ?? []) . ' ' . (string) ($p['container_type'] ?? ''));
+    return str_contains($hay, 'مبرد');
+};
+
 /** كارت الإذن — كعب إذن ورقي: تعريف فوق، إحصائيات، تفاصيل مطويّة، إجراء تحت. */
-$permitCard = function (array $p) use ($num) {
+$permitCard = function (array $p) use ($num, $portMark, $isReefer) {
+    /* الميناء والتوكيل طلعوا من القايمة المطويّة: الميناء بقى سطر جنب ختمه،
+       والتوكيل بقى بارزًا تحت اسم الشركة (طلب المالك). */
     $details = array_filter([
-        '⚓ الميناء'  => $p['port'],
-        '🏢 التوكيل'  => $p['agency'],
-        '🚢 الملاحية' => $p['shipping_co'],
-        '📍 الوجهة'   => $p['destination'],
+        'الملاحية' => $p['shipping_co'],
+        'الوجهة'   => $p['destination'],
     ], fn($v) => trim((string) $v) !== '');
+    $agency = trim((string) ($p['agency'] ?? ''));
+    $port   = trim((string) ($p['port'] ?? ''));
+    $cold   = $isReefer($p);
+    /* ⚠️ المبرّد **بيغلب** ختم الميناء: التبريد شغل تشغيلي مختلف (وقت وكهربا
+       وعطل)، والميناء بيفضل مكتوبًا بالاسم تحت فمفيش معلومة بتضيع. */
+    $stamp  = $cold ? 'snowflake' : ($port !== '' ? $portMark($port) : '');
     $drivers = $p['drivers'] ?? [];
     $bills   = (int) ($p['bills'] ?? 0);
     $cars    = (int) ($p['cars'] ?? 0);
     $movs    = count($p['movements']);
     ?>
-    <article class="hm-stub <?= $p['type'] === 'warid' ? 'is-warid' : 'is-sader' ?>"
-             data-created="<?= e((string) ($p['created_at'] ?? '')) ?>"
+    <article class="hm-stub <?= $p['type'] === 'warid' ? 'is-warid' : 'is-sader' ?><?= !empty($p['pinned']) ? ' is-pinned' : '' ?><?= !empty($p['track']['finished']) ? ' is-done' : '' ?><?= $cold ? ' is-cold' : '' ?>"
+             data-pid="<?= (int) $p['id'] ?>"
+             data-type="<?= e($p['type']) ?>"
+             data-port="<?= e(mb_strtolower((string) ($p['port'] ?? ''))) ?>"
+             data-pinned="<?= !empty($p['pinned']) ? '1' : '0' ?>"
+             data-worked="<?= !empty($p['worked']) ? '1' : '0' ?>"
              data-search="<?= e(mb_strtolower($p['no'] . ' ' . $p['company'] . ' ' . $p['client'] . ' ' . $p['destination'] . ' ' . implode(' ', $drivers))) ?>">
       <span class="hm-new-tag" hidden>🆕 جديد</span>
+      <?php /* ختم الركن — زخرفي بحت فـ`aria-hidden`، وبيتحط **قبل** الجسم
+               عشان يفضل وراه في ترتيب الطبقات. */ ?>
+      <?php if ($stamp !== ''): ?>
+        <span class="hm-stamp" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#stamp-<?= e($stamp) ?>"/></svg></span>
+      <?php endif; ?>
       <div class="hm-stub-body">
+        <?php /* ⚠️ الكارت كله بقى رابط لصفحة التفاصيل (طلب المالك: «الضغط على
+                 الإذن ما بيعملش حاجة»). الرابط **بيغطّي الجسم كله** بـ`inset:0`
+                 وزرار التثبيت مرفوع فوقه بـz-index — فورم جوّه رابط ماركب باطل،
+                 والتغطية دي هي البديل المعتمد. */ ?>
+        <a class="hm-stub-open" href="<?= url('m/permit/' . $p['id'] . '/info') ?>"
+           aria-label="تفاصيل الإذن <?= e($p['no']) ?>"></a>
         <div class="hm-stub-head">
           <h3><?= e($p['company'] ?: $p['client'] ?: 'بدون شركة') ?></h3>
-          <span class="hm-kind"><?= e($p['type_label']) ?></span>
+          <?php /* ⚠️ رقم الإذن **جوّه شريحة النوع** لا في سطر لوحده (بلاغ المالك):
+                   السطر المستقل كان بياخد ارتفاعًا كامل من كارت طويل أصلاً،
+                   وهنا بيبقى بارز أكتر لأنه على خلفية ملوّنة وبخط تقيل. */ ?>
+          <span class="hm-kind"><?= e($p['type_label']) ?> <b><bdi dir="ltr"><?= e($p['no']) ?></bdi></b></span>
+          <?php /* التثبيت (v63) — تفضيل عرض بحت: بيرفع الإذن فوق القايمة وبس.
+                   فورم عادي بلا جافاسكريبت عشان يشتغل حتى لو السكربت وقع. */ ?>
+          <form method="post" action="<?= url('m/permit/' . $p['id'] . '/pin') ?>" class="hm-pin-f">
+            <?= csrfField() ?>
+            <button type="submit" class="hm-pin<?= !empty($p['pinned']) ? ' is-on' : '' ?>"
+                    aria-pressed="<?= !empty($p['pinned']) ? 'true' : 'false' ?>"
+                    aria-label="<?= !empty($p['pinned']) ? 'شيل التثبيت' : 'ثبّت الإذن فوق' ?>"
+                    title="<?= !empty($p['pinned']) ? 'شيل التثبيت' : 'ثبّت فوق' ?>"><?= icon('star', 15) ?></button>
+          </form>
         </div>
-        <div class="hm-ref"><?= e($p['no']) ?></div>
 
+        <?php /* التوكيل الملاحي — طلب المالك يبقى بارزًا. كان مدفونًا في القايمة
+                 المطويّة رغم إنه أول حاجة المندوب بيسأل عنها في الميناء. */ ?>
+        <?php if ($agency !== ''): ?>
+          <div class="hm-agency">
+            <span class="hm-agency-ic"><?= icon('building', 15) ?></span>
+            <span class="hm-agency-txt">
+              <small>التوكيل الملاحي</small>
+              <b><?= e($agency) ?></b>
+            </span>
+          </div>
+        <?php endif; ?>
+
+        <?php if ($port !== '' || $cold): ?>
+          <div class="hm-portline">
+            <?php if ($port !== ''): ?>
+              <span class="hm-port"><?= icon('anchor', 13) ?> <?= e($port) ?></span>
+            <?php endif; ?>
+            <?php if ($cold): ?><span class="hm-cold"><?= icon('snowflake', 13) ?> مبرّد</span><?php endif; ?>
+          </div>
+        <?php endif; ?>
+
+        <?php /* ⚠️ **شكل الحاوية** بدل الشريحة النصّية (طلب المالك): الرسمة
+                 بتوصّل المقاس والنوع أسرع من الكلام — العشرين أقصر من الأربعين،
+                 والمبرّد ليه وحدة تبريد، والتانك أسطوانة. والعدد×المقاس بيتكتب
+                 **جوّه** الشكل.
+                 ⚠️ الوصف اللي مش حاوية معروفة (زي «١٠ طر د») بيرجع **null**
+                 فبيتعرض شريحة نصّية زي الأول — شكل غلط بيتقري كمعلومة غلط. */ ?>
         <?php if ($p['container_parts']): ?>
           <div class="hm-chips">
             <?php foreach ($p['container_parts'] as $part): ?>
-              <?php /* bdi dir=ltr إلزامي: من غيرها «8×20 قدم» بتتعرض «20×8 قدم» */ ?>
-              <span class="hm-chip"><?= icon('package', 14) ?> <bdi dir="ltr"><?= e($part) ?></bdi></span>
+              <?php $art = container_art((string) $part); ?>
+              <?php if ($art !== null): ?>
+                <span class="hm-boxwrap">
+                  <span class="hm-box is-<?= e($art['kind']) ?><?= $art['size'] ? ' sz-' . e($art['size']) : ' sz-x' ?>">
+                    <svg class="hm-box-art" viewBox="0 0 64 32" preserveAspectRatio="none"
+                         aria-hidden="true"><use href="#box-<?= e($art['kind']) ?>"/></svg>
+                    <?php /* bdi dir=ltr إلزامي: من غيرها «2×40» بتتعرض «40×2» */ ?>
+                    <b class="hm-box-lbl"><bdi dir="ltr"><?= e($art['label']) ?></bdi></b>
+                  </span>
+                </span>
+                <?php /* ⚠️ المبرّد **مالوش كلمة جنبه** — الكارت أصلاً بيعرض وسم
+                         «مبرّد» في سطر الميناء والرسمة زرقا بوحدة تبريد، فكتابتها
+                         هنا كمان بتخلّي نفس الخبر مرتين في كارت واحد. */ ?>
+                <?php if ($art['sub'] !== '' && $art['kind'] !== 'reefer'): ?>
+                  <span class="hm-box-sub"><?= e($art['sub']) ?></span>
+                <?php endif; ?>
+              <?php else: ?>
+                <span class="hm-chip"><?= icon('package', 14) ?> <bdi dir="ltr"><?= e($part) ?></bdi></span>
+              <?php endif; ?>
             <?php endforeach; ?>
           </div>
         <?php endif; ?>
@@ -85,24 +199,6 @@ $permitCard = function (array $p) use ($num) {
           </div>
         <?php endif; ?>
 
-        <?php if ($details || $drivers): ?>
-          <details class="hm-more">
-            <summary>تفاصيل الإذن</summary>
-            <?php if ($details): ?>
-              <dl>
-                <?php foreach ($details as $label => $value): ?>
-                  <dt><?= $label ?></dt><dd><?= e($value) ?></dd>
-                <?php endforeach; ?>
-              </dl>
-            <?php endif; ?>
-            <?php if ($drivers): ?>
-              <div class="hm-drivers">
-                <span class="hm-drivers-lbl"><?= icon('truck', 14) ?> السائقين</span>
-                <?php foreach ($drivers as $d): ?><span class="hm-driver"><?= e($d) ?></span><?php endforeach; ?>
-              </div>
-            <?php endif; ?>
-          </details>
-        <?php endif; ?>
       </div>
 
       <?php /* رحلة الشحنة (v62) — الحالة الحالية + رابط التحديث من الميدان.
@@ -243,26 +339,11 @@ $permitCard = function (array $p) use ($num) {
       <span><?= e((string) $pocket['lock_reason']) ?></span>
       <a class="hm-locked-btn" href="<?= url('m/work-date') ?>">اختار يوم تاني</a>
     </div>
-  <?php elseif (!$wdToday): ?>
-    <?php /* ⚠️ تحذير صريح: الرقم فوق **مش** عهدة النهاردة. كان مكتوب «مش
-             النهاردة» بخط صغير جوّه شريحة التاريخ وبس، فالمندوب ما بيلاحظهاش
-             ويفتكر الرقم هو اللي معاه دلوقتي. */ ?>
-    <div class="hm-pastday" role="alert">
-      <b>انت شغّال على يوم <?= e(dfmt($workDate)) ?> مش النهاردة</b>
-      <span>الرقم فوق عهدة اليوم ده، وأي بند تسجّله هيتكتب عليه.</span>
-      <a class="hm-pastday-btn" href="<?= url('m/work-date') ?>">رجّعني للنهاردة</a>
-    </div>
   <?php endif; ?>
-
-  <?php if (!$wdLocked && $pocket['deposits'] <= 0 && ($pocket['transfer_in'] ?? 0) <= 0): ?>
-    <?php /* مفيش عهدة نزلت في اليوم ده خالص: الرقم سالب أو صفر مش لأن عهدته
-             خلصت، لكن لأن المكتب ما نزّلش عهدة على اليوم ده. من غير السطر ده
-             المندوب يقرا «صرفت أكتر من عهدة اليوم» ويفتكر إنه غلط. */ ?>
-    <div class="hm-nodep">
-      <b>ماحدش نزّل لك عهدة على اليوم ده</b>
-      <span>سجّل عادي — والمكتب لما ينزّل العهدة على نفس اليوم الرقم يتظبط لوحده.</span>
-    </div>
-  <?php endif; ?>
+  <?php /* ⚠️ لوح «انت شغّال على يوم مش النهاردة» اتشال بقرار المالك (2026-08-02).
+           الحماية من الباج اللي اتعمل عشانه **باقية بدونه**: عنوان الرصيد بيسمّي
+           اليوم صراحةً («فاضل من عهدة يوم كذا»)، وشريحة التاريخ بتاخد `is-past`
+           وفيها رابط «غيّر». ما تشيلش الاتنين دول. */ ?>
 
   <?php if ($lowCustody): ?>
     <div class="hm-low">
@@ -286,9 +367,10 @@ $permitCard = function (array $p) use ($num) {
   <?php /* إجراءات مش على إذن — صف واحد مضغوط عشان الأذونات تفضل هي البطل. */ ?>
   <nav class="hm-actions" aria-label="إجراءات سريعة">
     <a href="<?= url('m/misc') ?>"><span class="ic"><?= icon('anchor', 14) ?></span>نثرية</a>
-    <?php /* v60 — «تسليم سائق» اتشال ومكانه «بوليصة جديدة»: المندوب بيضيف
-             البوليصة نفسها وبيكتب عهدة السائق جوّاها، والعهدة بتتخصم من محفظته. */ ?>
-    <a href="<?= url('m/bill/new') ?>"><span class="ic"><?= icon('truck', 14) ?></span>بوليصة جديدة</a>
+    <?php /* ⚠️ «بوليصة جديدة» **اتنقلت جوّه الإذن** (طلب المالك 2026-08-03):
+             البوليصة لازمها إذن، وفتحها من هنا كانت بتبدأ بسؤال «أنهي إذن؟»
+             على قايمة ٣٧ إذن. المسار `/m/bill/new` زي ما هو والفورم لسه
+             بيقبل بلا إذن مختار — اللي اتغيّر مكان الدخول. */ ?>
     <?php /* المرحلة ٣.٣ (docs/16) — البوليصة موجودة والمكتب سجّلها، والمندوب هو
              اللي سلّم سائقها عهدته. بلا الزرار ده العهدة تفضل متخصومة من خزنة
              المكتب وهو اللي دفعها. */ ?>
@@ -326,13 +408,47 @@ $permitCard = function (array $p) use ($num) {
   <?php if ($tab === 'permits'): ?>
     <div class="hm-sheet-head">
       <h2>أذوناتي</h2>
-      <?php if ($permits): ?><span class="hm-count"><?= count($permits) ?></span><?php endif; ?>
+      <?php if ($permitCount): ?><span class="hm-count"><?= (int) $permitCount ?></span><?php endif; ?>
     </div>
 
     <?php if (count($permits) > 5): ?>
       <div class="hm-search">
         <input type="search" id="permitSearch" placeholder="بحث"
                autocomplete="off" aria-label="بحث في الأذونات">
+      </div>
+
+      <?php
+      /* فلاتر القايمة — **كلها في المتصفح** زي البحث بالظبط، فمفيش أي طلب
+         للخادم ولا إعادة تحميل. الشرايح بتتولّد من المعروض فعلاً: ميناء
+         مالوش إذن مفتوح ما يظهرش شريحة فاضية. */
+      $fPorts = [];
+      $fPinned = $fWorked = $fSader = $fWarid = 0;
+      foreach ($permits as $fp) {
+          if (!empty($fp['pinned'])) { $fPinned++; }
+          if (!empty($fp['worked'])) { $fWorked++; }
+          ($fp['type'] === 'warid') ? $fWarid++ : $fSader++;
+          $pt = trim((string) ($fp['port'] ?? ''));
+          if ($pt !== '') { $fPorts[$pt] = ($fPorts[$pt] ?? 0) + 1; }
+      }
+      arsort($fPorts);
+      $fPorts = array_slice($fPorts, 0, 6, true);
+      ?>
+      <div class="hm-fchips" id="permitFilters" aria-label="فلترة الأذونات">
+        <button type="button" class="is-on" data-f="all">الكل <i><?= count($permits) ?></i></button>
+        <?php if ($fPinned): ?>
+          <button type="button" data-f="pinned"><?= icon('star', 14) ?> مثبَّت <i><?= $fPinned ?></i></button>
+        <?php endif; ?>
+        <?php if ($fWorked): ?>
+          <button type="button" data-f="worked">شغّال عليه <i><?= $fWorked ?></i></button>
+        <?php endif; ?>
+        <?php if ($fSader && $fWarid): ?>
+          <button type="button" data-f="sader">صادر <i><?= $fSader ?></i></button>
+          <button type="button" data-f="warid">وارد <i><?= $fWarid ?></i></button>
+        <?php endif; ?>
+        <?php foreach ($fPorts as $pName => $pCnt): ?>
+          <button type="button" data-f="port" data-v="<?= e(mb_strtolower($pName)) ?>">
+            <?= icon('anchor', 14) ?> <?= e($pName) ?> <i><?= $pCnt ?></i></button>
+        <?php endforeach; ?>
       </div>
     <?php endif; ?>
 
@@ -362,6 +478,13 @@ $permitCard = function (array $p) use ($num) {
       <h2>بنود يوم <?= e(dfmt($workDate)) ?></h2>
       <span class="hm-sheet-sub">اللي دخّلته على عهدة اليوم ده بس</span>
     </div>
+
+    <?php /* ⚠️ عرض للقراءة بس — **ما بيغيّرش يوم العمل**. قبل كده كان لازم
+             المندوب يغيّر يوم العمل كله عشان يبصّ على بند إمبارح، وده بيغيّر
+             اليوم اللي هيكتب عليه كمان فيسجّل بند النهاردة على يوم فات. */ ?>
+    <a class="hm-otherday" href="<?= url('m/entries?day=' . e(date('Y-m-d', strtotime($workDate . ' -1 day')))) ?>">
+      <?= icon('clock', 14) ?> شوف بنود يوم تاني <span>بلا ما تغيّر يوم شغلك</span>
+    </a>
 
     <div class="hm-filters" aria-label="فلترة البنود">
       <?php foreach (['' => 'الكل', 'pending' => 'مستني', 'approved' => 'اتقبل', 'rejected' => 'اترفض'] as $k => $label): ?>
@@ -429,7 +552,9 @@ $permitCard = function (array $p) use ($num) {
      <?= $tab === 'permits' ? 'aria-current="page"' : '' ?>>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z"/><path d="M14 3v6h5" class="cut"/></svg>
     <span>أذوناتي</span>
-    <?php if ($permits): ?><i class="hm-badge"><?= count($permits) ?></i><?php endif; ?>
+    <?php /* ⚠️ من العدّاد الرخيص لا من `count($permits)` — القايمة مش محمّلة
+             أصلاً على تبويب «بنودي»، فالشارة كانت هتقول صفر غلط. */ ?>
+    <?php if ($permitCount): ?><i class="hm-badge"><?= (int) $permitCount ?></i><?php endif; ?>
   </a>
   <a href="<?= url('m?tab=entries') ?>" class="<?= $tab === 'entries' ? 'is-on' : '' ?>"
      <?= $tab === 'entries' ? 'aria-current="page"' : '' ?>>
@@ -445,6 +570,45 @@ $permitCard = function (array $p) use ($num) {
     </a>
   <?php endif; ?>
 </nav>
+
+<?php /* ⚠️ مكتبة الأختام — كل شكل **مرّة واحدة** في الصفحة والكروت بتشاور عليه
+         بـ`<use>`. رسم الـSVG كامل جوّه كل كارت كان بيزوّد ٥٢ كيلوبايت على ٣٧
+         كارت، وده بيناقض سبب اختيارنا للرسم بدل الصور من الأساس.
+         بترسم أشكال الصفحة الحالية بس (مفيش رمز بلا مستخدِم). */ ?>
+<?php
+$stampsUsed = [];
+foreach (($permits ?? []) as $sp) {
+    $c = \App\Models\Maintenance::normkey(
+        implode(' ', $sp['container_parts'] ?? []) . ' ' . (string) ($sp['container_type'] ?? ''));
+    if (str_contains($c, 'مبرد')) { $stampsUsed['snowflake'] = 1; continue; }
+    $pt = trim((string) ($sp['port'] ?? ''));
+    if ($pt !== '') { $stampsUsed[$portMark($pt)] = 1; }
+}
+?>
+<?php
+/* أشكال الحاويات المستعملة في الصفحة — نفس مبدأ الأختام: الشكل مرّة واحدة. */
+$boxesUsed = [];
+foreach (($permits ?? []) as $bp) {
+    foreach (($bp['container_parts'] ?? []) as $bpart) {
+        $ba = container_art((string) $bpart);
+        if ($ba !== null) { $boxesUsed[$ba['kind']] = 1; }
+    }
+}
+?>
+<?php if ($stampsUsed || $boxesUsed): ?>
+<svg class="hm-stamp-lib" aria-hidden="true" focusable="false"><?php
+foreach (array_keys($stampsUsed) as $name) {
+    // بنقصّ جوف أيقونة `icon()` — المصدر الوحيد للأشكال يفضل خريطة `icon()`
+    $svg = icon($name, 24);
+    $inner = preg_replace('~^<svg[^>]*>|</svg>$~', '', $svg);
+    echo '<symbol id="stamp-' . e($name) . '" viewBox="0 0 24 24">' . $inner . '</symbol>';
+}
+foreach (array_keys($boxesUsed) as $bk) {
+    echo '<symbol id="box-' . e($bk) . '" viewBox="0 0 64 32" preserveAspectRatio="none">'
+       . container_box_svg($bk) . '</symbol>';
+}
+?></svg>
+<?php endif; ?>
 
 <dialog class="m-confirm" id="mConfirm" aria-labelledby="mConfirmTitle">
   <div class="m-confirm-box">
@@ -553,95 +717,130 @@ $permitCard = function (array $p) use ($num) {
     });
   }
 
-  // ── بحث في الأذونات ──────────────────────────────────
+  // ── بحث وفلترة الأذونات ──────────────────────────────
+  // ⚠️ **مُطبِّق واحد للاتنين**: البحث والفلتر بيشتغلوا على نفس القايمة، فلو
+  //    كل واحد أخفى/أظهر لوحده يبقى التاني بيلغي شغله (تكتب بحث فيرجّع كل
+  //    اللي الفلتر خبّاه). `applyPermitFilters` هي المصدر الوحيد للإخفاء.
   var search = document.getElementById('permitSearch');
-  if (search) {
-    search.addEventListener('input', function () {
-      var q = search.value.trim().toLocaleLowerCase('ar'), shown = 0;
-      document.querySelectorAll('.hm-stub[data-search]').forEach(function (card) {
-        card.hidden = q !== '' && card.dataset.search.indexOf(q) === -1;
-        if (!card.hidden) { shown++; }
-      });
-      document.querySelectorAll('.hm-group').forEach(function (head) {
-        var any = false, node = head.nextElementSibling;
-        while (node && node.classList.contains('hm-stub')) {
-          if (!node.hidden) { any = true; break; }
-          node = node.nextElementSibling;
-        }
-        head.hidden = !any;
-      });
-      document.getElementById('permitNoResults').hidden = shown !== 0;
+  var fbar = document.getElementById('permitFilters');
+  var curF = 'all', curV = '';
+
+  function applyPermitFilters() {
+    var q = search ? search.value.trim().toLocaleLowerCase('ar') : '', shown = 0;
+    document.querySelectorAll('.hm-stub[data-search]').forEach(function (card) {
+      var d = card.dataset;
+      var okQ = q === '' || d.search.indexOf(q) !== -1;
+      var okF = true;
+      if (curF === 'pinned')      { okF = d.pinned === '1'; }
+      else if (curF === 'worked') { okF = d.worked === '1'; }
+      else if (curF === 'sader')  { okF = d.type === 'sader'; }
+      else if (curF === 'warid')  { okF = d.type === 'warid'; }
+      else if (curF === 'port')   { okF = d.port === curV; }
+      card.hidden = !(okQ && okF);
+      if (!card.hidden) { shown++; }
+    });
+    document.querySelectorAll('.hm-group').forEach(function (head) {
+      var any = false, node = head.nextElementSibling;
+      while (node && node.classList.contains('hm-stub')) {
+        if (!node.hidden) { any = true; break; }
+        node = node.nextElementSibling;
+      }
+      head.hidden = !any;
+    });
+    document.getElementById('permitNoResults').hidden = shown !== 0;
+  }
+
+  if (search) { search.addEventListener('input', applyPermitFilters); }
+  if (fbar) {
+    fbar.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-f]');
+      if (!btn) { return; }
+      fbar.querySelectorAll('button').forEach(function (b) { b.classList.remove('is-on'); });
+      btn.classList.add('is-on');
+      curF = btn.dataset.f || 'all';
+      curV = btn.dataset.v || '';
+      vibe(8);
+      applyPermitFilters();
     });
   }
 
-  // ── إشعارات «جديد» (مقارنة محلية بلا هجرة) ───────────
-  var SEEN_P = 'alm:m:seen:permits', SEEN_C = 'alm:m:seen:custody';
+  // ── «جديد» = إذن أول مرة يشوفه المندوب ───────────────
+  /* ⚠️⚠️ الأساس بقى **هوية الإذن** لا وقت إنشائه.
+     الطريقة القديمة كانت علامة زمنية واحدة (`seen = آخر created_at`) وما
+     بتتقدّمش غير لما المندوب يدوس «تمام» — فطلعت مشكلتين حقيقيتين بلّغ عنهم
+     المالك: (١) أي إذن اتفتح بعد العلامة يفضل «جديد» **للأبد**، فبيتجمّع عليه
+     ١٠ و١٥ إذن كلهم مكتوب عليهم جديد؛ (٢) البانر والتنبيه بيرجعوا **كل مرة**
+     يفتح فيها التطبيق لأن العلامة مااتحرّكتش.
+     دلوقتي: بنخزّن **أرقام الأذونات اللي شافها**، واللي مش فيهم يبان «جديد»
+     **المرة دي وبس** ثم يتعلّم متشاف فورًا. يعني حرفيًّا «أول مرة يشوفه». */
+  var SEEN_IDS = 'alm:m:seen:permit-ids';
+  var SEEN_C   = 'alm:m:seen:custody';
   var DEPOSITS = <?= js_json(array_map(fn($d) => ['at' => $d['at'], 'amount' => $d['amount']], $deposits)) ?>;
   var ms = function (v) { var t = Date.parse((v || '').replace(' ', 'T')); return isNaN(t) ? 0 : t; };
-  var maxCardTime = 0;
-  document.querySelectorAll('.hm-stub[data-created]').forEach(function (c) { maxCardTime = Math.max(maxCardTime, ms(c.dataset.created)); });
-  var maxDepTime = DEPOSITS.reduce(function (a, d) { return Math.max(a, ms(d.at)); }, 0);
 
-  var seenP = parseInt(localStorage.getItem(SEEN_P) || '0', 10);
-  var seenC = parseInt(localStorage.getItem(SEEN_C) || '0', 10);
-  // أول مرة خالص: نضبط الأساس على دلوقتي فما نزعّقش بكل الأذونات القديمة
-  var firstRun = !seenP && !seenC;
-  if (firstRun) {
-    try { localStorage.setItem(SEEN_P, String(maxCardTime || Date.now())); localStorage.setItem(SEEN_C, String(maxDepTime || Date.now())); } catch (e) {}
-    seenP = maxCardTime; seenC = maxDepTime;
+  function readSeenIds() {
+    try { var v = JSON.parse(localStorage.getItem(SEEN_IDS) || 'null');
+          return Array.isArray(v) ? v : null; } catch (e) { return null; }
+  }
+  function writeSeenIds(ids) {
+    try { localStorage.setItem(SEEN_IDS, JSON.stringify(ids)); } catch (e) {}
   }
 
+  var cards = [].slice.call(document.querySelectorAll('.hm-stub[data-pid]'));
+  /* ⚠️ الكروت بترسم على تبويب الأذونات بس — لو مفيش كروت (تبويب «بنودي»)
+     **ما نلمسش المخزَّن خالص**، وإلا كل الأذونات تبقى «جديدة» تاني. */
+  if (cards.length) {
+    var shownIds = cards.map(function (c) { return String(c.dataset.pid); });
+    var seen = readSeenIds();
+    if (seen !== null) {
+      var known = {};
+      seen.forEach(function (id) { known[String(id)] = 1; });
+      cards.forEach(function (c) {
+        var isNew = !known[String(c.dataset.pid)];
+        var tag = c.querySelector('.hm-new-tag');
+        if (tag) { tag.hidden = !isNew; }
+        c.classList.toggle('is-new', isNew);
+      });
+    }
+    /* بيتعلّم «متشاف» فورًا — سواء أول تشغيل (فما يزعّقش بكل الأذونات القديمة)
+       أو بعد ما بان «جديد» المرة دي. وبنكتب **المعروض دلوقتي بس** فالمقفول
+       بيتشال من المخزَّن لوحده وما يكبرش مع الوقت. */
+    writeSeenIds(shownIds);
+  }
+
+  /* ── بانر العهدة الجديدة ───────────────────────────────
+     ⚠️ **بقى للعهدة بس** — الأذونات بقى ليها شارة على الكارت نفسه، والبانر
+        عنها كان بيتكرّر كل فتحة. والتنبيه المحلي (`new Notification`) اتشال
+        خالص: نظام الإشعارات الحقيقي (v51/v52) بيبعت `permit.new` للمناديب
+        أصلاً، فكان **خبرين لنفس الحاجة** من قناتين. */
+  var seenC = parseInt(localStorage.getItem(SEEN_C) || '0', 10);
+  var maxDepTime = DEPOSITS.reduce(function (a, d) { return Math.max(a, ms(d.at)); }, 0);
+  if (!seenC) { seenC = maxDepTime; try { localStorage.setItem(SEEN_C, String(seenC)); } catch (e) {} }
+
   function computeFresh() {
-    var newP = 0;
-    document.querySelectorAll('.hm-stub[data-created]').forEach(function (c) {
-      var isNew = ms(c.dataset.created) > seenP;
-      var tag = c.querySelector('.hm-new-tag');
-      if (tag) { tag.hidden = !isNew; }
-      c.classList.toggle('is-new', isNew);
-      if (isNew) { newP++; }
-    });
     var newDeps = DEPOSITS.filter(function (d) { return ms(d.at) > seenC; });
-    var parts = [];
-    if (newP) { parts.push('🆕 نزل لك ' + newP + (newP === 1 ? ' إذن جديد' : ' أذونات جديدة')); }
+    var banner = document.getElementById('freshBanner');
     if (newDeps.length) {
       var sum = newDeps.reduce(function (a, d) { return a + (+d.amount || 0); }, 0);
-      parts.push('💰 نزلت عهدة جديدة ' + sum.toLocaleString('en-US') + ' ج');
-    }
-    var banner = document.getElementById('freshBanner');
-    if (parts.length) {
-      document.getElementById('freshText').textContent = parts.join(' · ');
+      document.getElementById('freshText').textContent =
+        sum > 0 ? ('نزلت عهدة جديدة ' + sum.toLocaleString('en-US') + ' ج') : 'نزلت لك عهدة جديدة';
       banner.hidden = false;
-      notify(parts.join('\n'));
     } else {
       banner.hidden = true;
     }
-    return newP + newDeps.length;
-  }
-
-  // تنبيه نظام (لو المندوب سمح) — بيشتغل والتطبيق مفتوح
-  var lastNotified = '';
-  function notify(body) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') { return; }
-    if (body === lastNotified) { return; }        // ما نكررش نفس التنبيه
-    lastNotified = body;
-    try { new Notification('المتوكل', { body: body, icon: '<?= url('assets/img/logo.png') ?>', tag: 'alm-fresh' }); } catch (e) {}
+    return newDeps.length;
   }
 
   computeFresh();
 
   document.getElementById('freshOk').addEventListener('click', function () {
-    seenP = Math.max(seenP, maxCardTime, Date.now());
     seenC = Math.max(seenC, maxDepTime, Date.now());
-    try { localStorage.setItem(SEEN_P, String(seenP)); localStorage.setItem(SEEN_C, String(seenC)); } catch (e) {}
+    try { localStorage.setItem(SEEN_C, String(seenC)); } catch (e) {}
     computeFresh();
-    // أول ضغطة «تمام» فرصة كويسة نطلب إذن التنبيهات
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(function () {});
-    }
     vibe(10);
   });
 
-  // بوول خفيف كل 60ث والتطبيق مفتوح: يجيب أحدث الأختام فيحدّث الجديد حيًّا
+  // بوول خفيف كل 60ث والتطبيق مفتوح
   function poll() {
     if (document.hidden) { return; }
     fetch('<?= url('m/ping') ?>', { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
@@ -650,14 +849,12 @@ $permitCard = function (array $p) use ($num) {
         if (!d) { return; }
         // التحديث الإجباري بيركب على نفس النداء ده — صفر طلب زيادة
         if (window.AppUpdate && d.build) { window.AppUpdate.seen(d.build); }
-        var pAt = ms(d.permit_at), cAt = ms(d.deposit_at);
-        if (pAt > maxCardTime) { maxCardTime = pAt; }
+        var cAt = ms(d.deposit_at);
         if (cAt > seenC) {
-          // عهدة جديدة نزلت والتطبيق مفتوح — نضيفها كـ«جديدة» دلوقتي
           DEPOSITS.push({ at: d.deposit_at, amount: 0 });
           maxDepTime = Math.max(maxDepTime, cAt);
+          computeFresh();
         }
-        if (pAt > seenP || cAt > seenC) { computeFresh(); }
       }).catch(function () {});
   }
   setInterval(poll, 60000);

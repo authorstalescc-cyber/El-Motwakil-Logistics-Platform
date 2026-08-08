@@ -717,6 +717,15 @@
         const debt = val('freight') <= 0 ? 0
           : Math.max(0, val('freight') - val('custody') - val('transfer') - val('discount') + val('overnight_collection'));
         set('debt', debt);
+        /* مصروفات السيارة (سيارات المكتب) — مطابقة لـ Calc::bawala بالحرف.
+           ⚠️ برّه معادلة الدين تمامًا: الدين فوق اتحسب خلاص وما بيتأثرش بيها.
+           ⚠️ «الباقى من العهدة» بيطلع سالب عادي — ما تحطّش Math.max(0,…). */
+        const EXP = ['driver_share','assistant_share','gas','kawtsh','z_kawtsh','tahia_masr',
+                     'thabtan','permits','cards','overnight_expense','expense','other_expense'];
+        const totalExpense = EXP.reduce((s, c) => s + val(c), 0);
+        set('total_expense', totalExpense);
+        set('custody_remaining', val('custody') - totalExpense);
+        set('car_net', val('freight') - totalExpense);
       } else if (calc === 'takhlis') {
         const tot = val('fees') + val('expenses');
         set('total_statement', tot);
@@ -754,6 +763,45 @@
     };
     btSelect.addEventListener('change', applyType);
     applyType();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     خانات مصروفات السيارة — تظهر لسيارات المكتب بس
+     ═══════════════════════════════════════════════════════════════════════
+     ⚠️ **الخادم هو اللي بيقرّر** عن طريق `/cars/is-office` — ممنوع نسخة تانية
+        من `OfficeCar::plateKey()` هنا (توحيد حروف عربية + فصل أرقام عن حروف)،
+        لأنها هتفترق مع أول تعديل فالخانات تختفي عن سيارة مكتب **بلا أي خطأ**.
+     ⚠️ الحالة الابتدائية مرسومة من الخادم، فلو الجافاسكريبت ما اشتغلش الفورم
+        يفضل صح على البوليصة المحفوظة (بس مش هيتحدّث وانت بتغيّر رقم السيارة).
+     ⚠️ الإخفاء **ما بيمسحش** أي قيمة متكتبة (بعكس data-dep) — رقم سيارة اتغيّر
+        بالغلط كان هيضيّع الأرقام بالسكوت. */
+  const carNoInput = document.querySelector('form[data-calc="bawalis"] [name="car_no"]');
+  const officeEls  = document.querySelectorAll('[data-dep-office]');
+  if (carNoInput && officeEls.length && window.__OFFICE_CAR_CHECK_API) {
+    let seq = 0, timer = 0, lastAsked = null;
+    const paint = (on, name) => {
+      officeEls.forEach((el) => {
+        el.hidden = !on;
+        const note = el.querySelector('.fg-note');
+        if (note) note.textContent = 'سيارات المكتب بس' + (on && name ? ' — ' + name : '');
+      });
+    };
+    const ask = () => {
+      const plate = carNoInput.value.trim();
+      if (plate === lastAsked) return;
+      lastAsked = plate;
+      if (plate === '') { paint(false, ''); return; }
+      const mine = ++seq;
+      fetch(window.__OFFICE_CAR_CHECK_API + '?plate=' + encodeURIComponent(plate),
+            { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then((r) => r.json())
+        .then((d) => { if (mine === seq) paint(!!d.office, d.name || ''); })
+        // ⚠️ الفشل ما يخفيش الخانات: لو الشبكة وقعت والبوليصة لسيارة مكتب،
+        //    الإخفاء كان هيمنع المالك من الإدخال بلا ما يعرف السبب.
+        .catch(() => {});
+    };
+    carNoInput.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(ask, 350); });
+    carNoInput.addEventListener('change', ask);
   }
 
   // ================= شاشة إدارة الإذن: حفظ فوري (AJAX) + اختصارات =================
@@ -887,7 +935,19 @@
   function ensureEmpty() {
     const wrap = document.getElementById('movementsWrap');
     if (wrap && !wrap.querySelector('.movement') && !wrap.querySelector('.empty-mv')) {
-      wrap.innerHTML = '<div class="card empty-mv"><div class="empty" style="padding:32px"><div class="ic">🔀</div>لا حركات بعد — اضغط «➕ حركة جديدة» للبدء.</div></div>';
+      /* ⚠️ لازم يفضل **مطابقًا** للنسخة اللي بيرندرها الخادم في
+         `permits/_body_manage.php` — الخادم بيرسم أيقونة SVG وده كان بيرسم
+         إيموجي (🔀/➕)، فحالة الفراغ كانت بتبان بشكلين: واحد بعد حذف آخر
+         حركة وواحد بعد إعادة تحميل الصفحة.
+         الـSVG مكتوب هنا حرفيًّا (زي `icoAlert` في محرّك النوافذ) لأن خريطة
+         `ICONS` عايشة جوّه IIFE لوحة الأوامر ومش متاحة هنا. */
+      const icoShuffle = '<svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" '
+        + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" '
+        + 'aria-hidden="true" focusable="false"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 '
+        + '2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/>'
+        + '<path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg>';
+      wrap.innerHTML = '<div class="card empty-mv"><div class="empty empty-mv-in">'
+        + '<div class="ic">' + icoShuffle + '</div>لا حركات بعد — اضغط «حركة جديدة» للبدء.</div></div>';
     }
   }
 
@@ -2238,6 +2298,7 @@
         shuffle:    '<path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/>',
         'check-circle': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>',
         x:          '<path d="M18 6 6 18M6 6l12 12"/>',
+        trash:      '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>',
         send:       '<path d="M14.54 21.69a.5.5 0 0 0 .94-.02l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.02.94l7.93 3.18a2 2 0 0 1 1.11 1.11z"/><path d="m21.85 2.15-10.94 10.94"/>',
         bell:       '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
         // أيقونات أنواع المرحلة ٧ (التذكيرات والملخّص اليومي)
@@ -2545,44 +2606,12 @@
     });
   })();
 
-  /* ── إظهار/إخفاء الأرصدة الحسّاسة ──────────────────────────────────────────
-     ⚠️ ده كان **سكربتًا محليًّا في `office/index.php` وبس**، بينما `[data-secret]`
-        مستعملة في شاشات تانية (عهدة المناديب) — يعني الرصيد هناك كان بيفضل
-        `••••••` **للأبد بلا أي طريقة يتشاف بيها**. نفس عائلة باج
-        `.table-mobile-scroll` (خطّاف بيتحقن ومفيش له تنفيذ فيفشل بالسكوت).
-     القاعدة: أي شاشة تحطّ `[data-secret]` مع زر `.secret-toggle` تشتغل تلقائيًّا.
-     الحالة في `sessionStorage` عشان الانتقال بين التبويبات ما يخفيش الأرقام تاني. */
-  (function secretValues() {
-    const KEY = 'almotawakel:secret-shown';
-    const nodes = () => document.querySelectorAll('[data-secret]');
-    if (!nodes().length) return;
-    let shown = false;
-    try { shown = sessionStorage.getItem(KEY) === '1'; } catch (e) { /* وضع خاص */ }
-    nodes().forEach((el) => { if (!el.dataset.mask) el.dataset.mask = el.textContent; });
-    function apply() {
-      nodes().forEach((el) => {
-        el.textContent = shown ? (el.getAttribute('data-val') || '') : (el.dataset.mask || '••••••');
-      });
-      document.querySelectorAll('.secret-toggle').forEach((b) => {
-        b.textContent = shown ? '🙈 إخفاء الأرصدة' : '👁 إظهار الأرصدة';
-        b.setAttribute('aria-pressed', shown ? 'true' : 'false');
-      });
-    }
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.secret-toggle')) return;
-      shown = !shown;
-      try { sessionStorage.setItem(KEY, shown ? '1' : '0'); } catch (err) { /* وضع خاص */ }
-      apply();
-    });
-    apply();
-  })();
-
   /* ═════════════════════════════════════════════════════════════════════
      درج تعديل مستند طرف (v56) — `.js-pdoc-edit` / `.js-pdoc-cancel`
      ─────────────────────────────────────────────────────────────────────
      ⚠️ عايش في `app.js` **العام** مش في <style>/<script> محلي: نفس الماركب
         بيترندر في بروفايل الشركة **و**بروفايل الوكيل. النسخة المحلية كانت
-        هتشتغل في شاشة وتفشل بالسكوت في التانية — نفس باج «إظهار الأرصدة».
+        هتشتغل في شاشة وتفشل بالسكوت في التانية.
      ⚠️ الدرج `hidden` من الخادم فبيشتغل بلا جافاسكريبت كمان: لو الملف ما
         اتحمّلش، الأزرار ما بتعملش حاجة والصفحة تفضل مقروءة.
      ═════════════════════════════════════════════════════════════════════ */
@@ -2639,4 +2668,72 @@
     }
   });
   paint();
+})();
+
+/* ══════════════════════════════════════════════════════════════════════
+   خزنة الشركة `/company-safe` (v66) — اختصارات الفورم.
+
+   ⚠️ **تحسين تدريجي بحت**: نوع الحركة `radio` حقيقي والمبلغ خانة عادية، فلو
+      السكربت ده وقع الفورم لسه بيشتغل بالكامل. اللي بيضيفه هنا اختصارَين:
+        • زرار من الهيرو أو من شريط التصرّف بيختار النوع وينطّ للفورم.
+        • شريحة مبلغ بتملا خانة المبلغ.
+   ⚠️ **بالتفويض على `document`** زي باقي خطّافات الملف — ومحصورة بالصفحة
+      اللي فيها `#csForm` فما بتلمسش أي شاشة تانية.
+   ══════════════════════════════════════════════════════════════════════ */
+(function companySafeForm() {
+  var form = document.getElementById('csForm');
+  if (!form) return;
+
+  /* v67 — الحقول المشروطة بالنوع (فئة المصروف · كارت الفيزا · المندوب).
+     ⚠️ **الإخفاء من الجافاسكريبت لا من الخادم** (نفس قاعدة خانات سيارات المكتب):
+        لو السكربت وقع، المدير لسه شايف كل الخانات ويقدر يسجّل، والخادم هو
+        اللي بيفرض القواعد في `CompanySafe::normalise`.
+     ⚠️ **الإخفاء ما بيمسحش أي قيمة متكتبة** (بعكس `data-dep`) — تبديل النوع
+        بالغلط كان هيضيّع اللي اتكتب. الخادم بيتجاهل الحقل اللي مش بتاع النوع. */
+  function syncKindFields() {
+    var picked = form.querySelector('input[name="kind"]:checked');
+    var kind = picked ? picked.value : '';
+    form.querySelectorAll('[data-cs-for]').forEach(function (el) {
+      var want = el.getAttribute('data-cs-for').split(' ');
+      el.hidden = want.indexOf(kind) === -1;
+    });
+  }
+
+  function pickKind(kind) {
+    var input = form.querySelector('input[name="kind"][value="' + kind + '"]');
+    if (!input) return false;
+    input.checked = true;
+    // ⚠️ `change` لازم يتبعت يدويًّا — التعيين البرمجي ما بيطلقش الحدث،
+    //    وفيه معالج «الفورم اتغيّر» (js-dirty-form) بيسمع عليه.
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    syncKindFields();
+    return true;
+  }
+
+  form.addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'kind') { syncKindFields(); }
+  });
+  syncKindFields();
+
+  document.addEventListener('click', function (e) {
+    var kindBtn = e.target.closest('[data-cs-kind]');
+    if (kindBtn) {
+      e.preventDefault();
+      if (!pickKind(kindBtn.getAttribute('data-cs-kind'))) return;
+      var card = document.getElementById('entry');
+      if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      var amount = document.getElementById('csAmount');
+      if (amount) { setTimeout(function () { amount.focus(); }, 260); }
+      return;
+    }
+    var chip = e.target.closest('[data-cs-amount]');
+    if (chip) {
+      e.preventDefault();
+      var box = document.getElementById('csAmount');
+      if (!box) return;
+      box.value = chip.getAttribute('data-cs-amount');
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      box.focus();
+    }
+  });
 })();

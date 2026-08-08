@@ -48,7 +48,7 @@ $roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0
         <span class="ss-name"><?= e($st['label']) ?></span>
         <?php if ($st['dir']===Permit::DIR_EXPENSE): ?><span class="tl-dir neg">مصروف</span>
         <?php elseif ($st['dir']===Permit::DIR_REVENUE): ?><span class="tl-dir pos">محصّل</span><?php endif; ?>
-        <span style="flex:1"></span>
+        <span class="ps-sp"></span>
         <?php if ($isNone): ?><span class="ss-none" title="مُعلَّم: لا يوجد بند لهذه المرحلة"><?= icon('x', 14) ?> لا يوجد</span>
         <?php elseif (count($entries)): ?><span class="ss-count"><?= intf(count($entries)) ?></span>
         <?php elseif ($autoPrimary): ?><span class="ss-count" title="محسوبة تلقائيًا">تلقائي</span><?php endif; ?>
@@ -74,8 +74,8 @@ $roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0
                 <td class="<?= $amtCls ?>"><?= money($en['amount'],false) ?>
                   <?php $eqty=max(1,(int)($en['qty']??1)); if($eqty>1): ?><span class="te-qty" title="الكمية × سعر الوحدة"><?= intf($eqty) ?> × <?= money(round((float)$en['amount']/$eqty,2),false) ?></span><?php endif; ?>
                   <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge"><?= icon('credit-card', 14) ?> فيزا</span><?php endif; ?></td>
-                <?php if($key!=='primary_fees'): ?><td style="font-weight:500;color:var(--navy)"><?= (isset($en['actual_amount'])&&$en['actual_amount']!==null&&$en['actual_amount']!=='') ? money($en['actual_amount'],false) : '—' ?></td><?php endif; ?>
-                <td style="text-align:right"><?= e($en['note'] ?: '—') ?></td>
+                <?php if($key!=='primary_fees'): ?><td class="mv-ref"><?= (isset($en['actual_amount'])&&$en['actual_amount']!==null&&$en['actual_amount']!=='') ? money($en['actual_amount'],false) : '—' ?></td><?php endif; ?>
+                <td class="txt"><?= e($en['note'] ?: '—') ?></td>
                 <td><?= e($en['ref_no'] ?: '—') ?></td>
                 <td><?= $statusBadge($en['status']) ?></td>
                 <td><?php if($en['attachment']): ?><a href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank"><?= icon('file-text', 14) ?></a><?php else: ?>—<?php endif; ?></td>
@@ -143,7 +143,7 @@ if ($permitMoney):
 <div class="sec-head"><span><?= icon('shuffle', 14) ?> الحركات (<?= intf(count($movements)) ?>)</span></div>
 
 <?php if (!$movements): ?>
-  <div class="card"><div class="empty" style="padding:32px"><div class="ic"><?= icon('shuffle', 14) ?></div>لا حركات مسجّلة على هذا الإذن.</div></div>
+  <div class="card"><div class="empty empty-mv-in"><div class="ic"><?= icon('shuffle', 14) ?></div>لا حركات مسجّلة على هذا الإذن.</div></div>
 <?php else: ?>
   <?php $mvNo=0; foreach ($movements as $mv): $mid=(int)$mv['id']; $mvNo++;
     $mvBills = $mv['bills']; $mvStagesG = $mv['stages'];
@@ -158,7 +158,7 @@ if ($permitMoney):
       <summary class="mv-head">
         <span class="mv-seq"><?= icon('shuffle',16) ?> حركة #<?= intf($mv['seq']) ?></span>
         <?php if($mv['note']): ?><span class="mv-note"><?= e($mv['note']) ?></span><?php endif; ?>
-        <span style="flex:1"></span>
+        <span class="ps-sp"></span>
         <span class="mv-stats">
           <span title="عدد البوالص"><?= icon('truck', 14) ?> <?= intf(count($mvBills)) ?></span>
           <span class="pos" title="العهدة"><?= icon('coins', 14) ?> <?= money($mvCust,false) ?></span>
@@ -188,7 +188,7 @@ if ($permitMoney):
             <details class="stage <?= $bills?'has':'' ?>" <?= $bills?'open':'' ?>>
               <summary class="stage-sum">
                 <span class="ss-ic <?= $bills?'ok':'' ?>"><?= $bills?'✓':'🚛' ?></span>
-                <span class="ss-num"><?= $si ?></span><span class="ss-name">البوالص</span><span style="flex:1"></span>
+                <span class="ss-num"><?= $si ?></span><span class="ss-name">البوالص</span><span class="ps-sp"></span>
                 <?php if (count($bills)): ?><span class="ss-count"><?= intf(count($bills)) ?></span><?php endif; ?>
                 <a class="ss-act" href="<?= $manageUrl('bills',$mid) ?>" title="تعديل البوالص" onclick="event.stopPropagation()"><?= icon('edit', 14) ?></a>
                 <a class="ss-act add" href="<?= $manageUrl('bills',$mid) ?>" title="إضافة بوليصة" onclick="event.stopPropagation()"><?= icon('plus', 14) ?></a>
@@ -205,7 +205,7 @@ if ($permitMoney):
                     </tr></thead><tbody>
                     <?php foreach ($bills as $bl): ?>
                       <tr>
-                        <td style="font-weight:500"><?= e($bl['bill_number'] ?: '—') ?></td>
+                        <td class="mv-ref"><?= e($bl['bill_number'] ?: '—') ?></td>
                         <td><?= dfmt($bl['bill_date']) ?></td>
                         <td><?= e($bl['driver']) ?></td>
                         <td><?= e($bl['car_no']) ?></td>
@@ -230,13 +230,13 @@ if ($permitMoney):
             if ($has): ?>
             <details class="stage has">
               <summary class="stage-sum"><span class="ss-ic ok"><?= icon('check', 14) ?></span><span class="ss-num"><?= $si ?></span>
-                <span class="ss-name">المولدات</span><span style="flex:1"></span>
+                <span class="ss-name">المولدات</span><span class="ps-sp"></span>
                 <span class="ss-count"><?= intf(count($generators)) ?></span><span class="ss-chev">▾</span></summary>
               <div class="stage-body"><div class="table-wrap"><table class="data">
                 <thead><tr><th class="g-identity">التاريخ</th><th class="g-identity">الشركة</th>
                   <th class="g-vehicle">العدد</th><th class="g-revenue">النولون</th><th class="g-result">المتبقي</th></tr></thead>
                 <tbody><?php foreach ($generators as $g): ?>
-                  <tr><td><?= dfmt($g['gen_date']) ?></td><td style="text-align:right"><?= e($g['company']) ?></td>
+                  <tr><td><?= dfmt($g['gen_date']) ?></td><td class="txt"><?= e($g['company']) ?></td>
                     <td><?= intf($g['gen_count']) ?></td><td class="pos"><?= money($g['freight'],false) ?></td>
                     <td class="<?= $g['remaining']>0?'neg':'pos' ?>"><?= money($g['remaining'],false) ?></td></tr>
                 <?php endforeach; ?></tbody></table></div></div>

@@ -335,6 +335,152 @@ try {
     str_contains($mHtml, 'assets/css/m.css')
         ? ok('وبتحمّل m.css (البوابة برّه تخطيط المكتب)') : bad('شاشة المندوب بتحمّل ملف غلط');
 
+    // ══════════════════════════════════════ ⑫ب نصّ الإشعار فعليًّا
+    sec('⑫ب الإشعار: بيتبعت فعلاً وبيقول حاجة مفيدة');
+
+    /* بنبعت إشعارات حقيقية جوّه المعاملة وبنقرا الصف المتسجّل — رندر النص
+       بس ما بيمسكش الفرق بين «اتسجّل» و«اتخطّى بلا مستلمين». والإرسال للموبايل
+       مكتوم في CLI فمفيش أي رنّة بتطلع (PushNotify::enabled = false). */
+    $canEmit = \App\Models\Notify::available()
+        && count(\App\Models\Notify::recipientsFor('office', 'PermitController@index')) > 0;
+
+    if (!$canEmit) {
+        ok('⚠️ اتخطّى فحص الإشعار — مفيش مستلمين مكتب في القاعدة دي');
+    } else {
+        $lastNotif = function () {
+            return Database::row("SELECT * FROM notifications ORDER BY id DESC LIMIT 1") ?: [];
+        };
+        $before = (int) (Database::scalar("SELECT COALESCE(MAX(id),0) FROM notifications") ?? 0);
+
+        // ① مرحلة على الإذن كله
+        \App\Models\PushNotify::trackStage([
+            'permit_id' => $pid, 'stage_key' => $stages[2]['key'], 'bill_id' => 0,
+            'source' => PermitTrack::SRC_OFFICE, 'by' => '__tr_user',
+        ]);
+        $n = $lastNotif();
+        ((int) ($n['id'] ?? 0) > $before && ($n['kind'] ?? '') === 'track.stage')
+            ? ok('★ الإشعار اتسجّل فعلاً بنوع track.stage') : bad('مفيش إشعار اتسجّل');
+        str_contains((string) ($n['title'] ?? ''), $stages[2]['label'])
+            ? ok('والعنوان فيه اسم المرحلة') : bad('اسم المرحلة مش في العنوان');
+        str_contains((string) ($n['title'] ?? ''), '__tr_sader')
+            ? ok('ورقم الإذن') : bad('رقم الإذن مش في العنوان');
+        str_contains((string) ($n['body'] ?? ''), '__tr_cl')
+            ? ok('والجسم فيه العميل') : bad('العميل مش في الجسم');
+        str_contains((string) ($n['body'] ?? ''), 'من ' . count($stages))
+            ? ok('والتقدّم (مرحلة كذا من كذا)') : bad('التقدّم مش في الجسم');
+        str_contains((string) ($n['body'] ?? ''), '__tr_user')
+            ? ok('واسم اللي حدّثها') : bad('اسم المحدِّث مش في الجسم');
+        str_contains((string) ($n['url'] ?? ''), '#journey')
+            ? ok('والرابط بيفتح على لوح الرحلة مباشرةً') : bad('الرابط مش موجّه للوح الرحلة');
+        ($n['actor_type'] ?? '') === 'user'
+            ? ok('وactor_type=user لتسجيل المكتب') : bad('نوع الفاعل غلط لتسجيل المكتب');
+
+        /* ⚠️ قاعدة v35: الإشعار بيمرّ في مسار المندوب فممنوع يحمل أي مبلغ. */
+        !preg_match('/\d[\d,]*\.\d{2}|ج\.م/u', (string) ($n['title'] ?? '') . ' ' . ($n['body'] ?? ''))
+            ? ok('★ وولا مبلغ في الإشعار (قاعدة v35)') : bad('مبلغ وصل نص الإشعار');
+
+        // ② مرحلة على بوليصة بعينها → العربية والسائق
+        \App\Models\PushNotify::trackStage([
+            'permit_id' => $pid, 'stage_key' => $stages[3]['key'], 'bill_id' => $billA,
+            'source' => PermitTrack::SRC_REP, 'by' => '__tr_rep',
+        ]);
+        $nb = $lastNotif();
+        (str_contains((string) ($nb['body'] ?? ''), '__tr_b1')
+         && str_contains((string) ($nb['body'] ?? ''), 'ط ف ر 1111')
+         && str_contains((string) ($nb['body'] ?? ''), '__tr_drv'))
+            ? ok('★ حدث البوليصة فيه رقمها وعربيتها وسايقها')
+            : bad('بيانات البوليصة ناقصة من الإشعار: ' . ($nb['body'] ?? ''));
+        ($nb['actor_type'] ?? '') === 'rep'
+            ? ok('وactor_type=rep لتسجيل المندوب') : bad('نوع الفاعل غلط لتسجيل المندوب');
+
+        // ③ المرحلة النهائية لها نبرة مختلفة
+        \App\Models\PushNotify::trackStage([
+            'permit_id' => $pid, 'stage_key' => $stages[count($stages) - 1]['key'], 'bill_id' => 0,
+            'source' => PermitTrack::SRC_OFFICE, 'by' => '__tr_user',
+        ]);
+        str_contains((string) ($lastNotif()['title'] ?? ''), 'خلصت الرحلة')
+            ? ok('★ والمرحلة النهائية بتقول «خلصت الرحلة»') : bad('المرحلة النهائية زي أي مرحلة');
+
+        // ④ التراجع خبر مستقل بنبرة تحذير
+        \App\Models\PushNotify::trackStage([
+            'permit_id' => $pid, 'stage_key' => $stages[2]['key'], 'bill_id' => 0,
+            'source' => PermitTrack::SRC_OFFICE, 'by' => '__tr_user', 'undo' => true,
+        ]);
+        $nu = $lastNotif();
+        str_contains((string) ($nu['title'] ?? ''), 'رجعت الحالة')
+            ? ok('والتراجع بيتبعت كخبر واضح') : bad('التراجع ما بيبعتش خبر مفهوم');
+        ($nu['severity'] ?? '') === 'warn'
+            ? ok('★ وبنبرة تحذير (رجوع لورا مش تقدّم)') : bad('التراجع بنبرة عادية');
+
+        // ⑤ إذن مش موجود = مفيش إشعار وهمي
+        $cnt = (int) Database::scalar("SELECT COUNT(*) FROM notifications");
+        \App\Models\PushNotify::trackStage([
+            'permit_id' => 99999999, 'stage_key' => $stages[0]['key'], 'by' => 'x',
+        ]);
+        (int) Database::scalar("SELECT COUNT(*) FROM notifications") === $cnt
+            ? ok('وإذن مش موجود ما بيولّدش إشعار') : bad('اتبعت إشعار عن إذن مش موجود');
+
+        /* ══ ⑥ الحدث بيوصل المناديب كمان (قرار المالك 2026-08-02) ══════════ */
+        $activeReps = Database::all("SELECT id FROM reps WHERE status = 'active' LIMIT 2");
+        if (!$activeReps) {
+            ok('⚠️ اتخطّى فحص وصول المناديب — مفيش مندوب نشط في القاعدة دي');
+        } else {
+            \App\Models\PushNotify::trackStage([
+                'permit_id' => $pid, 'stage_key' => $stages[1]['key'], 'bill_id' => 0,
+                'source' => PermitTrack::SRC_OFFICE, 'by' => '__tr_user',
+            ]);
+            $nid = (int) Database::scalar("SELECT MAX(id) FROM notifications");
+            $kinds = array_column(Database::all(
+                "SELECT DISTINCT party_type FROM notification_recipients WHERE notification_id = ?",
+                [$nid]), 'party_type');
+            (in_array('rep', $kinds, true) && in_array('user', $kinds, true))
+                ? ok('★ الحدث وصل المكتب والمناديب مع بعض') : bad('الجمهور لسه المكتب بس: ' . implode(',', $kinds));
+
+            /* ⚠️ أهم فحص في التوسيع: رابط المندوب لازم يبقى بوابته هو، وإلا
+               يدوس على الإشعار ويتقذف على شاشة دخول المكتب. */
+            $row = Database::row("SELECT * FROM notifications WHERE id = ?", [$nid]);
+            \App\Models\Notify::urlFor($row, 'rep') === 'm/permit/' . $pid . '/track'
+                ? ok('★ ورابط المندوب بوابته هو مش صفحة المكتب')
+                : bad('رابط المندوب ميت: ' . \App\Models\Notify::urlFor($row, 'rep'));
+            str_contains(\App\Models\Notify::urlFor($row, 'user'), 'permits/' . $pid)
+                ? ok('ورابط المكتب زي ما هو') : bad('رابط المكتب اتغيّر');
+
+            /* الحارس العام: أي حدث بلا بديل ورابطه صفحة مكتب = بلا رابط عند
+               المندوب — خبر يُقرا أهون من رابط بيرمي ٤٠٣. */
+            \App\Models\Notify::urlFor(['url' => 'closing', 'meta_json' => null], 'rep') === ''
+                ? ok('★ وصفحة مكتب بلا بديل بتوصل المندوب بلا رابط بدل رابط ميت')
+                : bad('رابط مكتب ميت بيعدّي للمندوب');
+            \App\Models\Notify::urlFor(['url' => 'm/settle', 'meta_json' => null], 'rep') === 'm/settle'
+                ? ok('ورابط البوابة بيعدّي زي ما هو') : bad('رابط بوابة سليم اتشال');
+
+            // اللي عمل الإجراء ما بيرنّش على نفسه
+            $rid = (string) $activeReps[0]['id'];
+            \App\Models\PushNotify::trackStage([
+                'permit_id' => $pid, 'stage_key' => $stages[6]['key'], 'bill_id' => 0,
+                'source' => PermitTrack::SRC_REP, 'by' => '__tr_rep', 'actor_key' => $rid,
+            ]);
+            $nid2 = (int) Database::scalar("SELECT MAX(id) FROM notifications");
+            (int) Database::scalar(
+                "SELECT COUNT(*) FROM notification_recipients
+                  WHERE notification_id = ? AND party_type = 'rep' AND party_key = ?", [$nid2, $rid]) === 0
+                ? ok('★ واللي حدّثها بنفسه ما رنّش عليه') : bad('المندوب اترنّ على إجراء عمله هو');
+            (int) Database::scalar(
+                "SELECT COUNT(*) FROM notification_recipients
+                  WHERE notification_id = ? AND party_type = 'user'", [$nid2]) > 0
+                ? ok('والمكتب أخد الخبر عادي') : bad('الاستثناء شال مستلمين غلط');
+        }
+    }
+
+    /* ⚠️ الحارس اللي بيمنع الرنّة المكرّرة: `hasEvent` بترجّع true بعد التسجيل،
+       فالكنترولر يعرف إن إعادة الحفظ مش «حالة اتغيّرت». */
+    PermitTrack::hasEvent($pid, $stages[0]['key'], 0)
+        ? ok('★ hasEvent بتشوف المرحلة المسجَّلة') : bad('hasEvent ما شافتش مرحلة مسجَّلة');
+    !PermitTrack::hasEvent($pid, $stages[5]['key'], 0)
+        ? ok('وما بتشوفش مرحلة لسه ما اتسجّلتش') : bad('hasEvent بترجّع true على مرحلة مش موجودة');
+
+    PermitTrack::eventContext(99999999, $stages[0]['key']) === null
+        ? ok('وeventContext بترجّع null لإذن مش موجود') : bad('eventContext بترجّع سياق لإذن وهمي');
+
 } catch (\Throwable $e) {
     bad('استثناء غير متوقّع: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
 } finally {
@@ -380,7 +526,10 @@ $repGreedy = strpos($routes, "'/m/permit/{id}',  'RepPortalController@entryForm'
     ? ok('ومسار المندوب حرفي قبل الجشع /m/permit/{id}') : bad('ترتيب مسارات البوابة غلط');
 
 has('نوع الإشعار track.stage في KINDS', 'app/Models/Notify.php', "'track.stage'");
-has('وله جمهور في ROUTES', 'app/Models/Notify.php', "'track.stage'           => ['office'");
+/* ⚠️ `both` بقرار المالك (2026-08-02) — والمندوب لازم ياخد `meta.rep_url`
+      وإلا الإشعار يوصله برابط صفحة مكتب مقفولة عليه. */
+has('وجمهوره both (المكتب والمناديب)', 'app/Models/Notify.php', "'track.stage'           => ['both'");
+has('وبيخزّن رابط بوابة المندوب', 'app/Models/PushNotify.php', "'rep_url' => 'm/permit/");
 has('وPushNotify::trackStage موجودة', 'app/Models/PushNotify.php', 'function trackStage');
 /* ⚠️ الأيقونة لازم تكون في الخريطتين: icon() للصفحة وapp.js للجرس. */
 str_contains(src('public/assets/js/app.js'), "'map-pin'")
@@ -409,6 +558,29 @@ has('وإنشاء البوليصة بيسجّل أول مرحلة عليها',
 $pc = code_only('app/Controllers/PermitController.php');
 $wrapped = preg_match_all('~try\s*\{\s*[^}]*PermitTrack::~s', $pc);
 $wrapped >= 2 ? ok('★ والهوكان ملفوفان في try/catch') : bad('هوك تلقائي بلا try/catch — ممكن يوقف حفظ بوليصة');
+
+/* ⚠️ **كل مسارات الكتابة التلاتة لازم تبعت** — كان مسار المكتب ساكتًا تمامًا:
+      المندوب يحدّث فالمكتب يعرف، والمكتب يحدّث فمحدش يعرف. */
+$rpc = code_only('app/Controllers/RepPortalController.php');
+foreach ([
+    ['المكتب: تسجيل المرحلة بيبعت إشعار', $pc,  'trackStage'],
+    ['المندوب: تسجيل المرحلة بيبعت إشعار', $rpc, 'trackStore'],
+] as [$label, $code, $method]) {
+    // نقصّ جسم الدالة لحد أول `\n    }` عشان ما نبلعش اللي بعدها
+    $body = preg_match('~function ' . $method . '\(.*?\n    \}~s', $code, $m) ? $m[0] : '';
+    (str_contains($body, 'PushNotify::trackStage') && str_contains($body, 'PermitTrack::hasEvent'))
+        ? ok($label . ' — ومشروط بأنها مرحلة جديدة')
+        : bad($label . ' ناقص أو بلا حارس التكرار');
+}
+$undoBody = preg_match('~function trackUndo\(.*?\n    \}~s', $pc, $m) ? $m[0] : '';
+str_contains($undoBody, 'PushNotify::trackStage')
+    ? ok('والتراجع بيبعت إشعار كمان') : bad('التراجع بيشيل مرحلة بلا ما حد يعرف');
+
+/* ⚠️ `systemMark` **ممنوعة تبعت** — نقطتا النداء بيبعتوا `bill.linked` و
+      `permit.closed` أصلاً، فإشعار حالة كمان = نفس الخبر مرتين. */
+$smBody = preg_match('~function systemMark\(.*?\n    \}~s', code_only('app/Models/PermitTrack.php'), $m) ? $m[0] : '';
+($smBody !== '' && !str_contains($smBody, 'PushNotify'))
+    ? ok('★ والتسجيل التلقائي ساكت عن قصد (مفيش خبر مكرّر)') : bad('systemMark بتبعت إشعار مكرّر');
 
 echo "\n" . str_repeat('═', 62) . "\n";
 echo "اترجّع كل شيء (rollback) — مفيش أي أثر.\n";

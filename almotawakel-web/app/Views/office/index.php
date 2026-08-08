@@ -13,7 +13,6 @@ $od = static fn (string $what): string => url('office/drill/' . $what);
 <div class="toolbar">
   <div class="section-head" style="margin:0"><?= icon('credit-card', 18) ?> رصيد المكتب — كروت الفيزا</div>
   <div class="spacer"></div>
-  <button type="button" class="btn ghost secret-toggle" aria-pressed="false"><?= icon('search', 14) ?> إظهار الأرصدة</button>
   <a class="btn gold" href="<?= url('office/new') ?>?back=<?= urlencode(current_app_path() ?: 'office') ?>"><?= icon('plus', 15) ?> إضافة كارت</a>
 </div>
 
@@ -21,8 +20,7 @@ $od = static fn (string $what): string => url('office/drill/' . $what);
   <?php partial('stat', [
     'label' => 'إجمالي الأرصدة المتاحة', 'value' => intf($summary['balance']),
     'unit'  => intf($summary['count']) . ' كارت',
-    'icon'  => 'credit-card', 'tone' => 'gold', 'secret' => true,
-    'drill' => $od('balance'), 'title' => 'رصيد كل كارت',
+    'icon'  => 'credit-card', 'tone' => 'gold', 'drill' => $od('balance'), 'title' => 'رصيد كل كارت',
   ]); ?>
   <?php partial('stat', [
     'label' => 'إجمالي الشحنات', 'value' => intf($summary['deposits'] + $summary['opening']),
@@ -66,7 +64,6 @@ $od = static fn (string $what): string => url('office/drill/' . $what);
         'value' => money($c['balance'], false),
         'value_label' => 'الرصيد المتاح',
         'value_tone'  => $c['balance'] < 0 ? 'neg' : 'pos',
-        'secret' => true,
         'alert'  => $c['balance'] < 0,
         'tags'   => $tags,
       ]);
@@ -96,6 +93,3 @@ $od = static fn (string $what): string => url('office/drill/' . $what);
   ]); ?>
 <?php endif; ?>
 
-<?php /* ⚠️ سكربت إظهار/إخفاء الأرصدة عام في `app.js` — كان محليًّا هنا بس،
-         فشاشات تانية بتستخدم `[data-secret]` كانت بتفضل مقنّعة للأبد بلا أي
-         زرار يكشفها. ما ترجّعهوش هنا وإلا الضغطة تتنفّذ مرتين. */ ?>

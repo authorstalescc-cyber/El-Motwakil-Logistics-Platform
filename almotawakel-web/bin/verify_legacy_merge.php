@@ -95,17 +95,47 @@ $wrongPending = (int) Database::scalar(
 );
 $check($wrongPending === 0, 'البوالص القديمة بلا نولون أو دفعة تظهر بانتظار النولون', (string)$wrongPending);
 
-$payCount = (int)Database::scalar(
-    'SELECT COUNT(*) FROM bill_payments p JOIN bawalis b ON b.id=p.bill_id
-      WHERE p.is_legacy=1 AND b.is_legacy=1 AND b.legacy_id IS NOT NULL'
+/* ⚠️ الدفعات تتبع **نفس فلسفة البوالص فوق**: الأرشيف لقطة مجمّدة ليوم 2026-07-06،
+   وملف الإكسل فضل شغّال بعده — فدفعة اتسجّلت في الإكسل بعد اللقطة بتتزامن للنظام
+   (`bin/sync_bawalis_from_excel.php`) وبتخلّي الإجمالي **أعلى** من الأرشيف عن قصد.
+   عشان كده المطابقة الصارمة بتتعمل على **الصفوف اللي ما اتلمستش بعد الاستيراد**
+   (`updated_at = created_at`) زي فحص `pristineMismatch` بالظبط، والزيادة بتتقفل
+   كمعلومة. مقارنة الإجمالي المجمّد كانت بتفشل بإنذار كاذب مع أول مزامنة مشروعة. */
+/* ⚠️⚠️ ممنوع نبني الفحص على `updated_at = created_at` زي فحص البوالص فوق —
+   **متحقَّق إن صف واحد بس من 1738 لسه بالعلامة دي**، فالشرط ده بيدّي «0 / 0»
+   وينجح كذبًا (نفس مصيدة الفحص الفاضي الموثَّقة). الثوابت اللي تحت مبنيّة على
+   البيانات كلها ومستحيل تبقى فاضية. */
+
+/* ① ولا دفعة تاريخية ضاعت: المدفوع لكل بوليصة أرشيفية لازم ≥ اللي في اللقطة.
+      (المزامنة بتضيف دفعات وعمرها ما بتشيل — النقص معناه فقدان بيانات.) */
+$payLost = (int)Database::scalar(
+    'SELECT COUNT(*) FROM bawalis b JOIN legacy_bawalis l ON l.src_row=b.legacy_id
+      WHERE b.is_legacy=1 AND b.paid + 0.005 < l.payment'
 );
-$sourcePayCount = (int)Database::scalar('SELECT COUNT(*) FROM legacy_bawalis WHERE ABS(payment)>0.005');
-$paySum = (float)Database::scalar(
+$check($payLost === 0, 'ولا دفعة من لقطة الأرشيف ضاعت (المدفوع ≥ الأرشيف لكل بوليصة)', (string)$payLost);
+
+/* ② إجمالي الدفعات التاريخية أرضيته لقطة الأرشيف. */
+$paySumAll = (float)Database::scalar(
     'SELECT COALESCE(SUM(p.amount),0) FROM bill_payments p JOIN bawalis b ON b.id=p.bill_id
       WHERE p.is_legacy=1 AND b.is_legacy=1 AND b.legacy_id IS NOT NULL'
 );
-$check($payCount === $sourcePayCount, 'عدد الدفعات التاريخية مطابق', "$payCount / $sourcePayCount");
-$check(abs($paySum - (float)$expected['paid']) < 0.01, 'مجموع الدفعات التاريخية مطابق', (string)$paySum);
+$check($paySumAll + 0.01 >= (float)$expected['paid'],
+       'إجمالي الدفعات التاريخية ما قلّش عن الأرشيف (أرضية)',
+       number_format($paySumAll, 2) . ' ≥ ' . number_format((float)$expected['paid'], 2));
+
+/* ③ الثابت الحاسم: الزيادة عن الأرشيف = مجموع الدفعات المتزامنة من الإكسل
+      **بالمليم**. أي فرق معناه دفعة دخلت من مسار مش متتبَّع. */
+$syncedPay = Database::row(
+    "SELECT COUNT(*) n, COALESCE(SUM(p.amount),0) amt
+       FROM bill_payments p JOIN bawalis b ON b.id=p.bill_id
+      WHERE p.is_legacy=1 AND b.is_legacy=1 AND b.legacy_id IS NOT NULL
+        AND p.note LIKE '%مزامنة%'"
+);
+$excess = round($paySumAll - (float)$expected['paid'], 2);
+$check(abs($excess - round((float)$syncedPay['amt'], 2)) < 0.01,
+       'الزيادة عن الأرشيف = الدفعات المتزامنة من الإكسل بالظبط',
+       number_format($excess, 2) . ' = ' . number_format((float)$syncedPay['amt'], 2)
+       . ' (' . $syncedPay['n'] . ' دفعة)');
 
 // تشغيل أهم مجاميع العرض فعليًا يكشف أي خطأ SQL في فلاتر is_legacy قبل تسليم النظام.
 $smoke = [

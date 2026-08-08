@@ -105,7 +105,7 @@
 | POST | `/{entity}/{id}` | `{Ctrl}@update` |
 | POST | `/{entity}/{id}/delete` | `{Ctrl}@destroy` |
 
-إضافات خاصة: `GET /bawalis/{id}` → `BawalisController@show` • `POST /bawalis/bulk-freight` → تحديث نولون مجموعة • `POST /bawalis/bulk-owner` → تغيير صاحب البيان لمجموعة • `GET /bawalis/check-number` → فحص الرقم حيًا • `POST /bawalis/bulk-paste` → لصق دفعة من Excel • `GET /bawalis/new-legacy` + `POST /bawalis/legacy` → إضافة بوليصة قديمة يدوية معزولة • `GET /shamil/{id}/invoice` → `ShamilController@invoice`. كل المسارات الحرفية للبوالص يجب أن تسبق `/bawalis/{id}` الجشع.
+إضافات خاصة: `GET /bawalis/{id}` → `BawalisController@show` • `GET /bawalis/excel-sync` → قائمة صفوف Excel (للمالك/المدير) • `GET /bawalis/excel-sync/review?row=` → مقارنة **كل بيانات بوليصة واحدة** بين النظام وExcel مع اختيار مستقل لكل حقل • `POST` ثم `GET /bawalis/excel-sync/confirm` → إنشاء وعرض مراجعة نهائية مؤقتة لما اختاره المستخدم فقط • `POST /bawalis/excel-sync/upload` → رفع أحدث نسخة XLSX إلى التخزين المحمي بعد فحص البنية • `POST /bawalis/excel-sync/apply` → تنفيذ الحقول المختارة لبوليصة واحدة فقط داخل transaction وبصمة صف وسجل تدقيق (لا يوجد «اعتماد الكل») • `POST /bawalis/bulk-freight` → تحديث نولون مجموعة • `POST /bawalis/bulk-owner` → تغيير صاحب البيان لمجموعة • `GET /bawalis/check-number` → فحص الرقم حيًا • `POST /bawalis/bulk-paste` → لصق دفعة من Excel • `GET /bawalis/new-legacy` + `POST /bawalis/legacy` → إضافة بوليصة قديمة يدوية معزولة • `GET /shamil/{id}/invoice` → `ShamilController@invoice`. كل المسارات الحرفية للبوالص يجب أن تسبق `/bawalis/{id}` الجشع.
 
 > **أدوات الجداول العامة:** `public/assets/js/app.js` يفعّل تلقائيًا كل `table.data` و`table.pv-tbl`: ترتيب الأعمدة، إخفاء/إظهار، كثافة مدمجة/مريحة، تثبيت العمود الأول، تغيير عرض الأعمدة بالسحب، وتصدير الأعمدة الظاهرة CSV. الاختيارات تُحفظ في `localStorage` لكل مسار وبصمة عناوين الجدول، وأعمدة checkbox تظل ظاهرة حتى لا تتعطل إجراءات المجموعات. قوائم CRUD ترتّب من الخادم حتى يشمل الترتيب كل الصفحات، و`MutationObserver` يفعّل الأدوات نفسها للجداول المضافة عبر AJAX أو Popup. استخدم `data-no-sort`/`data-no-hide` على `<th>` للاستثناء، أو `data-table-tools-off` على الجدول لتعطيل الميزة كاملة.
 
@@ -209,6 +209,14 @@
 | GET | `/cars/drill/{what}` | OfficeCarController@drill (تفاصيل الأرقام — حرفي قبل الجشع) |
 | POST | `/cars` | OfficeCarController@store |
 | POST | `/cars/expense/{eid}/delete` | OfficeCarController@deleteExpense (حرفي قبل الجشع) |
+| GET | `/cars/{id}/driver` | OfficeDriverController@index (حساب السائق — v65) |
+| GET | `/cars/{id}/driver/bill/{bid}` | OfficeDriverController@bill (بيان بوليصة) |
+| POST | `/cars/{id}/driver/bill/{bid}` | OfficeDriverController@saveBill |
+| POST | `/cars/{id}/driver/movement` | OfficeDriverController@addMovement |
+| POST | `/cars/{id}/driver/movement/{mid}/delete` | OfficeDriverController@deleteMovement |
+| GET | `/cars/{id}/driver/print` | OfficeDriverController@printable (بيان A4) |
+| POST | `/cars/{id}/driver/issue` | OfficeDriverController@issue (حفظ لقطة ثابتة) |
+| GET | `/cars/{id}/driver/print/{sid}` | OfficeDriverController@printSaved |
 | GET | `/cars/{id}/edit` | OfficeCarController@edit |
 | GET | `/cars/{id}/report` | OfficeCarController@report (تقرير أداء A4) |
 | POST | `/cars/{id}/expense` | OfficeCarController@storeExpense |

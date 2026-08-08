@@ -216,20 +216,87 @@ class PermitTrack
     }
 
     /**
+     * المرحلة دي مسجَّلة على الهدف ده فعلاً؟
+     *
+     * ⚠️ **دي اللي بتفرّق بين «حدث جديد» و«تعديل بيانات حدث قايم»** — و`record`
+     *    بتعمل `ON DUPLICATE KEY UPDATE` فمستحيل تعرف الفرق من نتيجتها. الكنترولر
+     *    بينادّيها **قبل** التسجيل عشان يقرّر يبعت إشعار ولا لأ: إعادة تسجيل نفس
+     *    المرحلة (تصحيح ملاحظة أو تاريخ) مش «حالة اتغيّرت» وما تستاهلش رنّة.
+     */
+    public static function hasEvent(int $permitId, string $stageKey, int $billId = self::WHOLE_PERMIT): bool
+    {
+        if (!self::ready()) { return false; }
+        return (bool) Database::scalar(
+            'SELECT id FROM permit_track_events WHERE permit_id = ? AND bill_id = ? AND stage_key = ?',
+            [$permitId, max(0, $billId), $stageKey]);
+    }
+
+    /**
      * تسجيل تلقائي من النظام — **بيسجّل بس لو المرحلة مش مسجَّلة** فما بيدهسش
      * حاجة كتبها المكتب أو المندوب بإيده.
      *
      * ⚠️ ملفوفة في try/catch عند كل نقطة نداء: فشل تسجيل حالة **ممنوع** يوقف
      *    حفظ بوليصة أو إقفال إذن (نفس درس `Notify::emit` في v52).
+     *
+     * ⚠️ **ما بتبعتش إشعار عن قصد** — نقطتا النداء الوحيدتان (أول بوليصة على
+     *    الإذن · إقفال الإذن) بيبعتوا `bill.linked` و`permit.closed` أصلاً،
+     *    فإشعار حالة كمان = **نفس الخبر مرتين** في نفس الثانية.
      */
     public static function systemMark(int $permitId, string $stageKey, int $billId = self::WHOLE_PERMIT, ?string $note = null): bool
     {
         if (!self::ready()) { return false; }
-        $exists = Database::scalar(
-            'SELECT id FROM permit_track_events WHERE permit_id = ? AND bill_id = ? AND stage_key = ?',
-            [$permitId, max(0, $billId), $stageKey]);
-        if ($exists) { return false; }
+        if (self::hasEvent($permitId, $stageKey, $billId)) { return false; }
         return self::record($permitId, $stageKey, $billId, self::SRC_SYSTEM, $note, null, 'النظام');
+    }
+
+    // ═══════════════════════════════════════════════ بيانات الإشعار
+
+    /**
+     * حزمة العرض اللي الإشعار بيتبني منها — **المصدر الوحيد** لسياق أي حدث رحلة.
+     *
+     * الكنترولرات التلاتة (المكتب: تسجيل وتراجع · المندوب: تسجيل) بيقروا من هنا
+     * فمستحيل الإشعار يقول كلامًا مختلفًا حسب الشاشة اللي اتحدّث منها.
+     *
+     * ⚠️ **ولا عمود مالي في الاستعلام** (قاعدة v35): الحدث بيمرّ في مسار المندوب،
+     *    وممنوع أي مبلغ بيخصّ العميل يوصل شاشته ولا نصّ إشعاره.
+     *
+     * @return array{permit_no:string,type:string,client:string,company:string,
+     *               destination:string,bill_number:string,car_no:string,driver:string,
+     *               label:string,icon:string,index:int,total:int,terminal:bool}|null
+     */
+    public static function eventContext(int $permitId, string $stageKey, int $billId = self::WHOLE_PERMIT): ?array
+    {
+        $p = Database::row(
+            'SELECT permit_no, permit_type, client, company, destination FROM permits WHERE id = ?',
+            [$permitId]);
+        if (!$p) { return null; }
+
+        $type  = self::normType($p['permit_type'] ?? null);
+        $meta  = self::stageMeta($type, $stageKey);
+        $bill  = ['bill_number' => '', 'car_no' => '', 'driver' => '', 'destination' => ''];
+        if ($billId > 0) {
+            $b = Database::row(
+                'SELECT bill_number, car_no, driver, destination FROM bawalis WHERE id = ? AND permit_id = ?',
+                [$billId, $permitId]);
+            if ($b) { $bill = $b; }
+        }
+
+        return [
+            'permit_no'   => (string) ($p['permit_no'] ?? ''),
+            'type'        => $type,
+            'client'      => (string) ($p['client'] ?? ''),
+            'company'     => (string) ($p['company'] ?? ''),
+            // وجهة البوليصة أدقّ من وجهة الإذن لما الحدث على عربية بعينها
+            'destination' => (string) (($bill['destination'] ?? '') ?: ($p['destination'] ?? '')),
+            'bill_number' => (string) ($bill['bill_number'] ?? ''),
+            'car_no'      => (string) ($bill['car_no'] ?? ''),
+            'driver'      => (string) ($bill['driver'] ?? ''),
+            'label'       => $meta['label'] ?? self::labelOf($stageKey),
+            'icon'        => $meta['icon'] ?? 'map-pin',
+            'index'       => (int) ($meta['index'] ?? 0),
+            'total'       => count(self::stages($type)),
+            'terminal'    => !empty($meta['terminal']),
+        ];
     }
 
     // ═══════════════════════════════════════════════ القراءة

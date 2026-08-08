@@ -77,7 +77,18 @@ class OfficeCarController extends Controller
 
         $p = $this->period();
         $trips = OfficeCar::trips((int) $id, $p['from'], $p['to']);
-        $state = FormState::consume('cars.expense.' . (int) $id, $this->carUrl((int) $id));
+
+        // ⚠️ وضع تعديل مصروف — `?edit_exp=` بيقلب نموذج «سجّل مصروف» لنموذج
+        //    «عدّل المصروف». المصروف لازم يكون **بتاع السيارة دي**: الرابط مش
+        //    مصدر ثقة، ومن غير الفحص ده تقدر تعدّل مصروف سيارة تانية من هنا.
+        $editExp = null;
+        if (($_GET['edit_exp'] ?? '') !== '') {
+            $row = OfficeCar::findExpense((int) $_GET['edit_exp']);
+            if ($row && (int) $row['car_id'] === (int) $id) { $editExp = $row; }
+        }
+        $state = $editExp
+            ? FormState::consume('cars.expense.edit.' . (int) $editExp['id'], $this->carUrl((int) $id))
+            : FormState::consume('cars.expense.' . (int) $id, $this->carUrl((int) $id));
 
         $perf  = OfficeCar::perf((int) $id, $p['from'], $p['to']);
         $prevP = $p['prev_from'] === null ? null : OfficeCar::perf((int) $id, $p['prev_from'], $p['prev_to']);
@@ -103,6 +114,7 @@ class OfficeCarController extends Controller
             'ports'    => OfficeCar::breakdown($trips, 'port'),
             'drivers'  => OfficeCar::breakdown($trips, 'driver'),
             'expState' => $state,
+            'editExp'  => $editExp,
         ]);
     }
 
@@ -167,6 +179,26 @@ class OfficeCarController extends Controller
             header('Cache-Control: private, no-store, max-age=0');
         }
         $this->render('office_cars/_drill', $data, false);
+    }
+
+    /**
+     * فحص حيّ: اللوحة دي سيارة مكتب؟ (بيستخدمه فورم البوليصة)
+     *
+     * ⚠️ **موجود عشان التطبيع يفضل في مكان واحد.** فورم البوليصة محتاج يعرف
+     *    وهو شغّال إذا كانت السيارة بتاعتنا عشان يظهر خانات المصروفات؛ ونسخة
+     *    من `plateKey()` في الجافاسكريبت كانت هتفترق مع أول تعديل فالخانات
+     *    تختفي عن سيارة مكتب **بلا أي خطأ ظاهر**. نفس نمط فحص رقم البوليصة.
+     */
+    public function isOffice(): void
+    {
+        $this->requireAuth();
+        $car = OfficeCar::matchPlate((string) ($_GET['plate'] ?? ''));
+        $this->json([
+            'office' => $car !== null,
+            'name'   => $car['name'] ?? '',
+            'plate'  => $car['plate'] ?? '',
+        ]);
+        exit;   // ⚠️ إجبارية — `json()` بتطبع وما بتوقفش (باج v50)
     }
 
     // ═══════════════════════════════════════════════ إضافة/تعديل سيارة
@@ -296,18 +328,8 @@ class OfficeCarController extends Controller
         $car = OfficeCar::find((int) $id);
         if (!$car) { $this->fail('السيارة دي مش موجودة في السجل.', 'cars'); }
 
-        $d = [
-            'exp_date' => $this->cleanDate($_POST['exp_date'] ?? '') ?: work_date(),
-            'category' => (string) ($_POST['category'] ?? 'other'),
-            'amount'   => ($_POST['amount'] ?? '') === '' ? 0 : (float) $_POST['amount'],
-            'ref_no'   => trim((string) ($_POST['ref_no'] ?? '')),
-            'vendor'   => trim((string) ($_POST['vendor'] ?? '')),
-            'note'     => trim((string) ($_POST['note'] ?? '')),
-            'created_by' => (string) (Auth::user() ?? ''),
-        ];
-        $errors = [];
-        if ($d['amount'] <= 0) { $errors['amount'] = 'اكتب مبلغ أكبر من صفر.'; }
-        if (!isset(OfficeCar::EXPENSE_KINDS[$d['category']])) { $errors['category'] = 'اختار نوع المصروف.'; }
+        $d = $this->collectExpense() + ['created_by' => (string) (Auth::user() ?? '')];
+        $errors = $this->validateExpense($d);
         if ($errors) {
             $this->formFailure('cars.expense.' . (int) $id, 'cars/' . (int) $id . '#expense-form',
                 $_POST, $errors, $this->carUrl((int) $id));
@@ -319,6 +341,39 @@ class OfficeCarController extends Controller
             'مصروف سيارة (' . $car['plate'] . '): ' . OfficeCar::kindLabel($d['category']),
             ['work_date' => $d['exp_date']]);
         $this->done('اتسجّل المصروف على السيارة.', $this->carUrl((int) $id), 'expenses-panel');
+    }
+
+    /**
+     * تعديل مصروف مسجَّل.
+     *
+     * ⚠️ الفشل بيرجّع الفورم على **وضع التعديل** (`?edit_exp=`) لا على وضع
+     *    الإضافة، وإلا المالك يلاقي بياناته في نموذج «سجّل مصروف» فيضيف نسخة
+     *    تانية بدل ما يصلّح الأصلية.
+     */
+    public function updateExpense(string $eid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $old = OfficeCar::findExpense((int) $eid);
+        if (!$old) { $this->fail('المصروف ده مش موجود أو اتمسح قبل كده.', 'cars'); }
+        $carId = (int) $old['car_id'];
+        $car = OfficeCar::find($carId);
+        if (!$car) { $this->fail('السيارة دي مش موجودة في السجل.', 'cars'); }
+
+        $d = $this->collectExpense();
+        $errors = $this->validateExpense($d);
+        if ($errors) {
+            $this->formFailure('cars.expense.edit.' . (int) $eid,
+                $this->carUrl($carId, 'expense-form', ['edit_exp' => (int) $eid]),
+                $_POST, $errors, $this->carUrl($carId));
+        }
+
+        $this->claimForm($this->carUrl($carId, 'expense-form'));
+        OfficeCar::updateExpense((int) $eid, $d);
+        Audit::log('update', 'car_expense', (int) $eid, $old, $d,
+            'تعديل مصروف سيارة (' . $car['plate'] . '): ' . OfficeCar::kindLabel($d['category']),
+            ['work_date' => $d['exp_date']]);
+        $this->done('اتحفظ تعديل المصروف.', $this->carUrl($carId), 'expenses-panel');
     }
 
     public function deleteExpense(string $eid): void
@@ -340,12 +395,39 @@ class OfficeCarController extends Controller
      * ⚠️ **المصدر الوحيد لمسار كارت السيارة** — لازم يحمل الفترة معاه، وإلا
      *    الرجوع بعد الحفظ بيرمي المالك على فترة تانية وأرقام مختلفة.
      */
-    private function carUrl(int $id, string $anchor = ''): string
+    private function carUrl(int $id, string $anchor = '', array $extra = []): string
     {
         $q = [];
         if (($_POST['p'] ?? $_GET['p'] ?? '') !== '') { $q['p'] = (string) ($_POST['p'] ?? $_GET['p']); }
         if (($_POST['d'] ?? $_GET['d'] ?? '') !== '') { $q['d'] = (string) ($_POST['d'] ?? $_GET['d']); }
+        $q += $extra;
         return 'cars/' . $id . ($q ? '?' . http_build_query($q) : '') . ($anchor !== '' ? '#' . $anchor : '');
+    }
+
+    /**
+     * حقول مصروف السيارة — **مصدر واحد للإضافة والتعديل**.
+     *
+     * ⚠️ لو اتكتبت مرتين، أول حقل جديد يتضاف في ناحية وينساه التانية فيتحفظ
+     *    في الإضافة ويضيع في التعديل **بلا أي خطأ ظاهر**.
+     */
+    private function collectExpense(): array
+    {
+        return [
+            'exp_date' => $this->cleanDate($_POST['exp_date'] ?? '') ?: work_date(),
+            'category' => (string) ($_POST['category'] ?? 'other'),
+            'amount'   => ($_POST['amount'] ?? '') === '' ? 0 : (float) $_POST['amount'],
+            'ref_no'   => trim((string) ($_POST['ref_no'] ?? '')),
+            'vendor'   => trim((string) ($_POST['vendor'] ?? '')),
+            'note'     => trim((string) ($_POST['note'] ?? '')),
+        ];
+    }
+
+    private function validateExpense(array $d): array
+    {
+        $errors = [];
+        if ((float) $d['amount'] <= 0) { $errors['amount'] = 'اكتب مبلغ أكبر من صفر.'; }
+        if (!isset(OfficeCar::EXPENSE_KINDS[$d['category']])) { $errors['category'] = 'اختار نوع المصروف.'; }
+        return $errors;
     }
 
     /** الفترة المختارة من الرابط (`p` = day|week|month|all، `d` = يوم الارتكاز). */

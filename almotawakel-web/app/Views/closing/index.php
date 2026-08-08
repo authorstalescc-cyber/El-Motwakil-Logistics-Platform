@@ -52,20 +52,107 @@ $percent = (int) ($t['percent'] ?? 0);
     </div>
   </header>
 
-  <!-- ═══════════ معادلة رصيد اليوم ═══════════ -->
+  <?php /* ═══════════ معادلة رصيد اليوم ═══════════
+           ⚠️ **كل كارت زرار بيفتح تفاصيله** — قاعدة «ممنوع رقم أصمّ» (طلب المالك).
+              النوافذ **جاهزة في الصفحة** لأن كل بياناتها محمّلة أصلاً في `$groups`
+              و`$wallets`، فمفيش أي استعلام زيادة (نفس نمط `#topupsDrill`).
+           ⚠️ **صفر جملة تفسيرية** (طلب المالك): الشرح مكانه النافذة لا الكارت.
+              اللي فضل تحت الأرقام حالة وظيفية بس («مجمّد» على اليوم المتقفل).
+           ⚠️ اسم «عهدة مضافة» بيتبع النموذج: مجمّع ⇒ الرقم بيشمل عهدة المناديب
+              فبلا «للدرج»؛ غير مجمّع ⇒ الرقم الدرج لوحده فـ«للدرج» إلزامية. */ ?>
   <section class="cl-flow" aria-label="معادلة رصيد اليوم">
-    <div class="cl-cell"><span>رصيد أول اليوم</span><b><?= money($prevBalance,false) ?></b></div>
-    <i class="op plus">+</i>
-    <div class="cl-cell in"><span>عهدة مضافة</span><b><?= money($totTopups,false) ?></b></div>
-    <i class="op minus">−</i>
-    <div class="cl-cell out"><span>مصروفات نقدية</span><b><?= money($totExpense,false) ?></b></div>
-    <i class="op minus">−</i>
-    <div class="cl-cell out"><span>عهد السائقين</span><b><?= money($totCustodyExp,false) ?></b><small>بعد خصم <?= intf($rate) ?> لكل بوليصة</small></div>
+    <button type="button" class="cl-cell" data-drill="#drillOpening" data-drill-title="رصيد أول اليوم">
+      <span>رصيد أول اليوم</span><b><?= money($prevBalance,false) ?></b>
+    </button>
+    <?php /* ⚠️ **الإضافات اتفصلت لخانتين** (طلب المالك 2026-08-01): «عهدة مضافة
+             للدرج» كانت بتقول صفر في أغلب الأيام (الفلوس بقت تروح من البنك
+             للمناديب على طول) والمالك مش شايف الرقم اللي بيتعامل معاه فعلاً.
+             ⚠️ الاتنين **جزء من `topups`** فمجموعهم = الرقم اللي `Closing` بيحسبه
+                — أي واحدة تتشال من غير التانية بتكسر المعادلة. */ ?>
+    <?php if ((float) $totTopupsDrawer != 0.0 || (float) $totBankToReps == 0.0): ?>
+      <i class="op plus">+</i>
+      <button type="button" class="cl-cell in" data-drill="#topupsDrill" data-drill-title="عهدة مضافة — التفكيك">
+        <span>عهدة مضافة للدرج</span><b><?= money($totTopupsDrawer,false) ?></b>
+      </button>
+    <?php endif; ?>
+    <?php if ((float) $totBankToReps != 0.0): ?>
+      <i class="op plus">+</i>
+      <button type="button" class="cl-cell in" data-drill="#topupsDrill" data-drill-title="عهدة منزلة للمناديب">
+        <span>عهدة منزلة للمناديب</span><b><?= money($totBankToReps,false) ?></b>
+      </button>
+    <?php endif; ?>
     <i class="op eq">=</i>
-    <div class="cl-cell result <?= $carried < 0 ? 'negative' : '' ?>">
+    <?php /* كارت «الإجمالي» (طلب المالك) — `$available` محسوبة في الكنترولر
+             (`opening + topups`) فمفيش تعريف تاني للرقم. */ ?>
+    <button type="button" class="cl-cell total" data-drill="#drillAvailable" data-drill-title="الإجمالي المتاح">
+      <span>الإجمالي</span><b><?= money($available,false) ?></b>
+    </button>
+    <?php /* ⚠️ **خانة مستقلة للكاش اللي خرج من الدرج لجيب مندوب** (طلب المالك
+             2026-08-01): كانت مدفونة جوّه «مصروفات نقدية»، فالمالك يشوف رقمًا
+             كبيرًا ومايعرفش منه كام راح لمندوب وكام اتصرف فعلاً.
+             ⚠️ بتظهر بس لو القاعدة بتخصمه من الدرج — في النموذج المجمّع ده تحويل
+                داخلي مالوش أثر، وخانة بصفر في معادلة بتبقى تشتيت. */ ?>
+    <?php if (\App\Models\RepCustody::newSafeRuleActive()): ?>
+      <i class="op minus">−</i>
+      <button type="button" class="cl-cell out" data-drill="#drillOfficeDep" data-drill-title="عهدة مسحوبة من الدرج">
+        <span>عهدة مسحوبة من الدرج</span><b><?= money($totOfficeDep,false) ?></b>
+      </button>
+    <?php elseif ((float) $totDrawerToReps != 0.0): ?>
+      <?php /* ⚠️⚠️ **علامة تحويل مش عملية حسابية** — في النموذج المجمّع الدرج
+               وجيوب المناديب **الاتنين جوّه الرقم**، فالكاش اللي اتنقل بينهم
+               ما بيغيّرش الإجمالي. طرحه هنا كان هيكسر المعادلة. المالك طلب
+               يشوف السطر (2026-08-01) فبيتعرض بعلامة `⇄` ولون محايد عشان
+               يبان إنه نقل مكان مش خروج فلوس. */ ?>
+      <i class="op xfer" aria-hidden="true">⇄</i>
+      <button type="button" class="cl-cell xfer" data-drill="#drillOfficeDep"
+              data-drill-title="نزلت من الدرج للمناديب — تحويل داخلي">
+        <span>نزلت من الدرج للمناديب</span><b><?= money($totDrawerToReps,false) ?></b>
+        <small>تحويل داخلي</small>
+      </button>
+    <?php endif; ?>
+    <i class="op minus">−</i>
+    <button type="button" class="cl-cell out" data-drill="#drillExpenses" data-drill-title="مصروفات نقدية">
+      <span>مصروفات نقدية</span><b><?= money($totExpense,false) ?></b>
+    </button>
+    <i class="op minus">−</i>
+    <button type="button" class="cl-cell out" data-drill="#drillCustody" data-drill-title="عهد السائقين">
+      <span>عهد السائقين</span><b><?= money($totCustodyExp,false) ?></b>
+    </button>
+    <i class="op eq">=</i>
+    <button type="button" class="cl-cell result <?= $carried < 0 ? 'negative' : '' ?>"
+            data-drill="#drillCarried" data-drill-title="<?= $isClosed ? 'المرحّل المثبّت' : 'المرحّل للغد' ?>">
       <span><?= $isClosed ? 'المرحّل المثبّت' : 'المرحّل للغد' ?></span>
       <b><?= money($carried,false) ?></b>
-      <small><?= $isClosed ? 'مجمّد — لا يتغيّر' : 'يتغيّر مع أي إدخال' ?></small>
+      <?php if ($isClosed): ?><small>مجمّد</small><?php endif; ?>
+    </button>
+  </section>
+
+  <?php /* ═══════════ الكاش فين دلوقتي — الدرج والمناديب ═══════════
+           ⚠️ **الرقمان تراكميان (دلوقتي) مش بتوع اليوم المعروض** — سؤال «الكاش
+              فين؟» تراكمي بطبيعته (قاعدة v49). عشان الشاشة ما تكدبش، السطر
+              اللي تحت بيتطبع **بس لو** المجموع بيساوي مرحّل اليوم فعلاً؛ غير
+              كده الكروت بتقول «دلوقتي» ومفيش ادّعاء إنها بتاعة اليوم ده.
+           ⚠️ **ولا رقم بيتحسب من جديد:** `Closing::walletSplit()` بتنادي
+              `currentBalance()` و`RepCustody::balance()` نفسهم بتوع كل شاشة
+              تانية، فمستحيل تخالف كارت المندوب.
+           ⚠️ **السالب بيعدّي بلا `max(0,…)`** — معناه المكتب مدين للمندوب. */ ?>
+  <?php $tiesToDay = abs((float) $wallets['total'] - (float) $carried) < 0.005; ?>
+  <section class="cl-split" aria-label="الكاش برّه البنك دلوقتي">
+    <button type="button" class="cl-cell drawer" data-drill="#drillDrawer"
+            data-drill-title="رصيد الخزنة الفعلي">
+      <span>رصيد الخزنة الفعلي<?= $tiesToDay ? '' : ' دلوقتي' ?></span>
+      <b><?= money((float) $wallets['drawer'], false) ?></b>
+    </button>
+    <i class="op plus">+</i>
+    <button type="button" class="cl-cell reps<?= (float) $wallets['reps_total'] < 0 ? ' neg' : '' ?>"
+            data-drill="#drillReps" data-drill-title="الفلوس اللي مع المناديب">
+      <span>مع المناديب برّه<?= $tiesToDay ? '' : ' دلوقتي' ?></span>
+      <b><?= money((float) $wallets['reps_total'], false) ?></b>
+    </button>
+    <i class="op eq">=</i>
+    <div class="cl-cell sum">
+      <span>كل الكاش برّه البنك</span>
+      <b><?= money((float) $wallets['total'], false) ?></b>
     </div>
   </section>
 
@@ -79,9 +166,10 @@ $percent = (int) ($t['percent'] ?? 0);
     <?php endif; ?>
 
     <div class="rv-head">
+      <?php /* ⚠️ سطر التعليمات اتشال بطلب المالك — العنوان والمؤشّر جنبه
+               بيقولوا المطلوب، والعدّاد «X من Y بند» هو المعلومة الفعلية. */ ?>
       <div class="rv-head-txt">
         <h2>راجع بنود اليوم</h2>
-        <p>بُص على كل بند وعلّمه <?= icon('check', 14) ?>. الإقفال بيتفتح لما كل البنود النقدية تتعلّم.</p>
       </div>
 
       <div class="rv-gauge <?= $complete ? 'done' : '' ?>" id="rvGauge">
@@ -114,6 +202,20 @@ $percent = (int) ($t['percent'] ?? 0);
         <button type="button" class="rv-fbtn" data-filter="pending">بدون علامة <b id="rvCntPending"><?= intf((int)$t['pending']) ?></b></button>
         <button type="button" class="rv-fbtn" data-filter="done">متراجَع <b id="rvCntDone"><?= intf((int)$t['reviewed']) ?></b></button>
       </div>
+      <label class="rv-sort">
+        <span aria-hidden="true"><?= icon('sort', 14) ?></span>
+        <select id="rvSort" aria-label="ترتيب البنود">
+          <option value="">الترتيب الافتراضي</option>
+          <option value="ref">الإذن / البوليصة</option>
+          <option value="rep">المندوب</option>
+          <option value="company">الشركة</option>
+          <option value="client">العميل</option>
+          <option value="party">الطرف (سائق/مستفيد/مصدر)</option>
+          <option value="kind">نوع البند</option>
+          <option value="amount-desc">المبلغ — الأكبر أولاً</option>
+          <option value="amount-asc">المبلغ — الأصغر أولاً</option>
+        </select>
+      </label>
     </div>
 
     <form method="post" action="<?= url('closing/review-save') ?>" id="rvForm">
@@ -126,13 +228,26 @@ $percent = (int) ($t['percent'] ?? 0);
                  data-group="<?= e($key) ?>" id="rvg-<?= e($key) ?>">
           <header class="rv-gh">
             <span class="rv-gicon" aria-hidden="true"><?= $g['icon'] ?></span>
-            <div class="rv-gtitle">
+            <?php /* ⚠️ **صفر جملة تفسيرية** (طلب المالك 2026-07-31): وصف القسم
+                     اتنقل لـ`title` بدل ما ياخد سطرًا تحت كل عنوان. العنوان
+                     نفسه بيكفي، والتفصيل في نافذة الكارت فوق. */ ?>
+            <div class="rv-gtitle" title="<?= e($g['hint']) ?>">
               <b><?= e($g['title']) ?></b>
-              <small><?= e($g['hint']) ?></small>
             </div>
             <div class="rv-gstat">
               <span class="rv-gcount" data-count-for="<?= e($key) ?>"><?= intf($g['reviewed']) ?>/<?= intf($g['count']) ?></span>
-              <b class="rv-gsum <?= $g['dir'] === 'in' ? 'in' : 'out' ?>"><?= money($g['total'],false) ?></b>
+              <?php /* ⚠️ قاعدة «ممنوع رقم أصمّ»: رقم «عهدة مضافة» بقى بيفتح
+                       تفكيكه — كل مندوب نزله كام وصرف كام (طلب المالك). النافذة
+                       **جاهزة في الصفحة** لأن الأرقام محسوبة أصلاً في الكنترولر
+                       فمفيش استعلام زيادة عند الضغط. */ ?>
+              <?php if ($key === 'topups' && $g['count'] > 0): ?>
+                <button type="button" class="rv-gsum in" data-drill="#topupsDrill"
+                        data-drill-title="عهدة مضافة — التفكيك">
+                  <?= money($g['total'],false) ?> <?= icon('search', 13) ?>
+                </button>
+              <?php else: ?>
+                <b class="rv-gsum <?= $g['dir'] === 'in' ? 'in' : 'out' ?>"><?= money($g['total'],false) ?></b>
+              <?php endif; ?>
             </div>
             <?php if ($canReview): ?>
               <button type="button" class="rv-gall" data-group-toggle="<?= e($key) ?>">
@@ -141,13 +256,30 @@ $percent = (int) ($t['percent'] ?? 0);
             <?php endif; ?>
           </header>
 
-          <?php if ($g['kind'] === 'info'): ?>
-            <div class="rv-ginfo">البنود دي اتدفعت من كارت المكتب مش من الدرج، فما بتمنعش الإقفال — علّمها لو راجعتها.</div>
-          <?php endif; ?>
+          <?php /* ⚠️ لوحا الشرح («البنود دي اتدفعت من كارت المكتب…» و«منها كذا
+                   للدرج وكذا للمناديب») اتشالوا بطلب المالك. التفكيك موجود في
+                   نافذة «عهدة مضافة» (زر 🔍 جنب الرقم فوق) وهي مكانه الصح. */ ?>
 
           <div class="rv-list">
+            <?php $seq = 0; ?>
             <?php foreach ($g['items'] as $it): ?>
               <?php
+                /* مفاتيح الترتيب — وصفية بحتة للعرض في المتصفح، ولا تدخل أي حساب.
+                   ⚠️ كل نوع بند بيسمّي طرفه باسم مختلف (`party_label`)، فبند المندوب
+                      طرفه المندوب وبند الإذن طرفه العميل. عشان كده المفتاح بيلمّ
+                      الاتنين: `by_rep` (مين دفع من عهدته) **أو** الطرف نفسه لو
+                      البند أصلاً بتاع مندوب — وإلا الترتيب بالمندوب يسيب نثريات
+                      المناديب ومصروفاتهم برّه وهي بنودهم فعلاً. */
+                $sRep = (string) ($it['by_rep'] ?: ($it['party_label'] === 'المندوب' ? $it['party'] : ''));
+                $sClient = (string) ($it['client'] ?: ($it['party_label'] === 'العميل' ? $it['party'] : ''));
+                $sKeys = [
+                    'ref'     => (string) $it['ref'],
+                    'rep'     => $sRep,
+                    'company' => (string) ($it['company'] ?? ''),
+                    'client'  => $sClient,
+                    'party'   => (string) $it['party'],
+                    'kind'    => (string) $it['title'],
+                ];
                 $search = trim(implode(' ', array_filter([
                     $it['ref'], $it['title'], $it['party'], $it['note'], $it['ref_no'], $it['movement'],
                     $it['company'], $it['client'], $it['destination'], $it['containers'],
@@ -188,7 +320,12 @@ $percent = (int) ($t['percent'] ?? 0);
                    data-key="<?= e($it['key']) ?>"
                    data-group="<?= e($key) ?>"
                    data-blocking="<?= $g['kind'] === 'cash' ? '1' : '0' ?>"
-                   data-search="<?= e(search_norm($search)) ?>">
+                   data-search="<?= e(search_norm($search)) ?>"
+                   data-seq="<?= $seq++ ?>"
+                   data-amount="<?= e(number_format((float) $it['amount'], 2, '.', '')) ?>"
+                   <?php foreach ($sKeys as $sk => $sv): ?>
+                   data-s-<?= $sk ?>="<?= e($sv === '' || $sv === '—' ? '' : search_norm($sv)) ?>"
+                   <?php endforeach; ?>>
                 <label class="rv-pick">
                   <input type="checkbox" class="rv-check" name="reviewed[]"
                          value="<?= e($it['key']) ?>"
@@ -224,7 +361,7 @@ $percent = (int) ($t['percent'] ?? 0);
                   <?php endif; ?>
 
                   <div class="rv-stamp"<?= $it['reviewed'] ? '' : ' hidden' ?>>
-                    <?= icon('check', 14) ?> راجعه <?= e($it['reviewed_by'] ?: '—') ?><?= $it['reviewed_at'] ? ' — '.e($it['reviewed_at']) : '' ?>
+                    <?= icon('check', 14) ?> راجعه <?= e($it['reviewed_by'] ?: '—') ?><?= $it['reviewed_at'] ? ' — '.e(dtfmt($it['reviewed_at'])) : '' ?>
                   </div>
                   <?php if ($it['stale']): ?>
                     <div class="rv-warn"><?= icon('alert', 14) ?> المبلغ اتغيّر بعد المراجعة — راجعه تاني</div>
@@ -282,7 +419,11 @@ $percent = (int) ($t['percent'] ?? 0);
     <div class="cl-close-txt">
       <?php if ($isClosed): ?>
         <b>يوم <?= e(dfmt($date)) ?> متقفل</b>
-        <span>الرصيد المرحّل مثبّت على <strong><?= money($carried) ?></strong><?= $closedBy ? ' — بواسطة '.e($closedBy) : '' ?><?= $closedAt ? ' — '.e($closedAt) : '' ?>.</span>
+        <?php /* ⚠️ **`dtfmt()` إلزامية على أي وقت جاي من القاعدة** — ساعة MySQL
+                 على الإنتاج UTC وPHP القاهرة (فرق ١٨٠ دقيقة مقيس)، فالعرض الخام
+                 بيقول إن الإقفال حصل بدري ٣ ساعات. وختم البند تحت بيستخدم
+                 `dtfmt` أصلاً، فالسطرين كانوا بيقولوا وقتين لنفس الحاجة. */ ?>
+        <span>الرصيد المرحّل مثبّت على <strong><?= money($carried) ?></strong><?= $closedBy ? ' — بواسطة '.e($closedBy) : '' ?><?= $closedAt ? ' — '.e(dtfmt($closedAt)) : '' ?>.</span>
       <?php elseif ($complete): ?>
         <b>كل البنود اتراجعت — جاهز للإقفال</b>
         <span>هيتثبّت رصيد <strong><?= money($carried) ?></strong> كرصيد أول اليوم التالي، وهيتقفل الكتابة على اليوم ده.</span>
@@ -291,7 +432,7 @@ $percent = (int) ($t['percent'] ?? 0);
         <span id="clBlockTxt">فاضل <?= intf((int)$t['blocking_pending']) ?> بند من غير علامة مراجعة.</span>
       <?php endif; ?>
       <?php if ($rv['last_at']): ?>
-        <small class="cl-close-meta">آخر مراجعة: <?= e($rv['last_at']) ?><?= $rv['last_by'] ? ' — '.e($rv['last_by']) : '' ?></small>
+        <small class="cl-close-meta">آخر مراجعة: <?= e(dtfmt($rv['last_at'])) ?><?= $rv['last_by'] ? ' — '.e($rv['last_by']) : '' ?></small>
       <?php endif; ?>
     </div>
     <div class="cl-close-act">
@@ -313,6 +454,479 @@ $percent = (int) ($t['percent'] ?? 0);
       <?php endif; ?>
     </div>
   </section>
+
+  <?php /* ═══ نوافذ تفاصيل كروت المعادلة — كلها جاهزة في الصفحة ═══
+           ⚠️ **مفيش استعلام واحد زيادة**: البنود من `$groups` اللي الشاشة
+              محمّلاها أصلاً للمراجعة تحت، فمستحيل النافذة تقول رقمًا يخالف
+              القسم اللي جاي منه. */ ?>
+  <?php
+  /** صفوف بند المعادلة من أقسام المراجعة — نفس البنود اللي تحت بالحرف. */
+  $clRows = static function (array $keys) use ($groups): array {
+      $out = [];
+      foreach ($keys as $k) {
+          foreach (($groups[$k]['items'] ?? []) as $it) { $out[] = $it + ['_g' => $k]; }
+      }
+      return $out;
+  };
+  /** صفّ واحد في نافذة المعادلة — عنوانه بيانه، والميتا بتقول مين ومنين. */
+  $clRow = static function (array $it): void {
+      $ref   = trim((string) ($it['ref'] ?? ''));
+      $title = trim((string) ($it['title'] ?? ''));
+      $meta  = [];
+      // ⚠️ بيان البند في الميتا مش في `sub` — `sub` مكانها تحت المبلغ.
+      if ($title !== '' && $title !== $ref) { $meta[] = ['icon' => 'tag', 'text' => $title]; }
+      if (!empty($it['party']) && $it['party'] !== '—') { $meta[] = ['icon' => 'user', 'text' => (string) $it['party']]; }
+      if (!empty($it['by_rep']))    { $meta[] = ['icon' => 'briefcase', 'text' => 'دفعها ' . $it['by_rep']]; }
+      if (!empty($it['permit_ref'])){ $meta[] = ['icon' => 'file-text', 'text' => (string) $it['permit_ref']]; }
+      partial('row_item', [
+          'title'  => $ref !== '' ? $ref : ($title !== '' ? $title : '—'),
+          'icon'   => 'coins',
+          'meta'   => $meta,
+          'amount' => money((float) $it['amount'], false),
+          'url'    => !empty($it['link']) ? url((string) $it['link']) : null,
+      ]);
+  };
+  ?>
+
+  <div id="drillOpening" hidden>
+    <?php partial('drill', [
+      'how'   => $openingFrom !== null
+          ? 'الرقم ده هو المرحّل المثبَّت من إقفال يوم ' . dfmt($openingFrom) . '.'
+          : 'مفيش يوم متقفل قبل كده — الرقم جاي من الرصيد الافتتاحي في الإعدادات.',
+      'total' => ['label' => 'رصيد أول اليوم', 'value' => money($prevBalance, false)],
+      'more'  => $openingFrom !== null
+          ? ['label' => 'افتح إقفال ' . dfmt($openingFrom), 'url' => url('closing?date=' . urlencode($openingFrom))]
+          : ['label' => 'الإعدادات', 'url' => url('settings')],
+      'body'  => static function () use ($openingFrom, $prevBalance) {
+          partial('row_item', [
+              'title' => $openingFrom !== null ? 'مرحّل من يوم ' . dfmt($openingFrom) : 'رصيد افتتاحي',
+              'icon'  => 'landmark',
+              'meta'  => [['icon' => 'lock', 'text' => $openingFrom !== null ? 'رقم مثبَّت — ما بيتغيّرش' : 'من الإعدادات']],
+              'amount'=> money($prevBalance, false),
+          ]);
+      },
+    ]); ?>
+  </div>
+
+  <?php /* ⚠️ **العهدة اتقسمت هنا زي المعادلة فوق بالظبط** — المعادلة بتعرض
+           خانتين («للدرج» و«للمناديب») والنافذة كانت بتلمّهم في سطر واحد، فالمالك
+           يقارن سطر النافذة بالكارت ويلاقي رقمين مختلفين. أي تقسيم في المعادلة
+           لازم يتكرّر هنا وإلا الشاشة بتناقض نفسها. */ ?>
+  <div id="drillAvailable" hidden>
+    <?php $availSplit = (float) $totBankToReps != 0.0; ?>
+    <?php partial('drill', [
+      'how'   => 'رصيد أول اليوم + العهدة اللي اتضافت النهاردة، قبل أي صرف.',
+      'count' => $availSplit ? 3 : 2,
+      'total' => ['label' => 'الإجمالي المتاح', 'value' => money($available, false)],
+      'body'  => static function () use ($prevBalance, $totTopups, $totTopupsDrawer, $totBankToReps, $openingFrom, $availSplit) {
+          partial('row_item', [
+              'title' => 'رصيد أول اليوم',
+              'icon'  => 'landmark',
+              'meta'  => [['icon' => 'clock', 'text' => $openingFrom !== null ? 'مرحّل من ' . dfmt($openingFrom) : 'رصيد افتتاحي']],
+              'amount'=> money($prevBalance, false),
+          ]);
+          if ($availSplit) {
+              /* ⚠️ **ممنوع نص «عهدة مضافة للدرج» في أي مكان في الصفحة** لما
+                 النموذج المجمّع شغّال — `verify_safe_rule` بيحرسها على **الصفحة
+                 كلها** لا على كارت المعادلة وحده (الرقم ساعتها بيشمل عهد
+                 المناديب فالاسم بيكدب). فالسطر معنون بنفس صياغة رأس القسم في
+                 نافذة التفكيك: «دخل درج المكتب». */
+              partial('row_item', [
+                  'title' => 'دخل درج المكتب',
+                  'icon'  => 'landmark',
+                  'meta'  => [['icon' => 'info', 'text' => 'الكاش اللي دخل الدرج فعلاً']],
+                  'amount'=> money($totTopupsDrawer, false),
+              ]);
+              partial('row_item', [
+                  'title' => 'عهدة منزلة للمناديب',
+                  'icon'  => 'building',
+                  'meta'  => [['icon' => 'info', 'text' => 'اتسحبت من البنك ونزلت للمندوب على طول']],
+                  'amount'=> money($totBankToReps, false),
+              ]);
+          } else {
+              partial('row_item', [
+                  'title' => 'عهدة مضافة النهاردة',
+                  'icon'  => 'trending-up',
+                  'meta'  => [['icon' => 'info', 'text' => 'فلوس دخلت النظام في اليوم ده']],
+                  'amount'=> money($totTopups, false),
+              ]);
+          }
+      },
+    ]); ?>
+  </div>
+
+  <?php /* ⚠️ نوافذ المعادلة = **أقسام `BLOCKING` الطالعة**، كل خانة وأقسامها:
+           «مصروفات نقدية» ← `permits` + `general` · «عهد السائقين» ← `custody`
+           · «عهدة مسحوبة من الدرج» ← `rep_deposit`. لو ضفت قسم نقدي جديد في
+           `DailyReview::BLOCKING` لازم يتحط في خانة منهم وإلا يختفي من القراءة
+           بينما رقمه داخل في الرصيد. */ ?>
+  <?php /* ⚠️ **`rep_deposit` اتشال من هنا** (2026-08-01): بقى له خانته ونافذته
+           في المعادلة، فسيبانه هنا كان بيخلّي النافذة تقول رقمًا أكبر من الكارت
+           وبيتعدّ مرتين في القراءة. */ ?>
+  <?php /* ⚠️⚠️ **القسم اللي بيغذّي النافذة بيتغيّر مع النموذج** — `DailyReview`
+           بتحطّ نفس الصف في `rep_deposit` (نقدي) أو `rep_drawer` (تحويل داخلي)
+           حسب النموذج. تثبيت واحد منهم كان بيخلّي النافذة **فاضية** في النموذج
+           التاني والزرار يفتح على لا شيء.
+           ⚠️ والنافذة **مش مشروطة بالنموذج** — الخانة بتظهر في الحالتين (طلب
+              المالك: يشوف السطر حتى لما ما يتخصمش)، فلو النافذة اتخفت الضغط
+              كان هيدّي رسالة فشل. */ ?>
+  <?php $isDrawerRule = \App\Models\RepCustody::newSafeRuleActive();
+        $odRows = $clRows([$isDrawerRule ? 'rep_deposit' : 'rep_drawer']);
+        $odTotal = $isDrawerRule ? $totOfficeDep : $totDrawerToReps; ?>
+  <div id="drillOfficeDep" hidden>
+    <?php partial('drill', [
+      'how'   => $isDrawerRule
+        ? 'كاش خرج من درج المكتب ونزل عهدة لمندوب — بيتخصم من الخزنة يوم تنزيله وبيدخل محفظته.'
+        : 'كاش اتنقل من درج المكتب لجيب المندوب — الاتنين جوّه رقم الخزنة، فالإجمالي ما بيتغيّرش.',
+      'count' => count($odRows),
+      'total' => ['label' => 'إجمالي اللي نزل من الدرج', 'value' => money($odTotal, false)],
+      'more'  => ['label' => 'افتح عهدة المناديب', 'url' => url('rep-custody')],
+      'empty' => ['title' => 'مفيش عهدة نزلت من الدرج النهاردة'],
+      'body'  => static function () use ($odRows, $clRow) { foreach ($odRows as $it) { $clRow($it); } },
+    ]); ?>
+  </div>
+
+  <?php $expKeys = ['permits', 'general']; $expRows = $clRows($expKeys); ?>
+  <div id="drillExpenses" hidden>
+    <?php partial('drill', [
+      'how'   => 'إيصالات ومصروفات الأذونات + المصروفات العامة. العهدة اللي نزلت للمناديب من الدرج ليها خانتها.',
+      'count' => count($expRows),
+      'total' => ['label' => 'إجمالي المصروفات النقدية', 'value' => money($totExpense, false)],
+      'more'  => ['label' => 'افتح المصروفات', 'url' => url('expenses')],
+      'empty' => ['title' => 'مفيش مصروفات نقدية النهاردة'],
+      'body'  => static function () use ($expRows, $clRow) { foreach ($expRows as $it) { $clRow($it); } },
+    ]); ?>
+  </div>
+
+  <?php $cusRows = $clRows(['custody']); ?>
+  <div id="drillCustody" hidden>
+    <?php partial('drill', [
+      'how'   => 'المخصوم من كل بوليصة بعد خصم ' . intf($rate) . ' جنيه، ومعاه مين سلّم السائق.',
+      'count' => count($cusRows),
+      'total' => ['label' => 'إجمالي عهد السائقين', 'value' => money($totCustodyExp, false)],
+      'more'  => ['label' => 'افتح خزنة المكتب', 'url' => url('custody')],
+      'empty' => ['title' => 'مفيش عهد سائقين النهاردة'],
+      'body'  => static function () use ($cusRows, $clRow) { foreach ($cusRows as $it) { $clRow($it); } },
+    ]); ?>
+  </div>
+
+  <?php /* نافذتا «الكاش فين» — الدرج **مشتقّ** (الإجمالي − المحافظ) فنافذته
+           بتوري الطرح صريحًا بدل ما يبقى رقمًا أصمّ. */ ?>
+  <div id="drillDrawer" hidden>
+    <?php partial('drill', [
+      'how'   => 'الدرج = كل الكاش برّه البنك ناقص اللي في جيوب المناديب.',
+      'count' => 3,
+      'total' => ['label' => 'الكاش في الدرج', 'value' => money((float) $wallets['drawer'], false)],
+      'body'  => static function () use ($wallets) {
+          partial('row_item', ['title' => 'كل الكاش برّه البنك', 'icon' => 'wallet',
+              'amount' => money((float) $wallets['total'], false)]);
+          partial('row_item', ['title' => 'ناقص اللي مع المناديب', 'icon' => 'user',
+              'amount' => '− ' . money((float) $wallets['reps_total'], false)]);
+          partial('row_item', ['title' => 'يبقى في الدرج', 'icon' => 'landmark',
+              'amount' => money((float) $wallets['drawer'], false)]);
+      },
+    ]); ?>
+  </div>
+
+  <div id="drillReps" hidden>
+    <?php partial('drill', [
+      'how'   => 'رصيد كل مندوب تراكمي — الفلوس اللي برّه معاه فعلاً على كل الأيام.',
+      'count' => count($wallets['reps'] ?? []),
+      'total' => ['label' => 'إجمالي اللي مع المناديب',
+                  'value' => money((float) $wallets['reps_total'], false)],
+      'more'  => ['label' => 'افتح عهدة المناديب', 'url' => url('rep-custody')],
+      'empty' => ['title' => 'مفيش فلوس برّه مع أي مندوب'],
+      'body'  => static function () use ($wallets) {
+          foreach (($wallets['reps'] ?? []) as $w) {
+              $bal = (float) $w['balance'];
+              partial('row_item', [
+                  'title'  => (string) $w['name'],
+                  'icon'   => 'user',
+                  // ⚠️ السالب معناه المكتب مدين للمندوب — ممنوع يتقصّ على صفر.
+                  'meta'   => $bal < 0
+                      ? [['icon' => 'alert', 'text' => 'فرش من جيبه — المكتب مدين له']] : [],
+                  'amount' => money($bal, false),
+                  'amount_tone' => $bal < 0 ? 'neg' : '',
+                  'url'    => url('rep-custody/' . (int) $w['id']),
+              ]);
+          }
+      },
+    ]); ?>
+  </div>
+
+  <?php /* ⚠️⚠️ **الطرح لازم يطابق المعادلة فوق بالحرف** — «عهدة مسحوبة من الدرج»
+           خانة مستقلة في المعادلة و`$totExpense` **مطروح منها أصلاً**
+           (`expenses − officeDep`). سيبانها برّه النافذة كان بيخلّي التفكيك يقول
+           رقمًا أكبر من المرحّل بمقدار `officeDep` بالظبط — نافذة بتشرح رقمًا
+           وبتطلّع رقمًا تاني. متحقَّق: بتنحرف بـ٢,٠٠٠ على تنزيل ٢,٠٠٠ من الدرج.
+           ⚠️ بتظهر بس لو النموذج بيخصمها (`officeDep != 0` = القاعدة فعّالة)،
+              وإلا سطر بصفر في تفكيك من ٣ سطور بيبقى تشتيت. */ ?>
+  <?php $carriedOfficeDep = (float) $totOfficeDep; ?>
+  <div id="drillCarried" hidden>
+    <?php partial('drill', [
+      'how'   => $carriedOfficeDep != 0.0
+          ? 'الإجمالي المتاح ناقص المصروفات والعهدة المسحوبة من الدرج وعهد السائقين.'
+          : 'الإجمالي المتاح ناقص المصروفات وعهد السائقين.',
+      'count' => $carriedOfficeDep != 0.0 ? 4 : 3,
+      'total' => ['label' => $isClosed ? 'المرحّل المثبّت' : 'المرحّل للغد', 'value' => money($carried, false)],
+      'body'  => static function () use ($available, $totExpense, $totCustodyExp, $carriedOfficeDep) {
+          partial('row_item', ['title' => 'الإجمالي المتاح', 'icon' => 'wallet',
+              'amount' => money($available, false)]);
+          partial('row_item', ['title' => 'ناقص مصروفات نقدية', 'icon' => 'trending-down',
+              'amount' => '− ' . money($totExpense, false)]);
+          if ($carriedOfficeDep != 0.0) {
+              partial('row_item', ['title' => 'ناقص عهدة مسحوبة من الدرج', 'icon' => 'landmark',
+                  'meta'   => [['icon' => 'user', 'text' => 'نزلت لمناديب من كاش الدرج']],
+                  'amount' => '− ' . money($carriedOfficeDep, false)]);
+          }
+          partial('row_item', ['title' => 'ناقص عهد السائقين', 'icon' => 'truck',
+              'amount' => '− ' . money($totCustodyExp, false)]);
+      },
+    ]); ?>
+  </div>
+
+  <?php /* ═══ تفكيك «عهدة مضافة» — جاهز في الصفحة (طلب المالك) ═══
+           «كل واحد نزله كام وصرف كام» في اليوم ده. الأرقام من
+           `RepCustody::dayTotalsByRep()` نفسها بتاعة `/rep-custody` والداشبورد.
+
+           ⚠️⚠️ **الصفوف اتقسمت بالمصدر** (طلب المالك 2026-08-08: «ميّز بين العهد
+              اللي اتنزلت من الدرج والعهد التانية»). قبل كده كان صف المندوب
+              بيعرض `deposits` بتاعة اليوم **مخلوطة** (بنك + درج + مرحَّل)، فالرقم
+              اللي في الصف ما كانش بيطابق كارت «عهدة منزلة للمناديب» (بنك بس)
+              ولا كارت «عهدة مضافة للدرج» — والمالك يبص على رقمين مختلفين لنفس
+              الحاجة ومايعرفش الفلوس دي طلعت من الدرج ولا من البنك.
+           ⚠️ **الصفوف بقت من بنود المراجعة نفسها** (`$groups`) لا من
+              `dayTotalsByRep` — دي **نفس البنود اللي بتغذّي الكروت**، فمستحيل
+              النافذة تقول رقمًا يخالف الكارت اللي فتحها. `$repDay` فضل للسياق
+              بس (صرف كام وفاضل كام) مش لأي مبلغ في العمود الجانبي.
+           ⚠️ قسم «من الدرج» **مش داخل إجمالي النافذة** — ده كاش خارج من الدرج
+              (قسم `rep_deposit`/`rep_drawer`) مش عهدة داخلة، فعنوان القسم بيقول
+              كده صراحةً وإلا المجموع يتقري غلط. */ ?>
+  <?php /* ⚠️ **بترندر دايمًا — كان مشروطًا بوجود بنود في اليوم.** خانة «عهدة
+           مضافة للدرج» في المعادلة بتظهر حتى في يوم بلا أي حركة (بصفر)، فالضغط
+           عليها كان بيدوّر على نافذة **مش موجودة** ويدّي «تعذّر تحميل التفاصيل».
+           للمكوّن حالة فراغ جاهزة فالرندر الدايم أرخص من شرط تاني ممكن يفترق. */ ?>
+    <div id="topupsDrill" hidden>
+      <?php
+      $repNameById = [];
+      foreach (($repNames ?? []) as $rn) { $repNameById[(int) $rn['id']] = (string) $rn['name']; }
+
+      /** تجميع بنود المراجعة على المندوب — رقم المندوب من `link` بتاع البند. */
+      $repAgg = static function (array $items, array $types): array {
+          $out = [];
+          foreach ($items as $it) {
+              if (!in_array($it['type'] ?? '', $types, true)) { continue; }
+              $rid = preg_match('~rep-custody/(\d+)~', (string) ($it['link'] ?? ''), $m) ? (int) $m[1] : 0;
+              $k = $rid ?: 'n:' . ($it['party'] ?? '—');
+              if (!isset($out[$k])) {
+                  $out[$k] = ['id' => $rid, 'name' => (string) ($it['party'] ?? '—'), 'amount' => 0.0, 'n' => 0];
+              }
+              $out[$k]['amount'] += (float) $it['amount'];
+              $out[$k]['n']++;
+          }
+          return $out;
+      };
+      $topItems    = $groups['topups']['items'] ?? [];
+      $bankByRep   = $repAgg($topItems, ['rep_bank']);
+      $carryByRep  = $repAgg($topItems, ['rep_carry']);
+      // ⚠️ `$odRows` محسوبة فوق وبتختار القسم الصح حسب النموذج (`rep_deposit`
+      //    نقدي أو `rep_drawer` تحويل داخلي) — ممنوع تثبّت واحد منهم هنا.
+      $drawerByRep = $repAgg($odRows, ['rep_deposit']);
+      $drawerSum   = array_sum(array_column($drawerByRep, 'amount'));
+      $rowCount    = 1 + count($bankByRep) + count($carryByRep) + count($drawerByRep);
+      // هل عهدة البنك داخلة في رصيد اليوم؟ (نموذج «الخزنة = كل كاش الشركة»)
+      $bankCounts  = \App\Models\RepCustody::bankTopupActive();
+
+      /** صفّ مندوب — المبلغ من مصدره، والسياق (صرف/فاضل) من `dayTotalsByRep`. */
+      $repSrcRow = static function (array $r, string $icon) use ($repDay): void {
+          $rid = (int) $r['id'];
+          $d   = $repDay[$rid] ?? null;
+          $meta = [];
+          if ((int) $r['n'] > 1) { $meta[] = ['icon' => 'layers', 'text' => intf((int) $r['n']) . ' تنزيلات']; }
+          /* ⚠️ الميتا **إجمالي يومه من كل المصادر** والمبلغ على الجنب **من المصدر
+             ده بس** — لازم الكلمة تقول كده، وإلا المندوب اللي ظاهر في قسمين
+             يتقري كأن الرقمين متعارضين. */
+          if ($d !== null) {
+              $meta[] = ['icon' => 'trending-up', 'text' => 'نزل له اليوم كله '
+                  . money((float) ($d['deposits'] ?? 0), false)];
+              $meta[] = ['icon' => 'trending-down', 'text' => 'صرف ' . money((float) ($d['spent'] ?? 0), false)];
+              $meta[] = ['icon' => 'wallet', 'text' => 'فاضل '
+                  . money((float) ($d['deposits'] ?? 0) - (float) ($d['spent'] ?? 0), false)];
+          }
+          partial('row_item', [
+              'title'  => $r['name'] !== '' && $r['name'] !== '—' ? $r['name'] : ('مندوب #' . $rid),
+              'icon'   => $icon,
+              'meta'   => $meta,
+              'amount' => money((float) $r['amount'], false),
+              'url'    => $rid > 0 ? url('rep-custody/' . $rid) : null,
+          ]);
+      };
+
+      partial('drill', [
+        'how'   => 'كل عهدة اتضافت النهاردة مقسومة بمصدرها: اللي دخل الدرج، واللي نزل للمندوب من البنك على طول.',
+        'count' => $rowCount,
+        /* ⚠️⚠️ **الإجمالي = اللي `Closing` بيحسبه فعلاً (`$totTopups`) مش مجموع
+           المعروض.** القسم بيعرض حاجات **مش داخلة في الرصيد** عن قصد (الرصيد
+           المرحَّل دايمًا، وعهدة البنك في نموذج «الدرج بس»)، فمجموع المعروض بيطلع
+           أكبر من المعادلة فوق. كان مكتوب «إجمالي المضاف النهاردة» على مجموع
+           القسم — رقم مالوش وجود في أي مكان تاني في الشاشة، والمالك يقارنه
+           بالكارت ويلاقي فرق بلا تفسير. دلوقتي الإجمالي بيطابق المعادلة، وكل قسم
+           مش داخل فيه مكتوب على رأسه كده.
+           ⚠️ `$groups['topups']` صراحةً لو احتجته — `$g` برّه الحلقة بيحمل **آخر
+              قسم** اتلفّ عليه (unpaid) فالرقم بيطلع صفر بلا أي خطأ ظاهر. */
+        'total' => ['label' => 'الداخل في حساب اليوم', 'value' => money($totTopups, false)],
+        'more'  => ['label' => 'افتح عهدة المناديب', 'url' => url('rep-custody')],
+        'empty' => ['title' => 'مفيش عهدة اتضافت النهاردة'],
+        'body'  => function () use ($t, $bankByRep, $carryByRep, $drawerByRep, $drawerSum, $repSrcRow, $isDrawerRule, $bankCounts) {
+          $sec = static function (string $title, ?string $note = null): void {
+              echo '<div class="drill-sec">' . e($title)
+                 . ($note !== null ? ' <em>' . e($note) . '</em>' : '') . '</div>';
+          };
+
+          $sec('دخل درج المكتب');
+          partial('row_item', [
+            'title' => 'درج المكتب',
+            'icon'  => 'landmark',
+            'meta'  => [['icon' => 'info', 'text' => 'الكاش اللي دخل الدرج فعلاً']],
+            'amount'=> money($t['topups_drawer'] ?? 0, false),
+          ]);
+
+          if ($bankByRep) {
+            /* ⚠️ عهدة البنك بتتحسب في الرصيد **بس** في نموذج «الخزنة = كل كاش
+               الشركة»؛ في نموذج «الدرج بس» هي فلوس ما دخلتش الدرج فبرّه الحساب.
+               الملحوظة بتتبع النموذج الفعّال عشان الرأس ما يكدبش. */
+            $sec('نزلت للمناديب من البنك — ' . money((float) ($t['rep_bank'] ?? 0), false),
+                 $bankCounts ? 'ما دخلتش الدرج — بس داخلة في حساب اليوم'
+                             : 'ما دخلتش الدرج — مش في حساب اليوم');
+            foreach ($bankByRep as $r) { $repSrcRow($r, 'building'); }
+          }
+
+          if ($carryByRep) {
+            $sec('رصيد مرحَّل مع المناديب — ' . money((float) ($t['rep_carry'] ?? 0), false),
+                 'كان معاهم من قبل — مش إضافة ومش في حساب اليوم');
+            foreach ($carryByRep as $r) { $repSrcRow($r, 'undo'); }
+          }
+
+          if ($drawerByRep) {
+            $sec('نزلت للمناديب من الدرج — ' . money($drawerSum, false),
+                 $isDrawerRule ? 'كاش خرج من الدرج — مش إضافة، بتتطرح تحت'
+                               : 'تحويل داخلي — مش إضافة جديدة');
+            foreach ($drawerByRep as $r) { $repSrcRow($r, 'shuffle'); }
+          }
+        },
+      ]);
+      ?>
+    </div>
+
+  <?php
+  /* ═══ استلام كاش من المناديب (طلب المالك 2026-07-31) ═══
+     ⚠️ **قايمة اليوم مش التراكمي** عن قصد: الزرار بينادي
+        `settleZero($rep, $date)` اللي بيقفل **اليوم المعروض** ويسجّل التسوية
+        بتاريخه هو (قاعدة 2026-07-27). لو عرضنا التراكمي هنا، المالك يدوس على
+        رقم والنظام يسجّل رقمًا تاني.
+     ⚠️ **المبلغ عرض بس** — الخادم بيعيد حسابه بعد قفل صف المندوب. الفورم مش
+        مصدر ثقة والرصيد ممكن يكون اتغيّر والشاشة مفتوحة.
+     ⚠️ **البند المستنّي بيوقف الاستلام** (قرار المالك) — الزرار بيتقفل والسبب
+        مكتوب، لكن الحارس الحقيقي في `RepCustody::settleZero` مش هنا. */
+  $recvRows = [];
+  foreach (($repDay ?? []) as $rid => $x) {
+      $bal = round((float) ($x['balance'] ?? 0), 2);
+      if (abs($bal) < 0.005) { continue; }
+      $recvRows[(int) $rid] = ['balance' => $bal, 'pending' => round((float) ($x['pending'] ?? 0), 2)];
+  }
+  $repNameById = [];
+  foreach (($repNames ?? []) as $rn) { $repNameById[(int) $rn['id']] = (string) $rn['name']; }
+  /* «مفتوح من أيام سابقة» = التراكمي − رصيد اليوم (نفس مفهوم `/rep-custody`).
+     ⚠️ **بلا زرار استلام هنا عن قصد:** الزرار بيقفل **اليوم المعروض** ويسجّل
+        التسوية بتاريخه (قاعدة 2026-07-27). فلوس يوم فات بتتقفل من كارت المندوب
+        أو من شاشة تقفيل يومها، وإلا التسوية تتسجّل على يوم مش بتاعها. */
+  $prevOpen = [];
+  foreach (($wallets['reps'] ?? []) as $w) {
+      $rid  = (int) $w['id'];
+      $rest = round((float) $w['balance'] - (float) ($repDay[$rid]['balance'] ?? 0), 2);
+      if (abs($rest) > 0.005) { $prevOpen[$rid] = $rest; }
+  }
+  ?>
+  <?php if ($recvRows || $prevOpen || abs((float) $settledSum) > 0.005): ?>
+    <section class="d-card cl-recv" id="receive">
+      <div class="d-card-head">
+        <h3><?= icon('wallet', 18) ?> <span>استلام من المناديب</span></h3>
+        <?php if (abs((float) $settledSum) > 0.005): ?>
+          <span class="cl-wal-sum <?= $settledSum < 0 ? 'is-neg' : '' ?>">
+            <?= money((float) $settledSum, false) ?> <small><?= $settledSum < 0 ? 'دفعتها' : 'استلمتها' ?></small>
+          </span>
+        <?php endif; ?>
+      </div>
+      <div class="d-card-body">
+        <?php if ($recvRows): ?>
+          <ul class="cl-wal-list">
+            <?php foreach ($recvRows as $rid => $x): ?>
+              <?php $blocked = $x['pending'] > 0.005; ?>
+              <li class="cl-wal-row cl-recv-row<?= $x['balance'] < 0 ? ' is-neg' : '' ?>">
+                <span class="cl-wal-ic"><?= icon('user', 15) ?></span>
+                <a class="cl-wal-name" href="<?= url('rep-custody/' . $rid) ?>"><?= e($repNameById[$rid] ?? ('مندوب #' . $rid)) ?></a>
+                <b class="cl-wal-amt"><?= money($x['balance'], false) ?></b>
+                <?php /* ⚠️ **الرابط بعدسة المندوب واليوم** — من غيرها المالك اللي
+                         بيراجع بنود مندوب واحد بيتقذف على كل المناديب وكل الأيام.
+                         المصدر الوحيد `RepCustodyController::inboxUrl()` — ممنوع
+                         تكتب `rep-custody/inbox?status=…` بالإيد. */ ?>
+                <?php if ($blocked): ?>
+                  <a class="btn ghost sm"
+                     href="<?= url(\App\Controllers\RepCustodyController::inboxUrl('pending', $rid, $date)) ?>"
+                     title="فيه بنود مستنية مراجعتك بـ<?= e(money($x['pending'], false)) ?> — راجعها الأول">
+                    <?= icon('alert', 14) ?> راجع البنود
+                  </a>
+                <?php else: ?>
+                  <form method="post" action="<?= url('closing/receive-rep') ?>" class="confirm-financial"
+                        data-confirm="<?= $x['balance'] < 0
+                            ? 'تسجيل إنك دفعت ' . e(money(abs($x['balance']), false)) . ' للمندوب وتصفير عهدة يوم ' . e(dfmt($date)) . '؟'
+                            : 'استلمت ' . e(money($x['balance'], false)) . ' من المندوب وتصفير عهدة يوم ' . e(dfmt($date)) . '؟' ?>">
+                    <?= csrfField() ?>
+                    <?= formStateFields(\App\Core\FormState::token(), 'closing?date=' . urlencode($date) . '#receive') ?>
+                    <input type="hidden" name="date" value="<?= e($date) ?>">
+                    <input type="hidden" name="rep_id" value="<?= $rid ?>">
+                    <button class="btn sm" type="submit">
+                      <?= icon('check', 14) ?> <?= $x['balance'] < 0 ? 'دفعت له' : 'استلمت' ?>
+                    </button>
+                  </form>
+                <?php endif; ?>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
+
+        <?php if ($prevOpen): ?>
+          <ul class="cl-wal-list cl-recv-prev">
+            <?php foreach ($prevOpen as $rid => $rest): ?>
+              <li class="cl-wal-row is-prev<?= $rest < 0 ? ' is-neg' : '' ?>">
+                <span class="cl-wal-ic"><?= icon('clock', 15) ?></span>
+                <a class="cl-wal-name" href="<?= url('rep-custody/' . $rid) ?>"><?= e($repNameById[$rid] ?? ('مندوب #' . $rid)) ?></a>
+                <b class="cl-wal-amt"><?= money($rest, false) ?></b>
+                <span class="cl-recv-tag">من أيام سابقة</span>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
+
+        <?php if (($groups['rep_settle']['count'] ?? 0) > 0): ?>
+          <ul class="cl-wal-list cl-recv-done">
+            <?php foreach ($groups['rep_settle']['items'] as $it): ?>
+              <li class="cl-wal-row is-done<?= $it['amount'] < 0 ? ' is-neg' : '' ?>">
+                <span class="cl-wal-ic"><?= icon('check', 15) ?></span>
+                <a class="cl-wal-name" href="<?= url((string) $it['link']) ?>"><?= e((string) $it['party']) ?></a>
+                <b class="cl-wal-amt"><?= money((float) $it['amount'], false) ?></b>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
+      </div>
+    </section>
+  <?php endif; ?>
+
+  <?php /* ═══ قسم «الكاش برّه البنك» اتشال من هنا (2026-07-31، طلب المالك) ═══
+           بقى **كروت تحت المعادلة فوق** (`.cl-split`) بنفس الأرقام بالحرف
+           (`Closing::walletSplit()`) وبتفاصيل جوّه نافذتين. سيبانه هنا كان
+           بيكرّر نفس الأرقام مرتين في نفس الشاشة. */ ?>
 
   <!-- شريط سفلي لاصق: التقدّم + الإقفال دايمًا في المتناول (مهم على الهاتف) -->
   <?php if (!$isClosed && (int)$t['blocking'] > 0): ?>
@@ -357,8 +971,35 @@ $percent = (int) ($t['percent'] ?? 0);
 /* معادلة الرصيد */
 .cl-flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:var(--space-2);padding:var(--space-4);
   border:1px solid var(--line);border-radius:var(--radius-3);background:var(--card);box-shadow:var(--shadow-1)}
+/* ⚠️ الكروت بقت `<button>` (قاعدة «ممنوع رقم أصمّ») — لازم تصفير أنماط الزرار
+   الافتراضية وإلا الخط والمحاذاة يختلفوا عن باقي الشاشة. */
 .cl-cell{flex:1 1 140px;display:grid;align-content:center;gap:2px;padding:var(--space-3);
-  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--zebra)}
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--zebra);
+  font:inherit;text-align:start;cursor:pointer;position:relative;
+  transition:border-color var(--dur-1) var(--ease),background var(--dur-1) var(--ease)}
+.cl-cell:hover{border-color:var(--navy);background:var(--card)}
+.cl-cell:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+/* علامة إن الكارت بيفتح تفاصيل — بديل الجملة التفسيرية */
+.cl-cell::after{content:'';position:absolute;inset-block-start:6px;inset-inline-start:8px;
+  width:5px;height:5px;border-radius:50%;background:var(--ink-mut);opacity:.35}
+.cl-cell:hover::after{opacity:.9;background:var(--navy)}
+.cl-cell.total{background:var(--card);border-color:var(--navy)}
+.cl-cell.total b{color:var(--navy);font-size:var(--fs-4)}
+/* ═══ «الكاش فين دلوقتي» — الدرج والمناديب (طلب المالك 2026-07-31) ═══
+   نفس ماركب المعادلة عشان الشاشة تفضل بلغة واحدة، بشريط علوي مميّز يوضّح
+   إنه سطر تاني بيجاوب على سؤال تاني («الكاش فين» مش «اليوم عمل إيه»). */
+.cl-split{display:flex;flex-wrap:wrap;align-items:stretch;gap:var(--space-2);
+  margin-block-start:var(--space-3);padding:var(--space-4);
+  border:1px solid var(--line);border-radius:var(--radius-3);background:var(--card);
+  box-shadow:var(--shadow-1);border-block-start:3px solid var(--gold)}
+.cl-split .cl-cell.drawer b{color:var(--gold-dark)}
+.cl-split .cl-cell.reps b{color:var(--navy)}
+.cl-split .cl-cell.reps.neg b{color:var(--red)}
+/* ⚠️ المجموع `<div>` مش `<button>` — مالوش تفاصيل تانية غير اللي في الكارتين،
+   وزرار بيفتح نفس المعلومة تاني بيبقى تكرار. */
+.cl-split .cl-cell.sum{background:var(--zebra);border-color:var(--navy);cursor:default}
+.cl-split .cl-cell.sum::after{display:none}
+.cl-split .cl-cell.sum b{color:var(--ink);font-size:var(--fs-4)}
 .cl-cell span{font-size:var(--fs-1);color:var(--grey);font-weight:var(--fw-bold)}
 .cl-cell b{font-size:var(--fs-3);color:var(--navy);font-variant-numeric:tabular-nums}
 .cl-cell small{font-size:var(--fs-1);color:var(--grey);opacity:.85}
@@ -371,6 +1012,13 @@ $percent = (int) ($t['percent'] ?? 0);
 .cl-flow .op{align-self:center;font-style:normal;font-weight:var(--fw-black);font-size:var(--fs-4);color:var(--ink-mut)}
 .cl-flow .op.minus{color:var(--red)}
 .cl-flow .op.plus{color:var(--green)}
+/* ⚠️ **علامة تحويل داخلي — محايدة عن قصد.** الكاش بينتقل من الدرج لجيب مندوب
+   والاتنين جوّه الرقم، فالإجمالي ما بيتغيّرش. لون أحمر (خروج) أو أخضر (دخول)
+   كان هيقول إن فيه فلوس راحت أو جت وهو مش بيحصل. */
+.cl-flow .op.xfer{color:var(--ink-mut)}
+.cl-cell.xfer{border-style:dashed;background:var(--zebra)}
+.cl-cell.xfer b{color:var(--ink-mut)}
+.cl-cell.xfer small{font-size:var(--fs-1);color:var(--grey);font-weight:var(--fw-normal)}
 
 /* رأس المراجعة */
 .cl-review{padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-3);
@@ -408,6 +1056,11 @@ $percent = (int) ($t['percent'] ?? 0);
 .rv-search input{flex:1;min-height:42px;border:0;background:transparent;font-family:inherit;font-size:var(--fs-2)}
 .rv-search input:focus{outline:0}
 .rv-filters{display:flex;gap:var(--space-1);flex-wrap:wrap}
+.rv-sort{display:flex;align-items:center;gap:var(--space-2);padding:0 var(--space-3);
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--white);color:var(--grey)}
+.rv-sort select{min-height:42px;border:0;background:transparent;font-family:inherit;
+  font-size:var(--fs-2);color:var(--ink);cursor:pointer}
+.rv-sort select:focus{outline:0}
 .rv-fbtn{display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:0 var(--space-3);
   border:1px solid var(--line);border-radius:var(--radius-2);background:var(--white);
   color:var(--grey);font-family:inherit;font-size:var(--fs-2);font-weight:var(--fw-bold);cursor:pointer}
@@ -534,6 +1187,48 @@ $percent = (int) ($t['percent'] ?? 0);
 .cl-close-act .btn:disabled{opacity:.55;cursor:not-allowed}
 
 /* شريط لاصق سفلي */
+/* زرار مجموع القسم اللي بيفتح التفكيك — نفس شكل الرقم بالظبط + مؤشّر إنه يُضغط.
+   ⚠️ كل كلاس مطبوع لازم له شكل (درس `.table-mobile-scroll`). */
+button.rv-gsum{display:inline-flex;align-items:center;gap:6px;border:0;background:none;
+  padding:0;font:inherit;font-weight:700;cursor:pointer;font-variant-numeric:tabular-nums}
+button.rv-gsum svg{opacity:.55}
+button.rv-gsum:hover{text-decoration:underline}
+button.rv-gsum:hover svg{opacity:1}
+/* ═══ تفكيك المحافظ (المرحلة ٤.٣ من docs/16) ═══
+   ⚠️ الكلاسات هنا في `<style>` الشاشة عن قصد — مستعملة في **شاشة واحدة** بس.
+      لو اتنادت من شاشة تانية لازم تتنقل لـ`app.css` (درس `.cars-period` v54). */
+.cl-recv .cl-wal-sum{font-weight:700;font-size:var(--fs-5);color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.cl-wal-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.cl-wal-row{display:flex;align-items:center;gap:var(--space-3);min-height:44px;
+  padding:var(--space-2) 0;border-bottom:1px solid var(--line)}
+.cl-wal-row:last-child{border-bottom:0}
+.cl-wal-ic{display:grid;place-items:center;inline-size:30px;block-size:30px;flex:none;
+  border-radius:var(--radius-2);background:var(--bg-soft,#F2F6FC);color:var(--grey)}
+.cl-wal-row.is-drawer .cl-wal-ic{background:var(--gold-lt,#FBF3DE);color:var(--gold-dark)}
+.cl-wal-name{flex:1;min-width:0;font-weight:500;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+a.cl-wal-name:hover{color:var(--navy);text-decoration:underline}
+.cl-wal-amt{flex:none;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
+.cl-wal-row.is-neg .cl-wal-amt{color:var(--red)}
+.cl-wal-row.is-drawer .cl-wal-amt{font-size:var(--fs-4)}
+.cl-wal-note{margin:var(--space-3) 0 0;font-size:var(--fs-2);line-height:1.8;color:var(--grey)}
+.cl-wal-note b{color:var(--ink);font-variant-numeric:tabular-nums}
+/* ═══ استلام من المناديب (2026-07-31) — بيشارك ماركب `.cl-wal-*` ═══ */
+.cl-recv .cl-wal-sum{font-weight:700;font-size:var(--fs-5);color:var(--green);
+  font-variant-numeric:tabular-nums}
+.cl-recv .cl-wal-sum.is-neg{color:var(--red)}
+.cl-recv .cl-wal-sum small{font-weight:500;font-size:var(--fs-2);color:var(--grey)}
+.cl-recv-row form{margin:0;flex:none}
+/* الصف المتسوّى بيفضل ظاهر كـ«خلاص اتعمل» بدل ما يختفي بالسكوت */
+.cl-recv-done,.cl-recv-prev{margin-block-start:var(--space-3);padding-block-start:var(--space-2);
+  border-block-start:1px dashed var(--line)}
+.cl-wal-row.is-prev .cl-wal-ic{background:var(--gold-lt,#FBF3DE);color:var(--gold-dark)}
+.cl-recv-tag{flex:none;font-size:var(--fs-1);color:var(--grey);
+  padding:2px var(--space-2);border:1px solid var(--line);border-radius:var(--radius-pill)}
+.cl-wal-row.is-done .cl-wal-ic{background:var(--green-lt,#E3F1E7);color:var(--green)}
+.cl-wal-row.is-done .cl-wal-amt{color:var(--green)}
+.cl-wal-row.is-done.is-neg .cl-wal-amt{color:var(--red)}
 .cl-bar{position:sticky;bottom:0;z-index:var(--z-sticky);display:grid;
   grid-template-columns:auto 1fr auto;align-items:center;gap:var(--space-3);
   padding:var(--space-2) var(--space-3);border:1px solid var(--line);border-radius:var(--radius-2);
@@ -574,6 +1269,8 @@ $percent = (int) ($t['percent'] ?? 0);
   .rv-head{gap:var(--space-3)}
   .rv-filters{width:100%}
   .rv-fbtn{flex:1;justify-content:center}
+  .rv-sort{width:100%}
+  .rv-sort select{flex:1;width:100%}
   /* البند بيتحوّل لكارت: العلامة والمبلغ في صف، والتفاصيل تحتهم */
   .rv-item{grid-template-columns:auto 1fr auto;gap:var(--space-2) var(--space-3);
     padding:var(--space-3);align-items:start}
@@ -593,6 +1290,100 @@ $percent = (int) ($t['percent'] ?? 0);
   .rv-box,.rv-box:after,.rv-gauge-bar i,.cl-bar-line i,.rv-item{transition:none}
 }
 </style>
+
+<script>
+/* أدوات عرض البنود: بحث · فلترة · ترتيب.
+   ⚠️ سكربت **مستقل عن سكربت المراجعة عن قصد** — سكربت المراجعة محكوم بـ
+      `$canReview` (اليوم المتقفل ما بيتكتبش عليه)، ودي أدوات **عرض بحت**
+      لازم تشتغل على اليوم المتقفل كمان: المالك بيفتح يومًا قديم عشان يراجعه
+      بعينه، ومحتاج يدوّر ويرتّب فيه زي أي يوم. كانوا جوّه سكربت المراجعة،
+      فكانوا **معطّلين بالسكوت** على كل يوم متقفل — الخانة بتترسم وما بتعملش
+      حاجة (نفس عائلة باج `.table-mobile-scroll`). */
+(function () {
+  if (!document.getElementById('clPage')) { return; }
+
+  /* ① بحث وفلترة — كلها في المتصفح بلا أي طلب للخادم */
+  var search = document.getElementById('rvSearch');
+  var mode = 'all';
+  /* ⚠️ التطبيع إلزامي على الطرفين: `data-search` بيتطبّع في الخادم بـ`search_norm()`
+     واللي المستخدم بيكتبه بيتطبّع هنا بـ`almSearchNorm` (نفس الجدول بالحرف).
+     من غيره «إكرامية» ما بتلاقي «اكراميه» فالبند يبان مش موجود وهو موجود. */
+  var norm = window.almSearchNorm || function (v) { return String(v || '').trim().toLowerCase(); };
+  function applyFilter() {
+    var q = norm(search && search.value || '');
+    var shown = 0;
+    document.querySelectorAll('.rv-item').forEach(function (row) {
+      var done = row.classList.contains('is-done');
+      var okMode = mode === 'all' || (mode === 'pending' ? !done : done);
+      var okText = !q || (row.dataset.search || '').indexOf(q) !== -1;
+      var show = okMode && okText;
+      row.hidden = !show;
+      if (show) { shown++; }
+    });
+    document.querySelectorAll('.rv-group').forEach(function (g) {
+      g.hidden = !g.querySelector('.rv-item:not([hidden])');
+    });
+    var none = document.getElementById('rvNoRes');
+    if (none) { none.hidden = shown !== 0 || !document.querySelector('.rv-item'); }
+  }
+  /* سكربت المراجعة بينادّيها بعد كل علامة عشان الفلتر يفضل صادق */
+  window.__rvApplyFilter = applyFilter;
+  if (search) { search.addEventListener('input', applyFilter); }
+  document.querySelectorAll('.rv-fbtn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.rv-fbtn').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      mode = b.dataset.filter;
+      applyFilter();
+    });
+  });
+
+  /* ② ترتيب البنود — عرض بحت: ولا بيمسّ أي حساب ولا الإقفال ولا بيبعت للخادم.
+     ⚠️ الترتيب **جوّه كل قسم** (`.rv-list`) والأقسام نفسها ما بتتحركش: الأقسام
+        فئات مالية (داخل/خارج · كاش/فيزا/غير مدفوع) والإقفال مربوط بيها
+        (`DailyReview::BLOCKING`)، فتحريكها بيكسر معنى الشاشة وإجمالياتها. */
+  var sortSel = document.getElementById('rvSort');
+  var SORT_KEY = 'almotawakel:closing-sort';
+  function sortRows(by) {
+    document.querySelectorAll('.rv-list').forEach(function (list) {
+      var rows = Array.prototype.slice.call(list.querySelectorAll('.rv-item'));
+      if (rows.length < 2) { return; }
+      rows.sort(function (a, b) {
+        var d = 0;
+        if (by === 'amount-desc' || by === 'amount-asc') {
+          var na = parseFloat(a.dataset.amount) || 0, nb = parseFloat(b.dataset.amount) || 0;
+          d = by === 'amount-desc' ? nb - na : na - nb;
+        } else if (by) {
+          var key = 's' + by.charAt(0).toUpperCase() + by.slice(1);
+          var va = a.dataset[key] || '', vb = b.dataset[key] || '';
+          /* البند اللي مالوش قيمة (مفيش مندوب مثلاً) بيروح آخر القايمة —
+             ما ينفعش يتصدّر ترتيبًا هو مش داخل فيه أصلاً. */
+          if (va === '' && vb !== '') { return 1; }
+          if (vb === '' && va !== '') { return -1; }
+          d = va.localeCompare(vb, 'ar');
+        }
+        /* الترتيب الثانوي دايمًا الترتيب الأصلي — فالنتيجة ثابتة ومتوقّعة،
+           والبنود المتساوية ما بتتنطّطش من ترتيب لترتيب. */
+        return d || ((+a.dataset.seq || 0) - (+b.dataset.seq || 0));
+      });
+      rows.forEach(function (r) { list.appendChild(r); });
+    });
+  }
+  if (sortSel) {
+    try {
+      var saved = localStorage.getItem(SORT_KEY);
+      if (saved && sortSel.querySelector('option[value="' + saved + '"]')) {
+        sortSel.value = saved;
+        sortRows(saved);
+      }
+    } catch (e) { /* التخزين مقفول في المتصفح — الترتيب الافتراضي وخلاص */ }
+    sortSel.addEventListener('change', function () {
+      sortRows(sortSel.value);
+      try { localStorage.setItem(SORT_KEY, sortSel.value); } catch (e) {}
+    });
+  }
+})();
+</script>
 
 <?php if ($canReview): ?>
 <script>
@@ -693,7 +1484,9 @@ $percent = (int) ($t['percent'] ?? 0);
     if (closeBtn) { closeBtn.disabled = !j.complete; }
     var blockTxt = document.getElementById('clBlockTxt');
     if (blockTxt && !j.complete) { blockTxt.textContent = 'فاضل ' + (t.blocking_pending || 0) + ' بند من غير علامة مراجعة.'; }
-    applyFilter();
+    /* ⚠️ أدوات العرض في سكربت مستقل (بيشتغل على اليوم المتقفل كمان)، فالنداء
+       دفاعي: البند اللي اتعلّم لازم يختفي فورًا لو الفلتر «بدون علامة» شغّال. */
+    if (window.__rvApplyFilter) { window.__rvApplyFilter(); }
   }
 
   function set(id, val) { var el = document.getElementById(id); if (el && val !== undefined && val !== null) { el.textContent = val; } }
@@ -725,39 +1518,6 @@ $percent = (int) ($t['percent'] ?? 0);
     });
   });
 
-  /* بحث وفلترة — كلها في المتصفح بلا أي طلب للخادم */
-  var search = document.getElementById('rvSearch');
-  var mode = 'all';
-  /* ⚠️ التطبيع إلزامي على الطرفين: `data-search` بيتطبّع في الخادم بـ`search_norm()`
-     واللي المستخدم بيكتبه بيتطبّع هنا بـ`almSearchNorm` (نفس الجدول بالحرف).
-     من غيره «إكرامية» ما بتلاقي «اكراميه» فالبند يبان مش موجود وهو موجود. */
-  var norm = window.almSearchNorm || function (v) { return String(v || '').trim().toLowerCase(); };
-  function applyFilter() {
-    var q = norm(search && search.value || '');
-    var shown = 0;
-    document.querySelectorAll('.rv-item').forEach(function (row) {
-      var done = row.classList.contains('is-done');
-      var okMode = mode === 'all' || (mode === 'pending' ? !done : done);
-      var okText = !q || (row.dataset.search || '').indexOf(q) !== -1;
-      var show = okMode && okText;
-      row.hidden = !show;
-      if (show) { shown++; }
-    });
-    document.querySelectorAll('.rv-group').forEach(function (g) {
-      g.hidden = !g.querySelector('.rv-item:not([hidden])');
-    });
-    var none = document.getElementById('rvNoRes');
-    if (none) { none.hidden = shown !== 0 || !document.querySelector('.rv-item'); }
-  }
-  if (search) { search.addEventListener('input', applyFilter); }
-  document.querySelectorAll('.rv-fbtn').forEach(function (b) {
-    b.addEventListener('click', function () {
-      document.querySelectorAll('.rv-fbtn').forEach(function (x) { x.classList.remove('active'); });
-      b.classList.add('active');
-      mode = b.dataset.filter;
-      applyFilter();
-    });
-  });
 
   /* الضغط على أي مكان في صف البند بيعلّمه — أسهل بكتير على الهاتف */
   form.addEventListener('click', function (e) {

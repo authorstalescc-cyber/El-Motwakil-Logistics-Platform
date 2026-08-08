@@ -409,6 +409,9 @@ class BawalisController extends CrudController
     {
         $this->requireAuth();
         $this->requireCsrf();
+        if (\App\Models\OfficeDriverStatement::billAllocationTotal((int)$id) > 0.005) {
+            $this->fail('البوليصة مرتبطة بإيصال دفعه سائق سيارة المكتب. فكّ الربط من بيان السائق أولاً.', 'bawalis');
+        }
         $row = Database::row('SELECT bill_date, is_legacy FROM bawalis WHERE id = ?', [(int)$id]);
         if ($row && !(int)$row['is_legacy'] && $row['bill_date']
             && ($err = Closing::guard($row['bill_date']))) {

@@ -107,15 +107,29 @@ foreach ($sqlFixed as $m) {
    (تطابق جزئي) وبلّغت عن `push/index.php` غلط — ومصدرها `PushNotify::recent()`
    مش مصحَّح أصلاً فـ`dtfmt` عليه صح. الأدق: الاستعلامات المصحَّحة بترجّع
    الوقت بأسماء محدّدة (`at`/`last_at`/`until_at`/`ts`)، فمنع `dtfmt` عليها
-   بالتحديد هو الشرط الحقيقي. */
+   بالتحديد هو الشرط الحقيقي.
+
+   ⚠️⚠️ **الاسم عامّ فبيتصادم — الاستثناء لازم يكون مؤرَّخًا ومحروسًا.** موديلات
+   تانية بترجّع نفس الأسماء **بلا** تصحيح SQL، فـ`dtfmt` عليها **صح**. أول حالة:
+   `DailyReview::view()['last_at']` من `daily_closing_reviews` خام — ومنع `dtfmt`
+   عليها كان بيسيب شاشة التقفيل بوقت متأخّر ٣ ساعات (اتصادف فعليًّا 2026-08-08).
+   ⚠️ **الاستثناء مش سطر ثقة — تحته تأكيد** إن الموديل المصدر لسه ما بيصحّحش
+      جوّه SQL؛ يوم ما يصحّح، التأكيد بيفشل والاستثناء بيلغي نفسه بدل ما يفضل
+      يغطّي على تصحيح مزدوج حقيقي. */
 $fixedAliases = 'at|last_at|until_at|ts';
+/** [الشاشة => [المفاتيح المسموحة]] — مصدرها مش مصحَّح في SQL (مؤكَّد تحت). */
+$rawSourceOk = ['closing/index.php' => ['last_at']];
 $dbl = [];
 foreach (glob($root . '/app/Views/*/*.php') ?: [] as $f) {
+    $rel = str_replace($root . '/app/Views/', '', $f);
     $src = code_only((string) file_get_contents($f));
-    if (preg_match('/dtfmt\(\s*\$[a-zA-Z_]+\[[\'"](' . $fixedAliases . ')[\'"]\]/', $src)) {
-        $dbl[] = str_replace($root . '/app/Views/', '', $f);
-    }
+    if (!preg_match_all('/dtfmt\(\s*\$[a-zA-Z_]+\[[\'"](' . $fixedAliases . ')[\'"]\]/', $src, $hits)) { continue; }
+    $bad = array_diff(array_unique($hits[1]), $rawSourceOk[$rel] ?? []);
+    if ($bad) { $dbl[] = $rel . ' (' . implode(',', $bad) . ')'; }
 }
+// حارس الاستثناء: `DailyReview` لسه بيقرا `reviewed_at` خام بلا `Clock`
+chk(!str_contains((string) @file_get_contents($root . '/app/Models/DailyReview.php'), 'Clock::'),
+    '⚠️ `DailyReview` لسه بيرجّع الوقت خام — فـ`dtfmt` في شاشة التقفيل هي الصح');
 chk($dbl === [], '⚠️ ومفيش `dtfmt` على عمود الاستعلام صحّحه خلاص'
     . ($dbl ? ' — لقينا: ' . implode(' · ', $dbl) : ''));
 

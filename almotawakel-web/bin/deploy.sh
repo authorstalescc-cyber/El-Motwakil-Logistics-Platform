@@ -9,7 +9,7 @@
 # الخطوات بالترتيب:
 #   1) نسخة احتياطية من قاعدة **الإنتاج** (على السيرفر + نسخة تتنزّل محليًا).
 #   2) رفع الكود بـrsync --checksum وبلا --delete.
-#   3) تظبيط الصلاحيات (755/644 + config 600).
+#   3) تظبيط الصلاحيات (755/644 + config والنسخ وExcel المحمي 600).
 #   4) تشغيل كل الهجرات المعلقة تلقائيًّا من بوابة ledger ثم الفحوصات.
 #   5) التأكد إن الموقع بيرد 200، وطباعة ملخّص.
 #
@@ -26,6 +26,7 @@
 #   bash bin/deploy.sh
 #   bash bin/deploy.sh --verify bin/verify_v49.php
 #   bash bin/deploy.sh --operator deploy-karim
+#   bash bin/deploy.sh --files-from /tmp/release-files.txt
 #   bash bin/deploy.sh --dry-run          # يوري اللي هيترفع بلا ما يرفع
 # ============================================================================
 set -euo pipefail
@@ -38,6 +39,7 @@ DRY=0
 VERIFY=()
 MIGRATION_OPERATOR="deploy.sh"
 BACKUP_SHA=""
+FILES_FROM=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -48,12 +50,24 @@ while [[ $# -gt 0 ]]; do
       ;;
     --verify) VERIFY+=("$2"); shift 2 ;;
     --operator) MIGRATION_OPERATOR="$2"; shift 2 ;;
+    --files-from) FILES_FROM="$2"; shift 2 ;;
     *) echo "خيار مش معروف: $1" >&2; exit 2 ;;
   esac
 done
 
 [[ "$MIGRATION_OPERATOR" =~ ^[A-Za-z0-9._@-]{1,120}$ ]] \
   || { echo "قيمة --operator غير آمنة؛ استخدم حروفًا/أرقامًا و._@- فقط." >&2; exit 2; }
+
+if [[ -n "$FILES_FROM" ]]; then
+  [[ -f "$FILES_FROM" ]] || { echo "ملف النطاق غير موجود: $FILES_FROM" >&2; exit 2; }
+  while IFS= read -r scoped_file; do
+    [[ -z "$scoped_file" || "$scoped_file" == \#* ]] && continue
+    [[ "$scoped_file" =~ ^[A-Za-z0-9._/-]+$ && "$scoped_file" != /* && "$scoped_file" != *".."* ]] \
+      || { echo "مسار غير آمن في ملف النطاق: $scoped_file" >&2; exit 2; }
+    [[ -f "$LOCAL/$scoped_file" ]] \
+      || { echo "ملف النطاق غير موجود محليًا: $scoped_file" >&2; exit 2; }
+  done < "$FILES_FROM"
+fi
 
 say() { printf '\n\033[1;36m%s\033[0m\n%s\n' "$1" "────────────────────────────────────────────────────────────"; }
 ok()  { printf '  \033[32m✓\033[0m %s\n' "$1"; }
@@ -147,7 +161,12 @@ else
     ls -1 pre-deploy-*.sql.gz 2>/dev/null | sort | head -n -$KEEP | tee /dev/stderr | xargs -r rm -f" 2>&1 >/dev/null | wc -l | tr -d ' ')
   [[ "$PRUNED" -gt 0 ]] && ok "اتمسح $PRUNED نسخة قديمة من السيرفر (بنسيب آخر $KEEP)"
 
-  LOCAL_OLD=$(ls -1 "$LOCAL/database/backups/prod/"pre-deploy-*.sql.gz 2>/dev/null | sort | head -n -$KEEP || true)
+  # BSD head في macOS لا يدعم `head -n -20`؛ awk دي شغّالة على macOS/Linux
+  # وتطبع كل النسخ ما عدا آخر KEEP من غير رسالة خطأ مضلّلة.
+  LOCAL_OLD=$(ls -1 "$LOCAL/database/backups/prod/"pre-deploy-*.sql.gz 2>/dev/null \
+    | sort \
+    | awk -v keep="$KEEP" '{ files[NR]=$0 } END { for (i=1; i<=NR-keep; i++) print files[i] }' \
+    || true)
   if [[ -n "$LOCAL_OLD" ]]; then
     echo "$LOCAL_OLD" | xargs rm -f
     ok "اتمسح $(echo "$LOCAL_OLD" | wc -l | tr -d ' ') نسخة قديمة محليًّا (بنسيب آخر $KEEP)"
@@ -168,8 +187,18 @@ fi
 say "2) رفع الكود (rsync --checksum بلا --delete)"
 RSYNC_FLAGS=(-az --checksum --itemize-changes --human-readable)
 [[ $DRY -eq 1 ]] && RSYNC_FLAGS+=(--dry-run)
-CHANGED="$(rsync "${RSYNC_FLAGS[@]}" "${EXCLUDES[@]}" \
-  -e "ssh" "$LOCAL/" "$HOST:$REMOTE/" | grep -E '^[<>ch]' || true)"
+if [[ -n "$FILES_FROM" ]]; then
+  RSYNC_OUTPUT="$(rsync "${RSYNC_FLAGS[@]}" "${EXCLUDES[@]}" \
+    --files-from="$FILES_FROM" --relative \
+    -e "ssh" "$LOCAL/" "$HOST:$REMOTE/")" \
+    || die "فشل rsync أثناء رفع نطاق الملفات."
+else
+  RSYNC_OUTPUT="$(rsync "${RSYNC_FLAGS[@]}" "${EXCLUDES[@]}" \
+    -e "ssh" "$LOCAL/" "$HOST:$REMOTE/")" \
+    || die "فشل rsync أثناء رفع الكود."
+fi
+# grep يرجع 1 طبيعيًا لو مفيش تغيير؛ فشل rsync نفسه اتحرس فوق قبل الفلترة.
+CHANGED="$(printf '%s\n' "$RSYNC_OUTPUT" | grep -E '^[<>ch]' || true)"
 if [[ -z "$CHANGED" ]]; then
   ok "مفيش ملفات اتغيّرت — السيرفر متطابق أصلاً"
 else
@@ -206,16 +235,16 @@ fi
 
 # ── 3) الصلاحيات ──────────────────────────────────────────────────────────
 say "3) تظبيط الصلاحيات"
-# ⚠️ النسخ الاحتياطية والمرفقات مستثناة من التوسيع: ملفاتها فيها بيانات وبتتخزّن
-#    بـ600/700 عن قصد، وتحويلها 644 بيخلّيها مقروءة لأي مستخدم على السيرفر.
-SKIP="! -path './.git/*' ! -path './storage/backups/*' ! -path './database/backups/*' ! -path './storage/private_uploads/*'"
+# ⚠️ النسخ الاحتياطية والمرفقات ونسخة Excel مستثناة من التوسيع: ملفاتها فيها
+#    بيانات وبتتخزّن بـ600/700 عن قصد، وتحويلها 644 بيخلّيها مقروءة لأي مستخدم.
+SKIP="! -path './.git/*' ! -path './storage/backups/*' ! -path './database/backups/*' ! -path './storage/private_uploads/*' ! -path './storage/excel_sync/*'"
 ssh "$HOST" "cd '$REMOTE' && \
   find . -type d $SKIP -exec chmod 755 {} + && \
   find . -type f $SKIP -exec chmod 644 {} + && \
-  chmod 700 storage/backups database/backups 2>/dev/null; \
-  find storage/backups database/backups -type f -exec chmod 600 {} + 2>/dev/null; \
+  chmod 700 storage/backups database/backups storage/excel_sync 2>/dev/null; \
+  find storage/backups database/backups storage/excel_sync -type f -exec chmod 600 {} + 2>/dev/null; \
   chmod 600 config/config.php" || die "فشل تظبيط الصلاحيات."
-ok "755 للمجلدات · 644 للملفات · 600 لـconfig والنسخ الاحتياطية (منع 403)"
+ok "755 للمجلدات · 644 للملفات · 600 لـconfig والنسخ الاحتياطية وExcel المحمي"
 
 # ── 4) الهجرات والفحوصات ──────────────────────────────────────────────────
 # ممنوع تشغيل migrate_vN.php مباشرة: ده كان بيطبّق schema من غير ما يسجّل

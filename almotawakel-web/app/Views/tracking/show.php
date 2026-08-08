@@ -16,7 +16,7 @@ $msg   = $link !== '' ? Track::waMessage($t + ['bill_number' => $bill['bill_numb
 <div class="pg-head">
   <div>
     <h2 class="pg-title"><?= icon('map-pin', 22) ?> <?= e($t['driver'] ?: 'بلا سائق') ?>
-      <span class="trk-pulse <?= e($pk) ?>" style="font-size:var(--fs-1);vertical-align:middle"><?= e($ptxt) ?></span>
+      <span class="trk-pulse <?= e($pk) ?> tsh-xs"><?= e($ptxt) ?></span>
     </h2>
     <p class="pg-sub">
       <?= icon('truck', 13) ?> <?= e($t['car_no'] ?: '—') ?>
@@ -83,14 +83,14 @@ if ($eta): ?>
 <div class="trk-cols">
   <div>
     <?php if ($pings): ?>
-      <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px">
-        <div id="map" style="height:460px;width:100%"></div>
+      <div class="card mb">
+        <div id="map" class="tsh-map"></div>
       </div>
     <?php else: ?>
-      <div class="card" style="text-align:center;padding:40px 20px;margin-bottom:12px">
-        <div style="color:var(--grey);opacity:.45;margin-bottom:10px"><?= icon('map-pin', 40) ?></div>
-        <h3 style="color:var(--navy);margin-bottom:6px">لسه مفيش مواقع</h3>
-        <p style="color:var(--grey);font-size:var(--fs-3)">
+      <div class="card tsh-empty">
+        <div class="tsh-dim"><?= icon('map-pin', 40) ?></div>
+        <h3 class="tsh-h">لسه مفيش مواقع</h3>
+        <p class="tsh-mut-m">
           السائق لسه مضغطش الزرار.
           <?= empty($t['opened_at']) ? 'ولا فتح الرابط أصلاً.' : 'بس هو فتح الرابط ' . e(Track::ago($t['opened_at'])) . '.' ?>
         </p>
@@ -98,28 +98,28 @@ if ($eta): ?>
     <?php endif; ?>
 
     <?php if ($pings): ?>
-    <div class="card" style="padding:0">
-      <div class="card-head" style="padding:12px 14px"><b><?= icon('clock', 15) ?> سجل المواقع</b>
-        <small style="color:var(--grey);margin-inline-start:8px">الأحدث فوق</small></div>
-      <div style="max-height:420px;overflow-y:auto">
+    <div class="card" >
+      <div class="card-head tsh-pad-sm"><b><?= icon('clock', 15) ?> سجل المواقع</b>
+        <small class="tsh-mut-s">الأحدث فوق</small></div>
+      <div class="tsh-scroll">
         <table class="data" data-no-sort>
           <thead><tr><th>الوقت</th><th>المكان</th><th>المسافة</th><th>الطريقة</th></tr></thead>
           <tbody>
           <?php foreach (array_reverse($pings) as $p): ?>
             <tr>
-              <td style="white-space:nowrap">
+              <td class="nowrap">
                 <b><?= e(dtfmt($p['created_at'], 'H:i')) ?></b><br>
-                <small style="color:var(--grey)"><?= e(dtfmt($p['created_at'], 'd/m')) ?></small>
+                <small class="dbt-none"><?= e(dtfmt($p['created_at'], 'd/m')) ?></small>
               </td>
               <td>
                 <?= e($p['address'] ?: '—') ?><br>
-                <small style="color:var(--grey)">
+                <small class="dbt-none">
                   <a href="https://www.google.com/maps?q=<?= e($p['lat']) ?>,<?= e($p['lng']) ?>"
                      target="_blank" rel="noopener">افتح في خرائط جوجل ←</a>
                   <?php if ($p['accuracy_m'] !== null): ?> · دقة ±<?= intf($p['accuracy_m']) ?>م<?php endif; ?>
                 </small>
               </td>
-              <td style="white-space:nowrap"><?= (int) $p['dist_m'] > 0 ? e(number_format($p['dist_m'] / 1000, 2)) . ' كم' : '—' ?></td>
+              <td class="nowrap"><?= (int) $p['dist_m'] > 0 ? e(number_format($p['dist_m'] / 1000, 2)) . ' كم' : '—' ?></td>
               <td><span class="src <?= e($p['source']) ?>"><?= $p['source'] === 'live' ? 'تتبع مباشر' : 'ضغط الزرار' ?></span></td>
             </tr>
           <?php endforeach; ?>
@@ -131,28 +131,28 @@ if ($eta): ?>
   </div>
 
   <aside class="trk-side">
-    <div class="card" style="padding:14px">
-      <b style="display:block;margin-bottom:10px;color:var(--navy)"><?= icon('send', 15) ?> رابط السائق</b>
+    <div class="card tsh-pad">
+      <b class="tsh-lbl"><?= icon('send', 15) ?> رابط السائق</b>
 
       <?php if ($link === ''): ?>
-        <div class="flash error" style="margin:0 0 10px;font-size:var(--fs-2)">
+        <div class="flash error tsh-p">
           <?= icon('alert', 15) ?> مفيش رابط عام — شغّل «تشغيل-عام-على-النت» الأول.
         </div>
       <?php else: ?>
         <?php if ($stale): ?>
-          <div class="trk-stale" style="margin-bottom:9px">
+          <div class="trk-stale tsh-mb">
             <?= icon('alert', 13) ?> الرابط اتولّد على عنوان قديم — اضغط «جدّد» قبل ما تبعته.
           </div>
         <?php endif; ?>
         <?php if (!$open): ?>
-          <div class="trk-stale" style="margin-bottom:9px">
+          <div class="trk-stale tsh-mb">
             <?= icon('alert', 13) ?> الرابط مقفول دلوقتي (<?= e(Track::STATUSES[$t['status']] ?? '') ?>
             <?php if (!empty($t['expires_at']) && strtotime($t['expires_at']) < time()): ?>/ انتهت صلاحيته<?php endif; ?>).
           </div>
         <?php endif; ?>
 
         <div class="trk-link" title="<?= e($link) ?>"><?= e($link) ?></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:9px 0">
+        <div class="tsh-row wrap my">
           <?php if ($wa !== '' && $open): ?>
             <a class="btn sm wa" target="_blank" rel="noopener"
                href="https://wa.me/<?= e($wa) ?>?text=<?= rawurlencode($msg) ?>">ابعت واتساب</a>
@@ -163,21 +163,21 @@ if ($eta): ?>
       <?php endif; ?>
 
       <form method="post" action="<?= url('tracking/' . (int) $t['id'] . '/phone') ?>"
-            class="no-confirm" style="display:flex;gap:6px;margin-bottom:9px">
+            class="no-confirm" class="tsh-row tsh-mb">
         <?= csrfField() ?>
         <input type="tel" name="driver_phone" value="<?= e($t['driver_phone'] ?? '') ?>"
-               placeholder="رقم واتساب السائق" style="flex:1" inputmode="tel">
+               placeholder="رقم واتساب السائق" class="ps-sp" inputmode="tel">
         <button class="btn sm" type="submit">حفظ</button>
       </form>
 
       <form method="post" action="<?= url('tracking/' . (int) $t['id'] . '/renew') ?>" class="no-confirm">
         <?= csrfField() ?>
-        <button class="btn sm ghost" type="submit" style="width:100%">
+        <button class="btn sm ghost w-full" type="submit">
           <?= icon('undo', 14) ?> جدّد الرابط ومدّ الصلاحية
         </button>
       </form>
 
-      <div style="font-size:var(--fs-1);color:var(--grey);margin-top:9px;line-height:1.7">
+      <div class="tsh-note">
         <?php if (!empty($t['expires_at'])): ?>
           الصلاحية: <b><?= e(date('d/m — H:i', strtotime($t['expires_at']))) ?></b><br>
         <?php endif; ?>
@@ -185,18 +185,18 @@ if ($eta): ?>
       </div>
     </div>
 
-    <div class="card" style="padding:14px">
-      <b style="display:block;margin-bottom:10px;color:var(--navy)"><?= icon('check-circle', 15) ?> حالة الرحلة</b>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <div class="card tsh-pad">
+      <b class="tsh-lbl"><?= icon('check-circle', 15) ?> حالة الرحلة</b>
+      <div class="tsh-row wrap">
         <?php foreach (Track::STATUSES as $k => $lbl): ?>
-          <form method="post" action="<?= url('tracking/' . (int) $t['id'] . '/status') ?>" class="no-confirm" style="margin:0">
+          <form method="post" action="<?= url('tracking/' . (int) $t['id'] . '/status') ?>" class="no-confirm" >
             <?= csrfField() ?>
             <input type="hidden" name="status" value="<?= e($k) ?>">
             <button class="btn sm <?= $t['status'] === $k ? 'primary' : 'ghost' ?>" type="submit"><?= e($lbl) ?></button>
           </form>
         <?php endforeach; ?>
       </div>
-      <p style="font-size:var(--fs-1);color:var(--grey);margin-top:9px;line-height:1.7">
+      <p class="tsh-note">
         «وصلت» أو «ملغاة» بتقفل الرابط فورًا — السائق ما يقدرش يبعت موقعه تاني.
       </p>
     </div>
@@ -204,7 +204,7 @@ if ($eta): ?>
     <form method="post" action="<?= url('tracking/' . (int) $t['id'] . '/delete') ?>"
           data-confirm="تمسح تتبع الشحنة دي وكل مواقعها؟ البوليصة نفسها مش هتتأثر.">
       <?= csrfField() ?>
-      <button class="btn sm danger" type="submit" style="width:100%"><?= icon('trash', 14) ?> امسح التتبع</button>
+      <button class="btn sm danger w-full" type="submit"><?= icon('trash', 14) ?> امسح التتبع</button>
     </form>
   </aside>
 </div>

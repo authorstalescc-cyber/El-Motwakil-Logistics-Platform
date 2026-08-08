@@ -20,13 +20,13 @@ $isSearch = ($mode ?? 'directory') === 'search';
 ?>
 <?php partial('owner_tabs', ['active' => 'settlements']); ?>
 <!-- شريط البحث + الفلترة الموسّعة (يعمل في الوضعين) -->
-<div class="toolbar" style="flex-direction:column;align-items:stretch;gap:12px">
-  <form method="get" action="<?= url('settlements') ?>" style="width:100%">
-    <div class="dir-search" style="max-width:none;width:100%">
+<div class="toolbar stack">
+  <form method="get" action="<?= url('settlements') ?>" class="st-form">
+    <div class="dir-search full">
       <span class="ic"><?= icon('search', 14) ?></span>
       <input type="search" name="q" value="<?= e($f['q']) ?>" placeholder="بحث عن بوليصة…" autofocus>
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;width:100%">
+    <div class="st-filters">
       <select name="status">
         <option value="all"     <?= in_array($f['status'],['','all'],true)?'selected':'' ?>>كل الحالات</option>
         <option value="due"     <?= $f['status']==='due'?'selected':'' ?>>غير مسدّد بالكامل</option>
@@ -44,9 +44,9 @@ $isSearch = ($mode ?? 'directory') === 'search';
       <input list="dl_dest" name="destination" value="<?= e($f['destination']) ?>" placeholder="الجهة" autocomplete="off">
       <input list="dl_class" name="classification" value="<?= e($f['classification']) ?>" placeholder="التصنيف" autocomplete="off">
       <input list="dl_ctype" name="container_type" value="<?= e($f['container_type']) ?>" placeholder="تصنيف الحاويات" autocomplete="off">
-      <label style="color:var(--grey);font-weight:500">من</label>
+      <label class="st-lbl">من</label>
       <input type="date" name="from" value="<?= e($f['from']) ?>">
-      <label style="color:var(--grey);font-weight:500">إلى</label>
+      <label class="st-lbl">إلى</label>
       <input type="date" name="to" value="<?= e($f['to']) ?>">
       <button class="btn sm" type="submit"><?= icon('search', 14) ?> بحث</button>
       <?php if ($isSearch): ?><a class="btn ghost sm" href="<?= url('settlements') ?>"><?= icon('x', 14) ?> مسح</a><?php endif; ?>
@@ -67,12 +67,12 @@ $isSearch = ($mode ?? 'directory') === 'search';
     <div class="kpi red"><div class="lbl">المتبقّي</div><div class="val"><?= intf($resTot['remaining']) ?><span class="cur">ج.م</span></div></div>
   </div>
 
-  <div class="section-head" style="justify-content:flex-start"><h2><?= icon('search', 14) ?> البوالص المطابقة — حدّد المطلوب وادفعه دفعة واحدة</h2></div>
+  <div class="section-head"><h2><?= icon('search', 14) ?> البوالص المطابقة — حدّد المطلوب وادفعه دفعة واحدة</h2></div>
 
   <?php $showOwner = true; require __DIR__ . '/_bills.php'; ?>
 
   <?php if (count($bills) >= 500): ?>
-    <div style="padding:12px 4px;color:var(--grey)">عُرض أول 500 بوليصة — ضيّق البحث لعرض غيرها.</div>
+    <div class="dbt-cut">عُرض أول 500 بوليصة — ضيّق البحث لعرض غيرها.</div>
   <?php endif; ?>
 
 <?php else: /* ================================ وضع الدليل ================================ */ ?>
@@ -101,13 +101,13 @@ $isSearch = ($mode ?? 'directory') === 'search';
     </a>
   <?php endif; ?>
 
-  <div class="section-head" style="justify-content:space-between">
+  <div class="section-head spread">
     <h2><?= icon('user', 14) ?> أصحاب البيان</h2>
     <span class="count-badge"><?= intf(count($owners)) ?> <?= !empty($dueOnly)?'صاحب بيان له مديونية':'صاحب بيان' ?></span>
   </div>
 
   <?php if (!$owners): ?>
-    <div class="card"><div class="empty" style="padding:44px"><div class="ic"><?= icon('truck', 14) ?></div>لا بوالص بعد.</div></div>
+    <div class="card"><div class="empty empty-mv-in"><div class="ic"><?= icon('truck', 14) ?></div>لا بوالص بعد.</div></div>
   <?php else: ?>
     <div class="dir-grid">
       <?php foreach ($owners as $o):
@@ -149,35 +149,10 @@ $isSearch = ($mode ?? 'directory') === 'search';
       <?php endforeach; ?>
     </div>
     <?php if (count($owners) >= 600): ?>
-      <div style="padding:12px 4px;color:var(--grey)">عُرض أول 600 صاحب بيان — استخدم البحث لإيجاد غيرهم.</div>
+      <div class="dbt-cut">عُرض أول 600 صاحب بيان — استخدم البحث لإيجاد غيرهم.</div>
     <?php endif; ?>
   <?php endif; ?>
 
 <?php endif; ?>
 
-<style>
-.set-card{display:flex;flex-direction:column;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-3);padding:18px;box-shadow:var(--shadow);transition:.18s;position:relative;overflow:hidden;cursor:pointer}
-.settlement-view-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 0 16px;padding:11px;border:1px solid var(--line);border-radius:var(--radius-2);background:#fff}
-.set-card::before{content:'';position:absolute;top:0;inset-inline:0;height:4px;background:linear-gradient(90deg,var(--green),var(--gold))}
-.set-card.due::before{background:linear-gradient(90deg,var(--red),var(--gold))}
-.set-card:hover{transform:translateY(-4px);box-shadow:0 14px 32px rgba(21,53,91,.16);border-color:#cfd9e6}
-.set-figs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;background:var(--zebra);border:1px solid var(--line);border-radius:var(--radius-2);padding:11px 8px}
-.set-figs>div{display:flex;flex-direction:column;gap:3px}
-.set-figs span{font-size:var(--fs-1);color:var(--grey);font-weight:500}
-.set-figs b{font-size:var(--fs-4);font-weight:600}
-.set-figs b.fig-navy{color:var(--navy)}
-.set-figs b.pos{color:var(--green)} .set-figs b.neg{color:var(--red)}
-.set-bar{height:7px;background:var(--line);border-radius:var(--radius-1);overflow:hidden}
-.set-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--green),#3a9d5f);border-radius:var(--radius-1)}
-.warn-box{display:flex;align-items:center;gap:16px;text-decoration:none;color:inherit;
-  background:linear-gradient(90deg,#fff7ed,#fffbeb);border:2px solid #f4c150;border-inline-start:6px solid #e0a500;
-  border-radius:var(--radius-2);padding:16px 20px;margin:6px 0 18px;box-shadow:0 6px 18px rgba(224,165,0,.14);
-  transition:.18s;cursor:pointer}
-.warn-box:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(224,165,0,.22);border-color:#e0a500}
-.warn-ic{font-size:var(--fs-8);line-height:1;flex-shrink:0}
-.warn-txt{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
-.warn-txt>b{font-size:var(--fs-4);color:#8a5a00}
-.warn-txt>span{font-size:var(--fs-3);color:var(--grey);line-height:1.7}
-.warn-cta{flex-shrink:0;font-weight:600;color:#8a5a00;background:#ffe9b0;border:1px solid #e6c766;
-  border-radius:var(--radius-2);padding:9px 14px;white-space:nowrap}
-</style>
+

@@ -12,11 +12,11 @@ $label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
   <a class="tab <?= $tab==='owners'?'active':'' ?>" href="<?= url('directory?tab=owners') ?>"><?= icon('file-text', 14) ?> أصحاب البيان <span class="count-badge"><?= intf(count($owners)) ?></span></a>
 </nav>
 
-<form method="post" action="<?= url('directory/master/'.$type) ?>" class="card mb" style="padding:14px;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+<form method="post" action="<?= url('directory/master/'.$type) ?>" class="card mb" class="p5-pad p5-row end">
   <?= csrfField() ?>
-  <div class="field" style="margin:0;min-width:220px"><label>إضافة <?= e($label) ?> إلى البيانات الأساسية</label><input name="name" required placeholder="الاسم القانوني المعتمد"></div>
-  <div class="field" style="margin:0;min-width:150px"><label>الهاتف</label><input name="phone"></div>
-  <?php if($isA): ?><div class="field" style="margin:0;width:130px"><label>مهلة السداد</label><input type="number" name="payment_terms_days" value="30" min="0" max="365"></div><?php endif; ?>
+  <div class="field flush mw220"><label>إضافة <?= e($label) ?> إلى البيانات الأساسية</label><input name="name" required placeholder="الاسم القانوني المعتمد"></div>
+  <div class="field flush mw150"><label>الهاتف</label><input name="phone"></div>
+  <?php if($isA): ?><div class="field flush w130"><label>مهلة السداد</label><input type="number" name="payment_terms_days" value="30" min="0" max="365"></div><?php endif; ?>
   <button class="btn gold" type="submit">إضافة</button>
 </form>
 
@@ -32,7 +32,7 @@ $label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
 </div>
 
 <?php if(!$rows): ?>
-  <div class="card"><div class="empty" style="padding:44px"><div class="ic"><?= $isA?'👤':'🏢' ?></div><?= $q!==''?'لا نتائج مطابقة للبحث.':'لا بيانات.' ?></div></div>
+  <div class="card"><div class="empty empty-mv-in p5-pad-44"><div class="ic"><?= $isA?'👤':'🏢' ?></div><?= $q!==''?'لا نتائج مطابقة للبحث.':'لا بيانات.' ?></div></div>
 <?php else: ?>
   <div class="dir-grid">
     <?php foreach($rows as $r):

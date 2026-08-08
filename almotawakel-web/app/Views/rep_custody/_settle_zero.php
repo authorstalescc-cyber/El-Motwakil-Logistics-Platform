@@ -46,7 +46,7 @@ $others = array_values(array_filter(
   <div class="rc-zero-body">
     <div class="rc-zero-num">
       <span class="k"><?= $dayEmpty ? 'عهدة يوم ' . e(dfmt($day)) : ($owedToRep ? 'المكتب مستحق له' : 'فاضل من عهدة اليوم') ?></span>
-      <b class="v<?= $owedToRep ? ' neg' : '' ?>" data-secret><?= intf(abs($amt)) ?></b>
+      <b class="v<?= $owedToRep ? ' neg' : '' ?>"><?= intf(abs($amt)) ?></b>
       <span class="u">جنيه</span>
     </div>
 

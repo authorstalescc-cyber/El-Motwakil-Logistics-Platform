@@ -25,7 +25,6 @@ $prevLbl = $period['prev_label'] ? 'عن ' . $period['prev_label'] : null;
 <div class="toolbar">
   <div class="section-head" style="margin:0"><?= icon('truck', 18) ?> سيارات المكتب</div>
   <div class="spacer"></div>
-  <button type="button" class="btn ghost secret-toggle" aria-pressed="false"><?= icon('search', 14) ?> إظهار الأرصدة</button>
   <a class="btn gold" href="<?= url('cars/new') ?>"><?= icon('plus', 16) ?> أضف سيارة</a>
 </div>
 
@@ -70,15 +69,14 @@ $prevLbl = $period['prev_label'] ? 'عن ' . $period['prev_label'] : null;
     'drill' => $drill('custody'), 'title' => 'العهد اللي اتدفعت لسواقين سيارات المكتب',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'مصاريف السيارات', 'value' => money0($summary['expenses']),
+    'label' => 'مصاريف السيارات', 'value' => money0($summary['expenses_total'] ?? $summary['expenses']),
     'icon' => 'trending-down', 'tone' => 'red',
-    'delta' => $d('expenses'), 'delta_label' => $prevLbl, 'delta_good' => 'down',
-    'drill' => $drill('expenses'), 'title' => 'سولار وإصلاحات وغيره',
+    'delta' => $d('expenses_total'), 'delta_label' => $prevLbl, 'delta_good' => 'down',
+    'drill' => $drill('expenses'), 'title' => 'سولار وإصلاحات وبنود البوالص',
   ]); ?>
   <?php partial('stat', [
     'label' => 'صافي الأسطول', 'value' => money0($summary['net']),
-    'icon' => 'bar-chart', 'tone' => 'purple', 'secret' => true,
-    'delta' => $d('net'), 'delta_label' => $prevLbl,
+    'icon' => 'bar-chart', 'tone' => 'purple', 'delta' => $d('net'), 'delta_label' => $prevLbl,
     'drill' => $drill('net'), 'title' => 'نولون − عهد − مصاريف',
   ]); ?>
 <?php }]); ?>
@@ -88,7 +86,7 @@ $prevLbl = $period['prev_label'] ? 'عن ' . $period['prev_label'] : null;
 <div class="cars-note">
   <?= icon('info', 16) ?>
   <span>مصاريف السيارات دي <b>مش داخلة خزنة المكتب ولا التقفيل اليومي</b> — سجل خاص بالسيارات بس.
-    يعني رصيد الخزنة أعلى من الحقيقة بمقدار <b><?= e(money0($summary['expenses'])) ?></b> في الفترة دي.</span>
+    يعني رصيد الخزنة أعلى من الحقيقة بمقدار <b><?= e(money0($summary['expenses_total'] ?? $summary['expenses'])) ?></b> في الفترة دي.</span>
 </div>
 
 <?php /* ═══ القراءة الذكية — نفس الملف المستعمل في كارت السيارة ═══ */ ?>
@@ -96,8 +94,8 @@ $prevLbl = $period['prev_label'] ? 'عن ' . $period['prev_label'] : null;
 
 <?php /* ═══ كروت السيارات ═══ */ ?>
 <?php
-$busy  = array_values(array_filter($fleet, static fn ($c) => (int) $c['trips'] > 0 || (float) $c['expenses'] > 0));
-$quiet = array_values(array_filter($fleet, static fn ($c) => (int) $c['trips'] === 0 && (float) $c['expenses'] <= 0));
+$busy  = array_values(array_filter($fleet, static fn ($c) => (int) $c['trips'] > 0 || (float) ($c['expenses_total'] ?? $c['expenses']) > 0));
+$quiet = array_values(array_filter($fleet, static fn ($c) => (int) $c['trips'] === 0 && (float) ($c['expenses_total'] ?? $c['expenses']) <= 0));
 $maxFreight = 0.0;
 foreach ($busy as $c) { $maxFreight = max($maxFreight, (float) $c['freight']); }
 ?>
@@ -122,8 +120,8 @@ foreach ($busy as $c) { $maxFreight = max($maxFreight, (float) $c['freight']); }
         ['icon' => 'package', 'text' => intf($c['containers']) . ' حاوية'],
         ['icon' => 'banknote', 'text' => 'نولون ' . money0($c['freight'])],
       ];
-      if ((float) $c['expenses'] > 0) {
-        $tags[] = ['icon' => 'trending-down', 'text' => 'مصاريف ' . money0($c['expenses']), 'tone' => 'ex'];
+      if ((float) ($c['expenses_total'] ?? $c['expenses']) > 0) {
+        $tags[] = ['icon' => 'trending-down', 'text' => 'مصاريف ' . money0($c['expenses_total'] ?? $c['expenses']), 'tone' => 'ex'];
       }
       if ($c['status'] === 'inactive') {
         $tags[] = ['icon' => 'alert', 'text' => 'السيارة متوقفة', 'tone' => 'low'];
@@ -134,7 +132,6 @@ foreach ($busy as $c) { $maxFreight = max($maxFreight, (float) $c['freight']); }
         'value' => money0($c['net']),
         'value_label' => 'صافي السيارة',
         'value_tone'  => (float) $c['net'] < 0 ? 'neg' : 'pos',
-        'secret' => true,
         'alert'  => (float) $c['net'] < 0,
         'meter'  => $maxFreight > 0 ? [
           ['cls' => 'sp', 'pct' => min(100, (float) $c['freight'] / $maxFreight * 100)],
@@ -199,6 +196,8 @@ foreach ($busy as $c) { $maxFreight = max($maxFreight, (float) $c['freight']); }
           'extra'  => '<form method="post" action="' . e(url('cars/ignore')) . '" style="display:inline"'
                     . ' data-confirm="تمام — «' . e((string) $o['car_no']) . '» مش سيارة بتاعتنا؟">'
                     . csrfField()
+                    // ⚠️ `_form_token` إجباري — `claimForm` بترفض الطلب من غيره.
+                    . formStateFields(\App\Core\FormState::token(), 'cars')
                     . '<input type="hidden" name="plate" value="' . e((string) $o['car_no']) . '">'
                     . '<button class="btn ghost sm" type="submit">مش بتاعتنا</button></form>',
         ]);
@@ -221,6 +220,8 @@ foreach ($busy as $c) { $maxFreight = max($maxFreight, (float) $c['freight']); }
           ])),
           'extra' => '<form method="post" action="' . e(url('cars/unignore')) . '" style="display:inline">'
                    . csrfField()
+                   // ⚠️ `_form_token` إجباري — `claimForm` بترفض الطلب من غيره.
+                   . formStateFields(\App\Core\FormState::token(), 'cars')
                    . '<input type="hidden" name="key" value="' . e((string) $ig['key']) . '">'
                    . '<button class="btn ghost sm" type="submit">رجّعها للتنبيه</button></form>',
         ]); ?>

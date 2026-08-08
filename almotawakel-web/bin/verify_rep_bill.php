@@ -105,6 +105,60 @@ $posGreedy = strpos($routes, "\$r->get('/m/permit/{id}'");
     ? ok('⚠️ /m/bill/new حرفي قبل الجشع /m/permit/{id} (تحذير ٤)')
     : bad('/m/bill/new لازم يتسجّل قبل /m/permit/{id}');
 
+/* ⚠️⚠️ ١ب) **الكنترولر بيوصّل للموديل كل حقل بيقراه** — باج حقيقي اتصاد
+   2026-08-02 ببلاغ المالك «مشكلة في إضافة البوليصة من المندوب»:
+   الشاشة بتبعت رقم العربية في **٤ خانات** (`car_l1..3` + `car_digits`)
+   و`normaliseBill` بيقراهم بالأسماء دي، لكن `billStore` كان بيبني حزمة فيها
+   `car_no` **اللي الفورم أصلاً مش بيبعته** — فالأربعة كانوا بيتسقطوا و**كل**
+   بوليصة بتترفض بـ«اكتب حروف العربية التلاتة» والمندوب مالي الخانات.
+   كان على الإنتاج كمان (`grep -c car_l1` على الكنترولر = صفر).
+
+   ⚠️ **ليه الفحص القديم ما مسكهوش:** كل اختباراته بتنادي `RepPortal::createBill`
+      **مباشرةً** بحزمة مكتوبة بالإيد، فالوصلة بين الفورم والموديل ما كانتش
+      متغطّية. الفحص ده بيقارن **الحقول اللي الموديل بيقراها** بـ**اللي الكنترولر
+      بيبعتها** — فأي حقل جديد يتضاف للموديل وينتسي في الكنترولر بيتمسك فورًا. */
+sec('١ب) وصلة الفورم ← الكنترولر ← الموديل (الباج اللي وقف إضافة البوالص)');
+$modelSrc = src('app/Models/RepPortal.php');
+$ctrlSrc  = src('app/Controllers/RepPortalController.php');
+$viewSrc  = src('app/Views/m/bill_new.php');
+
+// الحقول اللي `normaliseBill` بيقراها من الحزمة: `$d['xxx']`
+$nb = strpos($modelSrc, 'function normaliseBill');
+$nbEnd = strpos($modelSrc, 'public static function', $nb + 30);
+$nbBody = substr($modelSrc, $nb, ($nbEnd !== false ? $nbEnd - $nb : 9000));
+preg_match_all("/\\\$d\\['([a-z0-9_]+)'\\]/i", $nbBody, $mm);
+$needs = array_values(array_unique($mm[1] ?? []));
+count($needs) >= 8 ? ok('اتقرا ' . count($needs) . ' حقل من `normaliseBill`')
+                   : bad('اشتقاق حقول `normaliseBill` فشل — لقينا ' . count($needs));
+
+// الحزمة اللي `billStore` بيبعتها
+$bs = strpos($ctrlSrc, 'function billStore');
+$bsEnd = strpos($ctrlSrc, 'PushNotify::billLinked', $bs);
+$bsBody = substr($ctrlSrc, $bs, ($bsEnd !== false ? $bsEnd - $bs : 4000));
+$missing = [];
+foreach ($needs as $f) {
+    if (!preg_match("/'" . preg_quote($f, '/') . "'\s*=>/", $bsBody)) { $missing[] = $f; }
+}
+$missing === []
+    ? ok('★ الكنترولر بيوصّل كل حقل بيقراه الموديل')
+    : bad('★ حقول بيقراها الموديل ومش بتوصل من الكنترولر: ' . implode(' · ', $missing));
+
+/* وخانات اللوحة الأربعة بالذات — دي اللي وقعت.
+   ⚠️ الشاشة بتبني تلات أسماء منها في حلقة (`name="car_l<?= $i + 1 ?>"`)، فالبحث
+      عن `name="car_l1"` حرفيًّا في الملف بيدّي **فشلًا كاذبًا**. الفحص على
+      البادئة + وجود الاسم في حزمة الكنترولر. */
+str_contains($viewSrc, 'name="car_l')
+    ? ok('الشاشة بتبعت خانات حروف اللوحة') : bad('الشاشة مش بتبعت خانات حروف اللوحة');
+foreach (['car_l1', 'car_l2', 'car_l3', 'car_digits'] as $f) {
+    str_contains($bsBody, "'" . $f . "'")
+        ? ok("خانة اللوحة «{$f}» بتتقرا في الكنترولر")
+        : bad("خانة اللوحة «{$f}» مقطوعة بين الشاشة والكنترولر");
+}
+// ⚠️ `car_no` ممنوع يرجع للحزمة: الموديل بيبنيه بنفسه، ووجوده بيوهم إن الحقل واصل
+!preg_match("/'car_no'\s*=>/", $bsBody)
+    ? ok('⚠️ `car_no` مش في الحزمة (الموديل بيركّبه من الأربعة)')
+    : bad('⚠️ `car_no` رجع للحزمة — بيوهم إن اللوحة واصلة وهي مش واصلة');
+
 // ══════════════════════════════════════════════════ ٢) المصدر الوحيد للشرط
 sec('٢) المصدر الوحيد لشرط «العهدة من خزنة المكتب»');
 $safeFiles = [
@@ -188,22 +242,49 @@ try {
         'container_count' => 2, 'container_type' => '40 قدم',
         'container_no' => 'AAAU1234567-BBBU7654321',
         'driver' => 'سائق فحص v60', 'car_owner' => 'مالك فحص v60',
-        'car_l1' => 'ف', 'car_l2' => 'ح', 'car_l3' => 'ص', 'car_digits' => '6000',
+        // السيناريو المُبلَّغ عنه: كيبورد الموبايل يرسل أرقامًا عربية.
+        'car_l1' => 'ف', 'car_l2' => 'ح', 'car_l3' => 'ص', 'car_digits' => '٦٠٠٠',
         'custody' => (string) $AMOUNT, 'bill_date' => $day,
         'newname_driver' => '1', 'newname_car_owner' => '1',
     ]);
     $billId = (int) $res['id'];
     ok('البوليصة اتسجّلت من مسار المندوب (#' . $billId . ')');
 
-    // ① خزنة المكتب ما اتمستش خالص
-    near('⚠️ خزنة المكتب قبل = بعد (العهدة مش من الدرج)',
-         round((float) Custody::balance(), 2), $safeBefore);
+    /* ① أثر البوليصة على رقم «خزنة المكتب» — **بيختلف حسب النموذج الشغّال**،
+       والاتنين صح كل واحد في نموذجه:
+         • **الخزنة = الدرج بس**: الرقم ما بيتغيّرش. الكاش خرج من جيب المندوب
+           والدرج برّه الحكاية تمامًا.
+         • **الخزنة = كل كاش الشركة** (`bankTopupActive`): محفظة المندوب **جوّه**
+           الرقم، فالكاش اللي راح للسائق خرج من الشركة فعلاً والرقم لازم ينقص
+           بالمخصوم. (لو فضل ثابت هنا يبقى الفلوس بتتبخّر — ده بالظبط الباج
+           اللي اتقفل في 2026-07-31.)
+       ⚠️ التوقّع اتقلب عن قصد مش اترخّى — القسم ٨ بيقيس نفس الحاجة من الاتجاه
+          التاني (وسم بوليصة قايمة). */
+    $expSafe = RepCustody::bankTopupActive()
+        ? round($safeBefore - Custody::billDeduction($AMOUNT,
+              Database::scalar('SELECT car_no FROM bawalis WHERE id = ?', [$billId])), 2)
+        : $safeBefore;
+    near(RepCustody::bankTopupActive()
+            ? '⚠️ الخزنة (= كل كاش الشركة) نقصت بالمخصوم — الكاش راح للسائق'
+            : '⚠️ خزنة المكتب قبل = بعد (العهدة مش من الدرج)',
+         round((float) Custody::balance(), 2), $expSafe);
 
-    // ② عهدة المندوب نقصت بالمبلغ **كامل** (مش «المبلغ − 100»)
-    near('⚠️ عهدة المندوب التراكمية نقصت بالمبلغ كامل',
-         round(RepCustody::balance($repId), 2), round($repBefore - $AMOUNT, 2));
+    // ② عهدة المندوب نقصت بـ**`العهدة − 100`** — نفس قاعدة خصم الخزنة بالظبط.
+    //
+    // ⚠️ **التوقّع ده اتقلب في 2026-07-30 بقرار المالك.** v60 كان بيخصم العهدة
+    //    **كاملة** بناءً على فهم إن الـ100 قاعدة خزنة. الصح: الـ100 **رقم ورقي**
+    //    («بتتساب لصاحب البوليصة يسترزق بيها لو باعها») والسائق بياخد الباقي
+    //    فعلاً — فاللي طلع من إيد المندوب `custody − 100` مش `custody`.
+    //    المصدر الوحيد `Custody::billDeduction()`، بما فيه استثناء السيارات.
+    // ⚠️ رقم السيارة بيتقرا **من الصف المحفوظ** لا يتكتب بالإيد: لو اللوحة
+    //    كانت في `custody_deduction_exempt_cars` الخصم بيبقى كامل، والفحص
+    //    لازم يتبع نفس القاعدة بدل ما يفترض −100 دايمًا.
+    $NET = Custody::billDeduction($AMOUNT,
+        Database::scalar('SELECT car_no FROM bawalis WHERE id = ?', [$billId]));
+    near('⚠️ عهدة المندوب التراكمية نقصت بـ«العهدة − 100»',
+         round(RepCustody::balance($repId), 2), round($repBefore - $NET, 2));
     near('⚠️ عهدة اليوم نقصت بنفس المبلغ',
-         round(RepCustody::balance($repId, $day), 2), round($repDayBefore - $AMOUNT, 2));
+         round(RepCustody::balance($repId, $day), 2), round($repDayBefore - $NET, 2));
 
     // ③ الكارت والكشف والداشبورد لازم يقولوا نفس الرقم
     $cards = [];
@@ -218,7 +299,9 @@ try {
     $billRows = array_values(array_filter($rows, static fn ($r) => ($r['src'] ?? '') === 'bill'));
     count($billRows) === 1
         ? ok("كشف الصرف فيه صف بـsrc='bill'") : bad('كشف الصرف مالوش صف للبوليصة');
-    if ($billRows) { near('مبلغ الصف = العهدة كاملة', (float) $billRows[0]['amount'], $AMOUNT); }
+    // ⚠️ كشف الصرف لازم يقول **نفس** رقم الرصيد (`العهدة − 100`) وإلا الكشف
+    //    يخالف الرصيد. الإجمالي الخام موجود جنبه في `gross_custody`.
+    if ($billRows) { near('مبلغ الصف = العهدة − 100 (زي الرصيد)', (float) $billRows[0]['amount'], $NET); }
 
     $act = RepCustody::dayActivity($repId, $day);
     ((int) ($act['bill']['cnt'] ?? 0)) === 1
@@ -274,7 +357,7 @@ try {
     $repNow = round(RepCustody::balance($repId), 2);
     RepPortal::deleteMyBill($repId, $billId, $day);
     near('حذف البوليصة رجّع العهدة لمحفظة المندوب',
-         round(RepCustody::balance($repId), 2), round($repNow + $AMOUNT, 2));
+         round(RepCustody::balance($repId), 2), round($repNow + $NET, 2));
 
     /* ══════════════════════════════════════ ٤ب) زرار «عربية المكتب»
        ⚠️ **أهم فحص في الميزة:** زرار بيملا قيم الخادم بيرفضها أسوأ من مفيش
@@ -454,6 +537,12 @@ str_contains($rp, 'implode(\' \', array_filter($letters)) . \' \' . $carDigits')
     : bad('صيغة اللوحة اتغيّرت — وحدة سيارات المكتب هتشوفها لوحة تانية');
 str_contains($rp, "\\x{0621}-\\x{064A}")
     ? ok('خانة الحرف بتقبل حرف عربي واحد بس') : bad('فحص حرف اللوحة ناقص');
+$billView = code_only(src('app/Views/m/bill_new.php'));
+str_contains($billView, 'replace(/[٠-٩]/g')
+    && str_contains($billView, 'replace(/[۰-۹]/g')
+    && str_contains($billView, "latinDigits(dBox.value).replace(/[^0-9]/g, '')")
+    ? ok('⚠️ خانة أرقام العربية توحّد ١٢٣٤ و۱۲۳۴ قبل التنظيف')
+    : bad('خانة أرقام العربية ممكن تمسح الأرقام العربية/الفارسية قبل الإرسال');
 
 // ══════════════════════════════════════════════════ ٧) شاشة التسليم القديمة
 sec('٧) «تسليم عهدة لسائق» — الشاشة اتشالت والسجلات ما اتلمستش');
@@ -480,6 +569,133 @@ has('RepCustody لسه بيخصم التسليمات القديمة', 'app/Model
     'RepDriverHandover::totalFor');
 has("كشف الصرف لسه فيه src='handover'", 'app/Models/RepCustody.php',
     "RepDriverHandover::forRep");
+
+// ══════════════════════════════════════════ ٨) النموذج المجمّع للخزنة (2026-07-31)
+sec('٨) عهدة السائق اللي دفعها المندوب بتدخل الحساب في النموذج المجمّع');
+
+/* ⚠️⚠️ **الباج اللي القسم ده اتعمل عشانه (مقيس على الإنتاج):** لما بقى معنى
+   «رصيد الخزنة» = الدرج + جيوب المناديب (`rep_bank_topup_from`)، فضل
+   `officeExcludeSql` بيستثني عهدة السائق اللي دفعها المندوب. النتيجة إن
+   المحفظة بتتخصم والخزنة لأ — **والمحفظة جوّه الخزنة** ⇒ الفلوس بتتبخّر.
+   ٢١,٠٠٠ في ٣ بوالص يوم 2026-07-29 كانوا مخفيين تمامًا من التقفيل. */
+
+$pooled = RepCustody::bankTopupActive();
+$clause = RepBillCustody::officeExcludeSql('b');
+
+if ($pooled) {
+    str_contains($clause, 'bill_date >=')
+        ? ok('⚠️ النموذج المجمّع شغّال والشرط بيسمح لعهد المناديب تدخل الحساب')
+        : bad('⚠️⚠️ النموذج المجمّع شغّال لكن الشرط لسه بيستثني عهد المناديب — فلوس بتتبخّر');
+    // ⚠️ الحدّ على `bill_date` بتاع الصف نفسه — بيحمي الأيام المتقفلة من
+    //    إعادة الحساب (`Closing::refreshLockedChainFrom`).
+    str_contains($clause, RepCustody::bankTopupFrom())
+        ? ok('⚠️ الحدّ على تاريخ البوليصة نفسها — الأيام المتقفلة ما بتتغيّرش')
+        : bad('⚠️ الشرط بلا حدّ تاريخ — إعادة حساب يوم متقفل هتعيد كتابته');
+} else {
+    $clause === " AND b.custody_rep_id IS NULL"
+        ? ok('النموذج غير المجمّع: الاستثناء شغّال زي ما هو (الخزنة = الدرج بس)')
+        : bad('النموذج غير المجمّع لكن الشرط اتغيّر — عهدة المندوب هتتخصم من الدرج');
+}
+
+/* ⚠️ **شرط السلامة بين الإعدادين.** جانب المحفظة محدود بخط الفصل
+   (`epochSql('bill_date')`) وجانب الخزنة بتاريخ النموذج المجمّع. لو تاريخ
+   النموذج **بعد** خط الفصل، بتفضل فيه بوالص متخصومة من المحفظة وبرّه الخزنة
+   = نفس التبخّر بالظبط. */
+$epoch = RepCustody::epoch();
+if ($pooled && $epoch !== '') {
+    RepCustody::bankTopupFrom() <= $epoch
+        ? ok('⚠️ تاريخ النموذج المجمّع ≤ خط الفصل — مفيش بوليصة بره الاتنين')
+        : bad('⚠️⚠️ تاريخ النموذج المجمّع بعد خط الفصل — بوالص هتتخصم من المحفظة وبرّه الخزنة');
+}
+
+// المصدر الوحيد لعرض «مين سلّم» — عشان ملفات الخزنة ما تذكرش العمود بإيدها.
+foreach (['app/Models/DailyReview.php', 'app/Controllers/DailyClosingController.php'] as $f) {
+    str_contains(code_only(src($f)), 'payerSelectSql')
+        ? ok("$f بيعرض «مين سلّم» من المصدر الوحيد")
+        : bad("$f مش بيعرض «مين سلّم» — الرقم هيزيد والمالك مش عارف ليه");
+}
+has('شاشة التقفيل بتعرض شارة «دفعها المندوب»', 'app/Views/closing/index.php', "\$it['by_rep']");
+has('الطباعة فيها عمود «سلّمها»', 'app/Views/closing/print.php', 'custody_rep_name');
+
+/* ⚠️ الاسم في المعادلة بيتغيّر مع النموذج: «عهدة مضافة للدرج» على رقم فيه
+   فلوس ما دخلتش الدرج كان بيتقري جمعًا مع سطر التفكيك تحته. */
+has('المعادلة بتسمّي «عهدة مضافة» صح حسب النموذج', 'app/Views/closing/index.php',
+    "empty(\$pooled) ? ' للدرج' : ''");
+has('الكنترولر بيمرّر علم النموذج للشاشة', 'app/Controllers/DailyClosingController.php',
+    "'pooled'        => RepCustody::bankTopupActive()");
+
+// ── فحص سلوكي: بوليصة حقيقية، الاتجاهان مع بعض ──────────────────────────
+if ($pooled) {
+    $pdo = Database::conn();
+    $pdo->beginTransaction();
+    try {
+        $bill = Database::row(
+            "SELECT id, custody, car_no, bill_date FROM bawalis
+              WHERE is_legacy = 0 AND custody > 0 AND custody_rep_id IS NULL
+              ORDER BY id DESC LIMIT 1");
+        $rep = Database::row("SELECT id FROM reps WHERE status = 'active' ORDER BY id LIMIT 1");
+        if (!$bill || !$rep) {
+            ok('(اتخطّى الفحص السلوكي — مفيش بوليصة/مندوب صالحين للاختبار)');
+        } else {
+            /* ⚠️ **البوليصة لازم تكون على يوم حيّ وإلا الفحص يفشل بإنذار كاذب.**
+               رصيد أي يوم متقفل مجمَّد في `daily_closings`، فوسم بوليصة قديمة
+               ما بيحركش `currentBalance` خالص — وده صح، مش باج. بنحرّك تاريخ
+               البوليصة لأول يوم بعد آخر إقفال (وبعد بداية النموذج المجمّع)،
+               وكله بيترجع بالـrollback. */
+            $last = \App\Models\Closing::lastClosedDate();
+            $live = $last !== null ? date('Y-m-d', strtotime($last . ' +1 day')) : RepCustody::bankTopupFrom();
+            if ($live < RepCustody::bankTopupFrom()) { $live = RepCustody::bankTopupFrom(); }
+            Database::exec('UPDATE bawalis SET bill_date = ? WHERE id = ?', [$live, (int) $bill['id']]);
+            $bill['bill_date'] = $live;
+
+            $rid = (int) $rep['id'];
+            $ded = Custody::billDeduction((float) $bill['custody'], $bill['car_no'] ?? null);
+            $safeBefore = \App\Models\Closing::currentBalance();
+            $walBefore  = RepCustody::balance($rid);
+
+            Database::exec('UPDATE bawalis SET custody_rep_id = ? WHERE id = ?', [$rid, (int) $bill['id']]);
+            $safeAfter = \App\Models\Closing::currentBalance();
+            $walAfter  = RepCustody::balance($rid);
+
+            /* ⚠️⚠️ **جوهر التصحيح، والتوقّع هنا عكس الحدس الأول:**
+               في النموذج المجمّع الخزنة = كل كاش الشركة، والكاش خرج للسائق
+               في الحالتين — فوسم «مين دفع» **ما بيغيّرش إجمالي الخزنة خالص**.
+               اللي بيتغيّر هو **مصدر الدفع**: محفظة المندوب بتنقص، وبالتالي
+               الدرج (= الخزنة − Σ المحافظ) بيرجع له المبلغ لأنه مدفعش.
+
+               ⚠️ **ده بالظبط الباج اللي اتقفل:** قبل التصحيح الوسم كان بيشيل
+                  البوليصة من الخزنة **والمحفظة تنقص برضه** ⇒ الخزنة كانت
+                  بتعلى بالمخصوم والفلوس تتبخّر. لو الفحص ده فشل بفرق =
+                  المخصوم، يبقى الاستثناء رجع. */
+            near('⚠️⚠️ إجمالي الخزنة ما اتغيّرش بالوسم — الكاش خرج في الحالتين',
+                $safeAfter - $safeBefore, 0);
+            near('⚠️ محفظة المندوب نقصت بالمخصوم (العهدة − الخصم)', $walBefore - $walAfter, $ded);
+            near('⚠️ الدرج رجع له المبلغ — المندوب هو اللي دفع مش الدرج',
+                ($safeAfter - $walAfter) - ($safeBefore - $walBefore), $ded);
+
+            /* ⚠️ قاعدة v50: مجموع قسم «عهد السائقين» في شاشة المراجعة لازم
+               يساوي رقم `Closing` بالمليم، وإلا الشاشة بتعرض حاجة والرصيد
+               بيقول حاجة تانية. */
+            near('⚠️ مجموع قسم المراجعة = رقم عهد السائقين في التقفيل',
+                \App\Models\DailyReview::view($live)['groups']['custody']['total'],
+                \App\Models\Closing::dayView($live)['driver']);
+
+            // البند بيبان في شاشة المراجعة باسم الدافع
+            $rows = \App\Models\DailyReview::view((string) $bill['bill_date'])['groups']['custody']['items'];
+            $found = null;
+            foreach ($rows as $r) { if ((int) $r['id'] === (int) $bill['id']) { $found = $r; break; } }
+            $found !== null
+                ? ok('⚠️ البوليصة بتبان في قسم «عهد السائقين» بعد الوسم')
+                : bad('⚠️⚠️ البوليصة اختفت من قسم «عهد السائقين» — نفس الباج الأصلي');
+            ($found['by_rep'] ?? null) !== null
+                ? ok('البند بيقول مين سلّمها')
+                : bad('البند مش بيقول مين سلّمها — الرقم زاد بلا تفسير');
+        }
+    } finally {
+        // ⚠️ rollback إجباري — الفحص بيوسم بوليصة حقيقية عشان يقيس الاتجاهين.
+        if ($pdo->inTransaction()) { $pdo->rollBack(); }
+    }
+}
 
 echo "\n" . str_repeat('=', 62) . "\n";
 echo "النتيجة: $pass نجح · $fail فشل\n";

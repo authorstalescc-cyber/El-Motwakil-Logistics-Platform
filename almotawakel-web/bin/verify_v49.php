@@ -282,9 +282,16 @@ try {
 
     // ═══ 8) العزل المالي
     sec('8) العزل: حركة المحفظة لوحدها ما بتلمسش الخزنة');
+    /* ⚠️ **التوقّع واعي بالنموذج** — قرار المالك (2026-07-30): «أي عهدة تتضاف
+   للمندوب كأنها في الدرج»، فتنزيل البنك بقى **بيزوّد** رصيد الخزنة.
+   `RepCustody::bankTopupActive()` هي المصدر الوحيد للفحص. */
+    $depAdds = RepCustody::bankTopupActive();
     $safeA = Closing::currentBalance();
     RepCustody::createDeposit($repA, 4321, $d2, 'اختبار عزل');
-    near('تنزيل العهدة ما غيّرش خزنة المكتب', Closing::currentBalance(), $safeA);
+    near($depAdds ? 'تنزيل العهدة **زوّد** خزنة المكتب (الخزنة = كل كاش الشركة)'
+                  : 'تنزيل العهدة ما غيّرش خزنة المكتب',
+         Closing::currentBalance(), $safeA + ($depAdds ? 4321 : 0));
+    $safeA = Closing::currentBalance();   // نقطة الأساس بقت بعد التنزيل
     if (RepTransfer::available()) {
         RepTransfer::create($repA, ['to_rep_id' => $repB, 'amount' => 21,
             'transfer_date' => $d2, 'note' => $tag]);
@@ -432,12 +439,19 @@ try {
     } else {
         $pastHtml = $renderHome($pastOpen);
         if ($pastHtml !== '') {
-            chk(str_contains($pastHtml, 'hm-pastday'),
-                '★ تحذير «انت شغّال على يوم مش النهاردة» ظاهر على الشاشة');
+            /* ⚠️ لوح `.hm-pastday` اتشال بقرار المالك (2026-08-02) — كان
+               فقرة شرح تلات سطور. **الحماية اللي اتعمل عشانها لازم تفضل**،
+               فالفحص اتحوّل من «اللوح موجود» لـ«اليوم بيتقال والطريق مفتوح»:
+               عنوان الرصيد بيسمّي اليوم، وشريحة التاريخ بتاخد `is-past` وفيها
+               رابط تغيير اليوم. ده تشديد على البديل مش ترخية للقاعدة. */
             chk(str_contains($pastHtml, 'عهدة يوم ' . dfmt($pastOpen)),
-                '★ وعنوان الرصيد بيقول اسم اليوم مش «اليوم»');
-            chk(str_contains($pastHtml, 'رجّعني للنهاردة'),
-                'وفيه طريق واضح يرجّعه للنهاردة');
+                '★ عنوان الرصيد بيقول اسم اليوم مش «اليوم»');
+            chk(str_contains($pastHtml, 'hm-wd is-past') || str_contains($pastHtml, 'is-past'),
+                '★ وشريحة التاريخ موسومة إنها يوم فات');
+            chk(str_contains($pastHtml, url('m/work-date')),
+                'وفيه طريق واضح يغيّر بيه اليوم');
+            chk(!str_contains($pastHtml, 'hm-pastday') && !str_contains($pastHtml, 'hm-nodep'),
+                '★ ولوحا الشرح المشالين ما رجعوش');
         }
     }
 } finally {

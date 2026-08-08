@@ -26,7 +26,6 @@ $drill = static fn (string $what): string => url('rep-custody/drill/' . $what);
     <button class="btn ghost" type="submit"><?= icon('search', 16) ?></button>
   </form>
   <?php /* الأرصدة مقنّعة افتراضيًّا — المعالج عام في app.js مش سكربت محلي */ ?>
-  <button type="button" class="btn ghost secret-toggle" aria-pressed="false"><?= icon('search', 14) ?> إظهار الأرصدة</button>
   <a class="btn ghost" href="<?= url('rep-custody/inbox') ?>"><?= icon('inbox', 16) ?> مراجعة البنود</a>
   <a class="btn ghost" href="<?= url('reps') ?>">المرتبات والحسابات</a>
 </div>
@@ -37,10 +36,27 @@ $drill = static fn (string $what): string => url('rep-custody/drill/' . $what);
 ]); ?>
 
 <?php /* ═══ الأرقام — كل واحد بيفتح بنوده ═══ */ ?>
-<?php partial('stat_grid', ['items' => 4, 'body' => function () use ($dsum, $drill) { ?>
+<?php
+/* ⚠️ **تفكيك «نزل للمناديب» بالمصدر** (بلاغ المالك 2026-08-08: «مش باين ده نازل
+   منين»). الصياغة من `RepCustody::sourceBadge()` والأرقام من
+   `depositSourceTotals()` — نفس نطاق الرقم اللي فوقها بالحرف، فمجموع السطر =
+   الكارت. بيختفي لو مصدر واحد بس (سطر بيقول اللي الكارت قايله = تشتيت). */
+$srcSplit = static function (array $totals): ?array {
+    if (count($totals) < 2) { return null; }
+    $parts = [];
+    foreach ($totals as $k => $v) {
+        $b = \App\Models\RepCustody::sourceBadge($k);
+        if ($b) { $parts[] = $b['short'] . ' ' . money0($v); }
+    }
+    return $parts ? ['dir' => 'flat', 'tone' => 'mute', 'text' => implode(' · ', $parts)] : null;
+};
+$depSplit = $srcSplit(\App\Models\RepCustody::depositSourceTotals($day));
+?>
+<?php partial('stat_grid', ['items' => 4, 'body' => function () use ($dsum, $drill, $depSplit) { ?>
   <?php partial('stat', [
     'label' => 'نزل للمناديب اليوم', 'value' => money0($dsum['deposits']),
     'icon'  => 'wallet', 'tone' => 'green',
+    'trend' => $depSplit,
     'drill' => $drill('deposits'), 'title' => 'العهدة اللي نزلت اليوم',
   ]); ?>
   <?php partial('stat', [
@@ -52,13 +68,12 @@ $drill = static fn (string $what): string => url('rep-custody/drill/' . $what);
            اعتماد، لأن فلوسه خرجت من إيدهم فعلاً — ده «الفاضل معاهم» الحقيقي. */ ?>
   <?php partial('stat', [
     'label' => 'فاضل معاهم من عهدة اليوم', 'value' => money0($dsum['pocket']),
-    'icon'  => 'briefcase', 'tone' => 'gold', 'secret' => true,
-    'drill' => $drill('balance'), 'title' => 'الفاضل من عهدة اليوم (بعد المستني) — مندوبًا مندوبًا',
+    'icon'  => 'briefcase', 'tone' => 'gold', 'drill' => $drill('balance'), 'title' => 'الفاضل من عهدة اليوم (بعد المستني) — مندوبًا مندوبًا',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'مستني مراجعتك', 'value' => money0($dsum['pending']),
+    'label' => 'مستني نقدي', 'value' => money0($dsum['pending']),
     'icon'  => 'hourglass', 'tone' => 'sader',
-    'drill' => $drill('pending'), 'title' => 'بنود اليوم المستنية اعتمادك',
+    'drill' => $drill('pending'), 'title' => 'البنود النقدية اليوم المستنية اعتمادك',
   ]); ?>
 <?php }]); ?>
 
@@ -68,7 +83,7 @@ $drill = static fn (string $what): string => url('rep-custody/drill/' . $what);
            لسه مفتوح من أيام **غير** اليوم المعروض، يعني شغل ناقص محتاج تصفية —
            وكل يوم بيتقفل على تاريخه من كارت المندوب. */ ?>
   <em class="d-sec-year">مفتوح من أيام سابقة:
-    <b data-secret data-val="<?= e(money0($sum['carry'])) ?>">••••••</b></em>
+    <b><?= e(money0($sum['carry'])) ?></b></em>
 </div>
 
 <?php
@@ -112,7 +127,6 @@ $quiet  = array_values(array_filter($cards, static fn ($c) => !$c['day_active'])
         'value' => money0($c['day_pocket']),
         'value_label' => $c['day_pending'] > 0 ? 'فاضل معاه (بعد المستني)' : 'فاضل من عهدة اليوم',
         'value_tone'  => $c['day_pocket'] < 0 ? 'neg' : 'pos',
-        'secret' => true,
         'alert'  => $c['day_pocket'] < 0,
         // شريط الاستهلاك: نسبة المصروف والمستنّي من عهدة اليوم (عرض فقط)
         'meter' => $dep > 0 ? [

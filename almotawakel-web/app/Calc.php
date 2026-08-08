@@ -10,6 +10,19 @@ use App\Core\App;
  */
 class Calc
 {
+    /**
+     * أعمدة مصروفات السيارة الـ١٢ في `bawalis` (بنود نظام الإكسل القديم).
+     *
+     * ⚠️ **المصدر الوحيد للقايمة دي** — بيقراها `Calc::bawala` (إجمال المصروف)
+     *    و`OfficeCar` (مصاريف البوالص في أداء السيارة) و`Schema`/الفاحص. لو
+     *    اتكتبت مرة تانية في أي مكان، إضافة بند جديد بتدخل في حساب وتغيب عن
+     *    التاني فالأرقام تختلف **بلا أي خطأ ظاهر**.
+     */
+    public const EXPENSE_COLS = [
+        'driver_share', 'assistant_share', 'gas', 'kawtsh', 'z_kawtsh', 'tahia_masr',
+        'thabtan', 'permits', 'cards', 'overnight_expense', 'expense', 'other_expense',
+    ];
+
     private static function n($v): float
     {
         return is_numeric($v) ? (float)$v : 0.0;
@@ -37,6 +50,20 @@ class Calc
         // فالدين لا يكون سالباً أبداً (قرار صاحب الشركة)، حتى لا يُنقِص إجمالي دَين صاحب البيان.
         $debt = $freight <= 0 ? 0.0 : max(0.0, $freight - $custody - $transfer - $discount + $overn);
         $r['debt'] = round($debt, 2);
+
+        /* ═══ مصروفات السيارة (سيارات المكتب) ═══
+           ⚠️ **برّه معادلة الدين تمامًا** — الدين فوق اتحسب خلاص من النولون
+              والعهدة والتحويلة والخصم والبياتة وبس. البنود دي تكلفة تشغيل
+              عربيتنا، مالهاش أي علاقة بحساب العميل، فما تدخّلهاش في `$debt`.
+           ⚠️ المعادلات التلاتة مستخرجة من بيانات نظام الإكسل القديم ومتحقَّق
+              منها على ٧٣ صف في `legacy_bawalis` بالمليم. الباقى من العهدة
+              **بيطلع سالب عادي** (يعني السواق صرف أكتر من عهدته) — ما تحطّش
+              `max(0,…)` عليه زي الدين، ده رقم تشغيلي مش دين. */
+        $totalExpense = 0.0;
+        foreach (self::EXPENSE_COLS as $col) { $totalExpense += self::n($r[$col] ?? 0); }
+        $r['total_expense']     = round($totalExpense, 2);
+        $r['custody_remaining'] = round($custody - $totalExpense, 2);
+        $r['car_net']           = round($freight - $totalExpense, 2);
         return $r;
     }
 

@@ -3,8 +3,8 @@
 ?>
 <?php partial('owner_tabs', ['active' => 'statements']); ?>
 <div class="page-head">
-  <div><h1 style="margin:0"><?= icon('layers', 14) ?> كشوف أصحاب البيان</h1></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn ghost" target="_blank" href="<?= url('statements/batch?scope=all&autoprint=1') ?>"><?= icon('file-text', 14) ?> كشف مجمع لكل أصحاب البيان</a><a class="btn ghost" target="_blank" href="<?= url('statements/batch?scope=due&autoprint=1') ?>">🔴 كشف مجمع لأصحاب المديونية</a><a class="btn gold" href="<?= url('statements/new') ?>"><?= icon('plus', 14) ?> إصدار كشف جديد</a></div>
+  <div><h1 ><?= icon('layers', 14) ?> كشوف أصحاب البيان</h1></div>
+  <div class="p5-row tight"><a class="btn ghost" target="_blank" href="<?= url('statements/batch?scope=all&autoprint=1') ?>"><?= icon('file-text', 14) ?> كشف مجمع لكل أصحاب البيان</a><a class="btn ghost" target="_blank" href="<?= url('statements/batch?scope=due&autoprint=1') ?>">🔴 كشف مجمع لأصحاب المديونية</a><a class="btn gold" href="<?= url('statements/new') ?>"><?= icon('plus', 14) ?> إصدار كشف جديد</a></div>
 </div>
 
 <!-- بطاقات ملخّص -->
@@ -16,21 +16,21 @@
 </div>
 
 <!-- فلترة -->
-<form class="card mb" method="get" action="<?= url('statements') ?>" style="padding:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+<form class="card mb" method="get" action="<?= url('statements') ?>" class="p5-pad p5-row end">
   <div><label class="flt-l">بحث</label>
     <input type="text" name="q" value="<?= e($q) ?>" placeholder="رقم المستند / صاحب البيان"
-           style="width:300px;padding:8px 11px;border:1px solid var(--line);border-radius:8px"></div>
-  <div><label class="flt-l">من</label><input type="date" name="from" value="<?= e($from) ?>" style="padding:8px;border:1px solid var(--line);border-radius:8px"></div>
-  <div><label class="flt-l">إلى</label><input type="date" name="to" value="<?= e($to) ?>" style="padding:8px;border:1px solid var(--line);border-radius:8px"></div>
+           class="p5-fin w300"></div>
+  <div><label class="flt-l">من</label><input type="date" name="from" value="<?= e($from) ?>" class="p5-fin sq"></div>
+  <div><label class="flt-l">إلى</label><input type="date" name="to" value="<?= e($to) ?>" class="p5-fin sq"></div>
   <button class="btn" type="submit"><?= icon('search', 14) ?> بحث</button>
   <?php if($q||$from||$to): ?><a class="btn ghost" href="<?= url('statements') ?>">مسح</a><?php endif; ?>
 </form>
 
 <!-- الجدول -->
-<div class="card" style="padding:0;overflow:hidden">
+<div class="card" >
   <?php if (!$rows): ?>
-    <div class="empty" style="padding:40px"><div class="ic"><?= icon('layers', 14) ?></div>لا توجد كشوف مطابقة.
-      <div style="margin-top:12px"><a class="btn gold" href="<?= url('statements/new') ?>"><?= icon('plus', 14) ?> إصدار كشف جديد</a></div></div>
+    <div class="empty p5-pad-xl"><div class="ic"><?= icon('layers', 14) ?></div>لا توجد كشوف مطابقة.
+      <div class="mt-3"><a class="btn gold" href="<?= url('statements/new') ?>"><?= icon('plus', 14) ?> إصدار كشف جديد</a></div></div>
   <?php else: ?>
     <div class="table-wrap"><table class="data">
       <thead><tr>
@@ -41,19 +41,19 @@
       <tbody>
       <?php foreach ($rows as $st): ?>
         <tr>
-          <td style="font-weight:600"><?= e($st['doc_no'] ?: '#'.$st['id']) ?></td>
+          <td class="dbt-tot"><?= e($st['doc_no'] ?: '#'.$st['id']) ?></td>
           <td><?= dfmt($st['statement_date']) ?></td>
-          <td style="font-weight:500"><a href="<?= url('settlements?owner=' . urlencode($st['owner'] ?? '')) ?>"><?= e($st['owner'] ?: '(بدون صاحب بيان)') ?></a></td>
+          <td class="mv-ref"><a href="<?= url('settlements?owner=' . urlencode($st['owner'] ?? '')) ?>"><?= e($st['owner'] ?: '(بدون صاحب بيان)') ?></a></td>
           <td><?= intf($st['paid_count']) ?></td>
           <td><?= intf($st['remaining_count']) ?></td>
           <td class="pos"><?= money($st['paid_sum'],false) ?></td>
-          <td style="font-weight:600;color:var(--navy)"><?= money($st['stat_remaining'],false) ?></td>
+          <td class="p5-h-inline"><?= money($st['stat_remaining'],false) ?></td>
           <td><div class="actions">
             <a class="edit" href="<?= url('statements/'.$st['id']) ?>" target="_blank" title="طباعة"><?= icon('file-text', 14) ?></a>
             <a class="edit" href="<?= url('statements/form?owner=' . urlencode($st['owner'] ?? '')) ?>" title="إصدار كشف آخر لنفس صاحب البيان"><?= icon('plus', 14) ?></a>
-            <?php if(($st['status']??'issued')!=='void'): ?><form method="post" action="<?= url('statements/'.$st['id'].'/delete') ?>" style="display:inline"
+            <?php if(($st['status']??'issued')!=='void'): ?><form method="post" action="<?= url('statements/'.$st['id'].'/delete') ?>" 
                   data-danger="1" data-confirm="إلغاء الكشف مع الاحتفاظ برقمه؟">
-              <?= csrfField() ?><input type="hidden" name="lock_version" value="<?= (int)($st['lock_version']??1) ?>"><input name="reason" required placeholder="سبب الإلغاء" style="width:100px"><button class="del" title="إلغاء"><?= icon('x', 14) ?></button>
+              <?= csrfField() ?><input type="hidden" name="lock_version" value="<?= (int)($st['lock_version']??1) ?>"><input name="reason" required placeholder="سبب الإلغاء" class="w100"><button class="del" title="إلغاء"><?= icon('x', 14) ?></button>
             </form><?php else: ?><span class="pill st-unpaid">ملغى</span><?php endif; ?>
           </div></td>
         </tr>

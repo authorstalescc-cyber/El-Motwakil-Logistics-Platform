@@ -77,9 +77,9 @@ chk(substr_count($tabAcc, '<table') === 1,
 chk(str_contains($v('_tab_account.php'), 'مقارنة رقمية بين أيام'),   // في تعليق فالقراءة خام
     '⚠️ والجدول ده **مقصود** وموثَّق: مقارنة رقمية بين أيام، وده اللي الجدول أحسن فيه');
 foreach ([['اليوم', $tabDay], ['الحساب', $tabAcc], ['الأذونات', $tabPerm]] as [$name, $src]) {
-    chk(str_contains($src, "partial('row_item'"), "تبويب «$name» بيستخدم `row_item`");
+    chk(str_contains($src, "partial('row_item'"), "تبويب «{$name}» بيستخدم `row_item`");
     chk(str_contains($src, "partial('panel'") || str_contains($src, 'd-card'),
-        "تبويب «$name» بيستخدم لوح اللغة الجديدة");
+        "تبويب «{$name}» بيستخدم لوح اللغة الجديدة");
 }
 chk(str_contains($tabDay, 'data-drill') && str_contains($tabDay, 'rc-chip'),
     '⚠️ شرائح أداء اليوم بقت أزرار بتفتح بنودها — مش أرقام صمّاء');
@@ -145,7 +145,8 @@ if ($repId <= 0) {
     }
     $_GET = [];
     $repDrills = ['rep_deposits', 'rep_spent', 'rep_pending', 'rep_receipts',
-                  'rep_expenses', 'rep_misc', 'rep_handover', 'rep_transfer', 'rep_visa'];
+                  'rep_expenses', 'rep_misc', 'rep_handover', 'rep_transfer',
+                  'rep_visa', 'rep_unpaid'];
     foreach ($repDrills as $w) {
         $_GET = ['rep' => (string) $repId];
         $out = $render(static fn () => (new RepCustodyController())->drill($w));

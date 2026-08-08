@@ -25,7 +25,7 @@ $mvCtType  = trim((string)($mv['container_type'] ?? ''));
 // تظهر دائمًا (حتى بدون كروت تعرض رابط «أضف كارت») — بلا سكربت لأن الحركة تُعاد رسمها بالـ AJAX.
 $visaField = function(?array $en) {
     $sel = (int)(is_array($en) ? ($en['visa_card_id'] ?? 0) : 0);
-    return '<label class="ms-fld"><span>💳 كارت الفيزا (لو مدفوع بالفيزا)</span>'
+    return '<label class="ms-fld"><span>' . icon('credit-card', 14) . ' كارت الفيزا (لو مدفوع بالفيزا)</span>'
          . visa_card_select($sel) . '</label>';
 };
 
@@ -70,7 +70,7 @@ $receiptForm = function(string $key, ?array $en, int $mid) use ($pid, $visaField
         <label class="ms-fld"><span>الفعلي (للعميل)</span>
           <input type="number" step="0.01" name="actual_amount" value="<?= $isEdit ? e($en['actual_amount'] ?? '') : '' ?>" placeholder="0"></label>
         <button class="btn gold sm" type="submit"><?= icon('download', 14) ?> <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
-        <button type="button" class="btn ghost sm ms-more-btn">المزيد ▾</button>
+        <button type="button" class="btn ghost sm ms-more-btn">المزيد <?= icon('chevron', 13) ?></button>
       </div>
       <div class="ms-more" hidden>
         <label class="ms-fld"><span>التاريخ</span>
@@ -112,14 +112,14 @@ $receiptEntryForm = function(string $key, ?array $en, int $mid, bool $hidden = f
         <label class="ms-fld wide"><span>اسم الإيصال (البيان)</span>
           <input list="dl_mv_receipt" name="note" value="<?= $isEdit ? e($en['note']) : '' ?>" placeholder="تخصيص / حمولة / تعتيق / هيئة / رسوم محصّلة"></label>
         <label class="ms-fld"><span>الكمية</span>
-          <input type="number" min="1" step="1" name="qty" value="<?= e($qty) ?>" class="js-rc-qty" style="max-width:80px"></label>
+          <input type="number" min="1" step="1" name="qty" value="<?= e($qty) ?>" class="js-rc-qty mv-qty"></label>
         <label class="ms-fld"><span>سعر الوحدة</span>
           <input type="number" step="0.01" name="amount" value="<?= e($unit) ?>" placeholder="0" class="js-rc-unit" required></label>
         <label class="ms-fld"><span>الفعلي للوحدة (للعميل)</span>
           <input type="number" step="0.01" name="actual_amount" value="<?= e($unitActual) ?>" placeholder="0"></label>
         <span class="rc-total">الإجمالي: <b class="js-rc-total neg">0</b></span>
         <button class="btn gold sm" type="submit"><?= icon('download', 14) ?> <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
-        <button type="button" class="btn ghost sm ms-more-btn">المزيد ▾</button>
+        <button type="button" class="btn ghost sm ms-more-btn">المزيد <?= icon('chevron', 13) ?></button>
       </div>
       <div class="ms-more" hidden>
         <label class="ms-fld"><span>التاريخ</span><input type="date" name="entry_date" value="<?= $isEdit ? e($en['entry_date']) : work_date() ?>"></label>
@@ -151,7 +151,7 @@ $receiptRow = function(string $key, array $st, array $S, int $mid) use ($receipt
         <span class="ms-sp"></span>
         <?php if ($S['none']): ?>
           <span class="ss-none"><?= icon('x', 14) ?> لا يوجد</span>
-          <form class="js-ajax" method="post" action="<?= url('permits/stage/'.$S['noneRow']['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" type="submit" title="إلغاء التعليم"><?= icon('undo', 14) ?></button></form>
+          <form class="js-ajax" method="post" action="<?= url('permits/stage/'.$S['noneRow']['id'].'/delete') ?>"><?= csrfField() ?><button class="btn ghost xs" type="submit" title="إلغاء التعليم"><?= icon('undo', 14) ?></button></form>
         <?php elseif ($S['real']): $en = $S['real'][0]; ?>
           <b class="ms-amt <?= $dirCls ?>"><?= money($en['amount'],false) ?></b>
           <?php if (isset($en['actual_amount']) && $en['actual_amount']!==null && $en['actual_amount']!==''): ?><span class="te-actual" title="السعر الفعلي (للعميل)"><?= icon('user', 14) ?> <?= money($en['actual_amount'],false) ?></span><?php endif; ?>
@@ -160,7 +160,7 @@ $receiptRow = function(string $key, array $st, array $S, int $mid) use ($receipt
           <?php if ($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank" title="المرفق"><?= icon('file-text', 14) ?></a><?php endif; ?>
           <?= $statusBadge($en['status']) ?>
           <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل"><?= icon('edit', 14) ?></button>
-          <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit" title="حذف"><?= icon('trash', 14) ?></button></form>
+          <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>"><?= csrfField() ?><button class="btn ghost xs danger" type="submit" title="حذف"><?= icon('trash', 14) ?></button></form>
         <?php endif; ?>
       </div>
       <?php if ($S['real']): ?>
@@ -201,7 +201,7 @@ $customForm = function(string $key, ?array $en, int $mid, bool $hidden = false) 
         <label class="ms-fld"><span>الفعلي</span><input type="number" step="0.01" name="actual_amount" value="<?= $isEdit ? e($en['actual_amount'] ?? '') : '' ?>" placeholder="0"></label>
         <label class="ms-fld wide"><span>اسم البند</span><input list="dl_mv_expense" name="note" value="<?= $isEdit ? e($en['note']) : '' ?>" placeholder="أرضية / غرامة / عمولة"></label>
         <button class="btn gold sm" type="submit"><?= icon('download', 14) ?> <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
-        <button type="button" class="btn ghost sm ms-more-btn">المزيد ▾</button>
+        <button type="button" class="btn ghost sm ms-more-btn">المزيد <?= icon('chevron', 13) ?></button>
       </div>
       <div class="ms-more" hidden>
         <label class="ms-fld"><span>التاريخ</span><input type="date" name="entry_date" value="<?= $isEdit ? e($en['entry_date']) : work_date() ?>"></label>
@@ -242,7 +242,7 @@ $customBlock = function(string $key, array $st, array $S, int $mid) use ($status
                   <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank"><?= icon('file-text', 14) ?></a><?php endif; ?>
                   <span class="ms-sp"></span>
                   <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل البند"><?= icon('edit', 14) ?></button>
-                  <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit"><?= icon('trash', 14) ?></button></form>
+                  <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>"><?= csrfField() ?><button class="btn ghost xs danger" type="submit"><?= icon('trash', 14) ?></button></form>
                 </div>
                 <div class="ms-edit-wrap" hidden><?= $customForm($key, $en, $mid) ?></div>
               </div>
@@ -292,7 +292,7 @@ $receiptsBlock = function(string $key, array $st, array $S, int $mid) use ($stat
                     data-receipt-amount="<?= e(money($en['amount'],false)) ?>"
                     title="نقل الإيصال إلى إذن آخر">⇄ نقل</button><?php endif; ?>
                   <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل الإيصال"><?= icon('edit', 14) ?></button>
-                  <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:0"><?= csrfField() ?><button class="btn ghost xs" style="color:var(--red)" type="submit" title="حذف الإيصال"><?= icon('trash', 14) ?></button></form>
+                  <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>"><?= csrfField() ?><button class="btn ghost xs danger" type="submit" title="حذف الإيصال"><?= icon('trash', 14) ?></button></form>
                 </div>
                 <div class="ms-edit-wrap" hidden><?= $receiptEntryForm($key, $en, $mid) ?></div>
               </div>
@@ -390,6 +390,14 @@ $billGrid = function(?array $bl, array $p) {
         <div class="bf-grid bf-grid-money">
           <div class="bf-fld"><label>النولون</label><input type="number" step="0.01" name="freight" value="<?= $bl ? e($bl['freight']) : '' ?>" placeholder="0"></div>
           <div class="bf-fld"><label>العهدة</label><input type="number" step="0.01" name="custody" value="<?= $bl ? e($bl['custody']) : '' ?>" placeholder="0"></div>
+          <?php /* ⚠️ **مين سلّم السائق؟** — الافتراضي خزنة المكتب. اختيار مندوب
+                   بيستثني البوليصة من الخزنة **و**يضيف مبلغها لصرف المندوب (الاتنين
+                   مع بعض في `RepBillCustody`). المخصوم `العهدة − 100` في الحالتين.
+                   بتختفي بالكامل قبل migrate_v60 لأن الدالة بترجّع ''. */ ?>
+          <?php $payerSel = rep_custody_select($bl['custody_rep_id'] ?? 0); ?>
+          <?php if ($payerSel !== ''): ?>
+            <div class="bf-fld"><label>مين سلّم السائق؟</label><?= $payerSel ?></div>
+          <?php endif; ?>
           <div class="bf-fld"><label>التحويلة</label><input type="number" step="0.01" name="transfer" value="<?= $bl ? e($bl['transfer']) : '' ?>" placeholder="0"></div>
           <div class="bf-fld"><label>الخصم</label><input type="number" step="0.01" name="discount" value="<?= $bl ? e($bl['discount']) : e($__discDefault) ?>"></div>
           <div class="bf-fld"><label>البياتة</label><input type="number" step="0.01" name="overnight_collection" value="<?= $bl ? e($bl['overnight_collection']) : '' ?>" placeholder="0"></div>
@@ -413,7 +421,7 @@ $billsBlock = function(int $mid, array $bills) use ($pid, $p, $type, $ctTotal, $
     ob_start(); ?>
     <div class="mstage <?= $bills?'has':'' ?>" id="stage-bills-<?= $mid ?>">
       <div class="ms-head">
-        <span class="ms-ic <?= $bills?'ok':'' ?>"><?= $bills?'✓':'🚛' ?></span>
+        <span class="ms-ic <?= $bills?'ok':'' ?>"><?= $bills ? icon('check', 14) : icon('truck', 14) ?></span>
         <span class="ms-name">البوليصة</span>
         <span class="ms-sp"></span>
         <?php if ($bills): ?><span class="ss-count"><?= intf(count($bills)) ?></span><?php endif; ?>
@@ -432,7 +440,7 @@ $billsBlock = function(int $mid, array $bills) use ($pid, $p, $type, $ctTotal, $
             </tr></thead><tbody>
             <?php foreach ($bills as $bl): ?>
               <tr>
-                <td style="font-weight:500"><?= e($bl['bill_number'] ?: '—') ?></td>
+                <td class="mv-ref"><?= e($bl['bill_number'] ?: '—') ?></td>
                 <td><?= dfmt($bl['bill_date']) ?></td>
                 <td><?= e($bl['driver']) ?></td>
                 <td><?= e($bl['car_no']) ?></td>
@@ -446,7 +454,7 @@ $billsBlock = function(int $mid, array $bills) use ($pid, $p, $type, $ctTotal, $
                 <td><div class="actions">
                   <a class="edit" href="<?= url('settlements/'.$bl['id']) ?>" title="سداد"><?= icon('banknote', 14) ?></a>
                   <button type="button" class="btn ghost xs ms-bill-edit-btn" data-billedit="billedit-<?= (int)$bl['id'] ?>-<?= $mid ?>" title="تعديل البوليصة"><?= icon('edit', 14) ?></button>
-                  <form method="post" action="<?= url('permits/'.$pid.'/delete-bill') ?>" class="js-ajax confirm-delete" style="margin:0" data-confirm="حذف البوليصة <?= e($bl['bill_number'] ?: '') ?> نهائياً؟">
+                  <form method="post" action="<?= url('permits/'.$pid.'/delete-bill') ?>" class="js-ajax confirm-delete" data-confirm="حذف البوليصة <?= e($bl['bill_number'] ?: '') ?> نهائياً؟">
                     <?= csrfField() ?><input type="hidden" name="bill_id" value="<?= (int)$bl['id'] ?>">
                     <button class="del" type="submit" title="حذف نهائياً"><?= icon('trash', 14) ?></button>
                   </form>
@@ -483,7 +491,7 @@ $billsBlock = function(int $mid, array $bills) use ($pid, $p, $type, $ctTotal, $
               </span>
             </div>
           </form>
-          <form id="linkbill-<?= $mid ?>" class="js-ajax" method="post" action="<?= url('permits/'.$pid.'/link-bill') ?>" style="display:none">
+          <form id="linkbill-<?= $mid ?>" class="js-ajax" method="post" action="<?= url('permits/'.$pid.'/link-bill') ?>" hidden>
             <?= csrfField() ?><input type="hidden" name="movement_id" value="<?= $mid ?>">
           </form>
         </div>
@@ -508,11 +516,11 @@ $generatorsBlock = function(array $generators, int $mid) {
           <thead><tr><th class="g-identity">التاريخ</th><th class="g-identity">الشركة</th>
             <th class="g-vehicle">العدد</th><th class="g-revenue">النولون</th><th class="g-result">المتبقي</th></tr></thead>
           <tbody><?php foreach ($generators as $g): ?>
-            <tr><td><?= dfmt($g['gen_date']) ?></td><td style="text-align:right"><?= e($g['company']) ?></td>
+            <tr><td><?= dfmt($g['gen_date']) ?></td><td class="txt"><?= e($g['company']) ?></td>
               <td><?= intf($g['gen_count']) ?></td><td class="pos"><?= money($g['freight'],false) ?></td>
               <td class="<?= $g['remaining']>0?'neg':'pos' ?>"><?= money($g['remaining'],false) ?></td></tr>
           <?php endforeach; ?></tbody></table></div>
-        <a class="btn ghost sm" href="<?= url('generators') ?>" style="margin-top:8px"><?= icon('settings', 14) ?> إدارة المولدات</a>
+        <a class="btn ghost sm mv-gen-link" href="<?= url('generators') ?>"><?= icon('settings', 14) ?> إدارة المولدات</a>
       </div>
     </div>
     <?php return ob_get_clean();
@@ -523,7 +531,7 @@ $generatorsBlock = function(array $generators, int $mid) {
     <span class="mv-seq"><?= icon('shuffle',16) ?> حركة #<?= intf($mv['seq']) ?></span>
     <?php if ($mv['note']): ?><span class="mv-note"><?= e($mv['note']) ?></span><?php endif; ?>
     <span class="mv-prog"><span class="mv-bar"><span style="width:<?= $mvProg ?>%"></span></span><small><?= $mvProg ?>%</small></span>
-    <span style="flex:1"></span>
+    <span class="mv-sp"></span>
     <span class="mv-stats">
       <?php if ($mvCtTotal > 0 || $mvCtType !== ''): ?>
         <span title="حاويات الحركة"><?= icon('package', 14) ?> <?= $mvCtTotal>0 ? intf($mvCtTotal) : '' ?><?= ($mvCtTotal>0 && $mvCtType!=='') ? ' · ' : '' ?><?= $mvCtType!=='' ? e($mvCtType) : '' ?></span>
@@ -533,22 +541,21 @@ $generatorsBlock = function(array $generators, int $mid) {
       <span class="neg" title="المصروفات"><?= icon('trending-down', 14) ?> <?= money($mvExp,false) ?></span>
       <?php if ($mvCharged>0): ?><span class="chg" title="إجمالي السعر الفعلي (للعميل)"><?= icon('user', 14) ?> <?= money($mvCharged,false) ?></span><?php endif; ?>
     </span>
-    <form method="post" action="<?= url('permits/movement/'.$mid.'/delete') ?>" class="js-ajax confirm-delete mv-del" style="margin:0" onclick="event.stopPropagation()">
-      <?= csrfField() ?><button class="btn ghost xs" type="submit" style="color:#ffb4a8" title="حذف الحركة"><?= icon('trash', 14) ?></button>
+    <form method="post" action="<?= url('permits/movement/'.$mid.'/delete') ?>" class="js-ajax confirm-delete mv-del" onclick="event.stopPropagation()">
+      <?= csrfField() ?><button class="btn ghost xs mv-del-btn" type="submit" title="حذف الحركة"><?= icon('trash', 14) ?></button>
     </form>
-    <span class="ss-chev">▾</span>
+    <span class="ss-chev"><?= icon('chevron', 14) ?></span>
   </summary>
   <div class="mv-body">
     <!-- بيانات الحركة (وصفي): عدد/تصنيف الحاويات + ملاحظة — معزول عن أي حساب -->
-    <form class="js-ajax mv-meta-form" method="post" action="<?= url('permits/movement/'.$mid.'/update') ?>"
-          style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:10px 4px 14px;border-bottom:1px dashed var(--line2);margin-bottom:12px">
+    <form class="js-ajax mv-meta-form" method="post" action="<?= url('permits/movement/'.$mid.'/update') ?>">
       <?= csrfField() ?>
-      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted,#667)">عدد الحاويات
-        <input type="number" min="0" name="container_count" value="<?= $mvCtTotal>0 ? intf($mvCtTotal) : '' ?>" placeholder="0" style="width:120px;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px" autocomplete="off"></label>
-      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted,#667)">تصنيف الحاويات
-        <?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','value'=>$mvCtType,'attrs'=>'style="width:150px;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px"']); ?></label>
-      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted,#667);flex:1;min-width:160px">ملاحظة الحركة
-        <input name="note" value="<?= e($mv['note'] ?? '') ?>" placeholder="ملاحظة اختيارية" style="border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px" autocomplete="off"></label>
+      <label class="mvm-fld">عدد الحاويات
+        <input type="number" min="0" name="container_count" value="<?= $mvCtTotal>0 ? intf($mvCtTotal) : '' ?>" placeholder="0" class="mvm-count" autocomplete="off"></label>
+      <label class="mvm-fld">تصنيف الحاويات
+        <?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','value'=>$mvCtType,'attrs'=>'class="mvm-type"']); ?></label>
+      <label class="mvm-fld grow">ملاحظة الحركة
+        <input name="note" value="<?= e($mv['note'] ?? '') ?>" placeholder="ملاحظة اختيارية" autocomplete="off"></label>
       <button class="btn ghost sm" type="submit" title="حفظ بيانات الحركة"><?= icon('download', 14) ?> حفظ</button>
     </form>
     <!-- شريط المراحل الأفقي -->

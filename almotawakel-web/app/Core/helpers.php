@@ -170,6 +170,148 @@ function container_norm($raw): ?string
     }
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * تفكيك «٢×٤٠ قدم» لرسم شكل الحاوية على كارت الإذن (بوابة المندوب).
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * الفكرة: الشكل بيوصّل المقاس والنوع أسرع من أي نص — العشرين أقصر من الأربعين،
+ * والمبرّد ليه وحدة تبريد، والتانك أسطوانة في هيكل. العدد×المقاس بيتكتب **جوّه**
+ * الشكل نفسه.
+ *
+ * ⚠️ **بترجّع `null` لأي وصف مش حاوية معروفة** («دبابة» · «١٩ طرد» · «١٠ طر د»)
+ *    — الشاشة ساعتها بترجع للشريحة النصّية العادية. **ممنوع نخترع شكلًا لوصف
+ *    مش عارفينه**: شكل غلط بيتقري كمعلومة غلط.
+ *
+ * ⚠️ المطابقة على مخرج `container_norm()` (المصدر الوحيد للتوحيد — v30) وبعدها
+ *    `Maintenance::normkey` عشان الهمزة والشدّة ما يفرقوش («أوبن توب» = «اوبن توب»).
+ *
+ * @param  string $part جزء زي «٢×٤٠ قدم» أو «١×تانك» أو «٤ حاوية»
+ * @return array{count:int,size:?string,kind:string,label:string,sub:string}|null
+ */
+function container_art(string $part): ?array
+{
+    $part = trim($part);
+    if ($part === '') { return null; }
+
+    // «4 حاوية» (بلا نوع) مالهاش شكل — العدد لوحده مش تصنيف
+    if (!preg_match('~^(\d+)\s*[×x*]\s*(.+)$~u', $part, $m)) { return null; }
+    $count = (int) $m[1];
+    $rest  = trim($m[2]);
+    if ($count < 1) { return null; }
+
+    $k = class_exists(\App\Models\Maintenance::class)
+        ? \App\Models\Maintenance::normkey($rest) : mb_strtolower($rest);
+
+    $kind = null;
+    if (str_contains($k, 'مبرد'))                              { $kind = 'reefer'; }
+    elseif (str_contains($k, 'هاي كيوب') || str_contains($k, 'هايكيوب')) { $kind = 'hc'; }
+    elseif (str_contains($k, 'تانك'))                          { $kind = 'tank'; }
+    elseif (str_contains($k, 'جامبو'))                         { $kind = 'jumbo'; }
+    elseif (str_contains($k, 'اوبن'))                          { $kind = 'open'; }
+    elseif (str_contains($k, 'فلات'))                          { $kind = 'flat'; }
+    elseif (str_contains($k, 'قدم'))                           { $kind = 'dry'; }
+    if ($kind === null) { return null; }                       // وصف مش معروف
+
+    // المقاس (٢٠/٤٠/٤٥) لو موجود — هو اللي بيحدّد طول الرسمة
+    $size = preg_match('~\b(20|40|45)\b~', $k, $sm) ? $sm[1] : null;
+
+    /* النص جوّه الشكل: «٢×٤٠» لو فيه مقاس، وإلا العدد لوحده (التانك مالوش مقاس).
+       والكلمة اللي جنبه بتظهر بس لما الرسمة **مش** كافية لوحدها — الحاوية
+       الجافة شكلها بيقول كل حاجة فما بنكتبش «قدم» جنبها. */
+    $subs = ['reefer' => 'مبرّد', 'hc' => 'هاي كيوب', 'tank' => 'تانك',
+             'jumbo' => 'جامبو', 'open' => 'أوبن توب', 'flat' => 'فلات راك', 'dry' => ''];
+
+    /* ⚠️ **التصنيف كامل جوّه الرسمة** («٢×٤٠») — الحاوية بتتوسّع عشانه بدل ما
+       نقسّم الرقم. جرّبنا التقسيم (المقاس جوّه والعدد برّه) واترفض من المالك،
+       والمساحة الفاضية في نص الرسمة مقاسها في CSS اتظبط على أطول احتمال
+       («١٢×٤٠») فما فيش تداخل. */
+    return [
+        'count'  => $count,
+        'size'   => $size,
+        'kind'   => $kind,
+        'label'  => $size !== null ? $count . '×' . $size : (string) $count,
+        'sub'    => $subs[$kind],
+    ];
+}
+
+/**
+ * جوف رسمة كل نوع حاوية (viewBox 0 0 64 32) — بتتحط في `<symbol>` مرّة واحدة
+ * في الصفحة والكروت بتشاور عليها بـ`<use>`.
+ *
+ * ⚠️ خطوط بس بلا تعبئة — الخصائص بتتحط على الـ`<svg>` المضيف في CSS، لأن
+ *    `<use>` ما بيورّثش خصائص الرسم من الـsymbol (نفس مصيدة ختم الميناء).
+ * ⚠️ الرسمة بتتمدّ بالعرض (`preserveAspectRatio="none"`) فالعشرين بتطلع أقصر
+ *    من الأربعين **بنفس الرسمة** — ده الفرق الحقيقي بينهم في الواقع.
+ */
+function container_box_svg(string $kind): string
+{
+    return [
+        /* ⚠️ الأضلاع عند الطرفين بس والوسط **سايب** — الرقم بيتكتب في النص زي
+           ما هو مستنسل على الحاوية الحقيقية. أول نسخة حطّت أضلاع على العرض كله
+           فالرقم غطّاها والشكل بقى يقرا كقوسين مش كحاوية. */
+        'dry'    => '<rect x="1.5" y="4.5" width="61" height="23" rx="1.5"/>'
+                  . '<path d="M7 5.5v21M12 5.5v21"/>'
+                  . '<path d="M52 5.5v21M57 5.5v21"/>'
+                  . '<path d="M1.5 8.5h61M1.5 23.5h61"/>',
+        // هاي كيوب: نفس الحاوية بس أعلى (بتاخد كل الارتفاع)
+        'hc'     => '<rect x="1.5" y="1.5" width="61" height="29" rx="1.5"/>'
+                  . '<path d="M7 2.5v27M12 2.5v27"/>'
+                  . '<path d="M52 2.5v27M57 2.5v27"/>'
+                  . '<path d="M1.5 5.5h61M1.5 26.5h61"/>',
+        // مبرّد: وحدة التبريد بفتحاتها على الطرف
+        'reefer' => '<rect x="1.5" y="4.5" width="61" height="23" rx="1.5"/>'
+                  . '<path d="M17 4.5v23"/>'
+                  . '<path d="M5 9h8M5 13h8M5 17h8M5 21h8"/>'
+                  . '<path d="M53 5.5v21M58 5.5v21"/>'
+                  . '<path d="M17 8.5h45.5M17 23.5h45.5"/>',
+        // تانك: أسطوانة جوّه هيكل
+        'tank'   => '<rect x="1.5" y="3" width="61" height="26" rx="1.5"/>'
+                  . '<path d="M9 16a11 8 0 0 1 11-8h24a11 8 0 0 1 0 16H20a11 8 0 0 1-11-8Z"/>'
+                  . '<path d="M30 8V4.5h4V8"/><path d="M1.5 3v26M62.5 3v26"/>',
+        // جامبو: صندوق طويل على شاسيه بعجلتين
+        'jumbo'  => '<rect x="1.5" y="2.5" width="55" height="17" rx="1.5"/>'
+                  . '<path d="M8 3.5v15M14 3.5v15"/><path d="M44 3.5v15M50 3.5v15"/>'
+                  . '<path d="M1.5 21h61"/><circle cx="18" cy="25.5" r="4"/><circle cx="47" cy="25.5" r="4"/>',
+        // أوبن توب: السقف مفتوح (شرط متقطّع)
+        'open'   => '<path d="M1.5 6.5v21h61v-21"/>'
+                  . '<path d="M1.5 6.5h7M14 6.5h7M26.5 6.5h11M43 6.5h7M55.5 6.5h7"/>'
+                  . '<path d="M8 9v18M14 9v18"/><path d="M50 9v18M56 9v18"/>'
+                  . '<path d="M1.5 24h61"/>',
+        // فلات راك: أرضية وقائمتان على الطرفين
+        'flat'   => '<path d="M1.5 21h61"/><path d="M1.5 25h61"/>'
+                  . '<path d="M4 21V6h5v15M55 21V6h5v15"/>'
+                  . '<path d="M14 21v-3M20 21v-3M44 21v-3M50 21v-3"/>',
+    ][$kind] ?? '';
+}
+
+/**
+ * رسمة القاطرة والمقطورة لعرض السيارة على موبايل المندوب (viewBox 0 0 104 40).
+ *
+ * ⚠️ خطوط بس — الخصائص على الـ`<svg>` المضيف (نفس قاعدة `<use>` بتاعة الحاويات).
+ * ⚠️ `office` نسخة سيارة المكتب: عليها علامة على المقطورة تفرّقها من بعيد،
+ *    والتفرقة نفسها بتيجي من `OfficeCar::matchPlate()` لا من نص مكتوب بالإيد.
+ */
+function truck_svg(bool $office = false): string
+{
+    $art = // المقطورة
+           '<rect x="2" y="8" width="62" height="19" rx="1.5"/>'
+         . '<path d="M10 9v17M17 9v17"/><path d="M49 9v17M56 9v17"/>'
+         . '<path d="M2 11.5h62M2 23.5h62"/>'
+           // القاطرة (الكابينة)
+         . '<path d="M66 27V14h11l7 6v7"/>'
+         . '<path d="M69 16.5h6.5l4 3.5H69z"/>'
+           // الشاسيه والعجل
+         . '<path d="M2 29h96"/>'
+         . '<circle cx="16" cy="33" r="4.5"/><circle cx="27" cy="33" r="4.5"/>'
+         . '<circle cx="80" cy="33" r="4.5"/>';
+    if ($office) {
+        // نجمة صغيرة على المقطورة — علامة «سيارة المكتب»
+        $art .= '<path d="m33 17.6 1.5 3 3.3.5-2.4 2.3.6 3.3-3-1.6-3 1.6.6-3.3-2.4-2.3 3.3-.5 1.5-3Z"/>';
+    }
+    return $art;
+}
+
 /** تنسيق «تصنيف الحاويات × عددها» — يرجع «النوع × العدد» أو «العدد حاوية» لو النوع فارغ */
 function containerLabel($type, $count): string
 {
@@ -625,11 +767,16 @@ function icon(string $name, int $size = 20, string $class = ''): string
         'receipt'     => '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
         'file-text'   => '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8M16 17H8M10 9H8"/>',
         'layers'      => '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+        // ⚠️ كانا ناقصين و`icon()` بترجّع دايرة فاضية بالسكوت للاسم المش موجود
+        'filter'      => '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+        'columns'     => '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18M15 3v18"/>',
         'credit-card' => '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
         'briefcase'   => '<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/>',
         'trending-down'=> '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
         'trending-up' => '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
         'coins'       => '<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>',
+        // ⚠️ الاسم الناقص بيقع على دايرة فاضية **بالسكوت** — يحرسه verify_typography §⑦
+        'tag'         => '<path d="M12.6 2.7a2 2 0 0 0-1.4-.6H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.4 8.4a2 2 0 0 0 2.8 0l6.8-6.8a2 2 0 0 0 0-2.8Z"/><circle cx="7" cy="7" r="1.2"/>',
         'users'       => '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
         'bar-chart'   => '<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>',
         'settings'    => '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
@@ -655,7 +802,17 @@ function icon(string $name, int $size = 20, string $class = ''): string
         'building'    => '<rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>',
         'user'        => '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
         'map-pin'     => '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+        'camera'      => '<path d="M4 8h3l1.6-2.4h6.8L17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"/><circle cx="12" cy="14" r="3.6"/>',
+        'star'        => '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.2-5.4-2.9-5.4 2.9 1-6.2L3.2 9.5l6.1-.9L12 3Z"/>',
         'anchor'      => '<circle cx="12" cy="5" r="3"/><line x1="12" x2="12" y1="22" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/>',
+        /* علامات الموانئ — بتترسم ختمًا كبيرًا في ركن كارت الإذن (بوابة المندوب).
+           خطوط بس (بلا تعبئة) عشان تفضل حادّة على أي مقاس وشفافية. */
+        'lighthouse'  => '<path d="M10 8h4l1.5 13h-7L10 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><path d="M12 3V1.5"/><path d="M17 5.5 19.5 4"/><path d="M7 5.5 4.5 4"/><path d="M9.4 13h5.2"/>',
+        'crane'       => '<path d="M4 21V4l14 3"/><path d="M4 8h9"/><path d="M15 7v6"/><path d="M12.5 13h5l-2.5 4-2.5-4Z"/><path d="M2 21h8"/>',
+        'ship'        => '<path d="M3 17c1.6 0 1.6 1.5 3.2 1.5S7.8 17 9.4 17s1.6 1.5 3.2 1.5S14.2 17 15.8 17s1.6 1.5 3.2 1.5"/><path d="M4.5 14.5 6 9h12l1.5 5.5"/><path d="M12 9V5"/><path d="M9 5h6"/>',
+        'containers'  => '<rect x="2.5" y="13" width="8" height="7" rx="1"/><rect x="13.5" y="13" width="8" height="7" rx="1"/><rect x="8" y="5" width="8" height="7" rx="1"/><path d="M5 13v7M8 13v7M16.5 13v7M19.5 13v7M10.5 5v7M13.5 5v7"/>',
+        /* الحاوية المبرّدة — بتغلب ختم الميناء لأنها شغل تشغيلي مختلف تمامًا. */
+        'snowflake'   => '<path d="M12 2v20M4.4 6.5l15.2 9M19.6 6.5 4.4 15.5"/><path d="M9.2 4.2 12 6.9l2.8-2.7M9.2 19.8 12 17.1l2.8 2.7"/><path d="m4.9 10.2-.8-3.7 3.7-.8M19.1 13.8l.8 3.7-3.7.8"/><path d="m19.1 10.2.8-3.7-3.7-.8M4.9 13.8l-.8 3.7 3.7.8"/>',
         'wallet'      => '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
         'sparkles'    => '<path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/>',
         'send'        => '<path d="M14.54 21.69a.5.5 0 0 0 .94-.02l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.02.94l7.93 3.18a2 2 0 0 1 1.11 1.11z"/><path d="m21.85 2.15-10.94 10.94"/>',
@@ -702,16 +859,19 @@ function icon(string $name, int $size = 20, string $class = ''): string
  *        صندوق مراجعة المناديب: حقول التعديل جوّه div مربوطة بفورم برّه، ومن
  *        غير السمة دي الاختيار ما بيتبعتش أصلاً فالكارت بيضيع بصمت.
  */
-function visa_card_select($selected = 0, string $name = 'visa_card_id', string $style = '', string $id = '', string $form = ''): string
+function visa_card_select($selected = 0, string $name = 'visa_card_id', string $class = '', string $id = '', string $form = ''): string
 {
     static $cards = null;
     if ($cards === null) { $cards = \App\Models\VisaCard::all(true); }
     $sel = (int) $selected;
     if (!$cards) {
-        return '<span class="visa-card-empty" style="font-size:.8rem;color:var(--grey)">— لا كروت مسجّلة. '
-             . '<a href="' . url('office') . '">➕ أضِف كارت فيزا</a></span>';
+        return '<span class="visa-card-empty">— لا كروت مسجّلة. '
+             . '<a href="' . url('office') . '">' . icon('plus', 13) . ' أضِف كارت فيزا</a></span>';
     }
-    $st = $style !== '' ? ' style="' . e($style) . '"' : '';
+    /* ⚠️ المعامل التالت بقى **كلاس** لا `style=` inline — الـinline كان
+       بيتحقن في كل شاشة بتنادي الدالة (المديونيات · السداد · الأذونات)
+       وبيمنع أي تعديل متجاوب عليه. القيم المستعملة: `narrow`. */
+    $st = ' class="visa-card-sel' . ($class !== '' ? ' ' . e($class) : '') . '"';
     $idAttr = $id !== '' ? ' id="' . e($id) . '"' : '';
     $formAttr = $form !== '' ? ' form="' . e($form) . '"' : '';
     $h  = '<select name="' . e($name) . '"' . $idAttr . $formAttr . ' title="كارت الفيزا (رصيد المكتب)"' . $st . '>'
@@ -719,6 +879,39 @@ function visa_card_select($selected = 0, string $name = 'visa_card_id', string $
     foreach ($cards as $vc) {
         $lbl = e($vc['name']) . ($vc['owner'] ? ' — ' . e($vc['owner']) : '');
         $h  .= '<option value="' . (int) $vc['id'] . '"' . ($sel === (int) $vc['id'] ? ' selected' : '') . '>' . $lbl . '</option>';
+    }
+    return $h . '</select>';
+}
+
+/**
+ * «مين سلّم السائق عهدته؟» — قائمة المناديب النشطين، والافتراضي **خزنة المكتب**.
+ *
+ * ⚠️ **الوسم بيحرّك محفظتين مع بعض** (`RepBillCustody`): بيستثني البوليصة من
+ *    خزنة المكتب **و**يضيف مبلغها لصرف المندوب. المخصوم في الحالتين
+ *    `العهدة − 100` (نفس `Custody::billDeduction`، باستثناء السيارات المعفاة).
+ *
+ * ⚠️ **server-rendered بلا أي سكربت** — نفس قاعدة `visa_card_select()`: تايم لاين
+ *    الأذونات بيتعاد رسمه بالـAJAX، فأي معالج JS بيتعلّق على العنصر بيضيع.
+ *
+ * ⚠️ بترجّع '' قبل `migrate_v60` (العمود مش موجود) فالفورم يفضل شغّال زي ما هو.
+ */
+function rep_custody_select($selected = 0, string $name = 'custody_rep_id', string $class = '', string $id = '', string $form = ''): string
+{
+    if (!\App\Models\RepBillCustody::ready()) { return ''; }
+    static $reps = null;
+    if ($reps === null) { $reps = \App\Models\RepCustody::activeReps(); }
+    $sel = (int) $selected;
+    $idAttr   = $id   !== '' ? ' id="' . e($id) . '"' : '';
+    $formAttr = $form !== '' ? ' form="' . e($form) . '"' : '';
+    $cls = ' class="visa-card-sel' . ($class !== '' ? ' ' . e($class) : '') . '"';
+    $h = '<select name="' . e($name) . '"' . $idAttr . $formAttr
+       . ' title="مين سلّم السائق العهدة؟ — الافتراضي خزنة المكتب"' . $cls . '>'
+       . '<option value="">🏦 من خزنة المكتب</option>';
+    // ⚠️ `activeReps()` بترجّع خريطة [id => name] مش صفوف — مش `$r['id']`.
+    foreach ($reps as $rid => $rname) {
+        $rid = (int) $rid;
+        $h .= '<option value="' . $rid . '"' . ($sel === $rid ? ' selected' : '') . '>'
+            . e((string) $rname) . '</option>';
     }
     return $h . '</select>';
 }

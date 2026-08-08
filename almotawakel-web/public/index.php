@@ -203,10 +203,18 @@ $r->post('/m/misc',   'RepPortalController@miscStore');
 // فتح إذن من الموبايل (v43) — **حرفي قبل الجشع `/m/permit/{id}`** (تحذير 4).
 $r->get('/m/permit/new',  'RepPortalController@permitForm');
 $r->post('/m/permit/new', 'RepPortalController@permitStore');
+/* بنود يوم تاني — عرض للقراءة بس، ما بيلمسش يوم العمل (بند ٦).
+   ⚠️ حرفي قبل الجشع `/m/entry/{sid}` (تحذير ٤). */
+$r->get('/m/entries', 'RepPortalController@entriesDay');
 $r->get('/m/entry/{sid}/edit', 'RepPortalController@entryEditForm');
 $r->post('/m/entry/{sid}/delete', 'RepPortalController@entryDelete');
 $r->post('/m/entry/{sid}', 'RepPortalController@entryUpdate');
+$r->get('/m/permit/{id}/info', 'RepPortalController@permitInfo');    // تفاصيل الإذن — حرفي قبل الجشع
+$r->post('/m/permit/{id}/file', 'RepPortalController@permitFileStore');   // رفع ورقة على الإذن (v64)
+$r->post('/m/permit-file/{id}/delete', 'RepPortalController@permitFileDelete');
+$r->get('/file/permit-file/{id}', 'FileController@permitFile');
 $r->get('/m/permit/{id}/docs', 'RepPortalController@permitDocs');   // مستندات الأطراف (v56) — قبل الجشع
+$r->post('/m/permit/{id}/pin', 'RepPortalController@permitPin');    // تثبيت الإذن (v63) — قبل الجشع
 // رحلة الشحنة (v62) — تحديث الحالة من الميدان. **حرفية قبل الجشع** (تحذير 4).
 $r->get('/m/permit/{id}/track',  'RepPortalController@trackForm');
 $r->post('/m/permit/{id}/track', 'RepPortalController@trackStore');
@@ -248,6 +256,16 @@ $r->post('/custody/topup/{id}',           'CustodyController@updateTopup');
 // نزّل عهدة لمندوب **من درج المكتب** (المصدر = office) — حرفي، بلا تعارض مع /custody/topup/{id}
 $r->post('/custody/rep-deposit',          'CustodyController@storeRepDeposit');
 
+// خزنة الشركة (v66) — الخزنة الأكبر اللي بتغذّي خزنة المكتب.
+// ⚠️ المسارات الحرفية قبل الجشع /company-safe/{id}/delete (تحذير ٤).
+$r->get('/company-safe',                  'CompanySafeController@index');
+$r->get('/company-safe/drill/{what}',     'CompanySafeController@drill');   // تفاصيل رقم — حرفي
+$r->get('/company-safe/statement',        'CompanySafeController@statement'); // كشف A4 — حرفي
+$r->post('/company-safe',                 'CompanySafeController@store');
+$r->post('/company-safe/budget',          'CompanySafeController@saveBudget'); // حرفي قبل /{id}
+$r->post('/company-safe/{id}/update',     'CompanySafeController@update');
+$r->post('/company-safe/{id}/delete',     'CompanySafeController@destroy');
+
 // رصيد المكتب (كروت الفيزا) — المسارات الأخصّ قبل الجشعة /{id}
 $r->get('/office',                        'OfficeController@index');
 $r->get('/office/new',                    'OfficeController@create');
@@ -275,6 +293,14 @@ $r->post('/cars/expense/{eid}/update',    'OfficeCarController@updateExpense');
 $r->post('/cars/expense/{eid}/delete',    'OfficeCarController@deleteExpense');
 $r->post('/cars/ignore',                  'OfficeCarController@ignorePlate');
 $r->post('/cars/unignore',                'OfficeCarController@unignorePlate');
+$r->get('/cars/{id}/driver/print/{sid}',  'OfficeDriverController@printSaved');
+$r->get('/cars/{id}/driver/print',        'OfficeDriverController@printable');
+$r->post('/cars/{id}/driver/issue',       'OfficeDriverController@issue');
+$r->get('/cars/{id}/driver/bill/{bid}',   'OfficeDriverController@bill');
+$r->post('/cars/{id}/driver/bill/{bid}',  'OfficeDriverController@saveBill');
+$r->post('/cars/{id}/driver/movement',    'OfficeDriverController@addMovement');
+$r->post('/cars/{id}/driver/movement/{mid}/delete','OfficeDriverController@deleteMovement');
+$r->get('/cars/{id}/driver',              'OfficeDriverController@index');
 $r->get('/cars/{id}/edit',                'OfficeCarController@edit');
 $r->get('/cars/{id}/report',              'OfficeCarController@report');   // تقرير A4 (قبل الجشع)
 $r->post('/cars/{id}/expense',            'OfficeCarController@storeExpense');
@@ -306,6 +332,7 @@ $r->post('/rep-custody/bulk-edit',                 'RepCustodyController@bulkEdi
 $r->post('/rep-custody/delete-many',               'RepCustodyController@deleteMany');   // حرفي قبل /{sid}
 $r->post('/rep-custody/deposit/{depId}/delete',    'RepCustodyController@deleteDeposit');
 $r->post('/rep-custody/settlement/{sid}/delete',   'RepCustodyController@deleteSettlement');
+$r->get('/rep-custody/settlement/{sid}/print',     'RepCustodyController@settlementPrint');  // إيصال A4 — حرفي قبل /{id}
 $r->post('/rep-custody/assign/{aid}/done',         'RepCustodyController@assignDone');
 $r->post('/rep-custody/assign/{aid}/back',         'RepCustodyController@assignBack');
 $r->post('/rep-custody/assign/{aid}/remove',       'RepCustodyController@assignRemove');
@@ -432,6 +459,8 @@ $r->post('/backup', 'BackupController@download');
 $r->get('/attachments/stage/{id}',      'FileController@stage');
 $r->get('/attachments/submission/{id}', 'FileController@submission');
 $r->get('/attachments/misc/{id}',       'FileController@misc');
+// إيصال حركة خزنة الشركة (v67) — جلسة المكتب بس (المندوب مرفوض عن قصد).
+$r->get('/attachments/company-safe/{id}', 'FileController@companySafeFile');
 // مستندات الأطراف (v56) — «print» حرفي قبل الجشع {id} (تحذير ٤).
 $r->get('/attachments/party-doc/{id}/print', 'FileController@partyDocPrint');
 $r->get('/attachments/party-doc/{id}',       'FileController@partyDoc');

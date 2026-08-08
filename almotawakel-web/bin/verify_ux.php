@@ -153,7 +153,13 @@ foreach ($views as $src) {
 /* وفيه أصناف مقصود إنها **خطّاف جافاسكريبت** لا شكل (`.js-copy`, `.ai-test`,
    `.secret-toggle`…) — دي مشروعة تمامًا، فبنعتبرها معرَّفة لو الجافاسكريبت
    بينادّيها. اللي بيفشل هو الصنف اللي مالوش شكل **ولا** سلوك. */
-$allJs = (string) file_get_contents($root . '/public/assets/js/app.js');
+/* ⚠️ **كل** ملفات الجافاسكريبت لا `app.js` وحده: فيه خطّافات عايشة في ملفات
+   مستقلة (`expenses-form.js` · `login.js` · `resume-scroll.js` · `app-update.js`)،
+   وقراءة `app.js` بس كانت بتخلّي `.expense-only` تتحسب «بلا سلوك» غلط. */
+$allJs = '';
+foreach (glob($root . '/public/assets/js/*.js') ?: [] as $f) {
+    $allJs .= "\n" . (string) file_get_contents($f);
+}
 foreach ($views as $src) {
     if (preg_match_all('#<script[^>]*>(.*?)</script>#s', $src, $jm)) {
         $allJs .= "\n" . implode("\n", $jm[1]);
@@ -175,6 +181,57 @@ $undefined
 preg_match('/\.btn\.primary\b/', $cssCode)
     ? ok('.btn.primary معرَّف (كان مستعمل في 5 مواضع وغير معرَّف)')
     : bad('.btn.primary مش معرَّف');
+
+/* ⚠️⚠️ **تعميم الفحص على كل الكلاسات — مش `.btn` بس.**
+   ده أكتر باج بيتكرر في المشروع: كلاس مطبوع في الماركب ومالوش أي تعريف
+   بيقع على الشكل الافتراضي **بالسكوت** — الصفحة تترندر «سليمة» والحاجة
+   مش شغّالة. السجل: `.table-mobile-scroll` (عاش شهور وعطّل التمرير الأفقي
+   لكل جدول عريض على الموبايل) · `.btn.primary` (٥ مواضع) · `.cars-period`
+   (v54) · و`.dg-ic` + `.pv-hint` (اتصادوا 2026-07-28 بالفحص ده نفسه).
+   ⚠️ الكلاس بيعدّي لو له **شكل أو سلوك** — خطّافات الجافاسكريبت مشروعة.
+   ⚠️ والتعليقات بتتشال الأول: تعليق بيوثّق كلاس اتشال كان بيخلّيه يتحسب
+      «مستعملًا» (نفس مصيدة `code_only` الموثَّقة).
+   **الرقم ده سقف بينزل مش هدف ثابت — ممنوع ترفعه لكلاس جديد.** */
+$CLASS_DEBT_CAP = 22;
+$usedClasses = [];
+foreach ($views as $rel => $src) {
+    $clean = preg_replace('~/\*[\s\S]*?\*/~', '', $src) ?? $src;
+    if (!preg_match_all('~class="([^"<]*)"~', $clean, $cm)) { continue; }
+    foreach ($cm[1] as $chunk) {
+        if (str_contains($chunk, '<?')) { continue; }   // مبني وقت التشغيل
+        foreach (preg_split('~\s+~', trim($chunk), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $c) {
+            if (preg_match('~^[a-z][\w-]*$~i', $c)) { $usedClasses[$c] = true; }
+        }
+    }
+}
+$orphanClasses = [];
+foreach (array_keys($usedClasses) as $c) {
+    $q = preg_quote($c, '~');
+    if (preg_match('~\.' . $q . '(?![\w-])~', $allCss))        { continue; }
+    if (preg_match('~[\'"`.]' . $q . '(?![\w-])~', $allJs))    { continue; }
+    $orphanClasses[] = $c;
+}
+/* ⚠️⚠️ **معالج واحد بس لـ«إظهار الأرصدة».** `app.js` بيسمع على `document`
+   لأي `.secret-toggle`؛ لو شاشة حطّت نسختها المحلية، **الاتنين بيقلبوا نفس
+   الحالة فالضغطة بتتنفّذ مرتين والرصيد ما بيتكشفش أبدًا**. الباج ده اتصلّح
+   في `office/index.php` قبل كده، وفضل عايش في `office/card.php` لحد
+   2026-07-28 — يعني زر إظهار رصيد الكارت كان **مايعملش حاجة**. */
+$secretDupes = [];
+foreach ($views as $rel => $src) {
+    if (preg_match("~querySelectorAll\(\s*['\"]\[data-secret\]['\"]~", $src)) {
+        $secretDupes[] = $rel;
+    }
+}
+$secretDupes === []
+    ? ok('⚠️ معالج «إظهار الأرصدة» **عام في app.js وحده** — مفيش نسخة محلية تلغيه')
+    : bad('نسخة محلية من معالج [data-secret] بتلغي العام: ' . implode('، ', $secretDupes));
+
+sort($orphanClasses);
+count($orphanClasses) <= $CLASS_DEBT_CAP
+    ? ok('كلاسات بلا شكل ولا سلوك ≤ ' . $CLASS_DEBT_CAP . ' (اتفحص '
+         . count($usedClasses) . ' كلاس · دلوقتي ' . count($orphanClasses) . ')')
+    : bad('كلاسات مستعملة وبلا شكل ولا سلوك بقت ' . count($orphanClasses)
+          . ' (السقف ' . $CLASS_DEBT_CAP . '): ' . implode('، ', array_slice($orphanClasses, 0, 8)));
 
 /* ══════════════ 4) طابور الفلاش ══════════════ */
 sec('٤) flash() بقت طابور + flash_all()');
@@ -520,12 +577,23 @@ str_contains($bawSrc, 'function pasteFailure')
 !preg_match("/flash\('error'[^;]*\);\s*redirect\('bawalis'\);/", $bawSrc)
     ? ok('لصق الإكسل: مفيش فشل بيرمي على القايمة والـtextarea فاضية')
     : bad('لصق الإكسل: لسه فيه مسار بيضيّع اللصق');
-str_contains($crudView, "\$pasteState['old']['rows']")
-    ? ok('نافذة اللصق بتترجّع متعبّية')
-    : bad('نافذة اللصق مش بتترجّع متعبّية');
-str_contains($crudView, 'data-reopen')
-    ? ok('نافذة اللصق بتتفتح لوحدها عشان المستخدم يشوف الخطأ')
-    : bad('نافذة اللصق مش بتتفتح بعد الفشل — الخطأ هيتخبّى');
+/* ⚠️ نافذة «لصق من Excel» **اتشالت من الواجهة بقرار المالك (2026-08-03)** مع
+   «إضافة بوليصة قديمة» و«معاينة مزامنة Excel». الفحصان اللي كانوا هنا كانوا
+   بيحرسوا إعادة تعبئة النافذة بعد الفشل — بقوا بلا موضوع.
+   **الحراسة اتقلبت مش اتشالت**: المسار والكنترولر لسه شغّالين (و`verify_navigation`
+   بيحرس `claimForm` عليهم)، فلو الواجهة رجعت يومًا لازم ترجع بحماية المُدخَل
+   معاها — والفحص تحت بيفشل لو رجعت ناقصة. */
+$pasteUi = str_contains($crudView, 'billPasteModal') || str_contains($crudView, 'openBillPaste');
+if (!$pasteUi) {
+    ok('نافذة اللصق مشالة من الواجهة (قرار المالك) — والكنترولر لسه محميّ');
+} else {
+    str_contains($crudView, "\$pasteState['old']['rows']")
+        ? ok('نافذة اللصق بتترجّع متعبّية')
+        : bad('نافذة اللصق رجعت من غير إعادة تعبئة — اللصق هيضيع عند أول غلطة');
+    str_contains($crudView, 'data-reopen')
+        ? ok('نافذة اللصق بتتفتح لوحدها عشان المستخدم يشوف الخطأ')
+        : bad('نافذة اللصق رجعت من غير فتح تلقائي — الخطأ هيتخبّى');
+}
 
 /* مراجعة التقفيل (v50) — مفيش أرقام تتكتب بالإيد أصلاً، فمفيش مُدخَل ممكن يضيع.
    اللي لازم يفضل مضمون: العلامة بتتحفظ لحظيًّا، وفيه مسار كامل بلا جافاسكريبت،

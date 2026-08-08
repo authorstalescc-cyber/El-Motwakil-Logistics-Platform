@@ -18,9 +18,9 @@
 <?php partial('owner_tabs', ['active' => 'settlements']); ?>
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('settlements') ?>">‹ رجوع لأصحاب البيان</a>
-  <span style="flex:1"></span>
+  <span class="ps-sp"></span>
   <a class="btn gold" href="<?= url('statements/form?owner=' . urlencode($owner)) ?>"><?= icon('layers', 14) ?> إصدار كشف حساب</a>
-  <span class="pill st-<?= (int)$stats['due_bills']>0?'unpaid':'paid' ?>" style="font-size:var(--fs-3);padding:6px 14px">
+  <span class="pill bs-pill st-<?= (int)$stats['due_bills']>0?'unpaid':'paid' ?>">
     <?= (int)$stats['due_bills']>0 ? intf($stats['due_bills']).' بوليصة غير مسدّدة' : 'كل البوالص مسدّدة' ?>
   </span>
 </div>
@@ -28,7 +28,7 @@
 <!-- هوية صاحب البيان -->
 <div class="set-hero">
   <div class="set-hero-av"><?= e(initials($ownerLabel)) ?></div>
-  <div style="min-width:0;flex:1">
+  <div class="st-grow">
     <h2 title="<?= e($ownerLabel) ?>"><?= e($ownerLabel) ?></h2>
     <?php if ($stats['first_date'] || $stats['last_date']): ?>
       <p>بوالص من <?= dfmt($stats['first_date']) ?> إلى <?= dfmt($stats['last_date']) ?></p>
@@ -52,14 +52,14 @@
 </div>
 
 <!-- بحث + فلترة قوية داخل بوالص صاحب البيان -->
-<div class="toolbar" style="flex-direction:column;align-items:stretch;gap:12px">
-  <form method="get" action="<?= url('settlements') ?>" style="width:100%">
+<div class="toolbar stack">
+  <form method="get" action="<?= url('settlements') ?>" class="st-form">
     <input type="hidden" name="owner" value="<?= e($owner) ?>">
-    <div class="dir-search" style="max-width:none;width:100%">
+    <div class="dir-search full">
       <span class="ic"><?= icon('search', 14) ?></span>
       <input type="search" name="q" value="<?= e($f['q']) ?>" placeholder="بحث عن بوليصة…">
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;width:100%">
+    <div class="st-filters">
       <select name="status">
         <option value="all"     <?= in_array($f['status'],['','all'],true)?'selected':'' ?>>كل الحالات</option>
         <option value="due"     <?= $f['status']==='due'?'selected':'' ?>>غير مسدّد بالكامل</option>
@@ -77,9 +77,9 @@
       <input list="dl_dest" name="destination" value="<?= e($f['destination']) ?>" placeholder="الجهة" autocomplete="off">
       <input list="dl_class" name="classification" value="<?= e($f['classification']) ?>" placeholder="التصنيف" autocomplete="off">
       <input list="dl_ctype" name="container_type" value="<?= e($f['container_type']) ?>" placeholder="تصنيف الحاويات" autocomplete="off">
-      <label style="color:var(--grey);font-weight:500">من</label>
+      <label class="st-lbl">من</label>
       <input type="date" name="from" value="<?= e($f['from']) ?>">
-      <label style="color:var(--grey);font-weight:500">إلى</label>
+      <label class="st-lbl">إلى</label>
       <input type="date" name="to" value="<?= e($f['to']) ?>">
       <button class="btn sm" type="submit">تصفية</button>
       <?php if ($filtered): ?><a class="btn ghost sm" href="<?= url('settlements') ?>?owner=<?= urlencode($owner) ?>"><?= icon('x', 14) ?> مسح الفلاتر</a><?php endif; ?>
@@ -92,7 +92,7 @@
 </div>
 
 <?php if ($filtered): ?>
-  <div class="ct-alloc" style="margin-bottom:14px">
+  <div class="ct-alloc mb">
     المعروض بعد الفلترة: <b><?= intf($shown['n']) ?></b> بوليصة —
     الدين <b><?= money($shown['debt'],false) ?></b> ·
     المدفوع <b class="pos"><?= money($shown['paid'],false) ?></b> ·
@@ -149,13 +149,13 @@ $stNewUrl   = url('statements/form?owner=' . urlencode($owner));
       </tr></thead>
       <tbody>
         <?php foreach ($statements as $st): ?>
-          <tr<?= (($st['status'] ?? 'issued') === 'void') ? ' style="opacity:.55"' : '' ?>>
-            <td style="font-weight:600"><?= e($st['doc_no'] ?: '#' . $st['id']) ?></td>
+          <tr<?= (($st['status'] ?? 'issued') === 'void') ? ' class="st-void"' : '' ?>>
+            <td class="dbt-tot"><?= e($st['doc_no'] ?: '#' . $st['id']) ?></td>
             <td><?= dfmt($st['statement_date']) ?></td>
             <td><?= intf($st['paid_count']) ?></td>
             <td><?= intf($st['remaining_count']) ?></td>
             <td class="pos"><?= money($st['paid_sum'], false) ?></td>
-            <td style="font-weight:600;color:var(--navy)"><?= money($st['stat_remaining'], false) ?></td>
+            <td class="dbt-tot"><?= money($st['stat_remaining'], false) ?></td>
             <td><div class="actions">
               <a class="edit" href="<?= url('statements/' . $st['id']) ?>" target="_blank" title="طباعة الكشف"><?= icon('file-text', 14) ?></a>
               <?php if (($st['status'] ?? 'issued') === 'void'): ?>
@@ -169,13 +169,4 @@ $stNewUrl   = url('statements/form?owner=' . urlencode($owner));
   <?php endif; ?>
 </div>
 
-<style>
-.set-hero{display:flex;align-items:center;gap:18px;padding:20px 24px;background:linear-gradient(135deg,var(--navy),var(--navy-mid));color:#fff;border-radius:var(--radius-3);box-shadow:var(--shadow-lg);margin-bottom:16px;flex-wrap:wrap}
-.set-hero-av{width:60px;height:60px;border-radius:var(--radius-3);flex:none;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:var(--fs-6);background:linear-gradient(135deg,var(--gold),#a5811a);color:var(--navy-dark);box-shadow:0 4px 12px rgba(201,162,39,.35)}
-.set-hero h2{font-size:var(--fs-6);font-weight:600;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.set-hero p{font-size:var(--fs-2);color:rgba(255,255,255,.78);font-weight:400;margin-top:2px}
-.set-hero-rem{text-align:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:var(--radius-2);padding:10px 20px}
-.set-hero-rem span{display:block;font-size:var(--fs-1);color:rgba(255,255,255,.75);font-weight:500;margin-bottom:3px}
-.set-hero-rem b{font-size:var(--fs-6);font-weight:600}
-.set-hero-rem b.neg{color:#ff9d9d} .set-hero-rem b.pos{color:#a7e9bf}
-</style>
+

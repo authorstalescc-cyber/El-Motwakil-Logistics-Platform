@@ -132,24 +132,51 @@ try {
         $lastClosed = Closing::lastClosedDate();
         $day = $lastClosed ? date('Y-m-d', strtotime($lastClosed . ' +1 day')) : date('Y-m-d');
 
-        // (أ) تنزيل عهدة 10,000 → الخزنة ما تتحركش
+        /* (أ) تنزيل عهدة 10,000
+           ⚠️ أثره بيتحدّد من النموذج (قرار المالك 2026-07-30: «أي عهدة تتضاف
+              للمندوب كأنها في الدرج») — والشرط تاريخ كمان مش مفتاح بس. */
+        $depAdds = \App\Models\RepCustody::bankTopupActive()
+                && $day >= \App\Models\RepCustody::bankTopupFrom() ? 10000 : 0;
         Database::exec(
             'INSERT INTO rep_custody_deposits (rep_id, dep_date, amount, note, created_by)
              VALUES (?,?,?,?,?)', [$repId, $day, 10000, 'اختبار v42', 'verify']);
-        chk(near(Closing::currentBalance(), $balBefore),
-            'تنزيل العهدة مابيخصمش من الخزنة (فضلت ' . number_format($balBefore, 2) . ')');
+        chk(near(Closing::currentBalance(), $balBefore + $depAdds),
+            $depAdds ? 'تنزيل العهدة زوّد الخزنة 10,000 (الخزنة = كل كاش الشركة)'
+                     : 'تنزيل العهدة مابيخصمش من الخزنة (فضلت ' . number_format($balBefore, 2) . ')');
+        $balBefore = Closing::currentBalance();   // الأساس بقى بعد التنزيل
         chk(near(RepCustody::balance($repId), $repBefore + 10000),
             'وبيزوّد رصيد عهدة المندوب 10,000');
 
-        // (ب) صرف 3,000 من عهدته → الخزنة تنقص 3,000
+        /* ⚠️⚠️ **قاعدة v42 اتقلبت في المرحلة ٢ من docs/16 — والفاحص ده بقى
+           بيوثّق القلب بدل ما يمنعه.**
+           v42 قالت: صرف المندوب المعتمَد بيتخصم من الخزنة يوم صرفه. وده كان صح
+           **بس** طول ما كل تنزيل عهدة معاه توب-أب مرايا في `manual_custody`.
+           لما الفلوس بقت تيجي من البنك للمندوب على طول (الواقع الفعلي — قرار
+           المالك Q2)، الخزنة بقت تتخصم لفلوس **عمرها ما دخلت الدرج** وبتنزل
+           سالب. القاعدة الجديدة: محفظة المندوب مستقلة تمامًا، واللي بيمسّ الدرج
+           هو **التنزيل لو طلع منه** (`source='office'`).
+           ⚠️ الفحوصات البنيوية فوق («مفيش شرط استثناء مكتوب بالإيد») **لسه
+              سارية وأهم من الأول** — الاستثناء الجديد بيمرّ على مصدر واحد
+              (`RepCustody::safeChargeSql`) ومحكوم بتاريخ، مش مكتوب في ٨ أماكن. */
+        /* ⚠️ **الشرط مفتاح + تاريخ مع بعض** — `safeChargeSql` محكومة بالاتنين
+   (`$dateCol < safeRuleFrom`)، فربط التوقّع بالمفتاح لوحده بيفشل على أي
+   يوم زرع قبل تاريخ البداية. المصدر الوحيد `RepCustody::safeRuleFrom()`. */
+        $newRule = \App\Models\RepCustody::newSafeRuleActive()
+                 && $day >= \App\Models\RepCustody::safeRuleFrom();
+        $hit = $newRule ? 0 : 3000;   // اللي بيتخصم من الدرج فعلاً
+        // لقطة **قبل** الزرع — الفحص تحت بيقارن الفرق مش الرقم المطلق
+        $expensesBefore = (float) Closing::dayView($day)['expenses'];
+
+        // (ب) صرف 3,000 من عهدته
         Database::exec(
             "INSERT INTO permit_stages
                 (permit_id, movement_id, stage_key, direction, amount, qty, actual_amount,
                  entry_date, ref_no, note, status, is_visa, visa_card_id, paid_by_rep_id)
              VALUES (?,NULL,'receipts',NULL,?,1,NULL,?,NULL,'اختبار v42','done',0,NULL,?)",
             [(int) $permit['id'], 3000, $day, $repId]);
-        chk(near(Closing::currentBalance(), $balBefore - 3000),
-            'صرف المندوب بيخصم 3,000 من الخزنة يوم صرفه');
+        chk(near(Closing::currentBalance(), $balBefore - $hit),
+            $newRule ? 'صرف المندوب **ما بيخصمش** من الخزنة (محفظته مستقلة — المرحلة ٢)'
+                     : 'صرف المندوب بيخصم 3,000 من الخزنة يوم صرفه (قاعدة v42)');
         chk(near(RepCustody::balance($repId), $repBefore + 7000),
             'وبيتخصم من عهدة المندوب كمان (باقي معاه 7,000)');
 
@@ -162,13 +189,20 @@ try {
             'وعهدة المندوب اتصفّرت بعد التسوية');
 
         // (د) صافي الدورة كلها = المصروف الفعلي بالظبط
-        chk(near(Closing::currentBalance(), $balBefore - 3000),
-            'صافي الدورة الكاملة = 3,000 المصروفة بالظبط (مش 10,000 ولا 7,000)');
+        chk(near(Closing::currentBalance(), $balBefore - $hit),
+            $newRule ? 'صافي الدورة الكاملة على الخزنة = صفر (التنزيل والصرف والمرتجع كلهم برّاها)'
+                     : 'صافي الدورة الكاملة = 3,000 المصروفة بالظبط (مش 10,000 ولا 7,000)');
 
         // (هـ) البند بيظهر في تقفيل يومه وفي المطابقة
         $dayView = Closing::dayView($day);
-        chk((float) $dayView['expenses'] >= 3000 - 0.005,
-            'البند ظاهر في مصروفات تقفيل يومه (' . number_format((float) $dayView['expenses'], 2) . ')');
+        /* ⚠️ **المقارنة على فرق البند مش على رقم اليوم المطلق.** النسخة الأولى
+           كانت بتقارن `expenses` بـ3000 حرفيًّا، فأول ما دخل مصروف يدوي حقيقي
+           على اليوم ده في الإنتاج فشلت بإنذار كاذب. السؤال الصح: «هل **البند
+           بتاعنا** دخل مصروفات اليوم؟» — والإجابة بتتقاس بالفرق قبل وبعد. */
+        chk(abs(((float) $dayView['expenses'] - $expensesBefore) - (float) $hit) < 0.005,
+            ($newRule ? 'البند برّه مصروفات تقفيل يومه (فرق '
+                      : 'البند ظاهر في مصروفات تقفيل يومه (فرق ')
+            . number_format((float) $dayView['expenses'] - $expensesBefore, 2) . ')');
     }
     $pdo->rollBack();
     ok('اتعمل rollback — القاعدة رجعت زي ما كانت بالظبط');

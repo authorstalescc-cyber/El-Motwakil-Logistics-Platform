@@ -3,21 +3,21 @@ use App\Models\Permit;
 /** @var array $rows */
 ?>
 <div class="page-head">
-  <div><h1 style="margin:0"><?= icon('receipt', 14) ?> إصدار فاتورة — اختر الإذن</h1></div>
+  <div><h1 ><?= icon('receipt', 14) ?> إصدار فاتورة — اختر الإذن</h1></div>
   <a class="btn ghost" href="<?= url('invoices') ?>">‹ سجل الفواتير</a>
 </div>
 
-<form class="card mb" method="get" action="<?= url('invoices/new') ?>" style="padding:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+<form class="card mb" method="get" action="<?= url('invoices/new') ?>" class="p5-pad p5-row end">
   <div><label class="flt-l">بحث في الأذونات</label>
     <input type="text" name="q" value="<?= e($q) ?>" placeholder="بحث" autofocus
-           style="width:320px;padding:8px 11px;border:1px solid var(--line);border-radius:8px"></div>
+           class="p5-fin w320"></div>
   <button class="btn" type="submit"><?= icon('search', 14) ?> بحث</button>
   <?php if($q): ?><a class="btn ghost" href="<?= url('invoices/new') ?>">مسح</a><?php endif; ?>
 </form>
 
-<div class="card" style="padding:0;overflow:hidden">
+<div class="card" >
   <?php if (!$rows): ?>
-    <div class="empty" style="padding:40px"><div class="ic"><?= icon('folder', 14) ?></div>لا توجد أذونات مطابقة.</div>
+    <div class="empty p5-pad-xl"><div class="ic"><?= icon('folder', 14) ?></div>لا توجد أذونات مطابقة.</div>
   <?php else: ?>
     <div class="table-wrap"><table class="data">
       <thead><tr>
@@ -30,7 +30,7 @@ use App\Models\Permit;
       <?php foreach ($rows as $p): ?>
         <tr>
           <td><span class="pill <?= $p['permit_type']==='warid'?'st-partial':'st-paid' ?>"><?= $p['permit_type']==='warid'?'وارد':'صادر' ?></span></td>
-          <td style="font-weight:600"><a href="<?= url('permits/'.$p['id']) ?>"><?= e($p['permit_no'] ?: '#'.$p['id']) ?></a></td>
+          <td class="dbt-tot"><a href="<?= url('permits/'.$p['id']) ?>"><?= e($p['permit_no'] ?: '#'.$p['id']) ?></a></td>
           <td><?= dfmt($p['permit_date']) ?></td>
           <td><?= e($p['client'] ?: '—') ?></td>
           <td><?= e($p['company'] ?: '—') ?></td>

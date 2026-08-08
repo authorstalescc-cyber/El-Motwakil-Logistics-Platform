@@ -376,6 +376,69 @@ yes('المكوّن بلا سكربت (تايم لاين الأذونات بيت
 yes('بوابة المندوب بتفرض القائمة على الخادم كمان',
     str_contains(php_code("$root/app/Models/RepPortal.php"), 'strictValue'));
 
+/* ── ٧ب-٢) شركة الشحن بتقبل الوكلاء كمان (قرار المالك 2026-08-02) ──────────
+   بلاغ المالك: «شركة الشحن بتكون هي نفس الوكيل لكنه بيحجمني في اختيارها».
+   مقيس وقتها: ٥٦ من ٨٧ إذن شركة الشحن فيهم = العميل بالحرف.
+   ⚠️ الفحص على **الثابت** لا على عدد بيانات اليوم: (أ) المسموح ⊇ القائمة الخام،
+      (ب) الوكيل المسجَّل مقبول، (ج) الاسم المخترع لسه مرفوض (حماية الأخطاء
+      الإملائية ما اتفكّتش)، (د) الأنواع التانية ما اتغيّرتش. */
+$rawShip = Lookup::ofType('shipping_co');
+$allShip = Lookup::allowedFor('shipping_co');
+yes('المسموح في شركة الشحن ⊇ القائمة الخام', count($allShip) >= count($rawShip));
+yes('وبلا تكرار بالمفتاح',
+    count($allShip) === count(array_unique(array_map([Maintenance::class, 'normkey'], $allShip))));
+foreach (['port', 'agency', 'container_type'] as $t) {
+    yes("القائمة المقفولة «$t» ما اتغيّرتش", Lookup::ofType($t) === Lookup::allowedFor($t));
+}
+$anAgent = Database::scalar('SELECT name FROM agents ORDER BY id LIMIT 1');
+if ($anAgent !== null && $anAgent !== '') {
+    $inList = false;
+    foreach ($allShip as $v) { if (Maintenance::normkey((string) $v) === Maintenance::normkey((string) $anAgent)) { $inList = true; break; } }
+    yes('★ وكيل مسجَّل مقبول كشركة شحن', $inList);
+}
+$fake = 'شركة شحن مخترعة ' . bin2hex(random_bytes(3));
+$bad = true;
+foreach ($allShip as $v) { if (Maintenance::normkey((string) $v) === Maintenance::normkey($fake)) { $bad = false; break; } }
+yes('★ واسم مخترع لسه مرفوض (الحماية ما اتفكّتش)', $bad);
+/* ⚠️ **الثلاثة لازم يقروا من `allowedFor` مع بعض** — لو المكوّن بيرسم خيارًا
+     والخادم بيرفضه، المستخدم مش فاهم غلط في إيه. */
+yes('المكوّن بيقرا `allowedFor` مش `ofType`', str_contains($ls, 'Lookup::allowedFor('));
+yes('و`Controller::strictListError` كمان',
+    str_contains(php_code("$root/app/Core/Controller.php"), 'Lookup::allowedFor('));
+yes('و`RepPortal::strictValue` كمان',
+    str_contains(php_code("$root/app/Models/RepPortal.php"), 'Lookup::allowedFor('));
+
+/* ── ٧ب-٣) التعبئة التلقائية: شركة الشحن = العميل ─────────────────────────
+   ⚠️ **الشاشة بس — مفيش تعبئة على الخادم**: كتابة قيمة المستخدم مشافهاش في
+      حقل بيدخل بيانات الإذن أسوأ من إنه يختارها بنفسه. */
+$autoJs = "$root/public/assets/js/lookup-autofill.js";
+yes('ملف التعبئة التلقائية موجود', is_file($autoJs));
+$aj = (string) @file_get_contents($autoJs);
+yes('★ ما بيدهسش اختيار المستخدم (بيملا الفاضي أو اللي هو حطّه)',
+    str_contains($aj, "target.dataset.auto !== '1'"));
+yes('والاستماع في مرحلة الالتقاط (فيه معالجات تانية بتوقف الحدث)',
+    substr_count($aj, ', true);') >= 2);
+foreach ([['app/Views/layout.php', 'شاشات المكتب'], ['app/Views/m/_pwa.php', 'بوابة المندوب']] as [$f, $lbl]) {
+    yes("الملف متحمَّل في $lbl", str_contains((string) @file_get_contents("$root/$f"), 'lookup-autofill.js'));
+}
+foreach ([['app/Views/permits/form.php', 'إنشاء إذن'],
+          ['app/Views/permits/_body_manage.php', 'تعديل إذن'],
+          ['app/Views/m/permit_new.php', 'إذن المندوب']] as [$f, $lbl]) {
+    yes("خانة شركة الشحن موسومة في $lbl",
+        str_contains((string) @file_get_contents("$root/$f"), 'data-autofill-from'));
+}
+/* ⚠️ **التسمية لازم تبقى واحدة في الشاشتين** — كانت `shipping_co` مكتوب عليها
+     «التوكيل الملاحي» في شاشة المندوب و`agency` «التوكيل»، فالمندوب يشوف حقلين
+     بنفس الاسم (بلاغ المالك 2026-08-02). */
+// ⚠️ `php_code` مش `file_get_contents`: التعليق اللي بيوثّق القاعدة بيذكر
+//    النصّين، فالعدّ الخام بيدّي **فشلًا كاذبًا** (المصيدة الموثَّقة في
+//    `verify_security` و`verify_ux` — وقعت هنا فعلاً وأنا بكتب الفحص).
+$mp = php_code("$root/app/Views/m/permit_new.php");
+yes('★ شاشة المندوب: «شركة الشحن» مرة واحدة', substr_count($mp, 'شركة الشحن') === 1);
+yes('★ و«التوكيل الملاحي» مرة واحدة', substr_count($mp, 'التوكيل الملاحي') === 1);
+yes('وحقول القوائم المقفولة بقت `lookup_select` (كانت كتابة حرة بتترفض)',
+    substr_count($mp, "'type'  => \$name") >= 1 || substr_count($mp, "partial('lookup_select'") >= 2);
+
 // ── against() بتقارن بالقائمة وحدها ──────────────────────────────────────
 $ap = ['ميناء الإسكندرية', 'ميناء دمياط'];
 same('against() بتمسك «الإسكندرية» مقابل القائمة', NS::against('port', 'الإسكندرية', $ap)['reason'], 'concept');

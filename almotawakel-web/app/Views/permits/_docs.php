@@ -28,7 +28,7 @@ foreach ($partyDocs as $g) {
       <?= icon('folder', 17) ?> مستندات الأطراف
       <span class="pdoc-cnt">(<?= intf($docCount) ?>)</span>
       <?php if ($expired > 0): ?>
-        <span class="pdoc-flag bad" style="margin-inline-start:8px">
+        <span class="pdoc-flag bad pdoc-flag-inline">
           <?= icon('alert', 13) ?> <?= intf($expired) ?> منتهي</span>
       <?php endif; ?>
     </div>

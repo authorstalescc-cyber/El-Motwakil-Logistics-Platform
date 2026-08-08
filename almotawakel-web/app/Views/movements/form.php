@@ -25,16 +25,16 @@ $visaCards = \App\Models\VisaCard::all(true);
   </div>
 
   <div class="form-group-title gt-expense">البنود (مصروفات / إيصالات / خصومات)</div>
-  <div style="padding:16px 20px">
-    <table class="data" id="itemsTable" style="white-space:normal">
+  <div class="mv-items-wrap">
+    <table class="data mv-items" id="itemsTable">
       <thead><tr>
-        <th class="g-identity" style="width:130px">النوع</th>
+        <th class="g-identity col-kind">النوع</th>
         <th class="g-identity">الفئة / البيان</th>
-        <th class="g-result" style="width:130px">المبلغ</th>
-        <th class="g-identity" style="width:110px">الدفع</th>
-        <th class="g-identity" style="width:150px">الكارت (فيزا)</th>
+        <th class="g-result col-amt">المبلغ</th>
+        <th class="g-identity col-pay">الدفع</th>
+        <th class="g-identity col-card">الكارت (فيزا)</th>
         <th class="g-identity">ملاحظة</th>
-        <th class="g-identity" style="width:60px">حذف</th>
+        <th class="g-identity col-del" data-no-sort>حذف</th>
       </tr></thead>
       <tbody id="itemsBody">
         <?php
@@ -42,30 +42,30 @@ $visaCards = \App\Models\VisaCard::all(true);
           ob_start(); ?>
           <tr>
             <td>
-              <select name="it_type[]" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px">
+              <select name="it_type[]">
                 <?php foreach (Movement::ITEM_TYPES as $k=>$lbl): ?>
                   <option value="<?= $k ?>" <?= $type===$k?'selected':'' ?>><?= $lbl ?></option>
                 <?php endforeach; ?>
               </select>
             </td>
-            <td><input list="dl_mvcat" name="it_category[]" value="<?= e($cat) ?>" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px" autocomplete="off"></td>
-            <td><input type="number" step="0.01" name="it_amount[]" value="<?= e($amt) ?>" placeholder="0" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px;text-align:center"></td>
+            <td><input list="dl_mvcat" name="it_category[]" value="<?= e($cat) ?>" autocomplete="off"></td>
+            <td><input type="number" step="0.01" name="it_amount[]" value="<?= e($amt) ?>" placeholder="0"></td>
             <td>
-              <select name="it_visa[]" title="طريقة الدفع" class="js-pay-sel" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px">
+              <select name="it_visa[]" title="طريقة الدفع" class="js-pay-sel">
                 <option value="0" <?= (int)$visa===0?'selected':'' ?>>نقدي</option>
                 <option value="1" <?= (int)$visa===1?'selected':'' ?>><?= icon('credit-card', 14) ?> فيزا</option>
               </select>
             </td>
             <td>
-              <select name="it_card[]" title="كارت الفيزا" class="js-card-sel" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px<?= (int)$visa===1?'':';display:none' ?>">
+              <select name="it_card[]" title="كارت الفيزا" class="js-card-sel"<?= (int)$visa===1 ? '' : ' hidden' ?>>
                 <option value="">— الكارت —</option>
                 <?php foreach ($visaCards as $vc): ?>
                   <option value="<?= (int)$vc['id'] ?>" <?= (int)$card===(int)$vc['id']?'selected':'' ?>><?= e($vc['name']) ?><?= $vc['owner']?' — '.e($vc['owner']):'' ?></option>
                 <?php endforeach; ?>
               </select>
             </td>
-            <td><input name="it_note[]" value="<?= e($note) ?>" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px"></td>
-            <td style="text-align:center"><button type="button" class="del rm-row" style="width:30px;height:30px;border-radius:var(--radius-1);border:1px solid var(--line2);background:#fff;cursor:pointer"><?= icon('trash', 14) ?></button></td>
+            <td><input name="it_note[]" value="<?= e($note) ?>"></td>
+            <td><button type="button" class="del rm-row"><?= icon('trash', 14) ?></button></td>
           </tr>
           <?php return ob_get_clean();
         };
@@ -74,12 +74,12 @@ $visaCards = \App\Models\VisaCard::all(true);
         ?>
       </tbody>
     </table>
-    <button type="button" class="btn ghost sm" id="addRow" style="margin-top:12px"><?= icon('plus', 14) ?> إضافة بند</button>
-    <div style="margin-top:14px;display:flex;gap:22px;flex-wrap:wrap;font-weight:500">
-      <span>مصروفات: <span id="sumExpense" style="color:var(--red)">0</span></span>
-      <span>إيصالات: <span id="sumReceipt" style="color:var(--green)">0</span></span>
-      <span>خصومات: <span id="sumDiscount" style="color:#8a6d10">0</span></span>
-      <span>الإجمالي المنصرف: <span id="sumAll" style="color:var(--navy)">0</span></span>
+    <button type="button" class="btn ghost sm" id="addRow"><?= icon('plus', 14) ?> إضافة بند</button>
+    <div class="mv-sums">
+      <span>مصروفات: <span id="sumExpense" class="s-ex">0</span></span>
+      <span>إيصالات: <span id="sumReceipt" class="s-rc">0</span></span>
+      <span>خصومات: <span id="sumDiscount" class="s-di">0</span></span>
+      <span>الإجمالي المنصرف: <span id="sumAll" class="s-all">0</span></span>
     </div>
   </div>
 
@@ -115,7 +115,7 @@ $visaCards = \App\Models\VisaCard::all(true);
   body.addEventListener('change', function(e){
     if (e.target.classList.contains('js-pay-sel')) {
       const card = e.target.closest('tr').querySelector('.js-card-sel');
-      if (card){ card.style.display = e.target.value==='1' ? '' : 'none'; if(e.target.value!=='1') card.value=''; }
+      if (card){ card.hidden = e.target.value!=='1'; if(card.hidden) card.value=''; }
     }
   });
   function recalc(){

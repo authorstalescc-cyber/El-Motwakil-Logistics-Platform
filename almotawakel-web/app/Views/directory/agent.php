@@ -46,8 +46,8 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 </div>
 
 <!-- كشف حساب العميل -->
-<div class="card cp-wrap mb" style="padding:18px 20px">
-  <div class="section-head" style="margin:0 0 14px"><?= icon('bar-chart', 17) ?> كشف حساب العميل</div>
+<div class="card cp-wrap mb dag-pad">
+  <div class="section-head dag-sec"><?= icon('bar-chart', 17) ?> كشف حساب العميل</div>
   <div class="cp-stmt">
     <div class="cp-stmt-cell">
       <span>المطلوب من العميل</span>
@@ -71,8 +71,8 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 
 <!-- التحصيلات + التخصيص والتوجيه للعهدة -->
 <div class="card cp-wrap mb">
-  <div class="section-head" style="padding:18px 20px 0;margin:0"><?= icon('credit-card', 17) ?> تحصيلات العميل
-    <span style="color:var(--grey);font-weight:400">(<?= count($payments) ?>)</span></div>
+  <div class="section-head dag-head"><?= icon('credit-card', 17) ?> تحصيلات العميل
+    <span class="dag-mut">(<?= count($payments) ?>)</span></div>
 
   <div class="cp-form-box">
     <form method="post" action="<?= url('directory/agent/'.$agent['id'].'/pay') ?>" id="cpForm">
@@ -82,15 +82,15 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
                ⚠️ شيله = `claimForm` في الكنترولر هترفض كل حفظ. */ ?>
       <?= formStateFields($payState['token'], $payState['back']) ?>
       <div class="cp-form-grid">
-        <div class="field" style="margin:0;width:150px">
+        <div class="field flush w150">
           <label>التاريخ</label>
           <input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>">
         </div>
-        <div class="field" style="margin:0;width:150px">
+        <div class="field flush w150">
           <label>المبلغ *</label>
           <input type="number" step="0.01" min="0" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="0" required>
         </div>
-        <div class="field" style="margin:0;flex:1;min-width:160px">
+        <div class="field flush grow">
           <label>البيان (اختياري)</label>
           <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة على الدفعة">
         </div>
@@ -100,7 +100,11 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
         <label class="cp-route-opt"><input type="radio" name="route" value="none" checked onchange="cpRoute()"> <span>بدون توجيه</span></label>
         <label class="cp-route-opt"><input type="radio" name="route" value="cash" onchange="cpRoute()"> <span><?= icon('banknote', 14) ?> عهدة نقدية (تُضاف لعهدة اليوم)</span></label>
         <label class="cp-route-opt"><input type="radio" name="route" value="visa" onchange="cpRoute()"> <span><?= icon('credit-card', 14) ?> شحن كارت فيزا</span></label>
-        <span id="cpVisaBox" class="cp-visa-box" style="display:none"><?= visa_card_select() ?></span>
+        <?php /* ⚠️ نفس قايمة `routeChoices()` بتاعة الكنترولر — وإلا خيار معروض والخادم يرفضه بالسكوت. */ ?>
+        <?php if (isset(\App\Models\ClientPayment::routeChoices()['company'])): ?>
+          <label class="cp-route-opt"><input type="radio" name="route" value="company" onchange="cpRoute()"> <span><?= icon('home', 14) ?> خزنة الشركة</span></label>
+        <?php endif; ?>
+        <span id="cpVisaBox" class="cp-visa-box" hidden><?= visa_card_select() ?></span>
       </div>
       <div class="cp-form-actions">
         <label class="cp-route-opt"><input type="checkbox" name="auto_allocate" value="1" checked> تخصيص على أقدم الفواتير المستحقة</label>
@@ -121,24 +125,24 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
       <?php else: foreach($payments as $pm): ?>
         <tr>
           <td><?= $pm['pay_date'] ? e(dfmt($pm['pay_date'])) : '—' ?></td>
-          <td class="pos" style="font-weight:600"><?= money($pm['amount'],false) ?></td>
+          <td class="pos dbt-tot"><?= money($pm['amount'],false) ?></td>
           <td>
             <?php if($pm['route']==='cash'): ?>
               <span class="pill st-paid"><?= icon('banknote', 14) ?> عهدة نقدية</span>
             <?php elseif($pm['route']==='visa'): ?>
               <span class="pill st-partial"><?= icon('credit-card', 14) ?> <?= e($cardName[(int)$pm['visa_card_id']] ?? 'فيزا') ?></span>
             <?php else: ?>
-              <span class="pill" style="background:var(--bg);color:var(--grey)">بدون توجيه</span>
+              <span class="pill" class="dag-mut-cell">بدون توجيه</span>
             <?php endif; ?>
           </td>
           <td><?= $pm['status']==='posted'?money($pm['unallocated_amount'],false):'—' ?></td>
           <td><span class="pill <?= $pm['status']==='reversed'?'st-unpaid':'st-paid' ?>"><?= $pm['status']==='reversed'?'معكوس':'مرحّل' ?></span></td>
-          <td style="text-align:right"><?= e($pm['note'] ?: '—') ?></td>
-          <td style="white-space:nowrap">
+          <td class="txt"><?= e($pm['note'] ?: '—') ?></td>
+          <td class="nowrap">
             <?php if($pm['status']==='posted'): ?><form method="post" action="<?= url('directory/agent/'.$agent['id'].'/payment/'.$pm['id'].'/delete') ?>"
-                  style="display:inline" data-danger="1" data-confirm="عكس هذا التحصيل مع بقاء سجله؟">
+                   data-danger="1" data-confirm="عكس هذا التحصيل مع بقاء سجله؟">
               <?= csrfField() ?>
-              <input name="reason" required placeholder="سبب العكس" style="width:100px"><button class="edit" type="submit" title="عكس" style="background:none;border:0;cursor:pointer"><?= icon('undo', 14) ?></button>
+              <input name="reason" required placeholder="سبب العكس" class="w100"><button class="edit" type="submit" title="عكس" class="oc-btn-bare"><?= icon('undo', 14) ?></button>
             </form><?php endif; ?>
           </td>
         </tr>
@@ -146,9 +150,9 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
     </tbody>
     <?php if($payments): ?>
     <tfoot><tr>
-      <td style="background:var(--gold-light);font-weight:600;text-align:left">الإجمالي</td>
-      <td style="background:var(--gold-light);font-weight:600"><?= money($st['paid'],false) ?></td>
-      <td colspan="5" style="background:var(--gold-light);font-weight:400;text-align:right;color:var(--grey)">
+      <td class="dag-tot end">الإجمالي</td>
+      <td class="dag-tot"><?= money($st['paid'],false) ?></td>
+      <td colspan="5" class="dag-tot mut txt">
         نقدي <?= money($paidCash,false) ?> · فيزا <?= money($paidVisa,false) ?> · بدون توجيه <?= money($paidNone,false) ?>
       </td>
     </tr></tfoot>
@@ -156,8 +160,8 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
   </table></div>
 </div>
 
-<div class="card" style="padding:20px;margin-bottom:16px">
-  <div class="section-head"><?= icon('home', 17) ?> الشركات التي يمثّلها هذا الوكيل <span style="color:var(--grey);font-weight:400">(<?= count($companies) ?>)</span></div>
+<div class="card dag-pad-lg mb">
+  <div class="section-head"><?= icon('home', 17) ?> الشركات التي يمثّلها هذا الوكيل <span class="dag-mut">(<?= count($companies) ?>)</span></div>
   <?php if($companies): ?>
     <div class="co-grid">
       <?php foreach($companies as $c): ?>
@@ -173,8 +177,8 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
   <?php endif; ?>
 </div>
 
-<div class="card" style="margin-bottom:16px">
-  <div class="section-head" style="padding:18px 20px 0"><?= icon('folder', 17) ?> الأذونات لصالح شركات هذا الوكيل <span style="color:var(--grey);font-weight:400">(<?= count($permits) ?>)</span></div>
+<div class="card mb">
+  <div class="section-head dag-head-p"><?= icon('folder', 17) ?> الأذونات لصالح شركات هذا الوكيل <span class="dag-mut">(<?= count($permits) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">النوع</th><th class="g-identity">الرقم</th><th class="g-identity">التاريخ</th>
@@ -184,14 +188,14 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
       <?php if(!$permits): ?>
         <tr><td colspan="6"><div class="empty-soft">لا أذونات مسجّلة باسم هذا الوكيل.</div></td></tr>
       <?php else: foreach($permits as $r): $invoiced = isset($invoicedPermitIds[(int)$r['id']]); ?>
-        <tr onclick="location.href='<?= url('permits/'.$r['id']) ?>'" style="cursor:pointer" class="<?= $invoiced?'perm-invoiced':'' ?>">
+        <tr onclick="location.href='<?= url('permits/'.$r['id']) ?>'" class="pv-rowlink" class="<?= $invoiced?'perm-invoiced':'' ?>">
           <td><span class="pill pill-<?= e($r['permit_type']) ?>"><?= $r['permit_type']==='warid'?'شهادة':'إذن' ?></span></td>
-          <td style="font-weight:600"><?= e($r['permit_no'] ?: '#'.$r['id']) ?>
+          <td class="dbt-tot"><?= e($r['permit_no'] ?: '#'.$r['id']) ?>
             <?php if($invoiced): ?><span class="perm-inv-badge"><?= icon('receipt', 14) ?> مصدر له فاتورة</span><?php endif; ?>
           </td>
           <td><?= dfmt($r['permit_date']) ?></td>
-          <td style="text-align:right"><?= e($r['company'] ?: '—') ?></td>
-          <td style="text-align:right"><?= e($r['destination'] ?: '—') ?></td>
+          <td class="txt"><?= e($r['company'] ?: '—') ?></td>
+          <td class="txt"><?= e($r['destination'] ?: '—') ?></td>
           <td><span class="pill <?= $r['status']==='closed'?'st-paid':'st-partial' ?>"><?= $r['status']==='closed'?'مقفول':'جارٍ' ?></span></td>
         </tr>
       <?php endforeach; endif; ?>
@@ -201,7 +205,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 
 <?php if($invoices): ?>
 <div class="card">
-  <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير شامل <span style="color:var(--grey);font-weight:400">(<?= count($invoices) ?>)</span></div>
+  <div class="section-head dag-head-p"><?= icon('receipt', 17) ?> فواتير شامل <span class="dag-mut">(<?= count($invoices) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">التاريخ</th><th class="g-identity">رقم الفاتورة</th><th class="g-identity">لصالح شركة</th>
@@ -211,8 +215,8 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
       <?php foreach($invoices as $r): ?>
         <tr>
           <td><?= dfmt($r['invoice_date']) ?></td>
-          <td style="font-weight:600"><?= e($r['invoice_no'] ?: '#'.$r['id']) ?></td>
-          <td style="text-align:right"><?= e($r['company'] ?: '—') ?></td>
+          <td class="dbt-tot"><?= e($r['invoice_no'] ?: '#'.$r['id']) ?></td>
+          <td class="txt"><?= e($r['company'] ?: '—') ?></td>
           <td class="pos"><?= money($r['invoice_total'],false) ?></td>
           <td><?= money($r['payments'],false) ?></td>
           <td class="g-result"><?= money($r['account_total'],false) ?></td>
@@ -224,9 +228,9 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 <?php endif; ?>
 
 <?php $pinv = $permitInvoices ?? []; if($pinv): ?>
-<div class="card" style="margin-top:16px">
-  <div class="section-head" style="padding:18px 20px 0"><?= icon('receipt', 17) ?> فواتير الأذونات
-    <span style="color:var(--grey);font-weight:400">(<?= count($pinv) ?> — إجمالي <?= money($permitInvSum['total'] ?? 0,false) ?>)</span></div>
+<div class="card mt-4">
+  <div class="section-head dag-head-p"><?= icon('receipt', 17) ?> فواتير الأذونات
+    <span class="dag-mut">(<?= count($pinv) ?> — إجمالي <?= money($permitInvSum['total'] ?? 0,false) ?>)</span></div>
   <div class="table-wrap"><table class="data">
     <thead><tr>
       <th class="g-identity">رقم المستند</th><th class="g-identity">النوع</th><th class="g-identity">التاريخ</th>
@@ -236,12 +240,12 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
     <tbody>
       <?php foreach($pinv as $iv): ?>
         <tr>
-          <td style="font-weight:600"><?= e($iv['doc_no'] ?: '#'.$iv['id']) ?></td>
+          <td class="dbt-tot"><?= e($iv['doc_no'] ?: '#'.$iv['id']) ?></td>
           <td><span class="pill <?= $iv['doc_kind']==='statement'?'st-partial':'st-paid' ?>"><?= e(\App\Models\PermitInvoice::kindLabel($iv['doc_kind'])) ?><?= $iv['taxable']?' • ضريبية':'' ?></span></td>
           <td><?= dfmt($iv['invoice_date']) ?></td>
           <td><?php if($iv['permit_id']): ?><a href="<?= url('permits/'.$iv['permit_id']) ?>"><?= e($iv['permit_no'] ?: '#'.$iv['permit_id']) ?></a><?php else: ?><?= e($iv['permit_no'] ?: '—') ?><?php endif; ?></td>
           <td><?= e($iv['internal_no'] ?: '—') ?></td>
-          <td class="pos" style="font-weight:600"><?= money($iv['total'],false) ?></td>
+          <td class="pos dbt-tot"><?= money($iv['total'],false) ?></td>
           <td><a class="edit" href="<?= url('permits/invoice/'.$iv['id']) ?>" target="_blank" title="طباعة"><?= icon('file-text', 14) ?></a></td>
         </tr>
       <?php endforeach; ?>
@@ -291,6 +295,9 @@ tr.perm-invoiced td:first-child{box-shadow:inset 3px 0 0 var(--green)}
 <script>
 function cpRoute(){
   var v=document.querySelector('#cpForm input[name=route]:checked');
-  document.getElementById('cpVisaBox').style.display=(v&&v.value==='visa')?'flex':'none';
+  /* ⚠️ سمة `hidden` مش `style.display`: `[hidden]{display:none!important}` في
+     app.css بتغلب أي `display` بيتحط من الجافاسكريبت، فلو فضلنا على
+     `style.display` الخانة ما بتظهرش أبدًا. */
+  document.getElementById('cpVisaBox').hidden = !(v&&v.value==='visa');
 }
 </script>

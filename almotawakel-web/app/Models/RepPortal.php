@@ -76,6 +76,29 @@ class RepPortal
         // توقيت الإنشاء — الشاشة بتقارنه بآخر زيارة محفوظة في المتصفح لكشف «الجديد»
         $meta = [];
         foreach ($picked as $r) { $meta[(int) $r['id']] = $r['created_at']; }
+
+        return self::buildPermits($repId, $meta);
+    }
+
+    /** عدد الأذونات المفتوحة — عدّاد رخيص لشارة التبويب بلا بناء الحزمة كلها. */
+    public static function openPermitCount(): int
+    {
+        return (int) Database::scalar("SELECT COUNT(*) FROM permits WHERE status = 'open'");
+    }
+
+    /**
+     * بناء حزمة العرض لمجموعة أذونات محدَّدة — **المصدر الوحيد** لشكل الحزمة.
+     *
+     * ⚠️ اتفصلت عن `myPermits()` عشان `myPermit()` تقدر تجيب **إذنًا واحدًا**
+     *    بدل ما تبني الـ٣٧ كلهم وترمي ٣٦. قبل الفصل كان فتح أي شاشة إذن
+     *    (تسجيل بند · الرحلة · المستندات · الحفظ — ٤ مواضع) بيشغّل ٦ استعلامات
+     *    على كل الأذونات المفتوحة (مقيس: ١١٫٨ms لـ٣٧ إذن، وبتكبر خطّيًّا).
+     *
+     * @param array<int,string|null> $meta [رقم الإذن => created_at] **بترتيب العرض**
+     */
+    private static function buildPermits(int $repId, array $meta): array
+    {
+        if (!$meta) { return []; }
         $ids = implode(',', array_map('intval', array_keys($meta)));
 
         $rows = Database::all(
@@ -209,6 +232,23 @@ class RepPortal
         }
         unset($tp);
 
+        /* الأذونات المثبَّتة (v63) واللي المندوب اشتغل عليها فعلاً — الاتنين
+           **تفضيل عرض بحت**: بيغيّروا الترتيب والفلترة وبس، ولا بيفتحوا ولا
+           بيقفلوا أي إذن (الحدّ الوحيد لسه `status='open'` في `assertAssigned`).
+           استعلام واحد لكل واحد فيهم مهما كان عدد الأذونات. */
+        $pinned = array_flip(RepPin::forRep($repId));
+        $worked = [];
+        foreach (Database::all(
+            'SELECT DISTINCT permit_id FROM rep_submissions
+              WHERE rep_id = ? AND permit_id IS NOT NULL', [$repId]) as $w) {
+            $worked[(int) $w['permit_id']] = true;
+        }
+        foreach ($out as $wid => &$wp) {
+            $wp['pinned'] = isset($pinned[$wid]);
+            $wp['worked'] = isset($worked[$wid]);
+        }
+        unset($wp);
+
         // ⚠️ نرجّع بترتيب الاستعلام الأول (التاريخ) مش بترتيب الـid — الاستعلام
         //    التاني بيرتّب بـ`p.id` عشان تجميع الحركات، فالترتيب المعروض لازم
         //    يترجع من `$meta` اللي متولّدة من الترتيب الصح.
@@ -216,16 +256,29 @@ class RepPortal
         foreach (array_keys($meta) as $pid) {
             if (isset($out[$pid])) { $ordered[] = $out[$pid]; }
         }
-        return $ordered;
+
+        /* المثبَّت فوق — **ترتيب مستقر**: بيحافظ على ترتيب التاريخ جوّه كل
+           مجموعة بدل ما يقلبها، فالمندوب ما يلاقيش القايمة اتلخبطت. */
+        $pins = array_values(array_filter($ordered, fn(array $p) => !empty($p['pinned'])));
+        $rest = array_values(array_filter($ordered, fn(array $p) => empty($p['pinned'])));
+        return array_merge($pins, $rest);
     }
 
-    /** إذن واحد ظاهر للمندوب (أو null لو مقفول/مش موجود) — للفورم. */
+    /**
+     * إذن واحد ظاهر للمندوب (أو null لو مقفول/مش موجود) — للفورم.
+     *
+     * ⚠️ بتجيب **الإذن ده وحده** لا كل الأذونات المفتوحة. قبل كده كانت بتلفّ
+     *    على `myPermits()` كاملة (٦ استعلامات على ٣٧ إذن) عشان تاخد واحد.
+     */
     public static function myPermit(int $repId, int $permitId): ?array
     {
-        foreach (self::myPermits($repId) as $p) {
-            if ($p['id'] === $permitId) { return $p; }
-        }
-        return null;
+        if ($permitId <= 0) { return null; }
+        $row = Database::row(
+            "SELECT id, created_at FROM permits WHERE id = ? AND status = 'open'", [$permitId]);
+        if (!$row) { return null; }
+
+        $built = self::buildPermits($repId, [(int) $row['id'] => $row['created_at']]);
+        return $built[0] ?? null;
     }
 
     /**
@@ -287,6 +340,55 @@ class RepPortal
              WHERE $where" . RepCustody::epochSql('s.entry_date') . "
              ORDER BY s.created_at DESC, s.id DESC
              LIMIT $limit", $params);
+    }
+
+    /**
+     * بوالص الإذن للعرض على موبايل المندوب — **وصفي بحت**.
+     *
+     * ⚠️ **الأعمدة بالاسم لا `SELECT *`** (قاعدة v35): البوليصة فيها `freight`
+     *    و`custody` و`discount` — ولا واحد منهم شغل المندوب، والاختيار بالاسم
+     *    بيمنع تسرّب أي عمود مالي **جديد** يتضاف للجدول بعدين.
+     */
+    public static function permitBills(int $permitId): array
+    {
+        if ($permitId <= 0) { return []; }
+        return Database::all(
+            "SELECT id, bill_number, bill_date, car_no, driver, car_owner,
+                    destination, container_no, container_count, container_type
+             FROM bawalis
+             WHERE permit_id = ? AND is_legacy = 0
+             ORDER BY id", [$permitId]);
+    }
+
+    /**
+     * البنود اللي اتسجّلت على الإذن — **من كل المناديب** مع اسم صاحب كل بند.
+     *
+     * ⚠️⚠️ **المبلغ بيبان لصاحب البند وبس.** الغرض من الشاشة إن المندوب يعرف
+     *    **إيه** اتسجّل قبله فما يدفعش إيصال مدفوع — وده محتاج الاسم والبيان
+     *    والتاريخ، **مش** كام دفع زميله. الإخفاء في الموديل لا في العرض عشان
+     *    أي شاشة جديدة تاخد نفس الحماية.
+     *
+     * ⚠️ و`actual_unit` (سعر العميل) **مش في الاستعلام أصلاً** — قاعدة v35.
+     */
+    public static function permitEntries(int $permitId, int $viewerRepId, int $limit = 60): array
+    {
+        if ($permitId <= 0) { return []; }
+        $limit = max(1, min(200, $limit));
+        $rows = Database::all(
+            "SELECT s.id, s.rep_id, s.kind, s.note, s.qty, s.amount, s.entry_date,
+                    s.status, s.is_visa, s.photo, r.name rep_name
+             FROM rep_submissions s
+             LEFT JOIN reps r ON r.id = s.rep_id
+             WHERE s.permit_id = ?
+             ORDER BY s.entry_date DESC, s.id DESC
+             LIMIT $limit", [$permitId]);
+
+        foreach ($rows as &$row) {
+            $row['mine'] = (int) $row['rep_id'] === $viewerRepId;
+            if (!$row['mine']) { $row['amount'] = null; }
+        }
+        unset($row);
+        return $rows;
     }
 
     /**
@@ -361,14 +463,28 @@ class RepPortal
     }
 
     /**
+     * المصدر الوحيد لشرط «البند المستني ده خرج كاش من عهدة المندوب فعلًا».
+     *
+     * الفيزا خرجت من كارت المكتب، و«غير مدفوع» لم يخرج من أي محفظة؛ لذلك
+     * الاثنان يظلان ظاهرين في صندوق المراجعة لكن لا يدخلان مبلغ `pending`
+     * الذي يُطرح من «فاضل معاه».
+     */
+    public static function pendingCashSql(string $alias = ''): string
+    {
+        $p = $alias === '' ? '' : $alias . '.';
+        return "{$p}is_visa = 0 AND {$p}unpaid = 0";
+    }
+
+    /** نفس القاعدة عند فلترة صفوف جُلبت بالفعل للـdrill-down. */
+    public static function pendingIsCash(array $row): bool
+    {
+        return empty($row['is_visa']) && empty($row['unpaid']);
+    }
+
+    /**
      * إجمالي البنود المستنية الاعتماد اللي **دفعها المندوب كاش من عهدته** بس لسه
      * ما اتعتمدتش، فمش داخلة في spentTotal. الرصيد المعروض له = رصيد العهدة −
      * ده (عشان يبقى واقعي مع اللي في جيبه).
-     *
-     * ⚠️ v45: **المدفوع بالفيزا مستثنى** (`is_visa = 0`). البند ده لما يتعتمد
-     *    هيتخصم من كارت المكتب مش من عهدة المندوب، فما ينفعش نخصمه من «معايا
-     *    دلوقتي» وهو لسه مستني — وإلا يبان إن عهدته نقصت بحاجة ما دفعهاش كاش.
-     *    (نفس منطق استثناء الفيزا في spentTotal و RepCustody::dashboard.)
      */
     public static function pendingAmount(int $repId, ?string $day = null): float
     {
@@ -377,7 +493,7 @@ class RepPortal
         if ($day !== null && $day !== '') { $w = ' AND entry_date = ?'; $args[] = $day; }
         return round((float) Database::scalar(
             "SELECT COALESCE(SUM(amount),0) FROM rep_submissions
-             WHERE rep_id = ? AND status = 'pending' AND is_visa = 0$w"
+             WHERE rep_id = ? AND status = 'pending' AND " . self::pendingCashSql() . "$w"
              . RepCustody::epochSql('entry_date'), $args), 2);
     }
 
@@ -926,7 +1042,9 @@ class RepPortal
         // المدموجة في «40 قدم» لازم تتوحّد في بوابة المندوب أيضًا.
         $value = DataAlias::canonical($type, $value) ?? $value;
         $key = Maintenance::normkey($value);
-        foreach (Lookup::ofType($type) as $v) {
+        // ⚠️ نفس مصدر شاشة المكتب بالحرف (`Controller::strictListError`) —
+        //    وإلا المندوب يترفض له اختيار المكتب بيقبله.
+        foreach (Lookup::allowedFor($type) as $v) {
             if (Maintenance::normkey((string) $v) === $key) { return (string) $v; }
         }
         return null;
@@ -1235,6 +1353,9 @@ class RepPortal
      */
     public static function deleteMyBill(int $repId, int $billId, string $day): void
     {
+        if (OfficeDriverStatement::billAllocationTotal($billId) > 0.005) {
+            throw new RuntimeException('البوليصة مرتبطة ببيان سائق سيارة المكتب — كلّم المكتب.');
+        }
         $bill = RepBillCustody::findMine($repId, $billId);
         if (!$bill) {
             throw new RuntimeException('البوليصة دي مش بتاعتك أو المكتب عدّلها — كلّم المكتب.');

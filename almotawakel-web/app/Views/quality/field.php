@@ -17,15 +17,15 @@ $cluster = function (array $c, int $i) use ($fieldKey, $reasonLabel): void {
     $members = $c['members'];
     $isSame  = $c['kind'] === 'same';
     ?>
-    <div class="card" style="padding:14px;margin-bottom:12px">
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px">
+    <div class="card p5-pad p5-mb">
+      <div class="p5-row tight p5-mb-10">
         <?php if ($isSame): ?>
-          <span class="pill" style="background:var(--red-lt);color:var(--red)">نفس الشيء قطعًا</span>
+          <span class="pill p5-tag-red">نفس الشيء قطعًا</span>
         <?php else: ?>
-          <span class="pill" style="background:#FBF3DC;color:var(--gold-dark)">
+          <span class="pill p5-tag-gold">
             <?= e($reasonLabel[$c['reason'] ?? ''] ?? 'متشابه') ?>
           </span>
-          <span style="color:var(--grey);font-size:var(--fs-1)">راجعها — ممكن يكونوا حاجتين مختلفتين فعلاً</span>
+          <span class="dbt-sub">راجعها — ممكن يكونوا حاجتين مختلفتين فعلاً</span>
         <?php endif; ?>
       </div>
 
@@ -38,7 +38,7 @@ $cluster = function (array $c, int $i) use ($fieldKey, $reasonLabel): void {
         <?= csrfField() ?>
       </form>
       <div>
-        <table class="data" data-table-tools-off style="margin-bottom:10px">
+        <table class="data p5-mb-10" data-table-tools-off>
           <thead>
             <tr>
               <th data-no-sort>الاسم المعتمد</th>
@@ -49,8 +49,8 @@ $cluster = function (array $c, int $i) use ($fieldKey, $reasonLabel): void {
           <tbody>
             <?php $first = true; foreach ($members as $name => $n): ?>
               <tr>
-                <td style="width:120px">
-                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <td class="w120">
+                  <label class="p5-chk">
                     <input type="radio" name="canonical" value="<?= e((string) $name) ?>"
                            <?= $first ? 'checked' : '' ?>
                            form="qf<?= $i ?>" required>
@@ -58,7 +58,7 @@ $cluster = function (array $c, int $i) use ($fieldKey, $reasonLabel): void {
                   </label>
                 </td>
                 <td><b><?= e((string) $name) ?></b></td>
-                <td><?= $n > 0 ? (int) $n . ' سجل' : '<span style="color:var(--grey)">القائمة بس</span>' ?></td>
+                <td><?= $n > 0 ? (int) $n . ' سجل' : '<span class="dbt-none">القائمة بس</span>' ?></td>
               </tr>
               <input type="hidden" name="variants[]" value="<?= e((string) $name) ?>" form="qf<?= $i ?>">
             <?php $first = false; endforeach; ?>
@@ -73,9 +73,9 @@ $cluster = function (array $c, int $i) use ($fieldKey, $reasonLabel): void {
 };
 ?>
 
-<div class="card" style="padding:16px;margin-bottom:16px">
+<div class="card p5-pad-16 mb">
   <div class="section-head"><?= icon('clipboard', 17) ?> <?= e($group['label']) ?></div>
-  <p style="color:var(--grey);margin:0;line-height:1.9">
+  <p class="set-p">
     <?= (int) $clusters['total'] ?> قيمة مسجّلة ·
     <b><?= count($clusters['same']) ?></b> مجموعة نفس الشيء ·
     <b><?= count($clusters['similar']) ?></b> مجموعة متشابهة.
@@ -84,6 +84,42 @@ $cluster = function (array $c, int $i) use ($fieldKey, $reasonLabel): void {
     <b>مفيش حاجة بتتمسح</b>، البيانات بتتوحّد بس.
   </p>
 </div>
+
+<?php if (count($values) >= 2): ?>
+  <div class="card p5-pad-16 mb">
+    <div class="section-head"><?= icon('shuffle', 17) ?> دمج يدوي</div>
+    <p class="set-p">
+      لو الاسمان مختلفان تمامًا لكنك تعرف أنهما لنفس الشيء، اختر القيمة الخاطئة
+      والاسم المعتمد. سيُصلَح القديم، وتُحفظ القيمة الخاطئة اسمًا بديلًا حتى
+      تتحول تلقائيًا لو كُتبت مرة أخرى.
+    </p>
+    <form method="post" action="<?= url('quality/' . $fieldKey . '/merge') ?>"
+          data-confirm="سيتم توحيد القيمة الخاطئة على الاسم المعتمد وحفظها اسمًا بديلًا. تمام؟">
+      <?= csrfField() ?>
+      <div class="form-grid">
+        <div class="field">
+          <label for="manual-variant">القيمة الخاطئة</label>
+          <select id="manual-variant" name="variants[]" required>
+            <option value="">اختر القيمة…</option>
+            <?php foreach ($values as $name => $n): ?>
+              <option value="<?= e((string) $name) ?>"><?= e((string) $name) ?> (<?= (int) $n ?>)</option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="field">
+          <label for="manual-canonical">الاسم المعتمد</label>
+          <select id="manual-canonical" name="canonical" required>
+            <option value="">اختر الاسم…</option>
+            <?php foreach ($values as $name => $n): ?>
+              <option value="<?= e((string) $name) ?>"><?= e((string) $name) ?> (<?= (int) $n ?>)</option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+      </div>
+      <button class="btn gold sm" type="submit"><?= icon('download', 14) ?> وحّد واحفظ كاسم بديل</button>
+    </form>
+  </div>
+<?php endif; ?>
 
 <?php if (!$clusters['same'] && !$clusters['similar']): ?>
   <?php partial('empty', ['emoji' => '✨', 'title' => 'الحقل ده نضيف — مفيش تهجئات مكرَّرة ولا متشابهة']); ?>
@@ -97,7 +133,7 @@ $cluster = function (array $c, int $i) use ($fieldKey, $reasonLabel): void {
 <?php endif; ?>
 
 <?php if ($clusters['similar']): ?>
-  <div class="section-head" style="margin-top:20px">متشابه — محتاج مراجعتك (<?= count($clusters['similar']) ?>)</div>
+  <div class="section-head p5-mt-20">متشابه — محتاج مراجعتك (<?= count($clusters['similar']) ?>)</div>
   <?php foreach ($clusters['similar'] as $c) { $cluster($c, $i++); } ?>
 <?php endif; ?>
 
@@ -106,9 +142,9 @@ $cluster = function (array $c, int $i) use ($fieldKey, $reasonLabel): void {
 $dead = array_filter($values, static fn($n) => $n === 0);
 if ($dead && !empty($group['lookup'])):
 ?>
-  <div class="section-head" style="margin-top:20px">مفردات في القائمة مش مستخدَمة في أي سجل (<?= count($dead) ?>)</div>
-  <div class="card" style="padding:14px">
-    <p style="color:var(--grey);margin:0 0 10px;line-height:1.9">
+  <div class="section-head p5-mt-20">مفردات في القائمة مش مستخدَمة في أي سجل (<?= count($dead) ?>)</div>
+  <div class="card p5-pad">
+    <p class="set-p">
       دي موجودة في القائمة المنسدلة بس مفيش ولا سجل واحد بيستخدمها — شيلها عشان
       ما تظهرش للموظفين كخيار.
     </p>
@@ -116,7 +152,7 @@ if ($dead && !empty($group['lookup'])):
       <?php foreach (array_keys($dead) as $v): ?>
         <span class="chip"><?= e((string) $v) ?>
           <form class="confirm-delete" method="post" action="<?= url('quality/' . $fieldKey . '/drop') ?>"
-                style="display:inline" data-confirm="شيل «<?= e((string) $v) ?>» من القائمة؟">
+                 data-confirm="شيل «<?= e((string) $v) ?>» من القائمة؟">
             <?= csrfField() ?>
             <input type="hidden" name="value" value="<?= e((string) $v) ?>">
             <button type="submit" title="شيل من القائمة">×</button>

@@ -86,7 +86,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
         <span class="ss-num"><?= $idx ?></span>
         <span class="ss-name"><?= e($st['label']) ?></span>
         <?php if ($st['dir']===Permit::DIR_EXPENSE): ?><span class="tl-dir neg">مصروف</span><?php endif; ?>
-        <span style="flex:1"></span>
+        <span class="ps-sp"></span>
         <?php if ($isNone): ?><span class="ss-none"><?= icon('x', 14) ?> لا يوجد</span>
         <?php elseif (count($realEntries)): ?><span class="ss-count"><?= intf(count($realEntries)) ?></span>
         <?php elseif ($autoPrimary): ?><span class="ss-count" title="محسوبة تلقائيًا من حاويات الإذن">تلقائي</span><?php endif; ?>
@@ -105,7 +105,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
         <?php if ($isNone): ?>
           <div class="tl-none">
             <span><?= icon('x', 14) ?> هذه المرحلة معلَّمة <b>«لا يوجد»</b> ومحسوبة كمكتملة.</span>
-            <form class="js-ajax" method="post" action="<?= url('permits/stage/'.$noneRow['id'].'/delete') ?>" style="margin:0">
+            <form class="js-ajax" method="post" action="<?= url('permits/stage/'.$noneRow['id'].'/delete') ?>">
               <?= csrfField() ?><button class="btn ghost sm" type="submit"><?= icon('undo', 14) ?> إلغاء التعليم</button>
             </form>
           </div>
@@ -122,8 +122,8 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
               <span class="te-edit">تعديل ▾</span>
             </summary>
             <?= $stageForm($key, $en) ?>
-            <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>" style="margin:6px 0 0">
-              <?= csrfField() ?><button class="btn ghost sm" type="submit" style="color:var(--red)"><?= icon('trash', 14) ?> حذف</button>
+            <form class="js-ajax confirm-delete ps-del-form" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>">
+              <?= csrfField() ?><button class="btn ghost sm danger" type="submit"><?= icon('trash', 14) ?> حذف</button>
             </form>
           </details>
         <?php endforeach; endif; ?>
@@ -157,7 +157,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
       <details class="stage has" id="stage-data" open>
         <summary class="stage-sum">
           <span class="ss-ic ok"><?= icon('file-text', 14) ?></span><span class="ss-num"><?= $pi ?></span>
-          <span class="ss-name">بيانات الإذن</span><span style="flex:1"></span>
+          <span class="ss-name">بيانات الإذن</span><span class="ps-sp"></span>
           <span class="ss-chev">▾</span>
         </summary>
         <div class="stage-body">
@@ -183,7 +183,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
               <label>الوكيل (العميل)<input list="dl_client" id="permit_client" name="client" value="<?= e($p['client']) ?>" autocomplete="off"></label>
               <label>لصالح شركة<input list="dl_company" id="permit_company" name="company" value="<?= e($p['company']) ?>" autocomplete="off"></label>
               <label>الجهة<input list="dl_dest" name="destination" value="<?= e($p['destination']) ?>" autocomplete="off"></label>
-              <?php partial('lookup_select', ['name'=>'shipping_co','type'=>'shipping_co','value'=>$p['shipping_co'] ?? '','label'=>'🚢 شركة الشحن']); ?>
+              <?php partial('lookup_select', ['name'=>'shipping_co','type'=>'shipping_co','value'=>$p['shipping_co'] ?? '','label'=>'🚢 شركة الشحن','attrs'=>'data-autofill-from="client" title="بتتملى تلقائيًا من العميل — غيّرها لو شركة الشحن مختلفة"']); ?>
               <?php partial('lookup_select', ['name'=>'agency','type'=>'agency','value'=>$p['agency'] ?? '','labelHtml'=>icon('receipt', 14).' التوكيل']); ?>
               <?php partial('lookup_select', ['name'=>'port','type'=>'port','value'=>$p['port'] ?? '','labelHtml'=>icon('anchor', 14).' الميناء']); ?>
               <label class="wide">ملاحظة<input name="note" value="<?= e($p['note']) ?>"></label>
@@ -201,17 +201,17 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
 <!-- ===== الحركات ===== -->
 <div class="sec-head">
   <span><?= icon('shuffle', 14) ?> الحركات (<span id="mvCount"><?= intf(count($movements)) ?></span>)</span>
-  <form method="post" action="<?= url('permits/'.$pid.'/movement') ?>" class="js-ajax mv-add-form" id="addMovementForm" style="margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <form method="post" action="<?= url('permits/'.$pid.'/movement') ?>" class="js-ajax mv-add-form" id="addMovementForm">
     <?= csrfField() ?>
-    <input type="number" min="0" name="container_count" placeholder="عدد الحاويات" title="عدد حاويات الحركة (اختياري)" style="width:120px;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px" autocomplete="off">
-    <?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','blank'=>'التصنيف','attrs'=>'title="تصنيف حاويات الحركة (اختياري)" style="width:130px;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px"']); ?>
+    <input type="number" min="0" name="container_count" placeholder="عدد الحاويات" title="عدد حاويات الحركة (اختياري)" class="mva-count" autocomplete="off">
+    <?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','blank'=>'التصنيف','attrs'=>'title="تصنيف حاويات الحركة (اختياري)" class="mva-type"']); ?>
     <button class="btn gold sm" type="submit"><?= icon('plus', 14) ?> حركة جديدة</button>
   </form>
 </div>
 
 <div id="movementsWrap">
   <?php if (!$movements): ?>
-    <div class="card empty-mv"><div class="empty" style="padding:32px"><div class="ic"><?= icon('shuffle', 14) ?></div>لا حركات بعد — اضغط «<?= icon('plus', 14) ?> حركة جديدة» للبدء.</div></div>
+    <div class="card empty-mv"><div class="empty empty-mv-in"><div class="ic"><?= icon('shuffle', 14) ?></div>لا حركات بعد — اضغط «حركة جديدة» للبدء.</div></div>
   <?php else: foreach ($movements as $mv): include __DIR__ . '/_movement.php'; endforeach; endif; ?>
 </div>
 
@@ -250,8 +250,8 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
 <?php endif; ?>
 
 <div class="permit-danger">
-  <form class="confirm-delete" method="post" action="<?= url('permits/'.$pid.'/delete') ?>" style="margin:0" data-confirm="حذف الإصدار بالكامل نهائياً؟ لا يمكن التراجع.">
-    <?= csrfField() ?><button class="btn ghost sm" type="submit" style="color:var(--red)"><?= icon('trash', 14) ?> حذف الإصدار بالكامل</button>
+  <form class="confirm-delete" method="post" action="<?= url('permits/'.$pid.'/delete') ?>" data-confirm="حذف الإصدار بالكامل نهائياً؟ لا يمكن التراجع.">
+    <?= csrfField() ?><button class="btn ghost sm danger" type="submit"><?= icon('trash', 14) ?> حذف الإصدار بالكامل</button>
   </form>
 </div>
 </div><!-- /.permit-manage -->

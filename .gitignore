@@ -29,3 +29,20 @@ almotawakel-web/storage/backups/
 almotawakel-web/database/old_data.json
 chrome-profile*/
 _preview_*.pdf
+
+# ===== مخرجات متولّدة ومستندات — مش كود (أضيفت 2026-08-09) =====
+# ⚠️ السبب: كانت 16 ميجا من PDF/CSV/لقطات شاشة قاعدة جنب الكود، فـ`git status`
+#    بيطلع 246 ملف ومستحيل تعرف إيه الشغل الحقيقي وإيه المخرجات.
+#    والـCSV فيه بيانات عملاء ومبالغ — نفس قاعدة منع نسخ قاعدة البيانات فوق.
+*.pdf
+*.csv
+*.docx
+*.xlsx
+_preview_*.pdf
+.shots-tmp/
+.agents/
+*.png
+!almotawakel-web/public/assets/**/*.png
+
+# نسخة قديمة متفرّعة من CLAUDE.md — المصدر الوحيد هو CLAUDE.md
+AGENTS.md

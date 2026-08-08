@@ -210,6 +210,99 @@ try {
     near('المصاريف 6,000', $perf['expenses'], 6000);
     near('الصافي = 30,000 − 8,000 − 6,000', $perf['net'], 16000);
 
+    sec('٥ب) تعديل مصروف مسجَّل');
+    $edId = OfficeCar::addExpense($cid, ['exp_date' => '2026-07-14', 'category' => 'fuel',
+                                         'amount' => 500, 'vendor' => 'محطة قديمة', 'note' => 'قديم']);
+    OfficeCar::updateExpense($edId, ['exp_date' => '2026-07-15', 'category' => 'tyres',
+                                     'amount' => 750, 'vendor' => 'ورشة جديدة', 'ref_no' => 'R-9', 'note' => 'جديد']);
+    $edRow = OfficeCar::findExpense($edId);
+    same('التاريخ اتعدّل', $edRow['exp_date'], '2026-07-15');
+    same('الفئة اتعدّلت', $edRow['category'], 'tyres');
+    near('المبلغ اتعدّل', $edRow['amount'], 750);
+    same('المحطة اتعدّلت', $edRow['vendor'], 'ورشة جديدة');
+    same('رقم الإيصال اتحفظ', $edRow['ref_no'], 'R-9');
+    same('البيان اتعدّل', $edRow['note'], 'جديد');
+    // ⚠️ التعديل ما ينقلش المصروف لسيارة تانية — `car_id` برّه الـUPDATE عن قصد.
+    same('السيارة ما اتغيّرتش', (int) $edRow['car_id'], $cid);
+    // ⚠️ فئة برّه القائمة البيضا بتقع على «أخرى» في التعديل زي الإضافة بالظبط.
+    OfficeCar::updateExpense($edId, ['exp_date' => '2026-07-15', 'category' => '../hack', 'amount' => 750]);
+    same('فئة مش في القائمة البيضا بتتخزَّن other في التعديل',
+        (string) Database::scalar("SELECT category FROM car_expenses WHERE id = ?", [$edId]), 'other');
+    // ⚠️ العزل: التعديل زي الإضافة — ما بيلمسش الخزنة.
+    near('رصيد الخزنة قبل = بعد التعديل', Closing::currentBalance(), $bal0);
+    OfficeCar::deleteExpense($edId);
+    same('المصروف اتشال بعد الاختبار', OfficeCar::findExpense($edId), null);
+
+    /* ═══════════════════════════════════════════════════════════════════
+       ٥ج) مصروفات البوليصة — بنود نظام الإكسل رجعت لسيارات المكتب (2026-07-28)
+       ═══════════════════════════════════════════════════════════════════ */
+    sec('٥ج) مصروفات البوليصة (سيارات المكتب بس)');
+
+    // المعادلات التلاتة — مستخرجة من `legacy_bawalis` ومتحقَّق منها على ٧٣ صف.
+    $bw = \App\Calc::bawala([
+        'freight' => 15500, 'custody' => 6000, 'transfer' => 0, 'discount' => 0,
+        'overnight_collection' => 0, 'driver_share' => 1500, 'assistant_share' => 500,
+        'gas' => 2000, 'tahia_masr' => 60, 'permits' => 200,
+        'overnight_expense' => 500, 'expense' => 500,
+    ]);
+    near('إجمال المصروف = مجموع الـ١٢', $bw['total_expense'], 5260);
+    near('الباقى من العهدة = عهدة − إجمال المصروف', $bw['custody_remaining'], 740);
+    near('صافى السيارة = نولون − إجمال المصروف', $bw['car_net'], 10240);
+
+    /* ⚠️⚠️ أهم فحص في الميزة: **دين البوليصة ما بيتأثرش بأي بند مصروف**.
+       الدين حساب العميل، والمصروفات دي تكلفة تشغيل عربيتنا. لو دخلت المعادلة
+       بالغلط، كل ديون العملاء والكشوف بتتغيّر **بلا أي خطأ ظاهر**. */
+    $bare = \App\Calc::bawala(['freight' => 15500, 'custody' => 6000]);
+    same('⚠️ الدين مع المصروفات = الدين بدونها', $bw['debt'], $bare['debt']);
+    near('   › والدين نفسه صح', $bw['debt'], 9500);
+    // الباقى من العهدة بيطلع سالب عادي (السواق صرف أكتر من عهدته) — مش زي الدين.
+    $neg = \App\Calc::bawala(['freight' => 10000, 'custody' => 1000, 'gas' => 3000]);
+    near('الباقى من العهدة بيقبل السالب', $neg['custody_remaining'], -2000);
+
+    // ⚠️ قايمة الأعمدة مصدرها واحد: `Calc::EXPENSE_COLS`.
+    same('عدد أعمدة المصروفات = ١٢', count(\App\Calc::EXPENSE_COLS), 12);
+    $schemaOffice = [];
+    foreach (\App\Schema::entities()['bawalis']['fields'] as $f) {
+        if (!empty($f['office']) && empty($f['calc'])) { $schemaOffice[] = $f['key']; }
+    }
+    sort($schemaOffice); $expCols = \App\Calc::EXPENSE_COLS; sort($expCols);
+    same('⚠️ خانات Schema = Calc::EXPENSE_COLS بالظبط', $schemaOffice, $expCols);
+    foreach (\App\Calc::EXPENSE_COLS as $c) {
+        if (!Database::scalar("SELECT COUNT(*) FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name='bawalis' AND column_name=?", [$c])) {
+            bad("عمود `$c` مش موجود في bawalis"); $missingCol = true;
+        }
+    }
+    if (empty($missingCol)) { ok('كل الـ١٢ عمود موجودين في bawalis'); }
+
+    // مطابقة اللوحة — المصدر الوحيد لسؤال «سيارة مكتب؟»
+    yes('matchPlate بتلاقي السيارة بلوحتها', OfficeCar::isOfficePlate('ق ب ر 9911'));
+    yes('  › وباللوحة المقلوبة كمان', OfficeCar::isOfficePlate('9911 ق ب ر'));
+    yes('  › ولوحة غريبة بترجّع لأ', !OfficeCar::isOfficePlate('ط ط ط 1'));
+
+    // الأثر على أداء السيارة (قرار المالك: تنضاف لمصاريف السيارة)
+    $perfBefore = OfficeCar::perf($cid, $p['from'], $p['to']);
+    Database::exec("UPDATE bawalis SET driver_share=1500, gas=2000, tahia_masr=60, permits=200
+                    WHERE bill_number = ?", ['__V54-1']);
+    OfficeCar::clearCache();
+    $perfAfter = OfficeCar::perf($cid, $p['from'], $p['to']);
+    near('مصروفات البوالص اتحسبت', $perfAfter['bill_expenses'] - $perfBefore['bill_expenses'], 3760);
+    near('إجمالي المصاريف = مصاريف السيارة + مصروفات البوالص',
+        $perfAfter['expenses_total'], $perfAfter['expenses'] + $perfAfter['bill_expenses']);
+    near('الصافي = نولون − عهد − إجمالي المصاريف',
+        $perfAfter['net'], $perfAfter['freight'] - $perfAfter['custody'] - $perfAfter['expenses_total']);
+    // ⚠️ daily() بتغذّي الاتجاه والمعدلات — لازم تطابق perf وإلا الرسم يقول رقمًا والكارت غيره.
+    $dailyBe = 0.0;
+    foreach (OfficeCar::daily([$cid], $p['from'], $p['to']) as $v) { $dailyBe += (float) $v['bill_expenses']; }
+    near('daily() = perf في مصروفات البوالص', $dailyBe, $perfAfter['bill_expenses']);
+    $fs = OfficeCar::fleetSummary(OfficeCar::fleet($p['from'], $p['to']));
+    yes('fleetSummary فيها bill_expenses', isset($fs['bill_expenses'], $fs['expenses_total']));
+    // ⚠️ العزل: بنود البوليصة عمرها ما تلمس الخزنة.
+    near('⚠️ رصيد الخزنة قبل = بعد إضافة مصروفات البوليصة', Closing::currentBalance(), $bal0);
+    Database::exec("UPDATE bawalis SET driver_share=0, gas=0, tahia_masr=0, permits=0
+                    WHERE bill_number = ?", ['__V54-1']);
+    OfficeCar::clearCache();
+
     sec('٦) ⚠️ العزل الفعلي: مصروف ضخم ما بيحركش الخزنة');
     OfficeCar::addExpense($cid, ['exp_date' => '2026-07-15', 'category' => 'other', 'amount' => 999999]);
     near('رصيد الخزنة قبل = بعد', Closing::currentBalance(), $bal0);
@@ -250,6 +343,42 @@ try {
     yes('  › وفيه الرحلتين', substr_count($card, '__V54-') === 2);
     yes('  › والبوليصة المُرحَّلة مش ظاهرة', !str_contains($card, '__V54-L'));
     yes('  › وفيه معادلة الصافي', str_contains($card, 'car-eq'));
+    yes('  › وفيه زر تعديل لكل مصروف', str_contains($card, 'aria-label="تعديل المصروف"'));
+
+    /* ⚠️ **فحص سلوكي على الناتج المرندَر** — الرمز اللي بيوصل المتصفح لازم
+       يعدّي من `FormState::claim()` بالظبط (`^[a-f0-9]{32}$`)، وإلا الزرار
+       بيترفض برسالة «هذا الطلب نُفّذ أو انتهت صلاحيته» **والمالك مش فاهم ليه**. */
+    $delChunk = '';
+    foreach (explode('cars/expense/', $card) as $i => $c) {
+        if ($i > 0 && str_contains($c, '/delete')) { $delChunk = explode('</form>', $c)[0]; break; }
+    }
+    $hasTok = (bool) preg_match('/name="_form_token" value="([a-f0-9]{32})"/', $delChunk, $m);
+    yes('  › وفورم حذف المصروف بيبعت رمز صالح لـclaimForm', $hasTok);
+    if ($hasTok) { yes('  › والرمز شكله اللي claim() بتقبله', (bool) preg_match('/^[a-f0-9]{32}$/', $m[1])); }
+    else { bad('  › الرمز مش في الناتج — الحذف هيترفض'); }
+    yes('  › والنموذج على وضع الإضافة', str_contains($card, 'سجّل مصروف على السيارة'));
+
+    // ⚠️ وضع التعديل: `?edit_exp=` بيقلب النموذج لتعديل ويعبّيه من المصروف.
+    $exId = (int) OfficeCar::expenses($cid, $p['from'], $p['to'])[0]['id'];
+    $_GET = ['p' => 'month', 'd' => '2026-07-16', 'edit_exp' => (string) $exId];
+    $cardEd = $grab(static fn () => $ctl->card((string) $cid));
+    yes('كارت السيارة بيرندر على وضع التعديل', !str_starts_with($cardEd, 'EXC') && strlen($cardEd) > 5000);
+    yes('  › والنموذج بقى «عدّل المصروف»', str_contains($cardEd, 'عدّل المصروف'));
+    yes('  › وبيبعت لمسار التعديل', str_contains($cardEd, 'cars/expense/' . $exId . '/update'));
+    yes('  › وفيه زر إلغاء', str_contains($cardEd, 'احفظ التعديل') && str_contains($cardEd, '>إلغاء<'));
+    yes('  › والصف اللي بيتعدّل معلَّم', str_contains($cardEd, 'بتعدّله دلوقتي'));
+
+    // ⚠️ **الرابط مش مصدر ثقة** — مصروف بتاع سيارة تانية لازم يترفض، وإلا
+    //    تقدر تعدّل مصروف أي سيارة من كارت أي سيارة.
+    $otherCar = OfficeCar::create(['name' => '__v54 سيارة تانية', 'plate' => 'س س س 9999',
+                                   'aliases' => '', 'model' => '', 'driver' => '', 'status' => 'active', 'note' => '']);
+    $otherExp = OfficeCar::addExpense($otherCar, ['exp_date' => '2026-07-15', 'category' => 'fuel', 'amount' => 100]);
+    $_GET = ['p' => 'month', 'd' => '2026-07-16', 'edit_exp' => (string) $otherExp];
+    $cardX = $grab(static fn () => $ctl->card((string) $cid));
+    yes('مصروف سيارة تانية بيترفض في وضع التعديل',
+        !str_contains($cardX, 'عدّل المصروف') && str_contains($cardX, 'سجّل مصروف على السيارة'));
+    OfficeCar::delete($otherCar);
+    $_GET = ['p' => 'month', 'd' => '2026-07-16'];
 
     $rep = $grab(static fn () => $ctl->report((string) $cid));
     yes('تقرير A4 بيرندر', !str_starts_with($rep, 'EXC') && str_contains($rep, 'تقرير أداء سيارة'));
@@ -296,6 +425,7 @@ yes('مسار /cars مسجَّل', str_contains($routes, "'/cars',"));
 // ⚠️ تحذير ٤ — الحرفي قبل الجشع
 yes('/cars/drill/{what} قبل الجشع /cars/{id}', $pos("'/cars/drill/{what}'") < $pos("\$r->get('/cars/{id}',"));
 yes('/cars/expense/{eid}/delete قبل الجشع', $pos("'/cars/expense/{eid}/delete'") < $pos("\$r->post('/cars/{id}',"));
+yes('/cars/expense/{eid}/update قبل الجشع', $pos("'/cars/expense/{eid}/update'") < $pos("\$r->post('/cars/{id}',"));
 yes('/cars/{id}/report قبل الجشع', $pos("'/cars/{id}/report'") < $pos("\$r->get('/cars/{id}',"));
 yes('/cars/new قبل الجشع', $pos("'/cars/new'") < $pos("\$r->get('/cars/{id}',"));
 
@@ -313,7 +443,7 @@ $missing ? bad('actions بلا requireAuth: ' . implode(', ', $missing))
 
 // كل POST فيه requireCsrf
 $missingCsrf = [];
-foreach (['store', 'update', 'destroy', 'storeExpense', 'deleteExpense'] as $mth) {
+foreach (['store', 'update', 'destroy', 'storeExpense', 'updateExpense', 'deleteExpense'] as $mth) {
     $rm = new ReflectionMethod(\App\Controllers\OfficeCarController::class, $mth);
     $src = implode('', array_slice(file($rm->getFileName()), $rm->getStartLine() - 1,
         $rm->getEndLine() - $rm->getStartLine() + 1));
@@ -321,6 +451,33 @@ foreach (['store', 'update', 'destroy', 'storeExpense', 'deleteExpense'] as $mth
 }
 $missingCsrf ? bad('POST بلا requireCsrf: ' . implode(', ', $missingCsrf))
              : ok('كل مسارات الكتابة فيها requireCsrf');
+
+/* ⚠️⚠️ **كل فورم كتابة لازم يبعت `_form_token`** — `claimForm()` بترفض أي طلب
+   من غيره برسالة «هذا الطلب نُفّذ أو انتهت صلاحيته»، يعني **الزرار ما بيشتغلش
+   خالص** والمالك مش فاهم ليه (اتصاد فعليًّا 2026-07-28: أزرار «حذف المصروف»
+   و«احذف السيارة» و«مش بتاعتنا» و«رجّعها للتنبيه» كانوا مكسورين من v54).
+   `csrfField()` **مش كفاية** — دي حماية تانية خالص. */
+// ⚠️ **التعليقات لازم تتشال قبل الفحص** — التعليق اللي بيوثّق القاعدة بيذكر
+//    اسم الحقل نفسه، فالفحص كان **بينجح كذبًا** حتى لو الحقل اتشال فعلاً
+//    (نفس مصيدة `code_only()` الموثَّقة في `verify_security.php`).
+$stripComments = static function (string $s): string {
+    $s = (string) preg_replace('~/\*.*?\*/~s', '', $s);
+    return (string) preg_replace('~(?<!:)//[^\n]*~', '', $s);
+};
+$noToken = [];
+foreach (['card', 'form', 'index'] as $v) {
+    $src = (string) file_get_contents($root . '/app/Views/office_cars/' . $v . '.php');
+    // كل فورم في الشاشة: بندوّر على وسم الفتح ونشوف جسمه لحد أول </form>
+    foreach (explode('method="post"', $src) as $i => $chunk) {
+        if ($i === 0) { continue; }
+        $body = $stripComments(explode('</form>', $chunk)[0] ?? '');
+        if (!str_contains($body, 'name="_form_token"') && !str_contains($body, 'formStateFields(')) {
+            $noToken[] = $v . '.php (فورم #' . $i . ')';
+        }
+    }
+}
+$noToken ? bad('⚠️ فورم كتابة بلا _form_token — الزرار هيترفض: ' . implode(' · ', $noToken))
+         : ok('⚠️ كل فورمات الكتابة بتبعت _form_token (claimForm مش هترفضها)');
 
 yes('«قراءة فقط» يقدر يفتح الشاشة', Access::allows('read_only', 'OfficeCarController@index', 'GET'));
 yes('«قراءة فقط» ممنوع يكتب', !Access::allows('read_only', 'OfficeCarController@storeExpense', 'POST'));

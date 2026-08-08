@@ -12,6 +12,26 @@ $groups = [
 $byGroup = [];
 foreach ($ent['fields'] as $f) { $byGroup[$f['group']][] = $f; }
 $val = fn($k) => $row[$k] ?? '';
+
+/* ═══ خانات مصروفات السيارة — سيارات المكتب بس ═══
+   ⚠️ الحالة الابتدائية بتتحسب **على الخادم** من `OfficeCar::matchPlate()`
+      (المصدر الوحيد لتطبيع اللوحة)، فالفورم شغّال صح حتى بلا جافاسكريبت.
+      الجافاسكريبت بيقلبها وانت بتكتب رقم السيارة عن طريق `/cars/is-office`
+      — **مش بنسخة تانية من `plateKey()` في المتصفح**.
+   ⚠️ الإخفاء **ما بيمسحش** أي قيمة متكتبة (بعكس آلية `data-dep`): لو اتغيّر
+      رقم السيارة بالغلط، المسح كان هيضيّع الأرقام بالسكوت. القيم المتخزّنة
+      على بوليصة عربية مستأجرة مالهاش أي أثر — مفيش حساب بيقراها. */
+$officeCar   = ($ent['table'] ?? '') === 'bawalis'
+    ? \App\Models\OfficeCar::matchPlate((string) $val('car_no')) : null;
+$isOfficeCar = $officeCar !== null;
+$officeAttrs = static fn (array $f, bool $on): string =>
+    empty($f['office']) ? '' : ' data-dep-office="1"' . ($on ? '' : ' hidden');
+// عنوان المجموعة يتخفى بس لو كل حقولها خاصة بسيارات المكتب (مجموعة «النتائج»
+// فيها دين البوليصة والمدفوع كمان، فعنوانها بيفضل ظاهر دايمًا).
+$groupIsOffice = static function (array $fields): bool {
+    foreach ($fields as $f) { if (empty($f['office'])) { return false; } }
+    return (bool) $fields;
+};
 ?>
 <div class="page-actions">
   <a class="btn ghost" href="<?= url($back) ?>">‹ رجوع للقائمة</a>
@@ -21,14 +41,14 @@ $val = fn($k) => $row[$k] ?? '';
 <?php if (!empty($errors['_form'])): ?><div class="form-error-summary" role="alert"><?= icon('alert', 14) ?> <?= e($errors['_form']) ?></div><?php endif; ?>
 
 <?php if (!empty($legacyCreate)): ?>
-<div class="card" style="margin-bottom:14px;padding:13px 16px;border-inline-start:5px solid #c9a227;background:#fff9e8;color:#6d5510">
+<div class="card legacy-note">
   <b>إضافة إلى البوالص القديمة.</b>
   لن يُنشأ لهذه البوليصة إذن أو حركة، ولن تدخل عهدتها أو أرقامها في التقفيل أو رصيد العهدة أو التقارير التشغيلية؛ وستظهر في السداد وكشوف أصحاب البيان.
 </div>
 <?php endif; ?>
 
 <?php if ($isEdit && !empty($ent['has_legacy']) && (int)($row['is_legacy'] ?? 0) === 1): ?>
-<div class="card" style="margin-bottom:14px;padding:13px 16px;border-inline-start:5px solid #c9a227;background:#fff9e8;color:#6d5510">
+<div class="card legacy-note">
   <b>بوليصة قديمة مُرحَّلة من الأرشيف.</b>
   يمكنك تعديل بياناتها وصاحب البيان، لكنها تظل معزولة عن العهدة والتقفيل والتقارير، ولن يُنشأ لها إذن أو حركة.
 </div>
@@ -39,14 +59,24 @@ $val = fn($k) => $row[$k] ?? '';
   <?= csrfField() ?>
   <?= formStateFields($formToken, $back) ?>
   <?php if($isEdit && array_key_exists('lock_version',$row)): ?><input type="hidden" name="lock_version" value="<?= (int)$row['lock_version'] ?>"><?php endif; ?>
-  <?php foreach ($groups as $gk=>$gLabel): if (empty($byGroup[$gk])) continue; ?>
-    <div class="form-group-title gt-<?= $gk ?>"><?= $gLabel ?></div>
+  <?php foreach ($groups as $gk=>$gLabel): if (empty($byGroup[$gk])) continue;
+        $gOffice = $groupIsOffice($byGroup[$gk]); ?>
+    <div class="form-group-title gt-<?= $gk ?>"<?= $gOffice ? ' data-dep-office="1"' . ($isOfficeCar ? '' : ' hidden') : '' ?>>
+      <?= $gLabel ?>
+      <?php if ($gOffice): ?><small class="fg-note">سيارات المكتب بس<?= $officeCar ? ' — ' . e($officeCar['name']) : '' ?></small><?php endif; ?>
+    </div>
     <div class="form-grid">
       <?php foreach ($byGroup[$gk] as $f):
         $isCalc = !empty($f['calc']);
         $type = $f['type']; $k = $f['key'];
         $dep = $f['dep'] ?? '';   // حقل مشروط بنوع البوليصة (warid/sader)
         // أرقام الحاويات: خانة لكل حاوية (المكوّن بيتولّى الرسم والتفكيك)
+        // ⚠️ الدافع بيختفي بالكامل قبل migrate_v60 (`rep_custody_select` بترجّع '')
+        //    — بلا الشرط ده الحقل يترسم فاضي والاختيار يتبعت لعمود مش موجود.
+        if ($type === 'rep_payer') {
+          $payerSel = rep_custody_select($val($k));
+          if ($payerSel === '') { continue; }
+        }
         if ($type === 'containers') {
           partial('container_nos', [
             'value' => $val($k), 'count' => (int) ($val('container_count') ?: 0), 'label' => $f['label'],
@@ -54,9 +84,11 @@ $val = fn($k) => $row[$k] ?? '';
           continue;
         }
       ?>
-        <div class="field <?= $isCalc?'calc':'' ?> <?= !empty($errors[$k])?'has-error':'' ?>" <?= $dep?'data-dep="'.$dep.'"':'' ?>>
+        <div class="field <?= $isCalc?'calc':'' ?> <?= !empty($errors[$k])?'has-error':'' ?>" <?= $dep?'data-dep="'.$dep.'"':'' ?><?= $officeAttrs($f, $isOfficeCar) ?>>
           <label><?= e($f['label']) ?><?= $isCalc?' 🔒':'' ?></label>
-          <?php if ($type==='billtype'): ?>
+          <?php if ($type==='rep_payer'): ?>
+            <?= $payerSel ?>
+          <?php elseif ($type==='billtype'): ?>
             <select name="<?= $k ?>" data-billtype>
               <option value="sader" <?= $val($k)==='sader'?'selected':'' ?>>صادر</option>
               <option value="warid" <?= $val($k)==='warid'?'selected':'' ?>>وارد</option>
@@ -97,7 +129,7 @@ $val = fn($k) => $row[$k] ?? '';
         <label>إجمالي ما استلمه صاحب البيان لهذه البوليصة</label>
         <input type="number" step="0.01" min="0" name="legacy_paid" value="<?= e($legacyPaid ?? 0) ?>" placeholder="0"<?= fieldErrorAttrs('legacy_paid', $errors) ?>>
         <?= fieldError('legacy_paid', $errors) ?>
-        <small style="display:block;margin-top:6px;color:var(--grey)">معزولة — مش بتدخل التقفيل</small>
+        <small class="hint">معزولة — مش بتدخل التقفيل</small>
       </div>
     </div>
   <?php endif; ?>

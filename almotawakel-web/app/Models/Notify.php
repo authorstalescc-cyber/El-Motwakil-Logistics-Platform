@@ -72,7 +72,11 @@ class Notify
         'bill.linked'           => ['office', 'PermitController@index'],
         'permit.closed'         => ['office', 'PermitController@index'],
         'driver.handover'       => ['office', 'RepCustodyController@index'],
-        'track.stage'           => ['office', 'PermitController@index'],   // رحلة الشحنة (v62)
+        /* ⚠️ `both` بقرار المالك (2026-08-02): المندوب في الميدان محتاج يعرف
+           إن الشحنة تحرّكت زي المكتب بالظبط. ولأن صفحات المكتب مقفولة عليه،
+           الحدث **لازم** يحمل `meta.rep_url` وإلا `Notify::urlFor` هتشيل
+           الرابط ويوصله خبر بلا وجهة. */
+        'track.stage'           => ['both',   'PermitController@index'],   // رحلة الشحنة (v62)
         'rep.transfer'          => ['office', 'RepCustodyController@index'],
 
         /* ── أنواع المرحلة ٧ (تلقائية — بيولّدها العامل مش المستخدم) ────────
@@ -163,6 +167,17 @@ class Notify
             $audience = (string) ($d['audience'] ?? $defaultAudience);
 
             $parties = self::recipientsFor($audience, $handler);
+
+            /* ⚠️ استثناء اللي عمل الإجراء بنفسه — بيتمرّر من النداء لا مفروض
+               على كل الأنواع. لازم للأحداث اللي جمهورها واسع (`both`): اللي
+               لسه دايس الزرار وشايف نتيجته قدّامه، رنّة عليه ضوضاء صافية. */
+            if (!empty($d['exclude']['type']) && isset($d['exclude']['key'])) {
+                $xt = (string) $d['exclude']['type'];
+                $xk = (string) $d['exclude']['key'];
+                $parties = array_values(array_filter(
+                    $parties, fn(array $p) => !($p['type'] === $xt && $p['key'] === $xk)));
+            }
+
             if (!$parties) { return 0; }             // مفيش مستلمين → مفيش داعي نسجّل
 
             // ⚠️ اتحسبوا قبل الاستعلام: `$d['severity'] ?? 'x'` جوّه الشرط الثلاثي
@@ -367,7 +382,8 @@ class Notify
     /** صندوق الوارد **جاهزًا للعرض** (الجرس + الصفحة). */
     public static function feed(string $partyType, string $partyKey, int $limit = 20, int $offset = 0): array
     {
-        return array_map([self::class, 'shape'], self::inbox($partyType, $partyKey, $limit, $offset));
+        return array_map(fn(array $r) => self::shape($r, $partyType),
+                         self::inbox($partyType, $partyKey, $limit, $offset));
     }
 
     /** عدد غير المقروء لشخص. */
@@ -466,7 +482,7 @@ class Notify
         $cols = $all ? "n.*, $at AS at_disp, NULL AS read_at" : "n.*, $at AS at_disp, r.read_at";
         $rows = Database::all("SELECT $cols $sql ORDER BY n.id DESC LIMIT $limit OFFSET $offset", $args);
 
-        return ['items' => array_map([self::class, 'shape'], $rows), 'total' => $total];
+        return ['items' => array_map(fn(array $r) => self::shape($r, $partyType), $rows), 'total' => $total];
     }
 
     /** الأنواع الموجودة فعلاً في السجل — لقائمة الفلترة (بلا أنواع فاضية). */
@@ -538,12 +554,76 @@ class Notify
      *    لوحدها بلا أي طلب للخادم. **ممنوع تستخدم `ts` في أي مقارنة على
      *    الخادم** — المقارنات مكانها جوّه SQL (قاعدة v48).
      */
-    private static function shape(array $r): array
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * الرابط اللي **الطرف ده** يقدر يفتحه فعلاً — المصدر الوحيد.
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * ⚠️ الحدث بيتخزّن برابط **واحد**، وصفحات المكتب مقفولة على المندوب (جلسته
+     *    مالهاش `uid` فـ`requireAuth` بترفضه — v35). يعني أي حدث جمهوره `both`
+     *    بيدّي المندوب **رابطًا ميتًا**: يدوس على الإشعار ويتقذف على شاشة دخول.
+     *
+     * القاعدة: المندوب بياخد `meta.rep_url` لو الحدث حاططه؛ ولو مفيش بديل
+     * والرابط المخزَّن صفحة مكتب → **بلا رابط** (الإشعار يفضل خبرًا يُقرا) بدل
+     * رابط بيرمي ٤٠٣. اللي المندوب بيفتحه فعلاً: بوابته `m/…` وصفحة الإشعارات
+     * (`NotificationController` حارسه `requireAnySession` — v53).
+     *
+     * ⚠️ **لازم تتنادى من المكانين**: `shape()` (الجرس والصفحة) و
+     *    `PushNotify::deliverMany` (رنّة الموبايل). لو اتنسيت في واحد، الرابط
+     *    يشتغل في مكان ويموت في التاني.
+     *
+     * @return string مسار خام بلا `url()` — المنادي هو اللي بيلفّه
+     */
+    public static function urlFor(array $row, string $partyType): string
+    {
+        $stored = trim((string) ($row['url'] ?? ''));
+        if ($partyType !== 'rep') { return $stored; }
+
+        $meta = [];
+        if (!empty($row['meta_json'])) {
+            $meta = json_decode((string) $row['meta_json'], true) ?: [];
+        }
+        $repUrl = trim((string) ($meta['rep_url'] ?? ''));
+        if ($repUrl !== '') { return $repUrl; }
+
+        if ($stored === '') { return ''; }
+        return (str_starts_with($stored, 'm/') || $stored === 'm'
+                || str_starts_with($stored, 'notifications')) ? $stored : '';
+    }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * الوجهة الاحتياطية اللي **الطرف ده يقدر يفتحها فعلاً** — المصدر الوحيد.
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * ⚠️⚠️ **باج متحقَّق على الإنتاج (2026-08-03) — لا ترجّع `url('')` هنا.**
+     *    `urlFor()` بترجّع `''` لما المندوب ياخد حدثًا رابطه صفحة مكتب بلا
+     *    `meta.rep_url` (كل أحداث `custom` — **١٩٠ مستلم**، وكل `permit.new`
+     *    اللي اتسجّل **قبل** ما `rep_url` تتضاف يوم 2026-08-02). وقتها كانت
+     *    رنّة الموبايل بتقع على `url('')` = **لوحة تحكم المكتب** → `requireAuth`
+     *    بترفض جلسة المندوب (مالهاش `uid` — v35) → **المندوب يتقذف على شاشة
+     *    دخول المكتب**، وهو بالظبط بلاغ المالك.
+     *
+     *    القاعدة: الرابط الفاضي = **صفحة إشعارات نفس الطرف**، فالخبر يفضل
+     *    مقروءًا في سياقه بدل ما يودّيه على صفحة مقفولة عليه.
+     *
+     * ⚠️ نفس تقسيم `NotificationController::ping` (`page`) بالحرف — لو اتغيّر
+     *    واحد فيهم لازم يتغيّر التاني وإلا الجرس بيوصّل لمكان والرنّة لمكان تاني.
+     *
+     * @return string مسار خام بلا `url()` — المنادي هو اللي بيلفّه
+     */
+    public static function fallbackUrlFor(string $partyType): string
+    {
+        return $partyType === 'rep' ? 'm/notifications' : 'notifications';
+    }
+
+    private static function shape(array $r, string $partyType = 'user'): array
     {
         $kind = (string) $r['kind'];
         $meta = self::kindMeta($kind);
         $at   = (string) ($r['at_disp'] ?? $r['created_at'] ?? '');
         $ts   = $at !== '' ? (strtotime($at) ?: time()) : time();
+        $path = self::urlFor($r, $partyType);
 
         return [
             'id'         => (int) $r['id'],
@@ -553,7 +633,7 @@ class Notify
             'severity'   => (string) ($r['severity'] ?? 'info'),
             'title'      => (string) ($r['title'] ?? ''),
             'body'       => (string) ($r['body'] ?? ''),
-            'url'        => ($r['url'] ?? '') !== '' ? url((string) $r['url']) : '',
+            'url'        => $path !== '' ? url($path) : '',
             'actor'      => (string) ($r['actor_name'] ?? ''),
             'work_date'  => $r['work_date'] ?? null,
             'ts'         => $ts,

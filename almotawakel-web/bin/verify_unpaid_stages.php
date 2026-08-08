@@ -30,6 +30,7 @@ use App\Models\Closing;
 use App\Models\DailyReview;
 use App\Models\Permit;
 use App\Models\RepCustody;
+use App\Models\RepPortal;
 
 $pass = 0; $fail = 0;
 function ok(string $m): void  { global $pass; $pass++; echo "  ✓ $m\n"; }
@@ -75,6 +76,14 @@ str_contains(Permit::cashOutSql('s'), 's.is_visa')
     ? ok('وبتستثني الفيزا زي ما كانت') : bad('cashOutSql وقّعت استثناء الفيزا!');
 !str_contains(Permit::cashOutSql(''), '.')
     ? ok('وبتشتغل بلا بادئة جدول كمان (استعلامات RepCustody)') : bad('صيغة بلا بادئة مكسورة');
+str_contains(RepPortal::pendingCashSql('s'), 's.unpaid = 0')
+    ? ok('والمستنّي النقدي بيستثني «غير مدفوع» من «فاضل معاه»')
+    : bad('pendingCashSql لا تستثني «غير مدفوع»!');
+str_contains(RepPortal::pendingCashSql('s'), 's.is_visa = 0')
+    ? ok('والمستنّي النقدي ما زال يستثني الفيزا')
+    : bad('pendingCashSql وقّعت استثناء الفيزا!');
+has('وحسابات العهدة تستخدم شرط المستنّي الموحّد', 'app/Models/RepCustody.php',
+    'RepPortal::pendingCashSql()');
 
 // ⚠️ أي ملف بيحسب كاش على permit_stages لازم ينادي cashOutSql — مش يكتب الشرط بإيده.
 $cashFiles = [
@@ -115,6 +124,38 @@ try {
     $dayBefore  = RepCustody::balance($repId, $day);
     near('عهدة المندوب قبل البند = 5,000', $dayBefore, 5000);
 
+    // نفس الشكوى حرفيًا قبل الاعتماد: «غير مدفوع» يظل في الصندوق، لكنه لا
+    // يُطرح من «فاضل معاه». البند النقدي العادي وحده هو الذي يُطرح.
+    Database::exec(
+        "INSERT INTO rep_submissions
+            (rep_id, client_token, permit_id, kind, note, qty, unit_amount, amount,
+             entry_date, is_visa, unpaid, status)
+         VALUES (?, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', ?, 'receipt',
+                 '__up_pending_unpaid', 1, 8000, 8000, ?, 0, 1, 'pending')",
+        [$repId, $permitId, $day]);
+    $pendingUnpaidId = Database::lastId();
+    Database::exec(
+        "INSERT INTO rep_submissions
+            (rep_id, client_token, permit_id, kind, note, qty, unit_amount, amount,
+             entry_date, is_visa, unpaid, status)
+         VALUES (?, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', ?, 'receipt',
+                 '__up_pending_cash', 1, 350, 350, ?, 0, 0, 'pending')",
+        [$repId, $permitId, $day]);
+    $pendingCashId = Database::lastId();
+
+    near('المستنّي النقدي = 350 فقط (من غير 8,000 غير مدفوعة)',
+         RepPortal::pendingAmount($repId, $day), 350);
+    $pendingTotals = RepCustody::dayTotalsByRep($day);
+    near('و«فاضل معاه» = 4,650، ما اتخصمش منه غير النقدي',
+         $pendingTotals[$repId]['pocket'] ?? -1, 4650);
+    near('وتجميع كل المناديب شايف المستنّي النقدي فقط',
+         $pendingTotals[$repId]['pending'] ?? -1, 350);
+
+    Database::exec("DELETE FROM rep_submissions WHERE id IN (?,?)",
+        [$pendingUnpaidId, $pendingCashId]);
+    near('بعد حذف fixtures المستنّية رجع «فاضل معاه» 5,000',
+         RepCustody::dayTotalsByRep($day)[$repId]['pocket'] ?? -1, 5000);
+
     Database::exec(
         "INSERT INTO permit_stages
             (permit_id, stage_key, direction, amount, qty, entry_date, note,
@@ -141,16 +182,39 @@ try {
     // ══════════════════════════════════════════════ ٤) البند المدفوع لسه بيخصم
     sec('٤) الضمانة العكسية: البند العادي لسه بيخصم');
 
+    /* ⚠️ **بندان مش بند واحد — والسبب إن القسم ده بيفحص محفظتين.**
+       البند الأصلي كان موسومًا لمندوب وبيتفحص على الخزنة **و**على عهدة المندوب
+       مع بعض. المرحلة ٢ من docs/16 قلبت القاعدة: البند المدفوع من محفظة مندوب
+       **مبقاش يمسّ الدرج** — فالفحص الواحد بقى بيخلط متغيّرين ويفشل بإنذار
+       كاذب (اتصاد فعليًّا بعد التفعيل على الإنتاج).
+       التفكيك: بند **مكتب** يفحص الخزنة (بيتخصم تحت القاعدتين)، وبند **مندوب**
+       يفحص محفظته. وكل واحد بيقيس اللي يخصّه بس. */
+    Database::exec(
+        "INSERT INTO permit_stages
+            (permit_id, stage_key, direction, amount, qty, entry_date, note,
+             status, is_visa, unpaid, paid_by_rep_id)
+         VALUES (?, 'receipts', NULL, 700, 1, ?, '__up_office', 'done', 0, 0, NULL)",
+        [$permitId, $day]);
+    near('بند مكتب بـ700 خصم من الخزنة', Closing::currentBalance(), $balBefore - 700);
+
     Database::exec(
         "INSERT INTO permit_stages
             (permit_id, stage_key, direction, amount, qty, entry_date, note,
              status, is_visa, unpaid, paid_by_rep_id)
          VALUES (?, 'receipts', NULL, 700, 1, ?, '__up_paid', 'done', 0, 0, ?)",
         [$permitId, $day, $repId]);
+    near('وبند مندوب بـ700 خصم من عهدته', RepCustody::balance($repId, $day), $dayBefore - 700);
+    ok('يعني الاستثناء بيخصّ الموسوم `unpaid` بس — مش بيعطّل الخصم العادي');
 
-    near('بند مدفوع بـ700 خصم من الخزنة', Closing::currentBalance(), $balBefore - 700);
-    near('وخصم من عهدة المندوب', RepCustody::balance($repId, $day), $dayBefore - 700);
-    ok('يعني الاستثناء بيخصّ الموسوم بس — مش بيعطّل الخصم العادي');
+    $activity = RepCustody::dayActivity($repId, $day);
+    near('ملخص «الكاش اللي طلع من إيده» = 700 فقط', $activity['cash'] ?? -1, 700);
+    near('والبند غير المدفوع ظاهر في خانته المعلوماتية', $activity['unpaid']['sum'] ?? -1, $big);
+    ($activity['unpaid']['cnt'] ?? 0) === 1
+        ? ok('وعدد البنود غير المدفوعة في الملخص = 1')
+        : bad('ملخص اليوم لم يفصل البند غير المدفوع!');
+    $daySpend = RepCustody::daySpending($day);
+    near('وتفاصيل «صرف اليوم» لا تضم غير الكاش الفعلي',
+         array_sum(array_column($daySpend, 'amount')), 700);
 
     // ══════════════════════════════════════════════ ٥) بيظهر ولا يختفي
     sec('٥) البند بيفضل ظاهر (توثيق مش إخفاء)');
@@ -178,7 +242,18 @@ try {
     !in_array('unpaid', DailyReview::BLOCKING, true)
         ? ok('★ والقسم ده **ما بيمنعش** الإقفال (زي الفيزا)') : bad('القسم بيمنع الإقفال — غلط');
     near('ومبلغه في خانة منفصلة عن الفيزا', $rv['totals']['unpaid'] ?? -1, $big);
-    near('وما دخلش إجمالي الكاش', $rv['totals']['cash'] ?? -1, 700);
+    /* ⚠️ **الفحص على المطابقة مش على رقم محفوظ.** كان مكتوبًا `700` حرفيًّا —
+       وهو مبلغ بند آخر في الـfixtures، فأي تعديل في الزرع بيفشّله بإنذار كاذب
+       (حصل فعلاً لما البند اتقسم بندين فوق). القاعدة الحقيقية اللي عايزين
+       نحرسها هي قاعدة v50: **مجموع أقسام المراجعة النقدية = مصروفات Closing**،
+       وهي صح تحت القاعدتين، فبند «غير مدفوع» لو دخل الكاش بالغلط بتتكسر فورًا. */
+    $dv = Closing::dayView($day);
+    near('وما دخلش إجمالي الكاش (مطابقة أقسام المراجعة مع Closing)',
+         $rv['totals']['cash'] ?? -1,
+         round((float) $dv['expenses'] + (float) $dv['driver'], 2));
+    ($rv['totals']['cash'] ?? 0) < $big - 0.005
+        ? ok('ومبلغ البند غير المدفوع (' . number_format($big, 2) . ') برّه الكاش')
+        : bad('مبلغ البند غير المدفوع داخل الكاش!');
 
     // ⚠️ الفحص اللي بيمسك أي تسريب: مجموع الأقسام النقدية = مصروفات التقفيل.
     // ⚠️ لازم نعيد قراءة `dayView` **دلوقتي** — النسخة اللي فوق اتقرت قبل ما
@@ -207,6 +282,12 @@ try {
     $miscView = (string) file_get_contents(dirname(__DIR__) . '/app/Views/m/misc.php');
     !str_contains($miscView, '_unpaid_field.php')
         ? ok('★ ومتأكدين إن النثرية مفيهاش الخانة') : bad('خانة «غير مدفوع» اتحطّت في النثرية');
+    has('كارت المندوب يوضح أن غير المدفوع مش من العهدة',
+        'app/Views/rep_custody/_tab_day.php', 'غير مدفوع — مش من العهدة');
+    has('والكشف التراكمي يوضّح نفس الوسم',
+        'app/Views/rep_custody/_tab_account.php', 'غير مدفوع — مش من العهدة');
+    has('ونوافذ التفاصيل تميّزه عن الكاش',
+        'app/Views/rep_custody/_drill.php', 'غير مدفوع — مش من العهدة');
 
     // كل كلاس بيتطبع لازم يكون له CSS (مصيدة .table-mobile-scroll)
     $css = (string) file_get_contents(dirname(__DIR__) . '/public/assets/css/app.css');

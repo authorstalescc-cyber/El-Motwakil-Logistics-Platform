@@ -18,8 +18,8 @@ $e = $edit ?: null;
 </div>
 
 <div class="pl-cols">
-  <div class="card" style="padding:14px">
-    <b style="display:block;margin-bottom:10px;color:var(--navy)">
+  <div class="card p5-pad">
+    <b class="tsh-lbl">
       <?= icon($e ? 'edit' : 'plus', 15) ?> <?= $e ? 'تعديل: ' . e($e['name']) : 'وجهة جديدة' ?>
     </b>
     <?php /* اللي اتكتب بيرجع بعد الرفض بدل ما يضيع (المرحلة ٢). */
@@ -60,8 +60,8 @@ $e = $edit ?: null;
         <?= icon('map-pin', 13) ?> <b>اضغط على الخريطة</b> تحت عشان تحدّد المكان — الأرقام هتتملي لوحدها.
       </p>
 
-      <div style="display:flex;gap:6px;margin-top:10px">
-        <button class="btn primary" type="submit" style="flex:1">
+      <div class="tsh-row mt-3">
+        <button class="btn primary ps-sp" type="submit">
           <?= icon('check', 15) ?> <?= $e ? 'احفظ التعديل' : 'أضِف الوجهة' ?>
         </button>
         <?php if ($e): ?>
@@ -71,14 +71,14 @@ $e = $edit ?: null;
     </form>
   </div>
 
-  <div class="card" style="padding:0;overflow:hidden">
-    <div id="plMap" style="height:420px;width:100%"></div>
+  <div class="card" >
+    <div id="plMap" class="p5-map"></div>
   </div>
 </div>
 
 <?php $autoN = count(array_filter($points, fn($p) => (int) ($p['is_auto'] ?? 0) === 1)); ?>
 <?php if ($autoN): ?>
-<div class="flash" style="background:#eef4fd;border:1px solid #cddff5;color:#1f5fa8;margin-bottom:12px">
+<div class="flash p5-info p5-mb">
   <?= icon('sparkles', 18) ?>
   <div>
     <b><?= intf($autoN) ?> وجهة النظام حدّدها لوحده من خرائط OpenStreetMap.</b><br>
@@ -91,7 +91,7 @@ $e = $edit ?: null;
 <h3 class="pl-h"><?= icon('truck', 17) ?> الوجهات اللي في بوالصك</h3>
 <p class="pl-sub">الأكثر استخدامًا الأول. اللي عليها <?= icon('alert', 14) ?> لسه مش متحدّدة، فالشحنات الرايحة لها مش هتوريك مسافة.</p>
 
-<div class="card" style="padding:0;overflow-x:auto;margin-bottom:16px">
+<div class="card p5-xscroll mb">
   <table class="data">
     <thead><tr><th>الوجهة في البوليصة</th><th>عدد البوالص</th><th>على الخريطة</th><th>نوع المطابقة</th><th data-no-sort></th></tr></thead>
     <tbody>
@@ -109,11 +109,11 @@ $e = $edit ?: null;
           <?php endif; ?>
         </td>
         <td><?= $c['match'] ? '<span class="pl-m ' . e($c['match']) . '">' . e($mlbl[$c['match']]) . '</span>' : '—' ?></td>
-        <td style="white-space:nowrap">
+        <td class="nowrap">
           <?php if ($c['point']): ?>
             <a class="btn sm ghost" href="<?= url('tracking/places?edit=' . (int) $c['point']['id']) ?>">تعديل</a>
           <?php else: ?>
-            <form method="post" action="<?= url('tracking/places/auto') ?>" class="no-confirm" style="display:inline">
+            <form method="post" action="<?= url('tracking/places/auto') ?>" class="no-confirm" >
               <?= csrfField() ?>
               <input type="hidden" name="name" value="<?= e($c['name']) ?>">
               <button class="btn sm primary" type="submit" title="النظام يدوّر عليها في الخرائط لوحده">
@@ -130,7 +130,7 @@ $e = $edit ?: null;
 </div>
 
 <h3 class="pl-h"><?= icon('anchor', 17) ?> كل الوجهات المحدّدة (<?= count($points) ?>)</h3>
-<div class="card" style="padding:0;overflow-x:auto">
+<div class="card p5-xscroll">
   <table class="data">
     <thead><tr><th>الوجهة</th><th>الأسماء البديلة</th><th>الإحداثيات</th><th data-no-sort></th></tr></thead>
     <tbody>
@@ -141,18 +141,18 @@ $e = $edit ?: null;
           <?php if ((int) ($p['is_auto'] ?? 0) === 1): ?>
             <span class="pl-auto" title="النظام حدّدها لوحده — راجعها"><?= icon('sparkles', 14) ?> تلقائي</span>
           <?php endif; ?>
-          <?= $p['note'] ? '<br><small style="color:var(--grey)">' . e($p['note']) . '</small>' : '' ?>
+          <?= $p['note'] ? '<br><small class="dbt-none">' . e($p['note']) . '</small>' : '' ?>
         </td>
-        <td style="font-size:var(--fs-1);color:var(--grey)"><?= e(str_replace('|', '، ', (string) $p['aliases'])) ?: '—' ?></td>
-        <td style="font-size:var(--fs-1);direction:ltr;text-align:left;font-family:ui-monospace,monospace">
+        <td class="dbt-sub"><?= e(str_replace('|', '، ', (string) $p['aliases'])) ?: '—' ?></td>
+        <td class="p5-mono">
           <a href="https://www.google.com/maps?q=<?= e($p['lat']) ?>,<?= e($p['lng']) ?>" target="_blank" rel="noopener">
             <?= e(number_format((float) $p['lat'], 4)) ?>, <?= e(number_format((float) $p['lng'], 4)) ?>
           </a>
         </td>
-        <td style="white-space:nowrap">
+        <td class="nowrap">
           <a class="btn sm ghost" href="<?= url('tracking/places?edit=' . (int) $p['id']) ?>">تعديل</a>
           <form method="post" action="<?= url('tracking/places/' . (int) $p['id'] . '/delete') ?>"
-                style="display:inline" data-confirm="تمسح «<?= e($p['name']) ?>»؟ الشحنات الرايحة لها مش هتوريك مسافة بعد كده.">
+                 data-confirm="تمسح «<?= e($p['name']) ?>»؟ الشحنات الرايحة لها مش هتوريك مسافة بعد كده.">
             <?= csrfField() ?>
             <button class="btn sm danger" type="submit"><?= icon('trash', 13) ?></button>
           </form>

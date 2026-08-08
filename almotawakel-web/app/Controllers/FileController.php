@@ -46,6 +46,48 @@ class FileController extends Controller
      *
      * `?dl=1` بينزّل الملف باسم عربي مفهوم بدل ما يفتحه في الصفحة.
      */
+    /**
+     * ورقة من ملفات الإذن (v64).
+     *
+     * ⚠️ متاحة لجلسة المكتب **ولأي مندوب** — الورقة تخصّ الإذن اللي كل
+     *    المناديب شغّالين عليه (قاعدة v43)، ومفيش فيها أي رقم بيخصّ العميل.
+     *    الزائر بلا جلسة بيترفض.
+     */
+    public function permitFile(string $id): void
+    {
+        $row = \App\Models\PermitFile::find((int) $id);
+        if (!$row) { $this->missing(); }
+        $office = \App\Core\Auth::check();
+        $rep    = class_exists(\App\Core\RepAuth::class) && \App\Core\RepAuth::check();
+        if (!$office && !$rep) {
+            http_response_code(403);
+            exit('غير مصرح.');
+        }
+        $download = ($_GET['dl'] ?? '') === '1';
+        $this->stream($row['file_path'] ?? null, $download,
+                      $download ? \App\Models\PermitFile::downloadName($row) : null);
+    }
+
+    /**
+     * إيصال حركة خزنة الشركة (v67).
+     *
+     * ⚠️⚠️ **جلسة المكتب بس — والمندوب مرفوض عن قصد.** الملف ده إيصال إيجار أو
+     *    مرتبات أو فاتورة مورّد، وكله بيخصّ حسابات الشركة. `Auth::check()`
+     *    بتدوّر على `uid` وجلسة المندوب مالهاش (v35)، فالرفض هو الافتراضي.
+     *    **ما تضيفش `RepAuth::check()` هنا** زي `permitFile` — دي حالة مختلفة.
+     */
+    public function companySafeFile(string $id): void
+    {
+        $this->requireAuth();
+        $row = \App\Models\CompanySafe::find((int) $id);
+        if (!$row || empty($row['attachment'])) { $this->missing(); }
+        $download = ($_GET['dl'] ?? '') === '1';
+        // ⚠️ الامتداد لازم يفضل في اسم التنزيل وإلا ويندوز مايعرفش يفتح الملف.
+        $ext = pathinfo((string) $row['attachment'], PATHINFO_EXTENSION);
+        $this->stream((string) $row['attachment'], $download,
+            $download ? 'ايصال-خزنة-الشركة-' . (int) $id . ($ext !== '' ? '.' . $ext : '') : null);
+    }
+
     public function partyDoc(string $id): void
     {
         $row = PartyDoc::find((int) $id);

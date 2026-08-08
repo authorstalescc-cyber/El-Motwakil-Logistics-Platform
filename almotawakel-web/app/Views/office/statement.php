@@ -93,17 +93,17 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
     <div class="totals">
       <div class="tt"><div class="l">إجمالي الشحنات</div><div class="v pos"><?= money($depTotal) ?></div></div>
       <div class="tt"><div class="l">إجمالي المدفوع بالفيزا (<?= intf($stats['count']) ?> عملية)</div><div class="v neg"><?= money($payTotal) ?></div></div>
-      <div class="tt bal"><div class="l" style="color:#cfe0f5">الرصيد المتاح</div><div class="v"><?= money($balance) ?></div></div>
+      <div class="tt bal"><div class="l p5-on-navy">الرصيد المتاح</div><div class="v"><?= money($balance) ?></div></div>
     </div>
 
     <table>
       <thead><tr>
-        <th style="width:18%">التاريخ / الوقت</th>
-        <th style="width:30%">الحركة / البيان</th>
-        <th style="width:18%">الطرف</th>
-        <th style="width:12%">شحن (+)</th>
-        <th style="width:12%">مدفوع (−)</th>
-        <th style="width:12%">الرصيد</th>
+        <th class="w18p">التاريخ / الوقت</th>
+        <th class="w30p">الحركة / البيان</th>
+        <th class="w18p">الطرف</th>
+        <th class="w12p">شحن (+)</th>
+        <th class="w12p">مدفوع (−)</th>
+        <th class="w12p">الرصيد</th>
       </tr></thead>
       <tbody>
         <?php foreach ($ledger as $r): ?>
@@ -117,13 +117,13 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
             <td><?= e($r['party'] ?: '—') ?></td>
             <td class="pos"><?= $r['amount']>0 && $r['kind']!=='opening' ? money($r['amount'],false) : '' ?></td>
             <td class="neg"><?= $r['amount']<0 ? money(-$r['amount'],false) : '' ?></td>
-            <td style="font-weight:600"><?= money($r['running'],false) ?></td>
+            <td class="dbt-tot"><?= money($r['running'],false) ?></td>
           </tr>
         <?php endforeach; ?>
-        <?php if(!$ledger): ?><tr><td colspan="6" style="padding:20px;color:var(--muted)">لا حركات على هذا الكارت.</td></tr><?php endif; ?>
+        <?php if(!$ledger): ?><tr><td colspan="6" class="dag-pad-lg dbt-none">لا حركات على هذا الكارت.</td></tr><?php endif; ?>
       </tbody>
       <tfoot><tr>
-        <td colspan="3" style="text-align:left">الإجماليات</td>
+        <td colspan="3" class="end">الإجماليات</td>
         <td class="pos"><?= money($depTotal,false) ?></td>
         <td class="neg"><?= money($payTotal,false) ?></td>
         <td><?= money($balance,false) ?></td>

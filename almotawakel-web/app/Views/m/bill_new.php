@@ -459,6 +459,11 @@ $carD = (string) ($old['car_digits'] ?? '');
         وده أهم حاجة تخلّي الشكل المقسوم أسهل من خانة واحدة مش أصعب. */
   var lBoxes = Array.prototype.slice.call(form.querySelectorAll('.js-car-l'));
   var dBox = document.getElementById('car_digits');
+  function latinDigits(value) {
+    return String(value || '')
+      .replace(/[٠-٩]/g, function (d) { return String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)); })
+      .replace(/[۰-۹]/g, function (d) { return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); });
+  }
   function plate() {
     var ls = lBoxes.map(function (b) { return b.value.trim(); }).filter(Boolean);
     var ds = dBox ? dBox.value.trim() : '';
@@ -476,9 +481,13 @@ $carD = (string) ($old['car_digits'] ?? '');
     });
   });
   if (dBox) {
-    dBox.addEventListener('input', function () {
-      dBox.value = dBox.value.replace(/\D/g, '').slice(0, 4);
-    });
+    var cleanCarDigits = function () {
+      /* `\D` كان بيمسح ١٢٣٤ و۱۲۳۴ لأن JavaScript بيعتبر الأرقام العربية
+         محارف غير رقمية. نحوّلها أولًا، ثم ننظّف القيمة الإنجليزية فقط. */
+      dBox.value = latinDigits(dBox.value).replace(/[^0-9]/g, '').slice(0, 4);
+    };
+    dBox.addEventListener('input', cleanCarDigits);
+    cleanCarDigits();   // كمان عند الرجوع للفورم بقيم قديمة بعد خطأ في حقل آخر
     dBox.addEventListener('keydown', function (ev) {
       if (ev.key === 'Backspace' && !dBox.value && lBoxes[2]) { lBoxes[2].focus(); }
     });

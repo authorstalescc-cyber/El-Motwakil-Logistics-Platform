@@ -87,7 +87,9 @@ class PaymentController extends Controller
 
         $date  = trim($_POST['pay_date'] ?? '');
         $date  = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : work_date();
-        $route = in_array($_POST['route'] ?? 'none', ['cash', 'visa'], true) ? $_POST['route'] : 'none';
+        // ⚠️ القايمة من `ClientPayment::routeChoices()` — المصدر الوحيد اللي
+        //    الشاشة بتقرا منه كمان (وإلا خيار معروض والخادم يرفضه بالسكوت).
+        $route = isset(ClientPayment::routeChoices()[$_POST['route'] ?? '']) ? (string) $_POST['route'] : 'none';
         $card  = (int) ($_POST['visa_card_id'] ?? 0);
 
         $errors = [];

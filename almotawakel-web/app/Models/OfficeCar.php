@@ -30,6 +30,9 @@ use App\Core\Database;
  */
 class OfficeCar
 {
+    /** @var array<string,array<string,mixed>>|null خريطة مفاتيح اللوحات للمطابقة داخل الطلب */
+    private static ?array $matchPlateMap = null;
+
     /** فئات مصاريف السيارة — المفتاح بيتخزَّن والتسمية للعرض. */
     public const EXPENSE_KINDS = [
         'fuel'      => 'سولار / بنزين',
@@ -113,6 +116,37 @@ class OfficeCar
         $keys = [self::plateKey((string) ($car['plate'] ?? ''))];
         foreach (self::aliasList($car) as $a) { $keys[] = self::plateKey($a); }
         return array_values(array_unique(array_filter($keys, static fn ($k) => $k !== '')));
+    }
+
+    /**
+     * ⚠️ **المصدر الوحيد لسؤال «اللوحة دي سيارة مكتب ولا لأ؟»** — بترجّع سجل
+     *    السيارة أو null. بيقراها فورم البوليصة (عشان يظهر خانات مصروفات
+     *    السيارة) وصفحة البوليصة والفحص الحيّ في `/cars/is-office`.
+     *
+     * ⚠️ **ممنوع تكتب المقارنة دي في الجافاسكريبت** — التطبيع فيه توحيد حروف
+     *    عربية وفصل أرقام عن حروف (`plateKey`)، ونسخة تانية منه في المتصفح
+     *    هتفترق مع أول تعديل فالخانات تختفي عن سيارة مكتب **بلا أي خطأ ظاهر**.
+     *    الواجهة بتسأل الخادم (زي فحص رقم البوليصة القايم).
+     */
+    public static function matchPlate(?string $carNo): ?array
+    {
+        $key = self::plateKey($carNo);
+        if ($key === '' || !self::available()) { return null; }
+        if (self::$matchPlateMap === null) {
+            self::$matchPlateMap = [];
+            foreach (self::all() as $car) {
+                foreach (self::keysOf($car) as $carKey) {
+                    self::$matchPlateMap[$carKey] = $car;
+                }
+            }
+        }
+        return self::$matchPlateMap[$key] ?? null;
+    }
+
+    /** هل اللوحة دي سيارة مكتب مسجَّلة؟ */
+    public static function isOfficePlate(?string $carNo): bool
+    {
+        return self::matchPlate($carNo) !== null;
     }
 
     public static function aliasList(array $car): array
@@ -331,6 +365,7 @@ class OfficeCar
     public static function clearCache(): void
     {
         self::$noMap = null;
+        self::$matchPlateMap = null;
     }
 
     /**
@@ -446,6 +481,19 @@ class OfficeCar
      * من البوليصة نفسها. `owner_mismatch` بيتحسب لما `car_owner` في البوليصة
      * مش «المكتب» — بنعرض تنبيه بدل ما نخفي الرحلة، عشان غلط الإدخال يبان.
      */
+    /**
+     * تعبير SQL لمجموع مصروفات البوليصة الـ١٢ (سولار/كاوتش/دور سواق…).
+     *
+     * ⚠️ **`Calc::EXPENSE_COLS` هو المصدر الوحيد للقايمة** — ممنوع تكتب أسماء
+     *    الأعمدة بإيدك هنا، وإلا بند جديد يدخل «إجمال المصروف» في البوليصة
+     *    ويغيب عن «صافي السيارة» فالرقمين يختلفوا **بلا أي خطأ ظاهر**.
+     */
+    public static function billExpenseSql(string $alias = 'b'): string
+    {
+        $parts = array_map(static fn ($c) => "COALESCE({$alias}.`{$c}`,0)", \App\Calc::EXPENSE_COLS);
+        return '(' . implode(' + ', $parts) . ')';
+    }
+
     public static function trips(int $carId, ?string $from = null, ?string $to = null, int $limit = 0): array
     {
         $nos = self::carNos($carId);
@@ -457,10 +505,15 @@ class OfficeCar
         if ($from !== null) { $where .= " AND b.bill_date >= ?"; $args[] = $from; }
         if ($to   !== null) { $where .= " AND b.bill_date <= ?"; $args[] = $to; }
 
-        $sql = "SELECT b.id, b.bill_date, b.bill_number, b.car_no, b.car_owner, b.driver,
+        $expenseCols = implode(', ', array_map(
+            static fn ($column) => "b.`{$column}`", \App\Calc::EXPENSE_COLS
+        ));
+        $sql = "SELECT " . self::billExpenseSql('b') . " AS bill_expense,
+                       b.id, b.bill_date, b.bill_number, b.car_no, b.car_owner, b.driver,
                        b.company, b.declaration_owner, b.destination,
                        b.container_count, b.container_type, b.classification,
                        b.freight, b.custody, b.transfer, b.debt, b.paid, b.pay_status,
+                       $expenseCols,
                        b.permit_id, b.movement_id,
                        p.permit_no, p.permit_type, p.port, p.agency, p.shipping_co, p.client
                 FROM bawalis b
@@ -521,6 +574,30 @@ class OfficeCar
              ($d['note'] ?? '') !== '' ? $d['note'] : null,
              ($d['created_by'] ?? '') !== '' ? $d['created_by'] : null]);
         return Database::lastId();
+    }
+
+    /**
+     * تعديل مصروف سيارة مسجَّل.
+     *
+     * ⚠️ **بلا `Closing::guard` زي `addExpense` بالظبط** — البند ما بيدخلش أي
+     *    تقفيل أصلاً (العزل بالبناء: `car_expenses` جدول خاص كل كود الخزنة
+     *    عمره ما سمع عنه)، فتعديل مبلغه أو تاريخه ما بيغيّرش أي رصيد مثبَّت.
+     * ⚠️ **`car_id` مش بيتغيّر من هنا** — نقل مصروف من سيارة لسيارة يغيّر أداء
+     *    الاتنين، فيتعمل بحذف وإضافة عشان يفضل في السجل أثر واضح.
+     */
+    public static function updateExpense(int $id, array $d): void
+    {
+        Database::exec(
+            "UPDATE car_expenses
+                SET exp_date = ?, category = ?, amount = ?, ref_no = ?, vendor = ?, note = ?
+              WHERE id = ?",
+            [$d['exp_date'] ?: work_date(),
+             isset(self::EXPENSE_KINDS[$d['category'] ?? '']) ? $d['category'] : 'other',
+             (float) ($d['amount'] ?? 0),
+             ($d['ref_no'] ?? '') !== '' ? $d['ref_no'] : null,
+             ($d['vendor'] ?? '') !== '' ? $d['vendor'] : null,
+             ($d['note'] ?? '') !== '' ? $d['note'] : null,
+             $id]);
     }
 
     public static function deleteExpense(int $id): void
@@ -593,13 +670,14 @@ class OfficeCar
     public static function perf(int $carId, ?string $from = null, ?string $to = null): array
     {
         $trips = self::trips($carId, $from, $to);
-        $freight = 0.0; $custody = 0.0; $deducted = 0.0; $containers = 0;
+        $freight = 0.0; $custody = 0.0; $deducted = 0.0; $containers = 0; $billExp = 0.0;
         $drivers = []; $companies = []; $paidTrips = 0;
         $firstD = null; $lastD = null;
         foreach ($trips as $t) {
             $freight    += (float) $t['freight'];
             $custody    += (float) $t['custody'];
             $deducted   += (float) $t['custody_deducted'];
+            $billExp    += (float) ($t['bill_expense'] ?? 0);
             $containers += max(0, (int) $t['container_count']);
             if (($t['driver'] ?? '') !== '')  { $drivers[trim((string) $t['driver'])] = true; }
             if (($t['company'] ?? '') !== '') { $companies[trim((string) $t['company'])] = true; }
@@ -611,6 +689,14 @@ class OfficeCar
             }
         }
         $exp = self::expenseTotal($carId, $from, $to);
+        /* ⚠️ **مصدران للمصروف والاتنين بيتخصموا** (قرار المالك 2026-07-28):
+             • `expenses`      = مصاريف مسجَّلة على السيارة نفسها في `/cars`.
+             • `bill_expenses` = بنود البوليصة (سولار/كاوتش/دور سواق…) بعد ما
+                                 رجعت لسيارات المكتب.
+           بيفضلوا **مفتاحين منفصلين** عن قصد عشان الشاشة توضّح كل واحد جاي
+           منين — لو السولار اتسجّل في المكانين بيتخصم مرتين، وده لازم يبان. */
+        $billExp = round($billExp, 2);
+        $expTotal = round($exp + $billExp, 2);
 
         return [
             'car_id'     => $carId,
@@ -620,7 +706,9 @@ class OfficeCar
             'custody'    => round($custody, 2),
             'custody_deducted' => round($deducted, 2),
             'expenses'   => $exp,
-            'net'        => round($freight - $custody - $exp, 2),
+            'bill_expenses'  => $billExp,
+            'expenses_total' => $expTotal,
+            'net'        => round($freight - $custody - $expTotal, 2),
             'drivers'    => count($drivers),
             'companies'  => count($companies),
             'paid_trips' => $paidTrips,
@@ -645,16 +733,21 @@ class OfficeCar
     public static function fleetSummary(array $fleet): array
     {
         $s = ['cars' => count($fleet), 'trips' => 0, 'containers' => 0,
-              'freight' => 0.0, 'custody' => 0.0, 'expenses' => 0.0, 'net' => 0.0];
+              'freight' => 0.0, 'custody' => 0.0, 'expenses' => 0.0,
+              'bill_expenses' => 0.0, 'expenses_total' => 0.0, 'net' => 0.0];
         foreach ($fleet as $c) {
             $s['trips']      += (int) $c['trips'];
             $s['containers'] += (int) $c['containers'];
             $s['freight']    += (float) $c['freight'];
             $s['custody']    += (float) $c['custody'];
             $s['expenses']   += (float) $c['expenses'];
+            $s['bill_expenses']  += (float) ($c['bill_expenses'] ?? 0);
+            $s['expenses_total'] += (float) ($c['expenses_total'] ?? $c['expenses']);
             $s['net']        += (float) $c['net'];
         }
-        foreach (['freight', 'custody', 'expenses', 'net'] as $k) { $s[$k] = round($s[$k], 2); }
+        foreach (['freight', 'custody', 'expenses', 'bill_expenses', 'expenses_total', 'net'] as $k) {
+            $s[$k] = round($s[$k], 2);
+        }
         return $s;
     }
 
@@ -764,7 +857,8 @@ class OfficeCar
         foreach (self::carNoMap() as $no => $cid) {
             if (in_array($cid, $carIds, true)) { $nos[] = $no; }
         }
-        $blank = ['trips' => 0, 'containers' => 0, 'freight' => 0.0, 'custody' => 0.0, 'expenses' => 0.0];
+        $blank = ['trips' => 0, 'containers' => 0, 'freight' => 0.0, 'custody' => 0.0,
+                  'expenses' => 0.0, 'bill_expenses' => 0.0];
 
         if ($nos) {
             $args = $nos;
@@ -775,7 +869,8 @@ class OfficeCar
             foreach (Database::all(
                 "SELECT b.bill_date d, COUNT(*) trips,
                         COALESCE(SUM(GREATEST(b.container_count,0)),0) conts,
-                        COALESCE(SUM(b.freight),0) f, COALESCE(SUM(b.custody),0) c
+                        COALESCE(SUM(b.freight),0) f, COALESCE(SUM(b.custody),0) c,
+                        COALESCE(SUM(" . self::billExpenseSql('b') . "),0) be
                  FROM bawalis b WHERE $w GROUP BY b.bill_date", $args) as $r) {
                 $d = (string) $r['d'];
                 $out[$d] ??= $blank;
@@ -783,6 +878,7 @@ class OfficeCar
                 $out[$d]['containers'] = (int) $r['conts'];
                 $out[$d]['freight']    = round((float) $r['f'], 2);
                 $out[$d]['custody']    = round((float) $r['c'], 2);
+                $out[$d]['bill_expenses'] = round((float) $r['be'], 2);
             }
         }
 

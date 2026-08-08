@@ -3,16 +3,20 @@ use App\Core\FormState;
 $topupState = $topupState ?? ['token'=>FormState::token(), 'old'=>[], 'errors'=>[], 'back'=>'custody'];
 $topupOld = $topupState['old'];
 $topupErrors = $topupState['errors'];
+$repList = $repList ?? [];
+$repDepState = $repDepState ?? ['token'=>FormState::token(), 'old'=>[], 'errors'=>[], 'back'=>'custody'];
+$repDepOld = $repDepState['old'];
+$repDepErrors = $repDepState['errors'];
 $returnPath = current_app_path() ?: 'custody';
 ?>
 <div class="toolbar">
-  <div class="section-head" style="margin:0"><?= icon('briefcase', 18) ?> خزنة المكتب</div>
+  <div class="section-head" ><?= icon('briefcase', 18) ?> خزنة المكتب</div>
   <div class="spacer"></div>
   <a class="btn ghost" href="<?= url('closing') ?>">التقفيل اليومي ›</a>
 </div>
 
 <?php if(!$lastClosed): ?>
-<div class="card mb" style="padding:12px 16px;border-right:4px solid var(--gold)">
+<div class="card mb p5-pad-sm p5-edge-gold-r">
   <?= icon('info', 15) ?> لسه مفيش أي يوم متقفل — الرصيد الحالي محسوب من كل الحركة. لتثبيت الأرصدة يومًا بيوم افتح <a href="<?= url('closing') ?>">التقفيل اليومي</a> واضغط «اقفل اليوم».
 </div>
 <?php endif; ?>
@@ -23,8 +27,7 @@ $returnPath = current_app_path() ?: 'custody';
 <?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($breakdown, $rate) { ?>
   <?php partial('stat', [
     'label' => 'الرصيد الحالي المتاح', 'value' => intf($breakdown['balance']),
-    'icon'  => 'briefcase', 'tone' => $breakdown['balance'] < 0 ? 'red' : 'gold', 'secret' => true,
-    'drill' => '#custodyBreak', 'title' => 'من إيه اتكوّن الرصيد',
+    'icon'  => 'briefcase', 'tone' => $breakdown['balance'] < 0 ? 'red' : 'gold', 'drill' => '#custodyBreak', 'title' => 'من إيه اتكوّن الرصيد',
   ]); ?>
   <?php partial('stat', [
     'label' => $breakdown['anchorDate'] ? 'رصيد آخر إقفال' : 'من البداية',
@@ -83,22 +86,22 @@ $returnPath = current_app_path() ?: 'custody';
 </div>
 
 <!-- إضافة عهدة يدوية للرصيد -->
-<div class="card mb" id="topup" style="padding:16px 18px">
-  <div class="section-head" style="margin:0 0 10px"><?= icon('plus', 17) ?> إضافة عهدة للرصيد</div>
+<div class="card mb oc-pad" id="topup">
+  <div class="section-head oc-sec"><?= icon('plus', 17) ?> إضافة عهدة للرصيد</div>
   <?= formErrorSummary($topupErrors) ?>
-  <form class="js-dirty-form" method="post" action="<?= url('custody/topup') ?>" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end">
+  <form class="js-dirty-form" method="post" action="<?= url('custody/topup') ?>" class="p5-row end">
     <?= csrfField() ?>
     <?= formStateFields($topupState['token'], $topupState['back']) ?>
-    <div class="field" style="margin:0;width:160px">
+    <div class="field flush w160">
       <label>التاريخ</label>
       <input type="date" name="cust_date" value="<?= e($topupOld['cust_date'] ?? work_date()) ?>"<?= fieldErrorAttrs('cust_date', $topupErrors) ?>>
       <?= fieldError('cust_date', $topupErrors) ?>
     </div>
-    <div class="field" style="margin:0;flex:1;min-width:180px">
+    <div class="field flush grow180">
       <label>البيان / المصدر</label>
       <input type="text" name="note" value="<?= e($topupOld['note'] ?? '') ?>" placeholder="مصدر العهدة (اختياري)">
     </div>
-    <div class="field" style="margin:0;width:150px">
+    <div class="field flush w150">
       <label>المبلغ</label>
       <input type="number" step="0.01" min="0.01" name="amount" value="<?= e($topupOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $topupErrors) ?>>
       <?= fieldError('amount', $topupErrors) ?>
@@ -106,6 +109,55 @@ $returnPath = current_app_path() ?: 'custody';
     <button class="btn gold" type="submit" data-primary-submit>إضافة للرصيد</button>
   </form>
 </div>
+
+<?php /* ═══ نزّل عهدة لمندوب **من الدرج** ═══
+         ⚠️ الكاش بيخرج من الدرج اللي قدّام المالك — فمكانه الطبيعي هنا مش في
+            كارت المندوب. المصدر مثبَّت `office` في الكنترولر مش في الفورم.
+         ⚠️ بتظهر بس لو `sourceMatters()` — من غير النموذجين كل المصادر واحدة
+            فعلاً، والشاشة ساعتها هتوعد بحاجة ما بتحصلش. */ ?>
+<?php if ($repList && \App\Models\RepCustody::sourceMatters()): ?>
+<div class="card mb oc-pad" id="rep-deposit">
+  <div class="section-head oc-sec"><?= icon('wallet', 17) ?> نزّل عهدة لمندوب من الدرج</div>
+  <?= formErrorSummary($repDepErrors) ?>
+  <form class="js-dirty-form p5-row end" method="post" action="<?= url('custody/rep-deposit') ?>">
+    <?= csrfField() ?>
+    <?= formStateFields($repDepState['token'], $repDepState['back']) ?>
+    <div class="field flush w160">
+      <label>المندوب</label>
+      <select name="rep_id" required<?= fieldErrorAttrs('rep_id', $repDepErrors) ?>>
+        <option value="">— اختار —</option>
+        <?php foreach ($repList as $rid => $rname): ?>
+          <option value="<?= (int) $rid ?>" <?= (string) ($repDepOld['rep_id'] ?? '') === (string) $rid ? 'selected' : '' ?>><?= e($rname) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <?= fieldError('rep_id', $repDepErrors) ?>
+    </div>
+    <div class="field flush w160">
+      <label>التاريخ</label>
+      <input type="date" name="dep_date" value="<?= e($repDepOld['dep_date'] ?? work_date()) ?>"<?= fieldErrorAttrs('dep_date', $repDepErrors) ?>>
+      <?= fieldError('dep_date', $repDepErrors) ?>
+    </div>
+    <div class="field flush grow180">
+      <label>ملاحظة (اختياري)</label>
+      <input type="text" name="note" maxlength="255" value="<?= e($repDepOld['note'] ?? '') ?>" placeholder="عهدة يوم…">
+    </div>
+    <div class="field flush w150">
+      <label>المبلغ</label>
+      <input type="number" step="0.01" min="0.01" name="amount" value="<?= e($repDepOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $repDepErrors) ?>>
+      <?= fieldError('amount', $repDepErrors) ?>
+    </div>
+    <button class="btn gold" type="submit" data-primary-submit><?= icon('plus', 15) ?> نزّل من الدرج</button>
+  </form>
+  <div class="hint p5-pad-sm">
+    <?php if (\App\Models\RepCustody::newSafeRuleActive()): ?>
+      الكاش بيتخصم من الخزنة يوم التنزيل وبيتحوّل لعهدة المندوب.
+    <?php else: ?>
+      تحويل داخلي: الخزنة زي ما هي (الفلوس لسه مع الشركة) — الدرج بس هو اللي بينقص وجيب المندوب بيزيد.
+      الفلوس اللي جاية من البنك للمندوب على طول تتسجّل من كارت المندوب باختيار «من البنك».
+    <?php endif; ?>
+  </div>
+</div>
+<?php endif; ?>
 
 <?php /* الجدول (٨ أعمدة مليانة `—`) اتشال: كل صف هنا **حركة** — إضافة عهدة أو
          عهدة سائق — مش سطر مقارنة رقمية. الرصيد الجاري بيبان كسطر صغير تحت

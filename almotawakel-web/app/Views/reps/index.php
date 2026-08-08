@@ -32,7 +32,7 @@
 </style>
 
 <div class="toolbar">
-  <div class="section-head" style="margin:0"><?= icon('user',20) ?> المناديب</div>
+  <div class="section-head" ><?= icon('user',20) ?> المناديب</div>
   <div class="spacer"></div>
   <a class="btn gold" href="<?= url('reps/new') ?>"><?= icon('plus',16) ?> إضافة مندوب</a>
 </div>
@@ -42,12 +42,12 @@
   <div class="fig"><div class="lbl">إجمالي المستحق لهم علينا</div><div class="val <?= $totalOwed>0?'':'' ?>"><?= money($totalOwed) ?></div></div>
 </div>
 
-<form method="get" action="<?= url('reps') ?>" class="filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:16px">
-  <div class="field" style="margin:0;flex:1;min-width:200px">
+<form method="get" action="<?= url('reps') ?>" class="filters" class="p5-row end mb">
+  <div class="field flush grow200">
     <label>بحث بالاسم أو التليفون</label>
     <input type="search" name="q" value="<?= e($q) ?>" placeholder="اكتب اسم المندوب…">
   </div>
-  <div class="field" style="margin:0;width:160px">
+  <div class="field flush w160">
     <label>الحالة</label>
     <select name="status">
       <option value="">الكل</option>
@@ -67,7 +67,7 @@
       <a class="rep-card" href="<?= url('reps/'.$r['id']) ?>">
         <div class="rc-head">
           <span class="rc-av"><?= e(initials($r['name'])) ?></span>
-          <div style="flex:1;min-width:0">
+          <div class="p5-grow0">
             <div class="rc-name"><?= e($r['name']) ?></div>
             <?php if($r['phone']): ?><div class="rc-phone"><?= e($r['phone']) ?></div><?php endif; ?>
           </div>

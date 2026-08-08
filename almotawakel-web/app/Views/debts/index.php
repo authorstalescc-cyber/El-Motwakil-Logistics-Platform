@@ -25,77 +25,41 @@ $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','debt'
 $accountState = $accountState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'debts?tab=others'];
 $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'debts?tab=visa'];
 ?>
-<style>
-.debts-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 18px;border-bottom:2px solid var(--line);padding-bottom:2px}
-.debts-tabs .tab-btn{background:transparent;border:0;padding:10px 18px;border-radius:10px 10px 0 0;
-  font-family:inherit;font-size:var(--fs-3);font-weight:500;color:var(--grey);cursor:pointer;position:relative;top:2px}
-.debts-tabs .tab-btn.active{color:var(--navy);background:var(--card);border:2px solid var(--line);border-bottom:2px solid var(--card)}
-.tab-panel{display:none;animation:tp .18s ease}
-.tab-panel.active{display:block}
-@keyframes tp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-/* العناوين: ثبّت المحاذاة لليمين (تفادي تعارض space-between العام مع الشريط الذهبي) */
-.tab-panel .section-head,#tab-others .section-head{justify-content:flex-start}
-.tab-panel .section-head.spread{justify-content:space-between}
-.debt-figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
-.debt-figs .fig{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);padding:14px 12px;text-align:center;overflow:hidden}
-.debt-figs .fig .lbl{font-size:var(--fs-2);color:var(--grey);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.debt-figs .fig .val{font-size:var(--fs-6);font-weight:600;margin-top:4px}
-.debt-figs .fig .val.navy{color:var(--navy)} .debt-figs .fig .val.pos{color:var(--green)} .debt-figs .fig .val.neg{color:var(--red)}
-.note-line{background:#f6f8ff;border:1px dashed #c5cbf0;border-radius:var(--radius-2);padding:11px 15px;color:var(--navy);font-size:var(--fs-2);line-height:1.7;margin-bottom:14px}
-.mini-owners{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
-.mo-card{display:flex;flex-direction:column;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);padding:14px;box-shadow:var(--shadow);cursor:pointer;transition:.16s}
-.mo-card:hover{transform:translateY(-3px);box-shadow:0 12px 26px rgba(21,53,91,.14);border-color:#cfd9e6}
-.mo-card .nm{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--navy)}
-.mo-card .nm .av{width:30px;height:30px;border-radius:50%;background:var(--gold-light,#faf3df);color:var(--navy);display:flex;align-items:center;justify-content:center;font-size:var(--fs-2);font-weight:600;flex-shrink:0}
-.mo-card .row{display:flex;justify-content:space-between;font-size:var(--fs-2)}
-.mo-card .row b.neg{color:var(--red)} .mo-card .row b.pos{color:var(--green)}
-.exp-cards{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px}
-.exp-grand{flex:1 1 220px;background:var(--navy);color:#fff;border-radius:var(--radius-2);padding:16px 20px}
-.exp-grand .lbl{font-size:var(--fs-2);opacity:.85}
-.exp-grand .val{font-size:var(--fs-7);font-weight:600;color:var(--gold);margin-top:4px}
-.exp-grand .sub{font-size:var(--fs-2);opacity:.8;margin-top:4px}
-.exp-src{flex:1 1 150px;background:#fff;border:1px solid var(--line);border-radius:var(--radius-2);padding:12px 16px}
-.exp-src .lbl{font-size:var(--fs-2);color:var(--grey)}
-.exp-src .val{font-size:var(--fs-5);font-weight:500;margin-top:4px}
-.exp-src .cnt{font-size:var(--fs-1);color:var(--grey)}
-.src-pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:var(--fs-2);font-weight:400;white-space:nowrap}
-.src-manual{background:#e7f0fb;color:#15355B}
-.src-permits{background:#efe7fb;color:#5b2f8f}
-.src-bawalis{background:#fbe7ec;color:#8f2f45}
-.src-takhlis{background:#e7f6ef;color:#1f7a52}
-.visa-badge{display:inline-block;background:#fdf0e3;color:#8a5a12;border-radius:999px;padding:1px 8px;font-size:var(--fs-1);font-weight:500}
-</style>
-
 <!-- ============ نظرة عامة ============ -->
-<div class="kpi-grid mb four">
-  <?php /* ⚠️ **ممنوع رقم أصمّ**: الرقم ده مجموع التلاتة اللي جنبه، فبيوصّل
-           لأول تبويب فيهم بدل ما يفضل رقمًا مالوش طريق. */ ?>
-  <a class="kpi red" href="<?= url('debts') ?>?tab=owners" title="تفاصيل المديونيات">
-    <div class="lbl">إجمالي المديونيات على الشركة</div>
-    <div class="val"><?= intf($ov['grand_remaining']) ?><span class="cur">ج.م</span></div></a>
-  <a class="kpi navy" href="<?= url('settlements') ?>" title="أصحاب بيان البوالص">
-    <div class="lbl">متبقّي أصحاب البيان</div>
-    <div class="val"><?= intf($ov['owners']['remaining']) ?><span class="cur">ج.م</span></div></a>
-  <a class="kpi gold" href="<?= url('debts') ?>?tab=inspection" title="الكشف والضمان">
-    <div class="lbl">متبقّي الكشف والضمان</div>
-    <div class="val"><?= intf($ov['inspection']['remaining']) ?><span class="cur">ج.م</span></div></a>
-  <a class="kpi green" href="<?= url('debts') ?>?tab=visa" title="عمليات الفيزا">
-    <div class="lbl">إجمالي عمليات الفيزا</div>
-    <div class="val"><?= intf($ov['visa']['grand']) ?><span class="cur">ج.م</span></div></a>
-</div>
+<?php /* ⚠️ **ممنوع رقم أصمّ**: الأربعة بيوصّلوا لتبويبهم/شاشتهم — مكوّن `stat`
+         بمعامل `url` (شاشة كاملة أقوى من نافذة لما البنود ليها تبويب فيه
+         جداول وفلاتر). كانوا ماركب `.kpi` مكتوبًا بالإيد. */ ?>
+<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($ov) { ?>
+  <?php partial('stat', [
+    'label' => 'إجمالي المديونيات على الشركة', 'value' => money0($ov['grand_remaining']),
+    'icon' => 'alert', 'tone' => 'red', 'url' => url('debts?tab=owners'),
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'متبقّي أصحاب البيان', 'value' => money0($ov['owners']['remaining']),
+    'icon' => 'user', 'tone' => 'navy', 'url' => url('settlements'),
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'متبقّي الكشف والضمان', 'value' => money0($ov['inspection']['remaining']),
+    'icon' => 'shield', 'tone' => 'gold', 'url' => url('debts?tab=inspection'),
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'إجمالي عمليات الفيزا', 'value' => money0($ov['visa']['grand']),
+    'icon' => 'credit-card', 'tone' => 'green', 'url' => url('debts?tab=visa'),
+  ]); ?>
+<?php }]); ?>
 
 <!-- ============ التبويبات ============ -->
 <div class="debts-tabs" role="tablist" aria-label="أنواع المديونيات">
   <button type="button" class="tab-btn<?= $tab==='inspection'?' active':'' ?>" data-tab="inspection"><?= icon('alert', 14) ?> الكشف والضمان</button>
   <button type="button" class="tab-btn<?= $tab==='owners'?' active':'' ?>" data-tab="owners"><?= icon('user', 14) ?> أصحاب بيان البوالص</button>
-  <button type="button" class="tab-btn<?= $tab==='others'?' active':'' ?>" data-tab="others">📌 مديونيات أخرى</button>
+  <button type="button" class="tab-btn<?= $tab==='others'?' active':'' ?>" data-tab="others"><?= icon('inbox', 14) ?> مديونيات أخرى</button>
   <button type="button" class="tab-btn<?= $tab==='visa'?' active':'' ?>" data-tab="visa"><?= icon('credit-card', 14) ?> تتبع الفيزا</button>
 </div>
 
 <!-- ============ تبويب: الكشف والضمان ============ -->
 <div class="tab-panel<?= $tab==='inspection'?' active':'' ?>" id="tab-inspection">
   <!-- تفصيل المديونية لكل إذن -->
-  <div class="card" style="padding:18px;margin-bottom:16px">
+  <div class="card pad mb">
     <div class="section-head spread">
       <span><?= icon('file-text', 14) ?> تفصيل الكشف والضمان على الأذونات</span>
       <span class="count-badge"><?= intf(count($inspCharges['rows'])) ?> إذن</span>
@@ -116,10 +80,10 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
             <td><?= intf($r['containers']) ?></td>
             <td><?= intf($r['units']) ?></td>
             <td><?= money($r['inspection'], false) ?>
-              <div style="font-size:var(--fs-1);color:var(--grey)"><?= $r['inspection_rate']>0 ? 'سعر '.money($r['inspection_rate'],false) : 'بلا سعر' ?></div></td>
+              <div class="dbt-sub"><?= $r['inspection_rate']>0 ? 'سعر '.money($r['inspection_rate'],false) : 'بلا سعر' ?></div></td>
             <td><?= money($r['guarantee'], false) ?>
-              <div style="font-size:var(--fs-1);color:var(--grey)"><?= $r['guarantee_rate']>0 ? 'سعر '.money($r['guarantee_rate'],false) : 'بلا سعر' ?></div></td>
-            <td style="font-weight:500"><?= money($r['amount'], false) ?></td>
+              <div class="dbt-sub"><?= $r['guarantee_rate']>0 ? 'سعر '.money($r['guarantee_rate'],false) : 'بلا سعر' ?></div></td>
+            <td class="mv-ref"><?= money($r['amount'], false) ?></td>
           </tr>
         <?php endforeach; ?>
         <?php if (!$inspCharges['rows']): ?>
@@ -128,12 +92,12 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
       </tbody>
       <?php if ($inspCharges['rows']): ?>
       <tfoot><tr>
-        <td colspan="3" style="text-align:left;font-weight:500">الإجمالي</td>
-        <td style="font-weight:600"><?= intf($inspCharges['containers']) ?></td>
-        <td style="font-weight:600"><?= intf($inspCharges['units']) ?></td>
-        <td style="font-weight:600"><?= money($inspCharges['inspection_total'], false) ?></td>
-        <td style="font-weight:600"><?= money($inspCharges['guarantee_total'], false) ?></td>
-        <td style="font-weight:600"><?= money($inspCharges['total'], false) ?></td>
+        <td colspan="3" class="dbt-totlbl">الإجمالي</td>
+        <td class="dbt-tot"><?= intf($inspCharges['containers']) ?></td>
+        <td class="dbt-tot"><?= intf($inspCharges['units']) ?></td>
+        <td class="dbt-tot"><?= money($inspCharges['inspection_total'], false) ?></td>
+        <td class="dbt-tot"><?= money($inspCharges['guarantee_total'], false) ?></td>
+        <td class="dbt-tot"><?= money($inspCharges['total'], false) ?></td>
       </tr></tfoot>
       <?php endif; ?>
     </table></div>
@@ -151,11 +115,11 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
       $creditor = trim((string)$a['name']);
       $payState = $paymentStates[(int)$a['id']] ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'debts?tab=inspection'];
       $payOld = $payState['old']; $payErrors = $payState['errors']; ?>
-      <div class="card" style="padding:18px">
+      <div class="card pad">
         <div class="section-head">
-          <?= $blk['ic'] ?> <?= e($blk['label']) ?> — <?= $creditor !== '' ? e($creditor) : '<span style="color:var(--grey);font-weight:500">غير محدّد</span>' ?>
+          <?= $blk['ic'] ?> <?= e($blk['label']) ?> — <?= $creditor !== '' ? e($creditor) : '<span class="dbt-none">غير محدّد</span>' ?>
         </div>
-        <div class="debt-figs" style="margin-bottom:12px">
+        <div class="debt-figs tight">
           <div class="fig"><div class="lbl">المديونية</div><div class="val navy"><?= intf($t['charges']) ?></div></div>
           <div class="fig"><div class="lbl">المدفوع</div><div class="val pos"><?= intf($t['paid']) ?></div></div>
           <div class="fig"><div class="lbl">المتبقّي</div><div class="val <?= $t['remaining']>0.005?'neg':'pos' ?>"><?= intf($t['remaining']) ?></div></div>
@@ -165,16 +129,16 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
         <form class="inline-form js-dirty-form" method="post" action="<?= url('debts/account/'.$a['id'].'/pay') ?>">
           <?= csrfField() ?>
           <?= formStateFields($payState['token'], $payState['back']) ?>
-          <div class="field" style="margin:0"><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
+          <div class="field flush"><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
           <input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>">
           <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)">
-          <label style="display:flex;align-items:center;gap:6px;font-weight:500;font-size:var(--fs-2);white-space:nowrap">
-            <input type="checkbox" name="is_visa" value="1" <?= !empty($payOld['is_visa'])?'checked':'' ?> style="width:16px;height:16px;accent-color:var(--gold)"><?= icon('credit-card', 14) ?> فيزا</label>
-          <?= visa_card_select((int)($payOld['visa_card_id'] ?? 0), 'visa_card_id', 'max-width:160px') ?>
+          <label class="dbt-visa-lbl">
+            <input type="checkbox" name="is_visa" value="1" <?= !empty($payOld['is_visa'])?'checked':'' ?> class="dbt-cbx"><?= icon('credit-card', 14) ?> فيزا</label>
+          <?= visa_card_select((int)($payOld['visa_card_id'] ?? 0), 'visa_card_id', 'narrow') ?>
           <button class="btn gold sm" type="submit" data-primary-submit><?= icon('plus', 14) ?> دفع</button>
         </form>
 
-        <div class="table-wrap" style="margin-top:12px"><table class="data">
+        <div class="table-wrap dbt-tw"><table class="data">
           <thead><tr><th class="g-identity">التاريخ</th><th class="g-revenue">المبلغ</th><th class="g-identity">ملاحظة</th><th class="g-identity">حذف</th></tr></thead>
           <tbody>
             <?php $tp=0; foreach ($pays as $p): $tp+=$p['amount']; ?>
@@ -183,7 +147,7 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
                 <td class="pos"><?= money($p['amount'],false) ?><?= !empty($p['is_visa'])?' <span class="visa-badge">فيزا</span>':'' ?></td>
                 <td><?= e($p['note']) ?></td>
                 <td>
-                  <form class="confirm-delete" method="post" action="<?= url('debts/payment/'.$p['id'].'/delete') ?>" style="margin:0">
+                  <form class="confirm-delete" method="post" action="<?= url('debts/payment/'.$p['id'].'/delete') ?>">
                     <?= csrfField() ?><?= formStateFields(FormState::token(), 'debts?tab=inspection') ?>
                     <button class="del" type="submit" title="حذف"><?= icon('trash', 14) ?></button>
                   </form>
@@ -208,17 +172,17 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
     <div class="fig"><div class="lbl">المتبقّي لهم</div><div class="val <?= $ownersSum['remaining']>0.005?'neg':'pos' ?>"><?= intf($ownersSum['remaining']) ?></div></div>
   </div>
 
-  <div class="page-actions" style="margin-bottom:14px">
+  <div class="page-actions mb">
     <a class="btn gold" href="<?= url('settlements') ?>"><?= icon('banknote', 14) ?> افتح صفحة سداد البوالص</a>
     <a class="btn ghost" href="<?= url('settlements') ?>?status=due">عرض غير المسدّد فقط</a>
   </div>
 
-  <div class="section-head" style="justify-content:space-between">
+  <div class="section-head spread">
     <span>🔺 أعلى أصحاب البيان مديونيةً</span>
     <span class="count-badge"><?= intf((int)$ownersSum['due_owners']) ?> لهم متبقٍّ</span>
   </div>
   <?php if (!$topOwners): ?>
-    <div class="card"><div class="empty" style="padding:36px">لا مديونيات متبقّية على أصحاب البيان. 🎉</div></div>
+    <div class="card"><div class="empty empty-mv-in">لا مديونيات متبقّية على أصحاب البيان</div></div>
   <?php else: ?>
     <div class="mini-owners">
       <?php foreach ($topOwners as $o):
@@ -228,7 +192,7 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
           <div class="nm"><span class="av"><?= e(initials($label)) ?></span><span title="<?= e($label) ?>"><?= e($label) ?></span></div>
           <div class="row"><span>عدد البوالص</span><b><?= intf($o['bills']) ?></b></div>
           <div class="row"><span>المتبقّي</span><b class="neg"><?= money($o['remaining'],false) ?></b></div>
-          <div class="row" style="font-size:var(--fs-1);color:var(--grey)"><span>آخر بوليصة</span><span><?= $o['last_date']?dfmt($o['last_date']):'—' ?></span></div>
+          <div class="row sub"><span>آخر بوليصة</span><span><?= $o['last_date']?dfmt($o['last_date']):'—' ?></span></div>
         </div>
       <?php endforeach; ?>
     </div>
@@ -238,10 +202,10 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
 <!-- ============ تبويب: مديونيات أخرى ============ -->
 <div class="tab-panel<?= $tab==='others'?' active':'' ?>" id="tab-others">
   <div class="two-col">
-    <div class="card" style="padding:18px">
+    <div class="card pad">
       <div class="section-head"><?= icon('plus', 17) ?> إضافة مديونية جديدة</div>
       <?= formErrorSummary($accountState['errors']) ?>
-      <form class="form-card js-dirty-form" method="post" action="<?= url('debts/account') ?>" style="box-shadow:none;padding:0;border:0">
+      <form class="form-card js-dirty-form flat" method="post" action="<?= url('debts/account') ?>">
         <?= csrfField() ?>
         <?= formStateFields($accountState['token'], $accountState['back']) ?>
         <div class="form-grid one">
@@ -252,12 +216,12 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
           <div class="field"><label>ملاحظة (اختياري)</label>
             <input type="text" name="note" value="<?= e($accountState['old']['note'] ?? '') ?>"></div>
         </div>
-        <div class="form-actions" style="margin-top:12px"><button class="btn gold" type="submit" data-primary-submit><?= icon('download', 14) ?> حفظ</button></div>
+        <div class="form-actions tight"><button class="btn gold" type="submit" data-primary-submit><?= icon('download', 14) ?> حفظ</button></div>
       </form>
     </div>
 
-    <div class="card" style="padding:18px">
-      <div class="section-head" style="justify-content:space-between">
+    <div class="card pad">
+      <div class="section-head spread">
         <span><?= icon('clipboard', 14) ?> المديونيات الأخرى</span>
         <span class="count-badge"><?= intf(count($manual)) ?> جهة</span>
       </div>
@@ -267,13 +231,13 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
           <?php $ta=0;$tp=0;$tr=0; foreach ($manual as $a): $ta+=$a['totals']['charges'];$tp+=$a['totals']['paid'];$tr+=$a['totals']['remaining']; ?>
             <tr>
               <td><a href="<?= url('debts/account/'.$a['id']) ?>"><b><?= e($a['name']) ?></b></a>
-                  <?php if($a['note']): ?><br><span style="color:var(--grey);font-size:var(--fs-1)"><?= e($a['note']) ?></span><?php endif; ?></td>
+                  <?php if($a['note']): ?><br><span class="dbt-sub"><?= e($a['note']) ?></span><?php endif; ?></td>
               <td><?= money($a['totals']['charges'],false) ?></td>
               <td class="pos"><?= money($a['totals']['paid'],false) ?></td>
               <td class="<?= $a['totals']['remaining']>0.005?'neg':'pos' ?>"><?= money($a['totals']['remaining'],false) ?></td>
               <td><div class="actions">
                 <a class="edit" href="<?= url('debts/account/'.$a['id']) ?>" title="الدفعات والتفاصيل"><?= icon('banknote', 14) ?></a>
-                <form class="confirm-delete" method="post" action="<?= url('debts/account/'.$a['id'].'/delete') ?>" style="margin:0">
+                <form class="confirm-delete" method="post" action="<?= url('debts/account/'.$a['id'].'/delete') ?>">
                   <?= csrfField() ?><?= formStateFields(FormState::token(), 'debts?tab=others') ?><button class="del" type="submit" title="حذف"><?= icon('trash', 14) ?></button>
                 </form>
               </div></td>
@@ -306,18 +270,18 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
   </div>
 
   <!-- إضافة عملية فيزا -->
-  <div class="card" style="padding:16px;margin-bottom:16px">
+  <div class="card pad mb">
     <div class="section-head"><?= icon('plus', 17) ?> إضافة عملية مدفوعة بالفيزا</div>
     <?= formErrorSummary($visaState['errors']) ?>
-    <form class="inline-form js-dirty-form" method="post" action="<?= url('debts/visa') ?>" style="flex-wrap:wrap">
+    <form class="inline-form js-dirty-form wrap" method="post" action="<?= url('debts/visa') ?>">
       <?= csrfField() ?>
       <?= formStateFields($visaState['token'], $visaState['back']) ?>
       <input type="date" name="exp_date" value="<?= e($visaState['old']['exp_date'] ?? work_date()) ?>">
       <input list="dl_visa_cat" name="category" value="<?= e($visaState['old']['category'] ?? '') ?>" placeholder="الفئة (إيجار / رسوم…)" autocomplete="off">
       <input type="text" name="beneficiary" value="<?= e($visaState['old']['beneficiary'] ?? '') ?>" placeholder="الجهة / المستفيد">
-      <div class="field" style="margin:0"><input type="number" step="0.01" name="amount" value="<?= e($visaState['old']['amount'] ?? '') ?>" placeholder="المبلغ" required style="max-width:130px"<?= fieldErrorAttrs('amount', $visaState['errors']) ?>><?= fieldError('amount', $visaState['errors']) ?></div>
+      <div class="field flush"><input type="number" step="0.01" name="amount" value="<?= e($visaState['old']['amount'] ?? '') ?>" placeholder="المبلغ" required class="dbt-amt"<?= fieldErrorAttrs('amount', $visaState['errors']) ?>><?= fieldError('amount', $visaState['errors']) ?></div>
       <input type="text" name="note" value="<?= e($visaState['old']['note'] ?? '') ?>" placeholder="بيان (اختياري)">
-      <?= visa_card_select((int)($visaState['old']['visa_card_id'] ?? 0), 'visa_card_id', 'max-width:170px') ?>
+      <?= visa_card_select((int)($visaState['old']['visa_card_id'] ?? 0), 'visa_card_id', 'narrow') ?>
       <button class="btn gold sm" type="submit" data-primary-submit><?= icon('credit-card', 14) ?> إضافة</button>
     </form>
     <datalist id="dl_visa_cat"><?php foreach (($visaCats ?? []) as $opt): ?><option value="<?= e($opt) ?>"><?php endforeach; ?></datalist>
@@ -325,7 +289,7 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
 
   <!-- فلترة -->
   <div class="toolbar">
-    <form method="get" action="<?= url('debts') ?>" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+    <form method="get" action="<?= url('debts') ?>" class="dbt-filter">
       <input type="hidden" name="tab" value="visa">
       <input type="search" name="q" value="<?= e($vf['q']) ?>" placeholder="بحث (فئة / جهة / بيان)…">
       <select name="source">
@@ -334,9 +298,9 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
           <option value="<?= e($key) ?>" <?= $vf['source']===$key?'selected':'' ?>><?= e($label) ?></option>
         <?php endforeach; ?>
       </select>
-      <label style="font-size:var(--fs-2);color:var(--grey)">من</label>
+      <label class="dbt-flbl">من</label>
       <input type="date" name="from" value="<?= e($vf['from']) ?>">
-      <label style="font-size:var(--fs-2);color:var(--grey)">إلى</label>
+      <label class="dbt-flbl">إلى</label>
       <input type="date" name="to" value="<?= e($vf['to']) ?>">
       <button class="btn sm" type="submit">تصفية</button>
       <?php if ($vHasFilter): ?><a class="btn ghost sm" href="<?= url('debts') ?>?tab=visa">إلغاء</a><?php endif; ?>
@@ -369,20 +333,20 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
             <td><?= intf($i) ?></td>
             <td><?= dfmt($r['d']) ?></td>
             <td><span class="src-pill src-<?= $srcClass[$src]??'manual' ?>"><?= e($visaSources[$src] ?? $src) ?></span></td>
-            <td><?= e($r['category']) ?><?php if(!empty($r['note']) && $r['note']!==$r['category']): ?><br><span style="color:var(--grey);font-size:var(--fs-1)"><?= e($r['note']) ?></span><?php endif; ?></td>
+            <td><?= e($r['category']) ?><?php if(!empty($r['note']) && $r['note']!==$r['category']): ?><br><span class="dbt-sub"><?= e($r['note']) ?></span><?php endif; ?></td>
             <td><?= e($r['party']) ?></td>
-            <td><?php if(!empty($r['card'])): ?><span class="pill st-paid"><?= icon('credit-card', 14) ?> <?= e($r['card']) ?></span><?php else: ?><span style="color:var(--grey)">—</span><?php endif; ?></td>
+            <td><?php if(!empty($r['card'])): ?><span class="pill st-paid"><?= icon('credit-card', 14) ?> <?= e($r['card']) ?></span><?php else: ?><span class="dbt-none">—</span><?php endif; ?></td>
             <td class="neg"><?= money($r['amount'], false) ?></td>
-            <td><?php if($link): ?><a href="<?= e($link) ?>" title="فتح الأصل">↗️</a><?php else: ?><span style="color:var(--grey)">—</span><?php endif; ?></td>
+            <td><?php if($link): ?><a href="<?= e($link) ?>" title="فتح الأصل"><?= icon('external', 14) ?></a><?php else: ?><span class="dbt-none">—</span><?php endif; ?></td>
           </tr>
         <?php endforeach; endif; ?>
       </tbody>
       <?php if ($visaRows): ?>
-      <tfoot><tr><td colspan="6" style="text-align:left;font-weight:500">إجمالي المعروض</td><td class="neg" style="font-weight:600"><?= money($visaTotals['grand'], false) ?></td><td></td></tr></tfoot>
+      <tfoot><tr><td colspan="6" class="dbt-totlbl">إجمالي المعروض</td><td class="neg dbt-tot"><?= money($visaTotals['grand'], false) ?></td><td></td></tr></tfoot>
       <?php endif; ?>
     </table></div>
     <?php if (count($visaRows) >= 500): ?>
-      <div style="padding:12px 4px;color:var(--grey)">عُرضت أول 500 عملية — ضيّق بالفلترة لعرض غيرها.</div>
+      <div class="dbt-cut">عُرضت أول 500 عملية — ضيّق بالفلترة لعرض غيرها.</div>
     <?php endif; ?>
   </div>
 </div>

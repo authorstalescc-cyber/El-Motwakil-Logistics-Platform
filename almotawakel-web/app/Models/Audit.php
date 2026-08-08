@@ -8,7 +8,13 @@ use RuntimeException;
 /** سجل العمليات وسلة المحذوفات. لا يرمي بيانات مالية بصمت. */
 class Audit
 {
-    private const RESTORABLE = ['bawalis', 'takhlis', 'generators', 'users'];
+    /**
+     * ⚠️ `rep_submissions` هنا **بند مستني أو مرفوض بس** — مالوش أي أثر مالي
+     *    (الخصم من الخزنة والعهدة بيحصل وقت الاعتماد، لما بيتولّد
+     *    `permit_stages`/`rep_misc_expenses`). البند المعتمد `RepInbox::delete`
+     *    بترفض حذفه أصلاً، فمستحيل يوصل السلة ويرجع منها بلا بنده الفعلي.
+     */
+    private const RESTORABLE = ['bawalis', 'takhlis', 'generators', 'users', 'rep_submissions'];
     private const UNDOABLE_UPDATES = ['bawalis', 'takhlis', 'generators'];
 
     public static function restorableEntities(): array

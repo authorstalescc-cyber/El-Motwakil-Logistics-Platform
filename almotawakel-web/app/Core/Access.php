@@ -45,6 +45,14 @@ class Access
         // تنظيف البيانات: الدمج بيعدّل مئات الصفوف دفعة واحدة — مش إجراء يومي.
         // ⚠️ لازم تفضل هنا — القايمة دي بتتفحص **قبل** السماح العام لطلبات GET.
         'QualityController@*',
+        // مراجعة/رفع/اعتماد ملف Excel تكشف وتعدّل بيانات مالية مجمّعة؛
+        // المجموعة كلها مقصورة على المالك والمدير.
+        'ExcelSyncController@*',
+        // الحذف النهائي لبند مندوب: بيشيل السجل من الصندوق خالص (بينزل السلة).
+        // ⚠️ مقصود إنه أضيق من باقي إجراءات الصندوق (الاعتماد/الرفض متاحين
+        //    للمحاسب): اللي يقدر **يسترجع** من `/audit` هو بس اللي يقدر يحذف.
+        'RepCustodyController@deleteSubmission',
+        'RepCustodyController@deleteMany',
         'PushController@index',
         'PushController@send',
         'PushController@test',
@@ -67,7 +75,7 @@ class Access
     private const FINANCIAL_CONTROLLERS = [
         'BawalisController', 'PaymentController', 'SettlementController',
         'DebtController', 'CustodyController', 'OfficeController',
-        'OfficeCarController',
+        'CompanySafeController', 'OfficeCarController', 'OfficeDriverController',
         'DailyClosingController', 'OwnerStatementController',
         'InvoiceController', 'ExpenseController', 'RepController',
         'RepCustodyController', 'StatementsController',

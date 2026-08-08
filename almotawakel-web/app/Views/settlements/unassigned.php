@@ -11,15 +11,15 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
 <?php partial('owner_tabs', ['active' => 'unassigned']); ?>
 <div class="page-actions">
   <a class="btn ghost" href="<?= url('settlements') ?>">‹ رجوع لأصحاب البيان</a>
-  <span style="flex:1"></span>
-  <span class="pill st-unpaid" style="font-size:var(--fs-3);padding:6px 14px">
+  <span class="ps-sp"></span>
+  <span class="pill bs-pill st-unpaid">
     <?= intf($tot['n']) ?> بوليصة بلا صاحب بيان
   </span>
 </div>
 
 <div class="set-hero warn">
   <div class="set-hero-av"><?= icon('alert', 14) ?></div>
-  <div style="min-width:0;flex:1">
+  <div class="st-grow">
     <h2>بوالص بلا صاحب بيان</h2>
   </div>
   <div class="set-hero-rem">
@@ -29,7 +29,7 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
 </div>
 
 <?php if (!$bills): ?>
-  <div class="card"><div class="empty" style="padding:44px"><div class="ic"><?= icon('check', 14) ?></div>كل البوالص لها صاحب بيان.</div></div>
+  <div class="card"><div class="empty empty-mv-in"><div class="ic"><?= icon('check', 14) ?></div>كل البوالص لها صاحب بيان.</div></div>
 <?php else: ?>
 
 <?php $bulkAllowOwner=false; require __DIR__ . '/../bawalis/_bulk_actions.php'; ?>
@@ -41,11 +41,10 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
   <!-- شريط التعيين الجماعي -->
   <div class="bulk-bar">
     <div class="bulk-info">المحدّد: <b id="selCount">0</b> بوليصة</div>
-    <span style="flex:1"></span>
+    <span class="ps-sp"></span>
     <button type="button" class="btn ghost sm" id="btnSelAll">تحديد الكل</button>
     <button type="button" class="btn ghost sm" id="btnSelNone">إلغاء التحديد</button>
-    <input list="dl_owner" id="bulkOwner" placeholder="اسم صاحب البيان للمحدّد" autocomplete="off"
-           style="border:1px solid var(--line2);border-radius:var(--radius-1);padding:8px 12px;min-width:220px">
+    <input list="dl_owner" id="bulkOwner" placeholder="اسم صاحب البيان للمحدّد" autocomplete="off" class="un-search">
     <button type="button" class="btn green sm" id="btnApplyBulk">تطبيق على المحدّد ↓</button>
   </div>
 
@@ -53,7 +52,7 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
     <div class="table-wrap">
       <table class="data" id="unTable">
         <thead><tr>
-          <th style="width:38px"><input type="checkbox" id="chkAll" class="bill-pick js-bill-pick-all" title="تحديد الكل"></th>
+          <th class="col-pick" data-no-sort><input type="checkbox" id="chkAll" class="bill-pick js-bill-pick-all" title="تحديد الكل"></th>
           <th class="g-identity">التاريخ</th>
           <th class="g-identity">النوع</th>
           <th class="g-identity">رقم البوليصة</th>
@@ -64,7 +63,7 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
           <th class="g-identity">السيارة</th>
           <th class="g-result">الدين</th>
           <th class="g-expense">المتبقّي</th>
-          <th class="g-revenue" style="min-width:230px">صاحب البيان</th>
+          <th class="g-revenue col-owner">صاحب البيان</th>
         </tr></thead>
         <tbody>
           <?php foreach ($bills as $b):
@@ -77,19 +76,18 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
                 data-freight="<?= e(number_format((float)($b['freight'] ?? 0),2,'.','')) ?>" data-legacy="<?= (int)($b['is_legacy'] ?? 0) ?>" title="تحديد"></td>
               <td><?= dfmt($b['bill_date']) ?></td>
               <td><span class="pill pill-<?= e($b['bill_type']) ?>"><?= $typeLabel($b['bill_type']) ?></span></td>
-              <td style="font-weight:500"><?= e($b['bill_number'] ?: '—') ?></td>
+              <td class="mv-ref"><?= e($b['bill_number'] ?: '—') ?></td>
               <td><?= e($ref ?: '—') ?></td>
-              <td style="text-align:right;max-width:170px;overflow:hidden;text-overflow:ellipsis"><?= e($b['company'] ?: '—') ?></td>
+              <td class="txt clip-170"><?= e($b['company'] ?: '—') ?></td>
               <td><?= e($b['destination'] ?: '—') ?></td>
-              <td style="text-align:right;max-width:150px;overflow:hidden;text-overflow:ellipsis"><?= e($cont ?: '—') ?></td>
+              <td class="txt clip-150"><?= e($cont ?: '—') ?></td>
               <td><?= e($b['car_no'] ?: '—') ?></td>
               <td><?= money($b['debt'], false) ?></td>
               <td class="<?= (float)$b['remaining'] > 0.005 ? 'neg' : '' ?>"><?= money($b['remaining'], false) ?></td>
               <td>
                 <input list="dl_owner" name="owner[<?= $b['id'] ?>]" class="owner-inp"
                        value="<?= e(($assignState['old']['owner'][$b['id']] ?? '')) ?>"
-                       placeholder="اكتب اسم صاحب البيان" autocomplete="off"
-                       style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px 10px">
+                       placeholder="اكتب اسم صاحب البيان" autocomplete="off" class="un-owner-in">
               </td>
             </tr>
           <?php endforeach; ?>
@@ -101,7 +99,7 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
       <div class="pay-bar-info">
         <span>بوالص سيُحفظ لها صاحب بيان: <b id="fillCount" class="pos">0</b></span>
       </div>
-      <span style="flex:1"></span>
+      <span class="ps-sp"></span>
       <button class="btn gold" type="submit" id="btnSave" disabled><?= icon('download', 14) ?> حفظ التعيين</button>
     </div>
   </div>
@@ -110,24 +108,12 @@ $typeLabel = fn($t) => $t === 'warid' ? 'وارد' : 'صادر';
 <datalist id="dl_owner"><?php foreach ($ownerOptions as $o): ?><option value="<?= e($o) ?>"><?php endforeach; ?></datalist>
 
 <?php if (count($bills) >= 1000): ?>
-  <div style="padding:12px 4px;color:var(--grey)">عُرض أول 1000 بوليصة — احفظ هذه الدفعة ليظهر الباقي.</div>
+  <div class="dbt-cut">عُرض أول 1000 بوليصة — احفظ هذه الدفعة ليظهر الباقي.</div>
 <?php endif; ?>
 
 <?php endif; ?>
 
-<style>
-.bulk-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;margin-bottom:14px;
-  background:var(--zebra);border:1px solid var(--line2);border-radius:var(--radius-2)}
-.bulk-info{font-weight:500;color:var(--navy)}
-.bulk-info b{font-size:var(--fs-4)}
-table.data tr.un-row.sel{background:var(--gold-light)!important}
-table.data tr.un-row.filled td{background:rgba(167,233,191,.14)}
-.pay-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-top:2px solid var(--line2);
-  background:var(--zebra);position:sticky;bottom:0;z-index:5}
-.pay-bar-info{display:flex;gap:18px;font-weight:500;color:var(--navy)}
-.pay-bar-info b{font-size:var(--fs-4)}
-.pay-bar .btn[disabled]{opacity:.5;cursor:not-allowed}
-</style>
+
 
 <script>
 (function(){

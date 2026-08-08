@@ -141,8 +141,8 @@ class PermitController extends Controller
             $baseConds = ["p.status='open'"];
             $baseParams = [];
             if ($followQ !== '') {
-                $baseConds[] = '(p.permit_no LIKE ? OR p.company LIKE ? OR p.client LIKE ?)';
-                array_push($baseParams, "%$followQ%", "%$followQ%", "%$followQ%");
+                $baseConds[] = '(p.permit_no LIKE ? OR p.company LIKE ? OR p.client LIKE ? OR p.destination LIKE ? OR p.agency LIKE ?)';
+                array_push($baseParams, "%$followQ%", "%$followQ%", "%$followQ%", "%$followQ%", "%$followQ%");
             }
             $baseWhere = 'WHERE ' . implode(' AND ', $baseConds);
             $followCounts = Database::row(
@@ -630,6 +630,12 @@ class PermitController extends Controller
         $billId = (int) ($_POST['bill_id'] ?? 0);
         $back   = 'permits/' . $pid . ($this->trackBackMode() === 'manage' ? '/manage' : '');
 
+        /* ⚠️ **قبل** الكتابة: `record` بتعمل `ON DUPLICATE KEY UPDATE` فمستحيل
+           نعرف بعدها هل دي مرحلة جديدة ولا تصحيح لواحدة مسجَّلة أصلاً. وإعادة
+           تسجيل نفس المرحلة (تعديل ملاحظة أو تاريخ) مش «حالة اتغيّرت» فما
+           تستاهلش إشعار — من غير الفحص ده كل حفظة بترنّ من جديد. */
+        $isNew = !PermitTrack::hasEvent($pid, $stage, $billId);
+
         try {
             PermitTrack::record(
                 $pid, $stage, $billId, PermitTrack::SRC_OFFICE,
@@ -643,6 +649,20 @@ class PermitController extends Controller
         Audit::log('update', 'permits', $pid, null, ['stage_key' => $stage, 'bill_id' => $billId],
             'تحديث حالة الرحلة إلى «' . $label . '» على ' . Permit::noLabel($p['permit_type']) . ' ' .
             ($p['permit_no'] ?: '#' . $pid), ['permit_id' => $pid]);
+
+        /* ⚠️ الإشعار بعد نجاح العملية وخارج أي transaction (docs/15 §٨.٢).
+           كان **ناقص تمامًا** في مسار المكتب: المندوب يحدّث فالمكتب يعرف،
+           والمكتب يحدّث فمحدش يعرف. */
+        if ($isNew) {
+            PushNotify::trackStage([
+                'permit_id' => $pid,
+                'stage_key' => $stage,
+                'bill_id'   => $billId,
+                'source'    => PermitTrack::SRC_OFFICE,
+                'by'        => (string) (\App\Core\Auth::user() ?? 'المكتب'),
+                'actor_key' => (string) (\App\Core\Auth::user() ?? ''),
+            ]);
+        }
 
         $this->done('الحالة اتحدّثت: ' . $label, $back, 'journey');
     }
@@ -667,6 +687,18 @@ class PermitController extends Controller
         Audit::log('delete', 'permits', $pid, ['stage_key' => $stage, 'bill_id' => $billId], null,
             'تراجع عن مرحلة «' . $label . '» في رحلة ' . Permit::noLabel($p['permit_type']) . ' ' .
             ($p['permit_no'] ?: '#' . $pid), ['permit_id' => $pid]);
+
+        /* ⚠️ التراجع بيرجّع الحالة **لورا** — والناس اللي شافت الإشعار الأول
+           لازم تعرف إنه اتلغى، وإلا يفضلوا فاكرين الشحنة وصلت. severity=warn. */
+        PushNotify::trackStage([
+            'permit_id' => $pid,
+            'stage_key' => $stage,
+            'bill_id'   => $billId,
+            'source'    => PermitTrack::SRC_OFFICE,
+            'by'        => (string) (\App\Core\Auth::user() ?? 'المكتب'),
+            'actor_key' => (string) (\App\Core\Auth::user() ?? ''),
+            'undo'      => true,
+        ]);
 
         $this->done('اتشالت مرحلة: ' . $label, $back, 'journey');
     }
@@ -1168,6 +1200,10 @@ class PermitController extends Controller
         $mv = Permit::movement((int)$mid);
         if (!$mv) { $this->fail('الحركة دي مش موجودة أو اتمسحت.', 'permits'); }
         $pid = (int)$mv['permit_id'];
+        if (\App\Models\OfficeDriverStatement::movementAllocationTotal((int)$mid) > 0.005) {
+            $this->fail('الحركة فيها إيصال مربوط ببيان سائق سيارة المكتب. فكّ الربط من بيان السائق أولاً.',
+                'permits/'.$pid.'/manage#movement-'.(int)$mid);
+        }
         [$ctCount, $ctType] = $this->movementContainerInput();
         $this->claimForm('permits/'.$pid.'/manage#movement-'.(int)$mid);
         Permit::updateMovement((int)$mid, trim($_POST['note'] ?? '') ?: null, $ctCount, $ctType);
@@ -1319,6 +1355,16 @@ class PermitController extends Controller
         $qty      = max(1, (int)($_POST['qty'] ?? 1));
         $unit     = (float)($_POST['amount'] ?? 0);
         $amount   = round($qty * $unit, 2);
+        if ($stageId > 0) {
+            $driverAllocated = \App\Models\OfficeDriverStatement::stageAllocationTotal($stageId);
+            if ($amount + 0.005 < $driverAllocated) {
+                $message = 'المبلغ الجديد أقل من الجزء (' . money0($driverAllocated)
+                    . ') المربوط ببيانات سائق سيارة المكتب. عدّل ربط الإيصال من بيان السائق أولاً.';
+                if ($this->wantsJson()) { $this->jsonFormFailure(['amount' => $message]); }
+                flash('error', $message);
+                redirect('permits/'.$pid.'/manage');
+            }
+        }
 
         // السعر الفعلي (اللي هنحاسب بيه العميل) — لكل البنود ماعدا البوالص والرسوم الأولية (الكشف والضمان)
         // يُدخَل كسعر وحدة أيضاً ويُضرب في الكمية ليعطي الإجمالي الفعلي.
@@ -1396,6 +1442,9 @@ class PermitController extends Controller
         $sourcePermitId = 0;
         try {
             $stageId = (int)$sid;
+            if (\App\Models\OfficeDriverStatement::stageAllocationTotal($stageId) > 0.005) {
+                throw new \RuntimeException('الإيصال مربوط ببيان سائق سيارة المكتب. فكّ الربط من بيان السائق قبل نقله.');
+            }
             $existing = Database::row('SELECT permit_id FROM permit_stages WHERE id = ?', [$stageId]);
             $sourcePermitId = (int)($existing['permit_id'] ?? 0);
             $result = Permit::moveReceipt($stageId, (int)($_POST['target_movement_id'] ?? 0));
@@ -1411,6 +1460,9 @@ class PermitController extends Controller
     {
         $this->requireAuth();
         $this->requireCsrf();
+        if (\App\Models\OfficeDriverStatement::stageAllocationTotal((int)$sid) > 0.005) {
+            $this->fail('الإيصال مربوط ببيان سائق سيارة المكتب. فكّ الربط من بيان السائق أولاً.', 'permits');
+        }
         $row = Database::row('SELECT permit_id, movement_id, attachment, entry_date, stage_key, direction, is_visa FROM permit_stages WHERE id = ?', [(int)$sid]);
         if ($row) {
             // بند ناتج عن اعتماد مندوب: الأدمن له حرية الحذف (قرار المالك) — بنفكّ الربط
@@ -1495,6 +1547,10 @@ class PermitController extends Controller
         $this->requireCsrf();
         $pid = (int)$id;
         $billId = (int)($_POST['bill_id'] ?? 0);
+        if (\App\Models\OfficeDriverStatement::billAllocationTotal($billId) > 0.005) {
+            $this->fail('البوليصة مرتبطة بإيصال دفعه سائق سيارة المكتب. فكّ الربط من بيان السائق أولاً.',
+                'permits/'.$pid.'/manage');
+        }
         $bill = Database::row('SELECT movement_id, custody, bill_date FROM bawalis WHERE id = ? AND permit_id = ?', [$billId, $pid]);
         if ($bill) {
             // القفل الصارم: لا حذف لبوليصة بعهدة تاريخها في يوم متقفل
@@ -1905,6 +1961,10 @@ class PermitController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $pid = (int)$id;
+        if (\App\Models\OfficeDriverStatement::permitAllocationTotal($pid) > 0.005) {
+            $this->fail('الإذن فيه إيصال مربوط ببيان سائق سيارة المكتب. فكّ الربط من بيان السائق أولاً.',
+                'permits/'.$pid);
+        }
         $blockers = DeletionPolicy::permit($pid);
         if ($blockers['invoices'] > 0) {
             flash('error','لا يمكن حذف إذن له مستندات مالية صادرة. ألغِ المستندات أولاً أو اترك الإذن محفوظاً.');

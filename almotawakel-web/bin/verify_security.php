@@ -367,6 +367,35 @@ if ($remote === null) {
     check('الجلسة بتتجدّد عند الدخول (يمنع تثبيت الجلسة)', str_contains($auth, 'session_regenerate_id(true)'));
     check('كوكي الجلسة httponly', str_contains($auth, "'httponly' => true"));
     check('توكن CSRF بيتقارن بـhash_equals', str_contains($auth, 'hash_equals'));
+
+    /* ⚠️⚠️ عمر الجلسة — باج «المندوب بيتطرد وهو بيرفق إيصال» (2026-08-02).
+       كان الكوكي `lifetime => 0` (كوكي متصفح): تطبيق PWA بيتقفل من نظام
+       الموبايل وهو في الخلفية أثناء فتح الكاميرا ⇒ الكوكي بيضيع ⇒ المندوب
+       بيلاقي نفسه على شاشة الدخول والصورة راحت. وPHP كمان كانت بتمسح ملف
+       الجلسة بعد ٢٤ دقيقة خمول (`gc_maxlifetime=1440`) وده بيلغي سياسة النظام
+       نفسها (مندوب ٨ ساعات · مكتب ساعتين) **بالسكوت**.
+       ⚠️ **ده مش تخفيف أمني**: الحد الحقيقي خادمي (`IDLE_MINUTES` في
+          `Auth`/`RepAuth` + إعادة التأكّد من الحساب كل دقيقتين) وما اتغيّرش. */
+    check('عمر كوكي الجلسة أطول من صفر (تطبيق PWA ما يخرجش لما النظام يقفله)',
+        str_contains($auth, "'lifetime' => self::SESSION_LIFETIME"));
+    check('وعمر ملف الجلسة على الخادم متظبّط كمان (مش 24 دقيقة الافتراضية)',
+        str_contains($auth, "ini_set('session.gc_maxlifetime'"));
+    check('⚠️ وبيتظبّط قبل session_start (بعدها مالوش أي تأثير)',
+        strpos($auth, "ini_set('session.gc_maxlifetime'") < strpos($auth, 'session_start()'));
+    check('النافذة متحرّكة مع النشاط (الكوكي بتتجدّد كل طلب)',
+        str_contains($auth, 'refreshCookie'));
+    check('⚠️ والتجديد بعد فحص headers_sent (وإلا تحذير جوّه أي رد JSON)',
+        str_contains($auth, 'headers_sent()'));
+    check('⚠️ والزائر بلا جلسة ماياخدش كوكي دايمة على الفاضي',
+        str_contains($auth, 'if (empty($_SESSION)) { return; }'));
+    check('★ سياسة الخمول الخادمية ما اتلمستش — المكتب',
+        str_contains($auth, 'IDLE_MINUTES = 120'));
+    check('★ وسياسة خمول المندوب كمان',
+        str_contains((string) file_get_contents("$root/app/Core/RepAuth.php"), 'IDLE_MINUTES = 480'));
+    /* ⚠️ عمر الملف لازم **يغطّي** أطول نافذة خمول، وإلا PHP بتمسح الجلسة قبل
+         ما النظام يقول إنها انتهت — وده بالظبط اللي كان بيحصل. */
+    check('★ عمر ملف الجلسة ≥ أطول نافذة خمول في النظام',
+        \App\Core\Auth::SESSION_LIFETIME >= 480 * 60);
     check('الصلاحيات بتتفرض مركزيًّا في الراوتر', str_contains((string) file_get_contents("$root/app/Core/Router.php"), 'Access::enforce'));
     // نفس السبب: shell_exec مقفولة على الإنتاج. بنقرا فهرس git بلا تشغيل أوامر.
     $gitDir = "$root/../.git";

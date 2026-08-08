@@ -1,15 +1,16 @@
 <?php
 use App\Core\FormState;
 $returnPath = current_app_path();
-// الأعمدة المعروضة: list_fields إن وُجدت، وإلا كل الحقول
-$allFields = $ent['fields'];
-if (!empty($ent['list_fields'])) {
-    $byKey = [];
-    foreach ($allFields as $f) { $byKey[$f['key']] = $f; }
-    $fields = array_values(array_filter(array_map(fn($k) => $byKey[$k] ?? null, $ent['list_fields'])));
-} else {
-    $fields = $allFields;
-}
+/* ⚠️ الجدول بيعرض **كل** أعمدة الكيان (طلب المالك) — `list_fields` بقت
+   «الأعمدة الأساسية» للتمييز البصري بس، مش قصّ للعرض. إدارة الزحمة عن طريق:
+   مبدّل المجموعات تحت + منتقي الأعمدة العام في `app.js` (محفوظ في localStorage).
+   ⚠️ مفتاح تخزين المنتقي مشتقّ من بصمة عناوين الأعمدة، فتغيير عددها بيبدأ
+      حالة جديدة نظيفة ومفيش إزاحة في الفهارس المحفوظة. */
+$fields    = $ent['fields'];
+$primary   = array_flip($ent['list_fields'] ?? []);
+$groupMeta = ['identity'=>'البيانات','vehicle'=>'السيارة','revenue'=>'الإيراد','expense'=>'المصروفات','result'=>'النتيجة'];
+$groupsUsed = [];
+foreach ($fields as $f) { $groupsUsed[$f['group'] ?? 'identity'] = true; }
 $detail = !empty($ent['detail']);
 $bulkBills = !empty($ent['has_legacy']);
 // دالة تنسيق قيمة الخلية حسب النوع
@@ -33,26 +34,37 @@ $fmtCell = function(array $f, $v): array {
     if ($type === 'int')   return [$v !== null ? intf($v) : '', ''];
     return [e($v), ''];
 };
-$monthNames = ['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+/* ⚠️ الفلاتر المتقدّمة لازم تتحمل في `$qs` كمان — من غير كده أول ضغطة على
+   ترتيب عمود أو صفحة تانية بتفضّي الفلاتر بالسكوت. */
+$flt        = $flt ?? ['fs'=>[],'ft'=>[],'fmin'=>[],'fmax'=>[],'from'=>'','to'=>''];
+$filterSpec = $filterSpec ?? [];
+$fltActive  = count($flt['fs']) + count($flt['ft']) + count($flt['fmin']) + count($flt['fmax'])
+            + ($flt['from'] !== '' ? 1 : 0) + ($flt['to'] !== '' ? 1 : 0);
 $qs = fn(array $ov=[]) => http_build_query(array_merge(
     ['q'=>$q,'year'=>$year,'month'=>$month,'source'=>$source,'legacy'=>$legacy ?? '',
-     'sort'=>$sort ?? '', 'dir'=>$dir ?? 'desc'], $ov));
+     'sort'=>$sort ?? '', 'dir'=>$dir ?? 'desc',
+     'fs'=>$flt['fs'], 'ft'=>$flt['ft'], 'fmin'=>$flt['fmin'], 'fmax'=>$flt['fmax'],
+     'from'=>$flt['from'], 'to'=>$flt['to']], $ov));
 ?>
+<?php /* ⚠️ صف الإجراءات منفصل عن صف الفلاتر (طلب المالك: «تحسين العرض والتنظيم»).
+         كانوا مكدّسين في شريط واحد مع ٦ عناصر فلترة و٤ أزرار، فالإجراء الأساسي
+         («إضافة بوليصة») كان بيضيع وسطهم. */ ?>
+<div class="page-actions">
+  <span class="count-badge"><?= intf($total) ?> سجل</span>
+  <div class="spacer"></div>
+  <?php if (!empty($ent['has_legacy'])): ?>
+    <a class="btn ghost" href="<?= url('statements/new') ?>"><?= icon('receipt', 14) ?> إصدار كشف حساب</a>
+  <?php endif; ?>
+  <?php $newQuery = array_filter(['source'=>(!empty($ent['has_source']) ? $source : ''),'back'=>$returnPath], fn($v)=>$v!==''); ?>
+  <a class="btn gold" href="<?= url($ent['route'].'/new?'.http_build_query($newQuery)) ?>"><?= icon('plus', 14) ?> إضافة<?= !empty($ent['has_legacy'])?' بوليصة':'' ?></a>
+</div>
+
 <div class="toolbar">
   <form method="get" action="<?= url($ent['route']) ?>">
     <input type="search" name="q" value="<?= e($q) ?>" placeholder="بحث في <?= e($ent['title']) ?>…">
-    <select name="year">
-      <option value="">كل السنوات</option>
-      <?php foreach ($years as $y): ?>
-        <option value="<?= e($y) ?>" <?= (string)$year===(string)$y?'selected':'' ?>><?= e($y) ?></option>
-      <?php endforeach; ?>
-    </select>
-    <select name="month">
-      <option value="">كل الشهور</option>
-      <?php for ($m=1;$m<=12;$m++): ?>
-        <option value="<?= $m ?>" <?= (string)$month===(string)$m?'selected':'' ?>><?= $monthNames[$m] ?></option>
-      <?php endfor; ?>
-    </select>
+    <?php /* ⚠️ فلترا السنة والشهر اتشالوا (طلب المالك) — «من تاريخ / إلى تاريخ» في
+             اللوحة المتقدّمة بيغطّوهم وأدق منهم. الخادم لسه بيقرا `year`/`month`
+             عشان أي رابط قديم متحفوظ يفضل شغّال، وزرار «إلغاء» بيمسحهم. */ ?>
     <?php if (!empty($ent['has_source'])): ?>
     <select name="source">
       <option value="">كل الجهات</option>
@@ -68,51 +80,118 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
     </select>
     <?php endif; ?>
     <button class="btn sm" type="submit">تصفية</button>
-    <?php if ($q||$year||$month||$source||($legacy??'')!==''): ?><a class="btn ghost sm" href="<?= url($ent['route']) ?>">إلغاء</a><?php endif; ?>
+    <?php if ($q||$year||$month||$source||($legacy??'')!==''||$fltActive): ?><a class="btn ghost sm" href="<?= url($ent['route']) ?>">إلغاء</a><?php endif; ?>
+    <?php /* الفلاتر المتقدّمة بتتبعت من نفس الفورم ده — القيم الحالية بتتحفظ في
+             حقول مخفية لو اللوحة مقفولة، فالبحث السريع ما بيلغيش فلترة شغّالة. */ ?>
+    <button class="btn ghost sm" type="button" id="advFltToggle" aria-expanded="<?= $fltActive?'true':'false' ?>" aria-controls="advFlt">
+      <?= icon('filter', 14) ?> فلترة متقدمة<?= $fltActive ? ' <span class="adv-flt-count">'.intf($fltActive).'</span>' : '' ?>
+    </button>
+
+    <div class="adv-flt" id="advFlt"<?= $fltActive ? '' : ' hidden' ?>>
+      <div class="adv-flt-grid">
+        <label class="field"><span>من تاريخ</span>
+          <input type="date" name="from" value="<?= e($flt['from']) ?>"></label>
+        <label class="field"><span>إلى تاريخ</span>
+          <input type="date" name="to" value="<?= e($flt['to']) ?>"></label>
+        <?php foreach ($filterSpec as $k => $s):
+          $lk = $s['lookup'] ? ($lookups[$s['lookup']] ?? []) : []; ?>
+          <?php if ($s['kind'] === 'choice'): ?>
+            <label class="field"><span><?= e($s['label']) ?></span>
+              <select name="fs[<?= e($k) ?>]">
+                <option value="">الكل</option>
+                <?php
+                  $opts = [];
+                  if ($s['type'] === 'billtype')      { $opts = ['sader'=>'صادر','warid'=>'وارد']; }
+                  elseif ($s['type'] === 'status')    { $opts = \App\Models\Bill::STATUS_LABELS; }
+                  elseif ($s['type'] === 'source')    { $opts = ['egycool'=>'ايجي كول','shujaie'=>'الشجيع']; }
+                  else { foreach ($lk as $v) { $opts[$v] = $v; } }
+                  $cur = $flt['fs'][$k] ?? '';
+                  foreach ($opts as $val => $lbl):
+                ?><option value="<?= e($val) ?>" <?= (string)$cur===(string)$val?'selected':'' ?>><?= e($lbl) ?></option><?php
+                  endforeach; ?>
+              </select></label>
+          <?php elseif ($s['kind'] === 'text'): ?>
+            <label class="field"><span><?= e($s['label']) ?></span>
+              <input type="search" name="ft[<?= e($k) ?>]" value="<?= e($flt['ft'][$k] ?? '') ?>"></label>
+          <?php elseif ($s['kind'] === 'range'): ?>
+            <div class="field adv-flt-range"><span><?= e($s['label']) ?></span>
+              <div>
+                <input type="number" step="any" name="fmin[<?= e($k) ?>]" value="<?= e($flt['fmin'][$k] ?? '') ?>" aria-label="<?= e($s['label']) ?> — من">
+                <input type="number" step="any" name="fmax[<?= e($k) ?>]" value="<?= e($flt['fmax'][$k] ?? '') ?>" aria-label="<?= e($s['label']) ?> — إلى">
+              </div>
+            </div>
+          <?php endif; ?>
+        <?php endforeach; ?>
+      </div>
+      <div class="adv-flt-actions">
+        <button class="btn gold sm" type="submit"><?= icon('filter', 14) ?> طبّق الفلترة</button>
+        <a class="btn ghost sm" href="<?= url($ent['route']) ?>">مسح الكل</a>
+      </div>
+    </div>
   </form>
-  <div class="spacer"></div>
-  <span class="count-badge"><?= intf($total) ?> سجل</span>
-  <?php if ($bulkBills): ?><button class="btn ghost" type="button" id="openBillPaste"><?= icon('clipboard', 14) ?> لصق من Excel</button><?php endif; ?>
-  <?php if (!empty($ent['has_legacy'])): ?><a class="btn ghost" href="<?= url('bawalis/new-legacy?back=' . rawurlencode($returnPath)) ?>"><?= icon('folder', 14) ?> إضافة بوليصة قديمة</a><?php endif; ?>
-  <?php $newQuery = array_filter(['source'=>(!empty($ent['has_source']) ? $source : ''),'back'=>$returnPath], fn($v)=>$v!==''); ?>
-  <a class="btn gold" href="<?= url($ent['route'].'/new?'.http_build_query($newQuery)) ?>"><?= icon('plus', 14) ?> إضافة<?= !empty($ent['has_legacy'])?' بوليصة حالية':'' ?></a>
 </div>
+
+<?php /* شرايح الفلاتر الشغّالة — مع ٦٢ خانة فلترة، من غيرها المستخدم بيبص على
+         نتيجة مفلترة ومايعرفش ليه. كل شريحة بتشيل فلترها هي بس. */
+$chips = [];
+$rm = function (string $bag, string $key) use ($qs, $flt) {
+    $b = $flt[$bag]; unset($b[$key]);
+    return '?' . $qs([$bag => $b, 'page' => 1]);
+};
+foreach ($flt['fs'] as $k => $v) {
+    $lbl = $filterSpec[$k]['label'] ?? $k;
+    $show = $v;
+    if (($filterSpec[$k]['type'] ?? '') === 'billtype') { $show = $v === 'warid' ? 'وارد' : 'صادر'; }
+    elseif (($filterSpec[$k]['type'] ?? '') === 'status') { $show = \App\Models\Bill::STATUS_LABELS[$v] ?? $v; }
+    $chips[] = [$lbl . ': ' . $show, $rm('fs', $k)];
+}
+foreach ($flt['ft'] as $k => $v) { $chips[] = [($filterSpec[$k]['label'] ?? $k) . ': ' . $v, $rm('ft', $k)]; }
+foreach ($flt['fmin'] as $k => $v) { $chips[] = [($filterSpec[$k]['label'] ?? $k) . ' ≥ ' . $v, $rm('fmin', $k)]; }
+foreach ($flt['fmax'] as $k => $v) { $chips[] = [($filterSpec[$k]['label'] ?? $k) . ' ≤ ' . $v, $rm('fmax', $k)]; }
+if ($flt['from'] !== '') { $chips[] = ['من ' . dfmt($flt['from']), '?' . $qs(['from' => '', 'page' => 1])]; }
+if ($flt['to']   !== '') { $chips[] = ['إلى ' . dfmt($flt['to']), '?' . $qs(['to' => '', 'page' => 1])]; }
+if ($q !== '')           { $chips[] = ['بحث: ' . $q, '?' . $qs(['q' => '', 'page' => 1])]; }
+?>
+<?php if ($chips): ?>
+<div class="flt-chips">
+  <?php foreach ($chips as [$lbl, $href]): ?>
+    <span class="flt-chip"><?= e($lbl) ?><a href="<?= e($href) ?>" aria-label="شيل الفلتر ده">×</a></span>
+  <?php endforeach; ?>
+  <a class="btn ghost sm" href="<?= url($ent['route']) ?>">مسح الكل</a>
+</div>
+<?php endif; ?>
 
 <?php if ($bulkBills) { require __DIR__ . '/../bawalis/_bulk_actions.php'; } ?>
 
-<?php if ($bulkBills): ?>
-<div class="bulk-modal" id="billPasteModal" hidden<?= ($pasteState['errors']['rows'] ?? '') !== '' ? ' data-reopen="1"' : '' ?>><div class="bulk-modal-card" role="dialog" aria-modal="true" aria-labelledby="billPasteTitle">
-  <div class="bulk-modal-head"><b id="billPasteTitle">إضافة بوالص بسرعة من Excel</b><button type="button" class="bulk-close" aria-label="إغلاق">×</button></div>
-  <form method="post" action="<?= url('bawalis/bulk-paste') ?>" class="no-confirm" style="padding:18px"><?= csrfField() ?>
-    <?php /* ⚠️ رمز النموذج يمنع إضافة نفس دفعة الـ٢٠٠ بوليصة مرتين. العملية
-             كاملة (كلها أو ولا واحدة)، فالتكرار كان بينتج نسخة تانية من كل صف.
-             شيله = `claimForm` في bulkPaste هترفض كل لصق. */ ?>
-    <?= formStateFields($pasteState['token'], $pasteState['back']) ?>
-    <p class="bulk-hint">انسخ العناوين والصفوف من Excel كما هي. العملية كاملة: إذا أخطأ صف واحد فلن تُضاف أي بوليصة.</p>
-    <div class="paste-template">رقم البوليصة &nbsp; التاريخ &nbsp; النوع &nbsp; صاحب البيان &nbsp; التصنيف &nbsp; الشركة &nbsp; الجهة &nbsp; الحاوية &nbsp; تصنيف الحاوية &nbsp; عدد الحاويات &nbsp; السيارة &nbsp; السائق &nbsp; صاحب السيارة &nbsp; النولون &nbsp; العهدة &nbsp; تحويلة &nbsp; خصم &nbsp; بياتة</div>
-    <?php /* إعادة التعبئة بعد الفشل — اللصق كله كان بيضيع ويضطر ينسخ من أول وجديد */
-          $pasteErr = $pasteState['errors']['rows'] ?? ''; ?>
-    <?php if ($pasteErr !== ''): ?>
-      <div class="flash error" role="alert" style="margin-top:10px"><?= icon('alert',17) ?> <?= e($pasteErr) ?></div>
-    <?php endif; ?>
-    <textarea name="rows" rows="12" required spellcheck="false" dir="rtl" placeholder="الصق هنا من Excel…" style="width:100%;margin-top:10px;padding:12px;border:1px solid var(--line2);border-radius:var(--radius-2);font-family:inherit;white-space:pre"><?= e($pasteState['old']['rows'] ?? '') ?></textarea>
-    <div id="billPastePreview" class="paste-preview" hidden></div>
-    <div class="bulk-modal-actions"><button class="btn ghost" type="button" id="previewBillPaste"><?= icon('search', 14) ?> معاينة</button><button class="btn gold" type="submit" id="submitBillPaste" disabled><?= icon('plus', 14) ?> إضافة الصفوف المعاينة</button><button class="btn ghost bulk-close" type="button">إلغاء</button></div>
-  </form>
-</div></div>
-<script>(function(){var b=document.getElementById('openBillPaste'),m=document.getElementById('billPasteModal');if(!b||!m)return;var ta=m.querySelector('textarea'),preview=document.getElementById('billPastePreview'),submit=document.getElementById('submitBillPaste');function close(){m.hidden=true;document.body.style.overflow=''}b.addEventListener('click',function(){m.hidden=false;document.body.style.overflow='hidden';setTimeout(function(){ta.focus()},20)});m.querySelectorAll('.bulk-close').forEach(function(x){x.addEventListener('click',close)});m.addEventListener('click',function(e){if(e.target===m)close()});ta.addEventListener('input',function(){submit.disabled=true;preview.hidden=true});if(m.dataset.reopen==='1'){m.hidden=false;document.body.style.overflow='hidden';setTimeout(function(){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length)},20);}document.getElementById('previewBillPaste').addEventListener('click',function(){var lines=ta.value.trim().split(/\r?\n/).filter(Boolean),rows=lines.map(function(l){return l.split('\t')});if(lines.length<2){preview.hidden=false;preview.innerHTML='<b class="neg">الصق صف العناوين وصف بيانات واحدًا على الأقل.</b>';return}var max=Math.min(6,rows.length),html='<b>سيتم إرسال '+(rows.length-1)+' صف. معاينة أول '+(max-1)+':</b><div class="table-wrap"><table class="data"><tbody>';for(var i=0;i<max;i++){html+='<tr>'+rows[i].slice(0,8).map(function(v){return '<'+(i?'td':'th')+'>'+v.replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})+'</'+(i?'td':'th')+'>'}).join('')+'</tr>'}preview.innerHTML=html+'</tbody></table></div>';preview.hidden=false;submit.disabled=false});})();</script>
-<style>.paste-template{direction:rtl;padding:9px 11px;border:1px dashed #c9a227;border-radius:var(--radius-1);background:#fff9e8;color:#6d5510;font-size:var(--fs-1);line-height:1.8}.paste-preview{margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:var(--radius-2);background:#f8fafc;max-height:230px;overflow:auto}.paste-preview table{margin-top:8px;font-size:var(--fs-1)}</style>
-<?php endif; ?>
+<?php /* ⚠️ «لصق من Excel» اتشال بقرار المالك (2026-08-03) مع «إضافة بوليصة قديمة»
+         و«معاينة مزامنة Excel». **المسار `POST /bawalis/bulk-paste` والكنترولر
+         `BawalisController::bulkPaste` ما اتلمسوش** — الواجهة بس هي اللي اتشالت،
+         و`verify_navigation` لسه بيحرس إن الأكشن بيمرّ على `claimForm`. */ ?>
+
+<?php /* ⚠️ الجدول بقى بكل الأعمدة، فمبدّل المجموعات ضروري مش رفاهية: بيخفي/يظهر
+         مجموعة كاملة بضغطة (المصروفات ١٢ عمود بتكون أصفارًا في العربية المستأجرة).
+         الحالة محفوظة في localStorage لكل شاشة، ومنتقي الأعمدة العام في `app.js`
+         لسه شغّال جنبه للتحكّم في عمود بعينه. */ ?>
+<div class="col-groups" id="colGroups" data-key="<?= e($ent['route']) ?>">
+  <span class="col-groups-lbl"><?= icon('columns', 14) ?> مجموعات الأعمدة:</span>
+  <?php foreach ($groupMeta as $gk => $glbl): if (empty($groupsUsed[$gk])) continue;
+    $n = count(array_filter($fields, fn($f) => ($f['group'] ?? 'identity') === $gk)); ?>
+    <button type="button" class="col-group-btn is-on" data-group="<?= e($gk) ?>" aria-pressed="true">
+      <?= e($glbl) ?> <span class="col-group-n"><?= intf($n) ?></span>
+    </button>
+  <?php endforeach; ?>
+  <button type="button" class="btn ghost sm" id="colGroupsReset">إظهار الكل</button>
+</div>
 
 <div class="card">
   <div class="table-wrap">
     <table class="data">
       <thead>
         <tr>
-          <?php if ($bulkBills): ?><th class="g-result" style="width:38px"><input type="checkbox" class="bill-pick js-bill-pick-all" title="تحديد كل بوالص الصفحة"></th><?php endif; ?>
+          <?php if ($bulkBills): ?><th class="g-result col-pick" data-no-sort><input type="checkbox" class="bill-pick js-bill-pick-all" title="تحديد كل بوالص الصفحة"></th><?php endif; ?>
           <th class="g-identity"><a class="server-sort" href="?<?= $qs(['sort'=>'id','dir'=>(($sort??'')==='id'&&($dir??'')==='asc')?'desc':'asc','page'=>1]) ?>">م <?= ($sort??'')==='id'?(($dir??'')==='asc'?'↑':'↓'):'⇅' ?></a></th>
           <?php foreach ($fields as $f): ?>
-            <th class="g-<?= $f['group'] ?>"><a class="server-sort" href="?<?= $qs(['sort'=>$f['key'],'dir'=>(($sort??'')===$f['key']&&($dir??'')==='asc')?'desc':'asc','page'=>1]) ?>"><?= e($f['label']) ?> <?= ($sort??'')===$f['key']?(($dir??'')==='asc'?'↑':'↓'):'⇅' ?></a></th>
+            <th class="g-<?= $f['group'] ?><?= isset($primary[$f['key']]) ? ' col-primary' : '' ?>" data-col-group="<?= e($f['group'] ?? 'identity') ?>"><a class="server-sort" href="?<?= $qs(['sort'=>$f['key'],'dir'=>(($sort??'')===$f['key']&&($dir??'')==='asc')?'desc':'asc','page'=>1]) ?>"><?= e($f['label']) ?> <?= ($sort??'')===$f['key']?(($dir??'')==='asc'?'↑':'↓'):'⇅' ?></a></th>
           <?php endforeach; ?>
           <th class="g-identity">إجراءات</th>
         </tr>
@@ -127,7 +206,8 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
           <tr<?= $detail ? ' class="rowlink'.($isLegacyRow?' legacy-row':'').'" data-href="'.url($ent['route'].'/'.$row['id']).'"' : ($isLegacyRow?' class="legacy-row"':'') ?>>
             <?php if ($bulkBills): ?><td><input type="checkbox" class="bill-pick js-bill-pick" value="<?= (int)$row['id'] ?>"
               data-no="<?= e($row['bill_number'] ?: '#'.$row['id']) ?>" data-date="<?= e($row['bill_date'] ?? '') ?>"
-              data-freight="<?= e(number_format((float)($row['freight'] ?? 0),2,'.','')) ?>" data-legacy="<?= (int)($row['is_legacy'] ?? 0) ?>" title="تحديد البوليصة"></td><?php endif; ?>
+              data-freight="<?= e(number_format((float)($row['freight'] ?? 0),2,'.','')) ?>" data-legacy="<?= (int)($row['is_legacy'] ?? 0) ?>"
+              data-owner="<?= e(trim((string)($row['declaration_owner'] ?? ''))) ?>" title="تحديد البوليصة"></td><?php endif; ?>
             <td><?= intf($i) ?><?php if ($isLegacyRow): ?><span class="legacy-pill" title="بوليصة قديمة معزولة عن العهدة والتقفيل">قديم</span><?php endif; ?></td>
             <?php foreach ($fields as $f): [$txt,$cls] = $fmtCell($f, $row[$f['key']] ?? null); ?>
               <td class="<?= !empty($f['calc'])?'calc':'' ?> <?= $cls ?>"><?= $txt ?></td>
@@ -137,7 +217,7 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
                 <?php if ($detail): ?><a href="<?= url($ent['route'].'/'.$row['id']) ?>" title="تفاصيل"><?= icon('search', 14) ?></a><?php endif; ?>
                 <?php if (!empty($ent['invoice'])): ?><a href="<?= url($ent['route'].'/'.$row['id'].'/invoice') ?>" target="_blank" title="فاتورة (طباعة / PDF)"><?= icon('receipt', 14) ?></a><?php endif; ?>
                 <a class="edit" href="<?= url($ent['route'].'/'.$row['id'].'/edit?back=' . rawurlencode($returnPath)) ?>" title="تعديل"><?= icon('edit', 14) ?></a>
-                <form class="confirm-delete" method="post" action="<?= url($ent['route'].'/'.$row['id'].'/delete') ?>" style="margin:0">
+                <form class="confirm-delete" method="post" action="<?= url($ent['route'].'/'.$row['id'].'/delete') ?>">
                   <?= csrfField() ?>
                   <?= formStateFields(FormState::token(), $returnPath) ?>
                   <button class="del" type="submit" title="حذف"><?= icon('trash', 14) ?></button>
@@ -171,13 +251,68 @@ $qs = fn(array $ov=[]) => http_build_query(array_merge(
   <?php endif; ?>
 </div>
 
+<script>
+/* لوحة الفلترة المتقدّمة + مبدّل مجموعات الأعمدة */
+(function () {
+  var t = document.getElementById('advFltToggle'), p = document.getElementById('advFlt');
+  if (t && p) {
+    t.addEventListener('click', function () {
+      var open = p.hidden;
+      p.hidden = !open;
+      t.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  }
+
+  var bar = document.getElementById('colGroups');
+  if (!bar) return;
+  var table = document.querySelector('.card table.data');
+  if (!table) { bar.hidden = true; return; }
+  var KEY = 'almotawakel-col-groups-v1:' + bar.dataset.key;
+  var off = {};
+  try { off = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { off = {}; }
+
+  /* ⚠️ بنستخدم نفس كلاس `tbl-col-hidden` بتاع منتقي الأعمدة في app.js عن قصد:
+     تصدير CSV بيستثني الخانات اللي عليها الكلاس ده، فلو عملنا كلاس تاني كان
+     التصدير هيطلع أعمدة المستخدم مخفيها. */
+  function cellsOfGroup(g) {
+    var idx = [], out = [];
+    Array.prototype.forEach.call(table.tHead.rows[0].cells, function (th, i) {
+      if (th.getAttribute('data-col-group') === g) idx.push(i);
+    });
+    if (!idx.length) return out;
+    Array.prototype.forEach.call(table.rows, function (row) {
+      idx.forEach(function (i) { if (row.cells[i]) out.push(row.cells[i]); });
+    });
+    return out;
+  }
+
+  function apply(g, on) {
+    cellsOfGroup(g).forEach(function (c) { c.classList.toggle('tbl-col-hidden', !on); });
+    var b = bar.querySelector('[data-group="' + g + '"]');
+    if (b) { b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  }
+
+  bar.querySelectorAll('.col-group-btn').forEach(function (b) {
+    var g = b.dataset.group;
+    if (off[g]) apply(g, false);
+    b.addEventListener('click', function () {
+      var on = !b.classList.contains('is-on');
+      apply(g, on);
+      if (on) { delete off[g]; } else { off[g] = 1; }
+      try { localStorage.setItem(KEY, JSON.stringify(off)); } catch (e) {}
+    });
+  });
+
+  var reset = document.getElementById('colGroupsReset');
+  if (reset) reset.addEventListener('click', function () {
+    bar.querySelectorAll('.col-group-btn').forEach(function (b) { apply(b.dataset.group, true); });
+    off = {}; try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+})();
+</script>
+
 <?php if ($detail): ?>
-<style>
-tr.rowlink{cursor:pointer}tr.rowlink:hover{background:var(--gold-light)!important}
-tr.legacy-row{background:#fff9e8}tr.legacy-row:hover{background:#fff1c6!important}
-.legacy-pill{display:block;width:max-content;margin:4px auto 0;padding:2px 7px;border-radius:999px;background:#7a5f0e;color:#fff;font-size:var(--fs-1);font-weight:600}
-.server-sort{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.server-sort:hover{text-decoration:underline}
-</style>
+
 <script>
 document.querySelectorAll('tr.rowlink').forEach(function(tr){
   tr.addEventListener('click', function(e){

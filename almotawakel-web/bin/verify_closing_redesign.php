@@ -45,6 +45,81 @@ foreach ($needles as $needle) {
     if (!str_contains($html, $needle)) { throw new RuntimeException('عنصر مفقود من رندر التقفيل: ' . $needle); }
 }
 
+/* ورقة الطباعة لها عقد عرض مستقل: ملخص العهدة، حاويات البوالص، ومصدر الإيصال.
+   نرندرها ببيانات اليوم نفسه عشان نحرس الاستعلام والعرض معًا. */
+$_GET['date'] = $day;
+$_SERVER['REQUEST_URI'] = '/closing/print?date=' . rawurlencode($day);
+// رندر CLI بلا Host؛ نحاكي دومين الإنتاج عشان رابط الـQR يبقى مطلقًا وقابلًا للمسح.
+$_SERVER['HTTP_HOST'] = 'portal.almutawakkil.com';
+$_SERVER['HTTPS'] = 'on';
+ob_start();
+(new DailyClosingController())->printable();
+$printHtml = ob_get_clean();
+foreach ([
+    'إجمالي العهدة المضافة', '>الحاويات<', '>المخصوم<', '>المندوب<',
+    'id="closingQr"', 'معاينة التقفيل على النظام', 'assets/vendor/qrcodejs/qrcode.min.js',
+] as $needle) {
+    if (!str_contains($printHtml, $needle)) {
+        throw new RuntimeException('عنصر مفقود من ورقة طباعة التقفيل: ' . $needle);
+    }
+}
+if (str_contains($printHtml, 'إجمالي الصادر اليوم')
+    || str_contains($printHtml, 'توقيع المسؤول')
+    || str_contains($printHtml, 'المحاسب / الختم')
+    || preg_match('~<th[^>]*>\s*العهدة\s*</th>~u', $printHtml)) {
+    throw new RuntimeException('ورقة الطباعة رجعت تعرض عنصرًا محذوفًا (الصادر/العهدة/التوقيعات).');
+}
+if (!preg_match('~table\.data\{[^}]*font-size:12px~s', $printHtml)
+    || !preg_match('~\.pad\.dense table\.data\{[^}]*font-size:11\.5px~s', $printHtml)) {
+    throw new RuntimeException('خط جداول الطباعة رجع للمقاس الصغير غير المقروء.');
+}
+$headStart = strpos($printHtml, '<div class="doc-tag">');
+$headEnd   = $headStart === false ? false : strpos($printHtml, '<!-- بطاقات الملخص -->', $headStart);
+$headHtml  = ($headStart === false || $headEnd === false) ? '' : substr($printHtml, $headStart, $headEnd - $headStart);
+if ($headHtml === '' || str_contains($headHtml, '<br')
+    || !str_contains($headHtml, 'تاريخ اليوم:')
+    || !str_contains($headHtml, 'بنود المصروفات:')
+    || !str_contains($headHtml, 'عهد السائقين:')) {
+    throw new RuntimeException('بيانات الهيدر ليست في صف واحد بجوار عنوان التقفيل.');
+}
+$qrAsset = dirname(__DIR__) . '/public/assets/vendor/qrcodejs/qrcode.min.js';
+$qrLicense = dirname(__DIR__) . '/public/assets/vendor/qrcodejs/LICENSE';
+if (!is_file($qrAsset) || filesize($qrAsset) < 15000
+    || !is_file($qrLicense) || !str_contains((string) file_get_contents($qrLicense), 'MIT License')) {
+    throw new RuntimeException('ملفات مولّد QR المحلي أو ترخيصه ناقصة.');
+}
+
+/* اختبار سلوكي للترتيب: كل شركة لازم تظهر ككتلة واحدة في الإيصالات والبوالص،
+   فلا ترجع شركة سبق عرضها بعد الانتقال لشركة أخرى. */
+$method = new ReflectionMethod(DailyClosingController::class, 'details');
+$details = $method->invoke(new DailyClosingController(), $day);
+$assertCompanyGroups = static function (array $rows, string $label): void {
+    $seen = [];
+    $last = null;
+    foreach ($rows as $row) {
+        $key = search_norm(trim((string) ($row['company'] ?? '')));
+        if ($key !== $last) {
+            if (isset($seen[$key])) {
+                throw new RuntimeException("ترتيب {$label} مش مجمّع حسب الشركة: {$key}");
+            }
+            $seen[$key] = true;
+            $last = $key;
+        }
+    }
+};
+$assertCompanyGroups($details['receiptRows'], 'الإيصالات');
+$assertCompanyGroups($details['custodyRows'], 'البوالص');
+foreach ($details['receiptRows'] as $row) {
+    if (!array_key_exists('rep_name', $row)) {
+        throw new RuntimeException('استعلام الإيصالات لا يعيد اسم المندوب.');
+    }
+}
+foreach ($details['custodyRows'] as $row) {
+    if (!array_key_exists('containers', $row)) {
+        throw new RuntimeException('استعلام البوالص لا يعيد تصنيف الحاويات.');
+    }
+}
+
 // أثر المطابقة اليدوية القديمة (v28) لازم يكون اختفى تمامًا
 foreach (['manual_total', 'reconForm', 'closing/reconcile'] as $gone) {
     if (str_contains($html, $gone)) {
@@ -139,3 +214,4 @@ echo "✓ معادلة الرصيد وأقسام المراجعة والإقفا
 echo "✓ مفيش أثر للمطابقة اليدوية القديمة ولا معرفات HTML مكررة\n";
 echo "✓ البحث بيطبّع العربي على الطرفين (PHP + app.js متطابقين)\n";
 echo "✓ عنوان كل بند = بيانه المكتوب مش نوعه\n";
+echo "✓ طباعة التقفيل بخط كبير وهيدر أفقي وQR محلي، بلا توقيعات، وترتيبها حسب الشركة\n";

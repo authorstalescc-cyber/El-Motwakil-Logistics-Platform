@@ -46,7 +46,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 
 <!-- ============ تبويب: عام ============ -->
 <div class="tab-panel active" id="tab-general">
-  <div class="card" style="padding:22px;max-width:760px">
+  <div class="card set-pad narrow">
     <div class="section-head"><?= icon('home', 17) ?> بيانات الشركة والإعدادات العامة</div>
     <form method="post" action="<?= url('settings/general') ?>">
       <?= csrfField() ?>
@@ -59,7 +59,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
           <input type="text" name="company_phone" value="<?= e($general['company_phone']) ?>" placeholder="مثال: 03-000000"></div>
         <div class="field"><label><?= icon('send', 14) ?> البريد الإلكتروني</label>
           <input type="text" name="company_email" value="<?= e($general['company_email']) ?>" placeholder="اختياري"></div>
-        <div class="field" style="grid-column:1/-1"><label><?= icon('map-pin', 14) ?> عنوان الشركة (يظهر في الفاتورة)</label>
+        <div class="field field-full"><label><?= icon('map-pin', 14) ?> عنوان الشركة (يظهر في الفاتورة)</label>
           <input type="text" name="company_address" value="<?= e($general['company_address']) ?>" placeholder="العنوان بالكامل"></div>
         <div class="field"><label><?= icon('receipt', 14) ?> البطاقة الضريبية / السجل التجاري</label>
           <input type="text" name="company_tax_id" value="<?= e($general['company_tax_id']) ?>" placeholder="اختياري"></div>
@@ -69,10 +69,10 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
           <input type="number" name="report_year" value="<?= e($general['report_year']) ?>"></div>
         <div class="field"><label>باقي عهدة سابقة (رصيد افتتاحي)</label>
           <input type="number" step="0.01" name="opening_balance" value="<?= e($general['opening_balance']) ?>"></div>
-        <div class="field" style="grid-column:1/-1"><label>تاريخ بداية احتساب الرصيد الافتتاحي</label>
+        <div class="field field-full"><label>تاريخ بداية احتساب الرصيد الافتتاحي</label>
           <input type="date" name="opening_balance_date" value="<?= e($general['opening_balance_date']) ?>"></div>
       </div>
-      <div style="margin-top:16px"><button class="btn gold" type="submit"><?= icon('download', 14) ?> حفظ الإعدادات العامة</button></div>
+      <div class="mt-4"><button class="btn gold" type="submit"><?= icon('download', 14) ?> حفظ الإعدادات العامة</button></div>
     </form>
   </div>
 </div>
@@ -80,20 +80,20 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 <!-- ============ تبويب: القوائم المنسدلة ============ -->
 <div class="tab-panel" id="tab-lists">
   <?php foreach ($lookupGroups as $gLabel => $keys): ?>
-    <div class="section-head" style="margin-top:6px"><?= e($gLabel) ?></div>
-    <div class="set-grid" style="margin-bottom:20px">
+    <div class="section-head set-mt-xs"><?= e($gLabel) ?></div>
+    <div class="set-grid set-mb">
       <?php foreach ($keys as $key): if (!isset($types[$key])) continue; ?>
         <div class="lk-card">
           <h4><?= e($types[$key]) ?> <span class="cnt">(<?= count($lookups[$key]) ?>)</span></h4>
-          <div class="chip-list" style="margin:10px 0">
+          <div class="chip-list set-my">
             <?php foreach ($lookups[$key] as $item): ?>
               <span class="chip"><?= e($item['value']) ?>
-                <form class="confirm-delete" method="post" action="<?= url('settings/lookup/'.$item['id'].'/delete') ?>" style="display:inline" data-confirm="حذف «<?= e($item['value']) ?>» من قائمة <?= e($types[$key]) ?>؟">
+                <form class="confirm-delete" method="post" action="<?= url('settings/lookup/'.$item['id'].'/delete') ?>"  data-confirm="حذف «<?= e($item['value']) ?>» من قائمة <?= e($types[$key]) ?>؟">
                   <?= csrfField() ?><button type="submit" title="حذف">×</button>
                 </form>
               </span>
             <?php endforeach; ?>
-            <?php if(!$lookups[$key]): ?><span style="color:var(--grey);font-size:var(--fs-2)">— فارغة —</span><?php endif; ?>
+            <?php if(!$lookups[$key]): ?><span class="dbt-sub">— فارغة —</span><?php endif; ?>
           </div>
           <form class="inline-form no-confirm" method="post" action="<?= url('settings/lookup') ?>">
             <?= csrfField() ?>
@@ -112,11 +112,11 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 
 <!-- ============ تبويب: الأذونات والتايم لاين ============ -->
 <div class="tab-panel" id="tab-permits">
-  <div class="card" style="padding:22px">
+  <div class="card set-pad">
     <div class="section-head"><?= icon('folder', 17) ?> إعدادات الأذونات والتايم لاين</div>
     <form method="post" action="<?= url('settings/permits') ?>">
       <?= csrfField() ?>
-      <div class="set-grid" style="margin-bottom:22px">
+      <div class="set-grid set-mb-lg">
         <div class="field"><label>أقصى عدد حاويات للكشف/الضمان الواحد</label>
           <input type="number" step="1" min="1" name="inspection_batch" value="<?= e($permitNums['inspection_batch']) ?>"></div>
         <div class="field"><label>جهة الكشف (المستحق)</label>
@@ -124,13 +124,13 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         <div class="field"><label>جهة الضمان (المستحق)</label>
           <input type="text" name="guarantee_creditor" value="<?= e($permitNums['guarantee_creditor']) ?>"></div>
       </div>
-      <div class="table-wrap"><table class="data" style="white-space:normal">
+      <div class="table-wrap"><table class="data wrap-normal">
         <thead><tr>
-          <th class="g-identity" style="width:90px">الترتيب</th>
-          <th class="g-identity" style="width:60px">الأيقونة</th>
+          <th class="g-identity w90">الترتيب</th>
+          <th class="g-identity w60">الأيقونة</th>
           <th class="g-identity">اسم المرحلة</th>
-          <th class="g-identity" style="width:120px">النوع</th>
-          <th class="g-identity" style="width:110px">الإظهار</th>
+          <th class="g-identity w120">النوع</th>
+          <th class="g-identity w110">الإظهار</th>
         </tr></thead>
         <tbody>
           <?php
@@ -139,15 +139,15 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
               $core = in_array($key, Permit::ALWAYS_ON, true);
           ?>
             <tr>
-              <td><input type="number" name="stage_order[<?= e($key) ?>]" value="<?= (int)$st['order'] ?>" style="width:70px;border:1px solid var(--line2);border-radius:var(--radius-1);padding:6px;text-align:center"></td>
-              <td style="font-size:var(--fs-5)"><?= $st['icon'] ?></td>
-              <td><input name="stage_label[<?= e($key) ?>]" value="<?= e($st['label']) ?>" style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:7px"></td>
+              <td><input type="number" name="stage_order[<?= e($key) ?>]" value="<?= (int)$st['order'] ?>" class="set-num"></td>
+              <td class="set-lg"><?= $st['icon'] ?></td>
+              <td><input name="stage_label[<?= e($key) ?>]" value="<?= e($st['label']) ?>" class="set-in"></td>
               <td><?= $dirTxt[$st['dir']] ?? '' ?></td>
-              <td style="text-align:center">
+              <td class="center">
                 <?php if ($core): ?>
                   <span class="pill st-paid">أساسية</span>
                 <?php else: ?>
-                  <label style="cursor:pointer"><input type="checkbox" name="stage_enabled[<?= e($key) ?>]" <?= $st['enabled']?'checked':'' ?> style="width:18px;height:18px;accent-color:var(--gold)"> ظاهرة</label>
+                  <label class="pointer"><input type="checkbox" name="stage_enabled[<?= e($key) ?>]" <?= $st['enabled']?'checked':'' ?> class="set-cbx"> ظاهرة</label>
                 <?php endif; ?>
               </td>
             </tr>
@@ -155,20 +155,21 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         </tbody>
       </table></div>
 
-      <div class="section-head" style="margin-top:26px"><?= icon('receipt', 17) ?> قواعد مرشد الإيصالات</div>
-      <p style="font-size:var(--fs-2);color:var(--ink-mut);font-weight:500;margin:4px 0 14px">
+      <div class="section-head set-mt-lg"><?= icon('receipt', 17) ?> قواعد مرشد الإيصالات</div>
+      <p class="set-sub">
         استرشادي بحت — بيقول «الإذن ده المتوقّع فيه كذا» بس، مايلزمش بأي حاجة. اكتب توكيل في كل سطر.
       </p>
+      <?php /* الـ`style=` inline اتشال: `.field textarea` بقت معرَّفة في
+               `app.css` (كانت ناقصة من القاعدة رغم إن `partials/field.php`
+               بيرندر textarea) — فالشكل بقى واحد وبيشتغل في الوضع الليلي. */ ?>
       <div class="set-grid">
         <div class="field"><label>توكيلات التأمين (يُغني عن إيصال التخصيص للصادر)</label>
-          <textarea name="insurance_agencies" rows="4" placeholder="ميرسك&#10;هابج لويد"
-            style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:9px;font-weight:500;resize:vertical"><?= e($rcpRules['insurance'] ?? '') ?></textarea></div>
+          <textarea name="insurance_agencies" rows="4" placeholder="ميرسك&#10;هابج لويد"><?= e($rcpRules['insurance'] ?? '') ?></textarea></div>
         <div class="field"><label>توكيلات تعتيق الحاويات (صادر)</label>
-          <textarea name="ateeq_agencies" rows="4" placeholder="أركاس"
-            style="width:100%;border:1px solid var(--line2);border-radius:var(--radius-1);padding:9px;font-weight:500;resize:vertical"><?= e($rcpRules['ateeq'] ?? '') ?></textarea></div>
+          <textarea name="ateeq_agencies" rows="4" placeholder="أركاس"><?= e($rcpRules['ateeq'] ?? '') ?></textarea></div>
       </div>
 
-      <button class="btn gold" type="submit" style="margin-top:16px"><?= icon('download', 14) ?> حفظ إعدادات التايم لاين</button>
+      <button class="btn gold mt-4" type="submit"><?= icon('download', 14) ?> حفظ إعدادات التايم لاين</button>
     </form>
   </div>
 </div>
@@ -191,14 +192,14 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 .ai-res.ok{color:var(--green)} .ai-res.err{color:var(--red)} .ai-res.muted{color:var(--grey)}
 </style>
 <div class="tab-panel" id="tab-ai">
-  <div class="card" style="padding:22px;max-width:760px">
+  <div class="card set-pad narrow">
     <div class="section-head"><?= icon('cpu', 17) ?> مفاتيح المساعد الذكي (Groq AI)</div>
     <p class="maint-note">المفتاح زي كلمة السر — بلاش تنشره لأي حد. تقدر تحفظ مفتاحين وتبدّل بينهم لو خلص رصيد واحد منهم. اضغط «اختبار» عشان تتأكد إن المفتاح شغّال قبل ما تعتمد عليه.</p>
     <form method="post" action="<?= url('settings/ai') ?>" id="ai-set-form" class="no-confirm">
       <?= csrfField() ?>
       <label class="ai-onoff"><input type="checkbox" name="ai_enabled" value="1" <?= $ai['enabled']==='1'?'checked':'' ?>> تفعيل المساعد الذكي</label>
 
-      <div class="field" style="margin-top:14px;max-width:440px"><label>الموديل المستخدم</label>
+      <div class="field set-mt-narrow"><label>الموديل المستخدم</label>
         <select name="ai_model" id="ai-model">
           <?php foreach ($ai['models'] as $m): ?>
             <option value="<?= e($m) ?>" <?= $ai['model']===$m?'selected':'' ?>><?= e($m) ?></option>
@@ -229,7 +230,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         </div>
       <?php endforeach; ?>
 
-      <div style="margin-top:16px"><button class="btn gold" type="submit"><?= icon('download', 14) ?> حفظ إعدادات المساعد</button></div>
+      <div class="mt-4"><button class="btn gold" type="submit"><?= icon('download', 14) ?> حفظ إعدادات المساعد</button></div>
     </form>
   </div>
 </div>
@@ -277,7 +278,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
   <div class="flash error" role="alert"><?= icon('alert',18) ?> <?= e($userState['errors']['_form']) ?> — البيانات اللي كتبتها زي ما هي (عدا كلمة السر).</div>
 <?php endif; ?>
   <div class="set-grid">
-    <div class="card" style="padding:22px">
+    <div class="card set-pad">
       <div class="section-head"><?= icon('plus', 17) ?> إضافة مستخدم جديد</div>
       <form method="post" action="<?= url('settings/users') ?>" autocomplete="off">
         <?= csrfField() ?>
@@ -297,11 +298,11 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
           <?php foreach (($roleLabels ?? []) as $rk => $rl): ?><option value="<?= e($rk) ?>" <?= $rk === ($userState['old']['role'] ?? 'read_only') ? 'selected' : '' ?>><?= e($rl) ?></option><?php endforeach; ?>
         </select></div>
         <label class="free-login-option"><input type="checkbox" name="can_free_edit" value="1" <?= ($userState['old']['can_free_edit'] ?? '') !== '' ? 'checked' : '' ?>><span><b>صلاحية الدخول الحر</b><small>كتابة على الأيام المقفولة</small></span></label>
-        <div style="margin-top:16px"><button class="btn gold" type="submit"><?= icon('plus', 14) ?> إضافة المستخدم</button></div>
+        <div class="mt-4"><button class="btn gold" type="submit"><?= icon('plus', 14) ?> إضافة المستخدم</button></div>
       </form>
     </div>
 
-    <div class="card" style="padding:22px">
+    <div class="card set-pad">
       <div class="section-head"><?= icon('users', 17) ?> المستخدمون الحاليون</div>
       <div class="table-wrap">
       <table class="data">
@@ -309,41 +310,41 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         <tbody>
         <?php foreach (($users ?? []) as $u): $uid = (int)$u['id']; $isSelf = $uid === (int)($currentUid ?? 0); ?>
           <tr>
-            <td><?= e($u['username']) ?><?php if ($isSelf): ?> <span style="opacity:.6">(أنت)</span><?php endif; ?></td>
+            <td><?= e($u['username']) ?><?php if ($isSelf): ?> <span class="dim">(أنت)</span><?php endif; ?></td>
             <td><?= e($u['display_name'] ?: '—') ?></td>
             <td><span class="pill"><?= e(($roleLabels ?? [])[$u['role'] ?? 'read_only'] ?? 'قراءة فقط') ?></span></td>
             <td><?= !empty($u['can_free_edit']) ? '<span class="pill st-paid">مسموح</span>' : '<span class="pill">عادي</span>' ?></td>
-            <td style="text-align:left;white-space:nowrap">
+            <td class="end nowrap">
               <button type="button" class="btn ghost sm" data-edit-user="<?= $uid ?>" title="تعديل"><?= icon('edit', 14) ?> تعديل</button>
               <?php if (!$isSelf): ?>
-                <form method="post" action="<?= url('settings/users/' . $uid . '/delete') ?>" data-confirm="حذف المستخدم «<?= e($u['username']) ?>»؟" style="display:inline">
+                <form method="post" action="<?= url('settings/users/' . $uid . '/delete') ?>" data-confirm="حذف المستخدم «<?= e($u['username']) ?>»؟" >
                   <?= csrfField() ?>
                   <button type="submit" class="btn ghost sm" title="حذف"><?= icon('trash', 14) ?> حذف</button>
                 </form>
               <?php endif; ?>
             </td>
           </tr>
-          <tr class="user-edit-row" id="user-edit-<?= $uid ?>" style="display:none">
-            <td colspan="5" style="background:var(--bg)">
-              <form method="post" action="<?= url('settings/users/' . $uid) ?>" autocomplete="off" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding:6px 2px">
+          <tr class="user-edit-row" id="user-edit-<?= $uid ?>" hidden>
+            <td colspan="5" class="bg-soft">
+              <form method="post" action="<?= url('settings/users/' . $uid) ?>" autocomplete="off" class="set-row wide">
                 <?= csrfField() ?>
-                <div class="field" style="margin:0;flex:1 1 160px">
+                <div class="field flush f160">
                   <label>اسم الدخول</label>
                   <input type="text" name="username" value="<?= e($u['username']) ?>" required autocomplete="off">
                 </div>
-                <div class="field" style="margin:0;flex:1 1 160px">
+                <div class="field flush f160">
                   <label>الاسم الظاهر</label>
                   <input type="text" name="display_name" value="<?= e($u['display_name']) ?>" autocomplete="off">
                 </div>
-                <div class="field" style="margin:0;flex:1 1 160px">
+                <div class="field flush f160">
                   <label>كلمة سر جديدة (اختياري)</label>
                   <input type="password" name="password" autocomplete="new-password" minlength="8" placeholder="اتركها فاضية لعدم التغيير">
                 </div>
-                <div class="field" style="margin:0;flex:1 1 140px"><label>الدور</label><select name="role">
+                <div class="field flush f140"><label>الدور</label><select name="role">
                   <?php foreach (($roleLabels ?? []) as $rk => $rl): ?><option value="<?= e($rk) ?>" <?= ($u['role']??'read_only')===$rk?'selected':'' ?>><?= e($rl) ?></option><?php endforeach; ?>
                 </select></div>
-                <label style="display:flex;align-items:center;gap:7px;padding:9px;border:1px solid var(--line);border-radius:9px"><input type="checkbox" name="can_free_edit" value="1" <?= !empty($u['can_free_edit'])?'checked':'' ?>> صلاحية الدخول الحر</label>
-                <div style="display:flex;gap:8px">
+                <label class="set-chk"><input type="checkbox" name="can_free_edit" value="1" <?= !empty($u['can_free_edit'])?'checked':'' ?>> صلاحية الدخول الحر</label>
+                <div class="set-row">
                   <button type="submit" class="btn gold sm"><?= icon('download', 14) ?> حفظ</button>
                   <button type="button" class="btn ghost sm" data-cancel-user="<?= $uid ?>">إلغاء</button>
                 </div>
@@ -362,7 +363,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 <div class="tab-panel" id="tab-maint">
   <div class="set-grid">
     <?php if ($canManageSecrets): ?>
-    <div class="card" style="padding:22px">
+    <div class="card set-pad">
       <div class="section-head"><?= icon('download', 17) ?> النسخ الاحتياطي</div>
       <form method="post" action="<?= url('backup') ?>" class="no-confirm">
         <?= csrfField() ?>
@@ -371,9 +372,9 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
     </div>
     <?php endif; ?>
 
-    <div class="card" style="padding:22px">
+    <div class="card set-pad">
       <div class="section-head"><?= icon('file-text', 17) ?> توحيد المسميات المكررة</div>
-      <p style="color:var(--grey);line-height:1.9;margin:0 0 12px">
+      <p class="set-p">
         الزرار القديم كان بيدمج <b>من غير ما يوريك هيدمج إيه في إيه</b> وبيختار الاسم
         المعتمد لوحده. بقى فيه شاشة بتعرض كل مجموعة بعدد استخدام كل تهجئة
         <b>وانت اللي تختار</b>.

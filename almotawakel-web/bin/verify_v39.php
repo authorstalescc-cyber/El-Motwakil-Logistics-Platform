@@ -130,19 +130,40 @@ try {
     echo "  رصيد الخزنة الابتدائي: " . number_format($bal0, 2) . " ج\n";
 
     RepCustody::createDeposit($repId, 3000, $today, '__v39');
-    is('تنزيل عهدة 3000 → الخزنة ما اتغيرتش', Closing::currentBalance(), $bal0);
+    /* ⚠️ **التوقّع واعي بالنموذج** — قرار المالك (2026-07-30): «أي عهدة تتضاف
+   للمندوب كأنها في الدرج»، فتنزيل البنك بقى **بيزوّد** رصيد الخزنة.
+   `RepCustody::bankTopupActive()` هي المصدر الوحيد للفحص. */
+    $depAdds = \App\Models\RepCustody::bankTopupActive();
+    is($depAdds ? 'تنزيل عهدة 3000 → الخزنة زادت 3000 (الخزنة = كل كاش الشركة)'
+                : 'تنزيل عهدة 3000 → الخزنة ما اتغيرتش',
+       Closing::currentBalance(), $bal0 + ($depAdds ? 3000 : 0));
+    $bal0 = Closing::currentBalance();   // الأساس بقى بعد التنزيل
     is('تنزيل عهدة 3000 → عهدة المندوب زادت', RepCustody::balance($repId), $cust0 + 3000);
 
     $miscId = RepMiscExpense::create([
         'rep_id' => $repId, 'exp_date' => $today,
         'note' => '__v39_مواصلات', 'qty' => 1, 'unit_amount' => 250,
     ]);
-    is('نثرية 250 → الخزنة نقصت 250', Closing::currentBalance(), $bal0 - 250);
+    /* ⚠️ **التوقّع واعي بالعصر — القلب مقصود مش ترخية.** المرحلة ٢ من docs/16
+       شالت صرف المندوب من الدرج بالكامل (النثرية بتتدفع من محفظته، والفلوس دي
+       جاية من البنك للمندوب على طول مش من الدرج). القاعدة القديمة (v42) لسه
+       سارية على أي نثرية **قبل** بداية القاعدة الجديدة. */
+    /* ⚠️ **الشرط مفتاح + تاريخ مع بعض** — `safeChargeSql` محكومة بالاتنين
+   (`$dateCol < safeRuleFrom`)، فربط التوقّع بالمفتاح لوحده بيفشل على أي
+   يوم زرع قبل تاريخ البداية. المصدر الوحيد `RepCustody::safeRuleFrom()`. */
+    $newRule = \App\Models\RepCustody::newSafeRuleActive()
+             && $today >= \App\Models\RepCustody::safeRuleFrom();
+    $hits = $newRule ? 0 : 1;   // مضروب في المبلغ
+    is($newRule ? 'نثرية 250 → الخزنة **ما اتغيّرتش** (محفظة المندوب مستقلة)'
+                : 'نثرية 250 → الخزنة نقصت 250',
+       Closing::currentBalance(), $bal0 - 250 * $hits);
     is('نثرية 250 → عهدة المندوب نقصت 250', RepCustody::balance($repId), $cust0 + 2750);
 
     // اختبار الضغط: مبلغ ضخم يثبت عدم وجود حد أو استثناء خفي.
     Database::exec("UPDATE rep_misc_expenses SET amount=999999 WHERE id=?", [$miscId]);
-    is('نثرية بـ999,999 → الخزنة تخصمها كاملة', Closing::currentBalance(), $bal0 - 999999);
+    is($newRule ? 'نثرية بـ999,999 → الخزنة ما اتغيّرتش (مفيش تسريب من المحفظة للدرج)'
+                : 'نثرية بـ999,999 → الخزنة تخصمها كاملة',
+       Closing::currentBalance(), $bal0 - 999999 * $hits);
     Database::exec("UPDATE rep_misc_expenses SET amount=250 WHERE id=?", [$miscId]);
 
     // ═══════════════════════════════════════════ 5) العزل عن حساب العميل
@@ -188,7 +209,10 @@ try {
     is('ما اتولّدش أي stage_id', $sub['stage_id'], null);
     is('الاعتماد ما ولّدش صف في permit_stages',
         (int) Database::scalar("SELECT COUNT(*) FROM permit_stages"), $stages0);
-    is('بعد الاعتماد: الخزنة نقصت 120', Closing::currentBalance(), $balBefore - 120);
+    // ⚠️ نفس قاعدة النثريات فوق: بعد المرحلة ٢ النثرية مبقاش لها أثر على الدرج
+    is($newRule ? 'بعد الاعتماد: الخزنة ما اتغيّرتش (نثرية من محفظة المندوب)'
+                : 'بعد الاعتماد: الخزنة نقصت 120',
+       Closing::currentBalance(), $balBefore - 120 * $hits);
     is('بعد الاعتماد: عهدة المندوب نقصت 120', RepCustody::balance($repId), $custBefore - 120);
 
     $saved = RepMiscExpense::find($newMiscId);
@@ -246,7 +270,9 @@ try {
     $balEnd = Closing::currentBalance();
     echo "  الابتدائي: " . number_format($bal0, 2) . " ج\n";
     echo "  النهائي:   " . number_format($balEnd, 2) . " ج\n";
-    is('الخزنة نقصت بالمصروف المعتمد فقط (250 + 120)', $balEnd, $bal0 - 370);
+    is($newRule ? 'الخزنة ما اتأثرتش بالنثريات خالص (كلها من محفظة المندوب)'
+                : 'الخزنة نقصت بالمصروف المعتمد فقط (250 + 120)',
+       $balEnd, $bal0 - 370 * $hits);
 
 } finally {
     $pdo->rollBack();   // مفيش أي أثر بيتساب

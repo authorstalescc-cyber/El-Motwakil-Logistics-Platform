@@ -460,5 +460,32 @@ $wdToday = $wd === $today;
   total(); networkState(false);
 })();
 </script>
+
+<?php /* ⚠️ بوب-أب التأكيد بعد الحفظ (طلب المالك) — بيظهر **مرة واحدة** بعد
+         حفظ ناجح على نفس الإذن، وبيخيّر: بند تاني (الفورم قدّامه فاضي) ولا
+         رجوع للأذونات. العلامة one-shot في الجلسة فما بيرجعش مع أي ريفريش. */ ?>
+<?php if (!empty($justSaved)): ?>
+<dialog class="m-done" id="mDone" aria-labelledby="mDoneT">
+  <div class="m-done-box">
+    <span class="m-done-ic"><?= icon('check-circle', 30) ?></span>
+    <b id="mDoneT">اتسجّل ✓</b>
+    <p>البند راح للمكتب للمراجعة. تسجّل بند تاني على نفس الإذن؟</p>
+    <div class="m-done-acts">
+      <button type="button" class="is-primary" id="mDoneMore">سجّل بند تاني</button>
+      <a href="<?= url('m') ?>">رجوع للأذونات</a>
+    </div>
+  </div>
+</dialog>
+<script>
+(function () {
+  var d = document.getElementById('mDone');
+  if (!d) { return; }
+  try { d.showModal(); } catch (e) { d.setAttribute('open', ''); }
+  document.getElementById('mDoneMore').addEventListener('click', function () {
+    try { d.close(); } catch (e) { d.removeAttribute('open'); }
+  });
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>

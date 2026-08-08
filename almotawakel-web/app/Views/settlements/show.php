@@ -8,42 +8,42 @@ $payOld = $paymentState['old']; $payErrors = $paymentState['errors']; ?>
 </div>
 
 <?php if ((int)($bill['is_legacy'] ?? 0) === 1): ?>
-<div class="card" style="margin-bottom:14px;padding:13px 16px;border-inline-start:5px solid #c9a227;background:#fff9e8;color:#6d5510">
+<div class="card legacy-note">
   <b>بوليصة قديمة:</b> متابعتها وسدادها هنا لا ينشئ إذنًا أو حركة، وقيمها التاريخية لا تدخل العهدة أو التقفيل.
 </div>
 <?php endif; ?>
 
 <div class="two-col">
-  <div class="card" style="padding:20px">
+  <div class="card pad">
     <div class="section-head">بيانات البوليصة</div>
     <table class="data">
       <tbody>
-        <tr><td style="background:var(--bg);font-weight:500">النوع</td><td><span class="pill pill-<?= $bill['bill_type'] ?>"><?= Bill::TYPE_LABELS[$bill['bill_type']]??'' ?></span></td></tr>
-        <tr><td style="background:var(--bg);font-weight:500">رقم البوليصة</td><td><?= e($bill['bill_number']) ?></td></tr>
-        <tr><td style="background:var(--bg);font-weight:500">العميل</td><td><?= e($bill['company'] ?: $bill['declaration_owner']) ?></td></tr>
-        <tr><td style="background:var(--bg);font-weight:500">التاريخ</td><td><?= dfmt($bill['bill_date']) ?></td></tr>
-        <tr><td style="background:var(--bg);font-weight:500">دين البوليصة</td><td style="font-weight:600"><?= money($bill['debt']) ?></td></tr>
-        <tr><td style="background:var(--bg);font-weight:500">المدفوع</td><td class="pos"><?= money($bill['paid']) ?></td></tr>
-        <tr><td style="background:var(--bg);font-weight:500">المتبقي</td><td class="<?= $bill['remaining']>0?'neg':'' ?>"><?= money($bill['remaining']) ?></td></tr>
-        <tr><td style="background:var(--bg);font-weight:500">الحالة</td><td><span class="pill st-<?= $bill['pay_status'] ?>"><?= Bill::STATUS_LABELS[$bill['pay_status']] ?></span></td></tr>
+        <tr><td class="dba-k">النوع</td><td><span class="pill pill-<?= $bill['bill_type'] ?>"><?= Bill::TYPE_LABELS[$bill['bill_type']]??'' ?></span></td></tr>
+        <tr><td class="dba-k">رقم البوليصة</td><td><?= e($bill['bill_number']) ?></td></tr>
+        <tr><td class="dba-k">العميل</td><td><?= e($bill['company'] ?: $bill['declaration_owner']) ?></td></tr>
+        <tr><td class="dba-k">التاريخ</td><td><?= dfmt($bill['bill_date']) ?></td></tr>
+        <tr><td class="dba-k">دين البوليصة</td><td class="dbt-tot"><?= money($bill['debt']) ?></td></tr>
+        <tr><td class="dba-k">المدفوع</td><td class="pos"><?= money($bill['paid']) ?></td></tr>
+        <tr><td class="dba-k">المتبقي</td><td class="<?= $bill['remaining']>0?'neg':'' ?>"><?= money($bill['remaining']) ?></td></tr>
+        <tr><td class="dba-k">الحالة</td><td><span class="pill st-<?= $bill['pay_status'] ?>"><?= Bill::STATUS_LABELS[$bill['pay_status']] ?></span></td></tr>
       </tbody>
     </table>
 
     <?php if ($bill['remaining'] > 0): ?>
-    <div class="section-head" style="margin-top:22px">تسجيل دفعة</div>
+    <div class="section-head dba-sec">تسجيل دفعة</div>
     <?= formErrorSummary($payErrors) ?>
     <form class="inline-form js-dirty-form" method="post" action="<?= url('settlements/'.$bill['id'].'/pay') ?>">
       <?= csrfField() ?>
       <?= formStateFields($paymentState['token'], $paymentState['back']) ?>
-      <div class="field" style="margin:0"><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required style="max-width:130px"<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
-      <div class="field" style="margin:0"><input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>"<?= fieldErrorAttrs('pay_date', $payErrors) ?>><?= fieldError('pay_date', $payErrors) ?></div>
+      <div class="field flush"><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required class="dbt-amt"<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
+      <div class="field flush"><input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>"<?= fieldErrorAttrs('pay_date', $payErrors) ?>><?= fieldError('pay_date', $payErrors) ?></div>
       <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)">
       <button class="btn gold sm" type="submit" data-primary-submit><?= icon('plus', 14) ?> دفع</button>
     </form>
     <?php endif; ?>
   </div>
 
-  <div class="card" style="padding:20px">
+  <div class="card pad">
     <div class="section-head">سجل الدفعات (<?= count($payments) ?>)</div>
     <div class="table-wrap"><table class="data">
       <thead><tr><th class="g-identity">التاريخ</th><th class="g-revenue">المبلغ</th><th class="g-identity">ملاحظة</th><th class="g-identity">حذف</th></tr></thead>
@@ -52,10 +52,10 @@ $payOld = $paymentState['old']; $payErrors = $paymentState['errors']; ?>
           <tr>
             <td><?= dfmt($p['pay_date']) ?></td>
             <td class="pos"><?= money($p['amount'],false) ?></td>
-            <td><?= e($p['note']) ?><?php if ((int)($p['is_legacy'] ?? 0) === 1): ?> <span class="pill" style="background:#7a5f0e;color:#fff">تاريخي</span><?php endif; ?></td>
+            <td><?= e($p['note']) ?><?php if ((int)($p['is_legacy'] ?? 0) === 1): ?> <span class="pill legacy-pill">تاريخي</span><?php endif; ?></td>
             <td>
               <?php if ((int)($p['is_legacy'] ?? 0) !== 1): ?>
-              <form class="confirm-delete" method="post" action="<?= url('settlements/'.$bill['id'].'/payment/'.$p['id'].'/delete') ?>" style="margin:0">
+              <form class="confirm-delete" method="post" action="<?= url('settlements/'.$bill['id'].'/payment/'.$p['id'].'/delete') ?>">
                 <?= csrfField() ?><?= formStateFields(FormState::token(), 'settlements/'.(int)$bill['id']) ?><button class="del" type="submit" title="حذف"><?= icon('trash', 14) ?></button>
               </form>
               <?php else: ?><span title="دفعة تاريخية ثابتة"><?= icon('alert', 14) ?></span><?php endif; ?>

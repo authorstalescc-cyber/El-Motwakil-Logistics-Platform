@@ -27,12 +27,12 @@ $mode = $mode ?? 'view';
        <?= $mode==='manage' ? 'aria-current="page"' : '' ?>><?= icon('edit',15) ?> تعديل</a>
   </div>
 
-  <span style="flex:1"></span>
+  <span class="ps-sp"></span>
   <a class="btn ghost sm" href="<?= url('permits/'.$pid.'/print') ?>" target="_blank"><?= icon('file-text', 14) ?> طباعة المراجعة</a>
   <a class="btn ghost sm" href="<?= url('permits/'.$pid.'/invoice') ?>"><?= icon('receipt', 14) ?> إصدار فاتورة</a>
   <?php if ($mode === 'manage'): ?>
     <button class="btn sm" type="submit" form="permitDataForm"><?= icon('download', 14) ?> حفظ الإذن</button>
-    <form method="post" action="<?= url('permits/'.$pid.'/close') ?>" style="margin:0" <?= $isClosed?'':'class="confirm-financial" data-confirm="تأكيد إتمام وإغلاق الإذن؟"' ?>>
+    <form method="post" action="<?= url('permits/'.$pid.'/close') ?>" <?= $isClosed?'':'class="confirm-financial" data-confirm="تأكيد إتمام وإغلاق الإذن؟"' ?>>
       <?= csrfField() ?>
       <button class="btn sm <?= $isClosed?'ghost':'gold' ?>" type="submit"><?= $isClosed?'↩️ إعادة فتح':'✅ إتمام الإذن' ?></button>
     </form>

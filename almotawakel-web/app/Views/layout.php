@@ -46,6 +46,8 @@ $navRaw = [
     ['settlements', 'السداد',        'banknote',      'SettlementController@index',  null],
 
     ['__sec', 'الخزنة والمصروفات', null, null, null],
+    // ⚠️ خزنة الشركة قبل خزنة المكتب عن قصد — هي الأكبر واللي بتغذّيها (v66).
+    ['company-safe', 'خزنة الشركة',  'home',          'CompanySafeController@index', null],
     ['custody',     'خزنة المكتب',   'briefcase',     'CustodyController@index',     null],
     ['office',      'كروت الفيزا',   'credit-card',   'OfficeController@index',      null],
     ['expenses',    'المصروفات',     'trending-down', 'ExpenseController@index',     'receipts_missing'],
@@ -369,6 +371,7 @@ $cmdSyn = [
     'debts'   => 'مديونية مديونيات دين ديون كشف ضمان',
     'payments'=> 'تحصيلات العملاء سداد دفعات قبض',
     'custody' => 'عهدة رصيد خزنة محفظة رصيد العهدة خزنه المكتب درج',
+    'company-safe' => 'خزنة الشركة الخزنه الكبيرة الرئيسية بنك ايداع تحويل للمكتب تغذية',
     'office'  => 'فيزا كارت كروت رصيد المكتب بنك كروت الفيزا',
     'cars'    => 'سيارة سيارات عربية عربيات لوري تريلا اسطول سولار بنزين اصلاح كاوتش اداء السيارة',
     'reps'    => 'مندوب مناديب مرتب مرتبات رواتب سلفة خصم',
@@ -430,12 +433,16 @@ foreach ($cmdCreate as [$label, $seg, $ic, $kw]) {
     <div class="d-modal-body" id="uiDrillBody"></div>
   </div>
 </div>
-<script>window.__SEARCH_API = <?= js_json(url('search/api')) ?>; window.__SEARCH_PAGE = <?= js_json(url('search')) ?>; window.__CMD_NAV = <?= js_json($cmdNav) ?>; window.__NAME_SUGGEST_API = <?= js_json(url('suggest/names')) ?>; window.__BILL_NUMBER_CHECK_API = <?= js_json(url('bawalis/check-number')) ?>; window.__TOASTS = <?= js_json($__toasts) ?>; window.__NOTIF_PING = <?= js_json(url('notifications/ping')) ?>; window.__NOTIF_READ = <?= js_json(url('notifications/read/__ID__')) ?>; window.__NOTIF_READ_ALL = <?= js_json(url('notifications/read-all')) ?>; window.__NOTIF_SNOOZE = <?= js_json(url('notifications/snooze/__ID__')) ?>; window.__NOTIF_PREFS = <?= js_json(url('notifications/prefs')) ?>; window.__CSRF = <?= js_json(Auth::csrf()) ?>;</script>
+<script>window.__SEARCH_API = <?= js_json(url('search/api')) ?>; window.__SEARCH_PAGE = <?= js_json(url('search')) ?>; window.__CMD_NAV = <?= js_json($cmdNav) ?>; window.__NAME_SUGGEST_API = <?= js_json(url('suggest/names')) ?>; window.__BILL_NUMBER_CHECK_API = <?= js_json(url('bawalis/check-number')) ?>; window.__OFFICE_CAR_CHECK_API = <?= js_json(url('cars/is-office')) ?>; window.__TOASTS = <?= js_json($__toasts) ?>; window.__NOTIF_PING = <?= js_json(url('notifications/ping')) ?>; window.__NOTIF_READ = <?= js_json(url('notifications/read/__ID__')) ?>; window.__NOTIF_READ_ALL = <?= js_json(url('notifications/read-all')) ?>; window.__NOTIF_SNOOZE = <?= js_json(url('notifications/snooze/__ID__')) ?>; window.__NOTIF_PREFS = <?= js_json(url('notifications/prefs')) ?>; window.__CSRF = <?= js_json(Auth::csrf()) ?>;</script>
 <?php $appJs = \App\Core\App::basePath('public/assets/js/app.js'); $appJsV = is_file($appJs) ? filemtime($appJs) : 1; ?>
 <?php $rsJs = \App\Core\App::basePath('public/assets/js/resume-scroll.js'); $rsJsV = is_file($rsJs) ? filemtime($rsJs) : 1; ?>
 <?php /* الرجوع لنفس المكان بعد الحفظ — ملف مشترك مع بوابة المندوب (مش جوّه app.js
          لأن /m ما بتحمّلوش). defer عشان يشتغل والـDOM جاهز. */ ?>
 <script defer src="<?= url('assets/js/resume-scroll.js') ?>?v=<?= $rsJsV ?>"></script>
+<?php $laJs = \App\Core\App::basePath('public/assets/js/lookup-autofill.js'); ?>
+<?php /* شركة الشحن = العميل تلقائيًا — ملف مشترك بين المكتب وبوابة المندوب
+         (`/m` ما بتحمّلش app.js — نفس سبب `resume-scroll.js`). */ ?>
+<script defer src="<?= url('assets/js/lookup-autofill.js') ?>?v=<?= is_file($laJs) ? filemtime($laJs) : 1 ?>"></script>
 <script src="<?= url('assets/js/app.js') ?>?v=<?= $appJsV ?>"></script>
 <?= $scripts ?? '' ?>
 </body>
