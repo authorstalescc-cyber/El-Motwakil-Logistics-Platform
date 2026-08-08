@@ -19,9 +19,9 @@ use App\Core\FormState;
 
     <?php if (!$openPermits): ?>
       <?php partial('empty', [
-        'emoji' => '📭',
+        'icon' => 'inbox',
         'title' => 'مفيش أذونات مفتوحة متاحة للتنزيل',
-        'action' => ['label' => '📄 الأذونات والشهادات', 'url' => url('permits')],
+        'action' => ['label' => 'الأذونات والشهادات', 'url' => url('permits')],
       ]); ?>
     <?php else: ?>
       <input type="search" class="asg-q" placeholder="بحث"
@@ -93,7 +93,7 @@ use App\Core\FormState;
   'body'   => function () use ($assigns, $repId) {
     if (!$assigns) {
       partial('empty', [
-        'emoji' => '📋',
+        'icon' => 'clipboard',
         'title' => 'مفيش أذونات منزّلة له',
       ]);
       return;
@@ -142,30 +142,6 @@ use App\Core\FormState;
   },
 ]); ?>
 
-<style>
-/* ── قائمة تنزيل الأذونات: بحث + كروت قابلة للاختيار ── */
-.asg-q{width:100%;padding:9px 12px;border:1px solid var(--line2);border-radius:var(--radius-2);
-  font-family:inherit;font-size:var(--fs-2);background:var(--card);margin-bottom:9px}
-.asg-q:focus{outline:none;border-color:var(--navy)}
-
-.asg-list{max-height:340px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius-3);background:var(--card)}
-.asg-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;cursor:pointer;
-  border-bottom:1px solid var(--line)}
-.asg-item:last-of-type{border-bottom:0}
-.asg-item:hover{background:var(--zebra)}
-.asg-item input{width:17px;height:17px;margin:2px 0 0;flex:none;cursor:pointer}
-/* الكارت المختار يبان فورًا — المالك بيختار كذا واحد ولازم يشوف اللي علّمه */
-.asg-item:has(input:checked){background:var(--green-lt)}
-
-.asg-body{flex:1;min-width:0}
-.asg-top{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:var(--fs-2)}
-.asg-sub{display:flex;gap:5px;flex-wrap:wrap;font-size:var(--fs-1);color:var(--grey);margin-top:3px}
-.asg-none{padding:22px 12px;text-align:center;color:var(--grey);font-size:var(--fs-2)}
-
-.asg-foot{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
-.asg-count{font-size:var(--fs-1);color:var(--grey);font-weight:500}
-.asg-count.on{color:var(--green)}
-</style>
 
 <script>
 (function () {

@@ -109,9 +109,9 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
       <?php if (!$dayLedger): ?>
         <tr><td colspan="9">
           <?php partial('empty', [
-            'emoji' => '📆',
+            'icon' => 'calendar',
             'title' => 'مفيش أي حركة عهدة له لسه',
-            'action' => ['label' => '💰 نزّله عهدة', 'url' => url('rep-custody/' . $repId . '?tab=day#deposit-form')],
+            'action' => ['label' => 'نزّله عهدة', 'url' => url('rep-custody/' . $repId . '?tab=day#deposit-form')],
           ]); ?>
         </td></tr>
       <?php else: foreach ($dayLedger as $d): ?>
@@ -179,7 +179,8 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
     <?= csrfField() ?>
     <?= formStateFields($settleState['token'], $settleState['back']) ?>
     <?php if ($b['balance'] < 0): ?>
-      <div class="note mb">الرصيد سالب: الشركة مستحق عليها للمندوب <?= money(abs($b['balance']), false) ?>. هذا وضع عمل مسموح، ولا يوجد مبلغ يرجعه الآن.</div>
+      <?php /* تحذير وظيفي (بيمنع قرار غلط) — بس في ≤٦ كلمات بدل جملتين */ ?>
+      <div class="note mb"><?= icon('alert', 15) ?> مستحق للمندوب <b><?= money(abs($b['balance']), false) ?></b> — مفيش مبلغ يرجّعه.</div>
     <?php endif; ?>
     <div class="form-grid two">
       <div class="field"><label>رجّع كام؟ (<?= $b['balance'] < 0 ? 'مستحق له ' . money(abs($b['balance']), false) : 'الباقي معاه ' . money($b['balance'], false) ?>)</label>
@@ -194,10 +195,9 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
     </div>
     <div class="field"><label>ملاحظة (اختياري)</label>
       <input type="text" name="note" value="<?= e($settleOld['note'] ?? '') ?>" maxlength="255"></div>
-    <div class="note mb" style="font-size:var(--fs-1)">
-      المرتجع بيقفل حساب العهدة مع المندوب بس — <b>مش بيتضاف للخزنة</b>، لأن الفلوس
-      دي أصلاً ماخرجتش منها: الخزنة بتنقص وقت ما المندوب يصرف، مش وقت ما تنزّلها له.
-    </div>
+    <?php /* نفس الشارة اللي في `_settle_zero.php` بالحرف — كانت فقرة ٢٥ كلمة
+             بتشرح «ليه»؛ الأثر نفسه (مفيش مساس بالخزنة) هو المعلومة. */ ?>
+    <div class="mb"><span class="pill st-partial">بلا أثر على الخزنة</span></div>
     <button class="btn" type="submit" data-primary-submit <?= $b['balance'] <= 0 ? 'disabled' : '' ?>><?= icon('check-circle', 15) ?> سجّل التسوية</button>
   </form>
 </details>
@@ -212,7 +212,7 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
   'class'  => 'mb',
   'body'   => function () use ($spending, $day) {
     if (!$spending) {
-      partial('empty', ['emoji' => '🧾', 'title' => 'لسه ما صرفش حاجة من عهدته',]);
+      partial('empty', ['icon' => 'receipt', 'title' => 'لسه ما صرفش حاجة من عهدته',]);
       return;
     }
     foreach ($spending as $s) {
@@ -383,7 +383,7 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
     'scroll' => true,
     'body'   => function () use ($deposits, $day, $back) {
       if (!$deposits) {
-        partial('empty', ['emoji' => '💰', 'title' => 'لا تنزيلات بعد',]);
+        partial('empty', ['icon' => 'wallet', 'title' => 'لا تنزيلات بعد',]);
         return;
       }
       foreach ($deposits as $d) {
@@ -418,7 +418,7 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
     'scroll' => true,
     'body'   => function () use ($settlements, $back) {
       if (!$settlements) {
-        partial('empty', ['emoji' => '🤝', 'title' => 'لا تسويات بعد',]);
+        partial('empty', ['icon' => 'users', 'title' => 'لا تسويات بعد',]);
         return;
       }
       foreach ($settlements as $s) {
@@ -449,7 +449,3 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
   ]); ?>
 </div>
 
-<style>
-/* صف يوم العمل بيتلوّن في كل جداول الحساب عشان المالك يلاقيه بسرعة */
-.rc-row-today > td{background:var(--gold-light)}
-</style>

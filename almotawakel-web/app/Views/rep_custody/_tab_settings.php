@@ -29,7 +29,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
       <div class="rts-row tight">
         <?php if ($cred['wa'] !== ''): ?>
           <a class="btn btn-wa" target="_blank" rel="noopener"
-             href="<?= e($cred['wa']) ?>">📱 ابعتهاله على واتساب</a>
+             href="<?= e($cred['wa']) ?>"><?= icon('send', 15) ?> ابعتهاله على واتساب</a>
         <?php else: ?>
           <span class="pill st-late">مفيش رقم موبايل صح للمندوب —
             <a href="<?= url('reps/' . $repId . '/edit') ?>">ضيفه الأول</a></span>
@@ -60,7 +60,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
     var t = document.getElementById('credMsg').textContent;
     navigator.clipboard.writeText(t).then(function () {
       var b = document.getElementById('copyCred');
-      b.textContent = '✓ اتنسخت'; setTimeout(function () { b.textContent = '📋 انسخ الرسالة'; }, 1800);
+      b.textContent = 'اتنسخت'; setTimeout(function () { b.textContent = 'انسخ الرسالة'; }, 1800);
     });
   });
   </script>
@@ -115,7 +115,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
             </div>
           <?php endif; ?>
         </div>
-        <button class="btn" type="submit" data-primary-submit><?= $account ? '💾 احفظ التعديل' : '➕ اعمل الحساب' ?></button>
+        <button class="btn" type="submit" data-primary-submit><?= $account ? 'احفظ التعديل' : 'اعمل الحساب' ?></button>
       </form>
     </div>
 
@@ -139,7 +139,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
         <form method="post" action="<?= url('rep-custody/' . $repId . '/account/toggle') ?>" >
           <?= csrfField() ?>
           <?= formStateFields(FormState::token(), $back) ?>
-          <button class="edit" type="submit"><?= $account['status'] === 'active' ? '⏸ أوقف الدخول' : '▶️ فعّل' ?></button>
+          <button class="edit" type="submit"><?= $account['status'] === 'active' ? 'أوقف الدخول' : 'فعّل' ?></button>
         </form>
         <div class="mt-2">
           الرابط اللي يفتحه: <code><?= e(rtrim(public_base_url() ?: url(''), '/')) ?>/m</code>
@@ -175,7 +175,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
           <form method="post" action="<?= url('rep-custody/' . $repId . '/permit-perm') ?>" >
             <?= csrfField() ?>
             <?= formStateFields(FormState::token(), $back . '#permit-perm') ?>
-            <button class="edit" type="submit"><?= $canAddPermit ? '⛔ اسحب الصلاحية' : '✅ اسمح له' ?></button>
+            <button class="edit" type="submit"><?= $canAddPermit ? 'اسحب الصلاحية' : 'اسمح له' ?></button>
           </form>
         <?php endif; ?>
       </div>
@@ -204,7 +204,7 @@ $back = 'rep-custody/' . $repId . '?tab=settings';
           <form method="post" action="<?= url('rep-custody/' . $repId . '/watch-perm') ?>" >
             <?= csrfField() ?>
             <?= formStateFields(FormState::token(), $back . '#watch-perm') ?>
-            <button class="edit" type="submit"><?= $canWatchTeam ? '⛔ اسحب المتابعة' : '✅ خليه يتابع' ?></button>
+            <button class="edit" type="submit"><?= $canWatchTeam ? 'اسحب المتابعة' : 'خليه يتابع' ?></button>
           </form>
         <?php endif; ?>
       </div>

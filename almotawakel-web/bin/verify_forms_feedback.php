@@ -125,9 +125,15 @@ try {
         $repCard .= (string) file_get_contents($f);
     }
     $repCustodyController = (string) file_get_contents(dirname(__DIR__) . '/app/Controllers/RepCustodyController.php');
+    /* ⚠️ **كان مربوطًا بجملة حرفية** («هذا وضع عمل مسموح») — وده بالظبط اللي
+       التوثيق بيحذّر منه: الفحص المكتوب على تسمية بيفشل بإنذار كاذب أول إعادة
+       صياغة مشروعة. حصل فعلاً لما الجملة اتقصّت لتحذير ≤٦ كلمات (قانون التصميم).
+       الضمانة الحقيقية اتنين ولسه محروستين: **السلوك** (الرصيد السالب مقبول —
+       `verify_v41`) و**الإبلاغ** (الشاشة بتقول إن ده مستحق للمندوب) — والتاني
+       بيتفحص بالمعنى دلوقتي مش بالصياغة. */
     chk(str_contains($v41, 'RepCustody::balance($repId) === -10.0')
-        && str_contains($repCard, 'هذا وضع عمل مسموح'),
-        'الرصيد السالب لعهدة المندوب يظل مسموحًا ويُشرح كمستحق للمندوب');
+        && str_contains($repCard, 'مستحق للمندوب'),
+        'الرصيد السالب لعهدة المندوب يظل مسموحًا ويُبلَّغ كمستحق للمندوب');
     chk(str_contains($repCard, 'formStateFields($depositState[\'token\']')
         && str_contains($repCard, 'formStateFields($settleState[\'token\']')
         && str_contains($repCustodyController, "formFailure('rep_custody.deposit.")

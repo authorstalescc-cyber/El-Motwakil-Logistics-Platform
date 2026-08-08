@@ -2948,6 +2948,154 @@ button.d-hchip{cursor:pointer;font-family:inherit}
 /* ═══════════ لوحة متابعة عهدة المناديب (v35) — عرض فقط ═══════════ */
 .d-sec-head .d-sec-year.alert{background:var(--red-lt);border-color:#e6bcbc;color:var(--red)}
 
+/* ═══ كارت المندوب — الترويسة الموحّدة وأقسامه
+   ⚠️ كل ده كان `<style>` محلي جوّه `card.php` (٤٥ سطر) و`_settle_zero.php`
+      و`_tab_permits.php` — مخالف لقانون التصميم بند ٧، ومعناه إن الشكل
+      بيتفرّق عن النظام مع أول تعديل في التوكنز. */
+.rc-hero{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-3);
+  box-shadow:var(--shadow);padding:16px 18px;margin-bottom:var(--d-gap)}
+.rc-hero-id{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.rc-hero-av{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;
+  flex-shrink:0;border-radius:50%;background:var(--navy);color:var(--gold)}
+.rc-hero-name{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0}
+.rc-hero-name b{font-size:var(--fs-5);font-weight:600;color:var(--navy)}
+.rc-hero-name em{font-style:normal;font-size:var(--fs-2);color:var(--grey)}
+.rc-hero-acts{display:flex;gap:8px;flex-wrap:wrap;margin-inline-start:auto}
+
+/* شبكة الترويسة — الرقم البطل بيمتد والباقي حواليه. الأرقام كلها `stat`
+   فالشكل بيتورّث من لغة النظام؛ اللي هنا **تخطيط بس** لا إعادة تعريف. */
+.rc-hero-grid{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);
+  grid-template-columns:repeat(2,minmax(0,1fr))}
+.rc-hero-grid .d-kpi.hero{grid-column:1 / -1}
+@media(min-width:900px){
+  .rc-hero-grid{grid-template-columns:1.4fr repeat(4,minmax(0,1fr))}
+  .rc-hero-grid .d-kpi.hero{grid-column:auto;grid-row:span 1}
+}
+/* نمط «الرقم البطل» في المكوّن نفسه — متاح لأي شاشة تانية */
+.d-kpi.hero{background:var(--gold-light);border-color:var(--gold)}
+.d-kpi.hero .d-kpi-val{font-size:var(--fs-7);letter-spacing:-.5px}
+.d-kpi.hero .d-kpi-lbl{font-weight:600;color:var(--navy)}
+.d-kpi.hero:hover{border-color:var(--gold-dark)}
+.rc-hero-src{margin-top:10px;font-size:var(--fs-1);font-weight:500;color:var(--grey)}
+@media(max-width:640px){
+  .rc-hero{padding:14px}
+  .rc-hero-acts{margin-inline-start:0;width:100%}
+  .rc-hero-acts .btn{flex:1 1 auto;justify-content:center}
+  .rc-hero-grid{grid-template-columns:minmax(0,1fr)}
+}
+
+.rc-pend{background:var(--gold-light);border-color:var(--gold)}
+
+/* شرائح أداء اليوم */
+.rc-perf{display:flex;gap:10px;flex-wrap:wrap;padding:14px 18px}
+.rc-chip{display:flex;flex-direction:column;gap:2px;min-width:120px;flex:1 1 120px;
+  border:1px solid var(--line);border-radius:var(--radius-2);padding:10px 12px;background:var(--bg)}
+.rc-chip .k{font-size:var(--fs-1);color:var(--grey);font-weight:500}
+.rc-chip .v{font-size:var(--fs-4);font-weight:700;color:var(--navy);line-height:1.2}
+.rc-chip .n{font-size:var(--fs-1);color:var(--grey)}
+.rc-chip.on{border-color:var(--gold);background:var(--gold-light)}
+/* صف «برّه العهدة» — نفس الشكل بحدّ فاصل عشان يُقرا كمجموعة تانية بلا جملة تشرحها */
+.rc-perf.out{padding-top:0;margin-top:-4px}
+.rc-perf.out .rc-chip{border-style:dashed}
+.rc-chip.cash{border-style:solid;border-color:var(--navy);background:var(--navy)}
+.rc-chip.cash .k,.rc-chip.cash .k svg{color:#dae4ef}
+.rc-chip.cash .v{color:var(--gold)}
+/* تحذير «صرف أكتر من عهدة اليوم» — شارة مش فقرة */
+.rc-eq-warn{display:flex;align-items:center;gap:7px;margin:0 18px 16px;padding:8px 12px;
+  border:1px solid #e6bcbc;border-radius:var(--radius-2);background:var(--red-lt);
+  color:var(--red);font-size:var(--fs-1);font-weight:600}
+.rc-eq-warn svg{flex-shrink:0}
+
+/* معادلة عهدة اليوم */
+.rc-eq{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:14px 18px;
+  font-size:var(--fs-2);color:var(--navy)}
+.rc-eq-part{display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding:6px 12px;border:1px solid var(--line);border-radius:var(--radius-2);background:var(--bg);min-width:88px}
+.rc-eq-part .k{font-size:var(--fs-1);color:var(--grey);font-weight:500;white-space:nowrap}
+.rc-eq-part .v{font-weight:700}
+.rc-eq-part.res{background:var(--gold-light);border-color:var(--gold)}
+/* الخطوة «دفعه ومستني اعتمادك» — فلوس خرجت من إيده والبند لسه في المراجعة */
+.rc-eq-part.wait{background:var(--sader-lt);border-color:#e6cfae}
+.rc-eq-part.wait .v{color:var(--sader-dk)}
+.rc-eq-op{font-weight:700;color:var(--grey)}
+
+/* درج تعديل التحويل لزميل — `<details>` بلا جافاسكريبت عن قصد (الكارت بيترندر
+   في تبويبات وروابط حقيقية، فأي خطّاف JS هنا نقطة فشل صامت زيادة) */
+.rc-trf-edit{margin:0 0 var(--space-2);border:1px solid var(--line);
+  border-radius:var(--radius-2);background:var(--zebra)}
+.rc-trf-edit[open]{background:var(--card);border-color:var(--navy)}
+.rc-trf-sum{padding:var(--space-2) var(--space-3);cursor:pointer;font-size:var(--fs-1);
+  color:var(--grey);font-weight:var(--fw-bold);list-style:none}
+.rc-trf-sum::-webkit-details-marker{display:none}
+.rc-trf-edit[open] .rc-trf-sum{color:var(--navy);border-bottom:1px solid var(--line)}
+.rc-trf-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:var(--space-3);padding:var(--space-3)}
+.rc-trf-acts{display:flex;align-items:end}
+.rc-trf-del{padding:0 var(--space-3) var(--space-3)}
+@media (max-width:640px){
+  .rc-trf-form{grid-template-columns:1fr}
+  .rc-eq{gap:6px;font-size:var(--fs-1)}
+  .rc-eq-part{min-width:72px;padding:6px 9px}
+}
+
+
+/* ─── كارت المندوب: أقسامه (كانت `<style>` محلية في التبويبات) ─── */
+
+/* ── قائمة تنزيل الأذونات: بحث + كروت قابلة للاختيار ── */
+.asg-q{width:100%;padding:9px 12px;border:1px solid var(--line2);border-radius:var(--radius-2);
+  font-family:inherit;font-size:var(--fs-2);background:var(--card);margin-bottom:9px}
+.asg-q:focus{outline:none;border-color:var(--navy)}
+
+.asg-list{max-height:340px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius-3);background:var(--card)}
+.asg-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;cursor:pointer;
+  border-bottom:1px solid var(--line)}
+.asg-item:last-of-type{border-bottom:0}
+.asg-item:hover{background:var(--zebra)}
+.asg-item input{width:17px;height:17px;margin:2px 0 0;flex:none;cursor:pointer}
+/* الكارت المختار يبان فورًا — المالك بيختار كذا واحد ولازم يشوف اللي علّمه */
+.asg-item:has(input:checked){background:var(--green-lt)}
+
+.asg-body{flex:1;min-width:0}
+.asg-top{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:var(--fs-2)}
+.asg-sub{display:flex;gap:5px;flex-wrap:wrap;font-size:var(--fs-1);color:var(--grey);margin-top:3px}
+.asg-none{padding:22px 12px;text-align:center;color:var(--grey);font-size:var(--fs-2)}
+
+.asg-foot{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.asg-count{font-size:var(--fs-1);color:var(--grey);font-weight:500}
+.asg-count.on{color:var(--green)}
+
+.rc-zero-body{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;padding:14px 18px}
+.rc-zero-num{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-width:150px;padding:12px 16px;border:1px solid var(--gold);border-radius:var(--radius-2);
+  background:var(--gold-light)}
+.rc-zero-num .k{font-size:var(--fs-1);color:var(--grey);font-weight:500;white-space:nowrap}
+.rc-zero-num .v{font-size:var(--fs-6);font-weight:700;color:var(--navy);line-height:1.1}
+.rc-zero-num .v.neg{color:#B3261E}
+.rc-zero-num .u{font-size:var(--fs-1);color:var(--grey)}
+.rc-zero-txt{flex:1 1 260px;font-size:var(--fs-2);color:var(--navy)}
+.rc-zero-txt p{margin:0}
+.rc-zero.is-clean .rc-zero-num{border-color:var(--line);background:var(--bg)}
+.rc-zero-acts{flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap}
+.rc-zero-block{display:flex;gap:8px;margin:10px 0 0;padding:10px 12px;border-radius:var(--radius-2);
+  background:#fdf3f2;border:1px solid #f0c8c4;color:#8a2b22;font-size:var(--fs-1);line-height:1.7}
+.rc-zero-block svg{flex:none;margin-top:2px}
+.rc-zero-days{margin:10px 0 0;font-size:var(--fs-1);color:var(--navy)}
+.rc-zero-days ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.rc-zero-days li{display:flex;gap:6px;align-items:center;padding:3px 9px;border-radius:var(--radius-pill);
+  background:var(--zebra);border:1px solid var(--line)}
+.rc-zero-days li b{font-weight:600}
+.rc-zero-days li b.neg{color:#B3261E}
+.rc-zero-days li.more{color:var(--grey)}
+@media (max-width:640px){
+  .rc-zero-body{gap:12px}
+  .rc-zero-num{width:100%}
+  .rc-zero-acts{flex-direction:column}
+  .rc-zero-acts form,.rc-zero-acts .btn{width:100%;justify-content:center}
+}
+
+/* صف يوم العمل بيتلوّن في كل جداول الحساب عشان المالك يلاقيه بسرعة */
+.rc-row-today > td{background:var(--gold-light)}
+
 /* تنقّل بين أيام العرض (`partials/day_nav.php`) — عدسة قراءة مش تغيير ليوم الشغل */
 .day-nav{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
 .day-nav-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;

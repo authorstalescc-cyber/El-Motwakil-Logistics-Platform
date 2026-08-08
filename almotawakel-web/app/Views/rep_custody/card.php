@@ -44,90 +44,115 @@ $pendingDaySum = round((float) ($dayPendingSum ?? 0), 2);
 // «فاضل معاه» = رصيد اليوم بعد خصم المستنّي كمان — نفس تعريف شاشة المندوب
 // (`RepPortal::dayPocket`) وشاشة كل المناديب (`dayTotalsByRep`).
 $dayLeft = round((float) $dayB['balance'] - $pendingDaySum, 2);
-?>
-<div class="toolbar">
-  <div class="section-head" style="margin:0"><?= icon('user', 18) ?> <?= e($rep['name']) ?></div>
-  <?php if (($rep['status'] ?? 'active') !== 'active'): ?>
-    <span class="pill st-partial">متوقف</span>
-  <?php endif; ?>
-  <div class="spacer"></div>
-  <?php /* الأرصدة مقنّعة افتراضيًّا — المعالج عام في app.js (مش سكربت محلي) */ ?>
-  <a class="btn ghost" href="<?= url('reps/' . $repId) ?>">كشف المرتبات</a>
-  <a class="btn ghost" href="<?= url('rep-custody') ?>">‹ كل المناديب</a>
-</div>
 
-<?php /* شريط يوم العمل — المكوّن الموحّد (كان مكتوبًا بالإيد هنا `.rc-daybar`
-         فبقى نسخة تانية بتفترق عن باقي الشاشات مع أول تعديل). */ ?>
-<?php partial('day_bar', [
-  'day'     => $day,
-  'locked'  => $dayLocked,
-  'actions' => static function () use ($nav) { partial('day_nav', $nav); },
-  'facts'  => [[
-    'label' => 'برّه معاه (كل الأيام)',
-    'value' => intf($b['balance']),
-    'tone'  => $b['balance'] < 0 ? 'neg' : 'pos',
-  ]],
-]); ?>
+/* ⚠️ **ممنوع رقم أصمّ**: كل رقم في الشاشة بيفتح بنوده من
+   `GET /rep-custody/drill/{what}?rep={id}` — بيتجابوا عند الضغط بس. */
+$rd = static fn (string $what): string => url('rep-custody/drill/' . $what . '?rep=' . $repId);
 
-<?php /* ═══ عهدة اليوم — الأرقام الأساسية للشاشة ═══ */ ?>
-<?php /* ⚠️ **ممنوع رقم أصمّ**: كل رقم بيفتح بنوده من
-         `GET /rep-custody/drill/{what}?rep={id}` — بيتجابوا عند الضغط بس. */ ?>
-<?php $rd = static fn (string $what): string => url('rep-custody/drill/' . $what . '?rep=' . $repId); ?>
-<?php
-/* ⚠️ تفكيك «نزل له اليوم» بالمصدر — نفس صياغة `/rep-custody` بالحرف
-   (`sourceBadge`) ونفس نطاق الرقم (`depositSourceTotals` بالمندوب واليوم).
-   بيختفي لو مصدر واحد بس عشان ما يكررش اللي الكارت قايله. */
+/* تفكيك «نزل له اليوم» بالمصدر — نفس صياغة `/rep-custody` بالحرف (`sourceBadge`)
+   ونفس نطاق الرقم (`depositSourceTotals` بالمندوب واليوم). بيختفي لو مصدر واحد
+   بس عشان ما يكررش اللي الرقم قايله. */
 $cardSrc = \App\Models\RepCustody::depositSourceTotals($day, $repId);
 $cardSplit = null;
 if (count($cardSrc) > 1) {
     $parts = [];
+    /* ⚠️ **الاسم `$badge` مش `$b`.** `$b` هو رصيد المندوب (`breakdown`) واللوب
+       دي كانت **بتدهسه** — فالمندوب اللي نزلت له عهدة من مصدرين في يوم واحد،
+       تبويب «الحساب الكامل» (اللي بيتحمّل بعدها) كان بيقرا `$b['balance']` من
+       مصفوفة شارة: «الباقي معاه ٠٫٠٠» و**زرار «سجّل التسوية» بيتقفل**، يعني
+       مستحيل تقفل حسابه. اتّجرب وأُعيد إنتاجه؛ محروس في `verify_rep_custody_day`. */
     foreach ($cardSrc as $k => $v) {
-        $b = \App\Models\RepCustody::sourceBadge($k);
-        if ($b) { $parts[] = $b['short'] . ' ' . money0($v); }
+        $badge = \App\Models\RepCustody::sourceBadge($k);
+        if ($badge) { $parts[] = $badge['short'] . ' ' . money0($v); }
     }
-    if ($parts) { $cardSplit = ['dir' => 'flat', 'tone' => 'mute', 'text' => implode(' · ', $parts)]; }
+    if ($parts) { $cardSplit = ['text' => implode(' · ', $parts)]; }
 }
 ?>
-<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($dayB, $pendingDaySum, $dayLeft, $rd, $dayLabel, $cardSplit) { ?>
-  <?php partial('stat', [
-    'label' => 'نزل له اليوم', 'value' => intf($dayB['deposits']),
-    'icon' => 'wallet', 'tone' => 'green',
-    'trend' => $cardSplit,
-    'drill' => $rd('rep_deposits'), 'title' => 'العهدة اللي نزلت له في ' . $dayLabel,
-  ]); ?>
-  <?php partial('stat', [
-    'label' => 'صرفه اليوم', 'value' => intf($dayB['spent']),
-    'icon' => 'trending-down', 'tone' => 'red',
-    'drill' => $rd('rep_spent'), 'title' => 'اللي صرفه في ' . $dayLabel,
-  ]); ?>
-  <?php /* ⚠️ الرقم ده `dayLeft` (= رصيد اليوم − المستنّي) مش `dayB['balance']`:
-           البند اللي المندوب دفعه ولسه في صندوق المراجعة فلوسه خرجت من إيده،
-           فلو ما اتخصمش الشاشة بتقول إن معاه فلوس هو أصلاً صرفها. */ ?>
-  <?php partial('stat', [
-    'label' => $pendingDaySum > 0 ? 'فاضل معاه (بعد المستني)' : 'فاضل من عهدة اليوم',
-    'value' => intf($dayLeft),
-    'icon' => 'briefcase', 'tone' => 'gold', 'drill' => $rd('rep_spent'), 'title' => 'الفاضل من عهدة ' . $dayLabel,
-  ]); ?>
-  <?php partial('stat', [
-    'label' => 'مستني نقدي اليوم', 'value' => intf($pendingDaySum),
-    'icon' => 'hourglass', 'tone' => 'sader',
-    'drill' => $rd('rep_pending'), 'title' => 'البنود النقدية في ' . $dayLabel . ' المستنية اعتمادك',
-  ]); ?>
-<?php }]); ?>
-
-<?php /* ⚠️ سطر «التراكمي» المستقل اتشال (المرحلة ١٢): الرقم نفسه بقى **حقيقة
-         في شريط اليوم** فوق، وتفاصيله (نزل إجمالًا · صرف · رجّع) مكانها تبويب
-         «الحساب الكامل» — عرض نفس الرقم مرتين في شاشة واحدة زحمة بلا فايدة. */ ?>
-<?php if ($pendingAll): ?>
-  <div class="note mb rc-pend">
-    <?= icon('hourglass', 15) ?> <strong><?= intf(count($pendingAll)) ?> بند</strong> مستني مراجعتك من المندوب ده
-    (<?= money(array_sum(array_column($pendingAll, 'amount')), false) ?> على كل الأيام).
-    <?php /* ⚠️ **`?rep=` إلزامية**: من غيرها الرابط بيوَدّي على كل المناديب
-             والمالك يدوّر وسطهم — وهي الشكوى اللي الفلترة الخادمية اتعملت
-             عشانها. الصندوق بيحترمها بعد كل اعتماد كمان. */ ?>
-    <a href="<?= url('rep-custody/inbox?status=pending&rep=' . $repId) ?>"><strong>راجع بنوده دلوقتي ←</strong></a>
+<?php /* ═══ الترويسة الموحّدة ═══
+   ⚠️ **كانت ٥ طبقات قبل أي معلومة**: توولبار (اسم + زرارين) ← شريط اليوم ←
+      ٤ كروت ← بانر «مستني» ← شريط التبويبات. بقت **٣**: الترويسة دي (مين +
+      كام) ← شريط اليوم (سياق + تنقّل) ← التبويبات.
+   ⚠️ **وكل رقم بيظهر مرة واحدة.** «فاضل معاه» كان في كارت + معادلة اليوم +
+      سطر تحتها، و«المستني» في كارت + بانر + خطوة في المعادلة + لوح كامل —
+      البانر اتشال خالص (بقى رقمًا هنا وشارة على التبويب) والسطور التوضيحية
+      اتشالت لأن المعادلة نفسها بتوري الخطوة.
+   ⚠️ الرقم البطل والأرقام الجانبية كلهم `data-drill` — نفس آلية `stat`
+      بالحرف، فقاعدة «ممنوع رقم أصمّ» متحققة والنافذة واحدة في النظام كله. */ ?>
+<div class="rc-hero">
+  <div class="rc-hero-id">
+    <span class="rc-hero-av"><?= icon('user', 20) ?></span>
+    <div class="rc-hero-name">
+      <b><?= e($rep['name']) ?></b>
+      <?php if (($rep['status'] ?? 'active') !== 'active'): ?>
+        <span class="pill st-partial">متوقف</span>
+      <?php endif; ?>
+      <?php if (!empty($rep['phone'])): ?><em><?= e($rep['phone']) ?></em><?php endif; ?>
+    </div>
+    <div class="rc-hero-acts">
+      <?php /* ⚠️ الطريق لمراجعة بنوده **فضل** لكن كزرار بعدّاد بدل فقرة كاملة
+               كانت بتكرر رقم «المستني». و`?rep=` إلزامية — من غيرها الرابط
+               بيوَدّي على كل المناديب والمالك يدوّر وسطهم. */ ?>
+      <?php if ($pendingAll): ?>
+        <a class="btn gold" href="<?= url('rep-custody/inbox?status=pending&rep=' . $repId) ?>">
+          <?= icon('inbox', 15) ?> راجع <?= intf(count($pendingAll)) ?> بند
+        </a>
+      <?php endif; ?>
+      <a class="btn ghost" href="<?= url('reps/' . $repId) ?>">كشف المرتبات</a>
+      <a class="btn ghost" href="<?= url('rep-custody') ?>">‹ كل المناديب</a>
+    </div>
   </div>
-<?php endif; ?>
+
+  <?php /* ⚠️ **الأرقام بمكوّن النظام (`stat_grid` + `stat`) لا ماركب بالإيد.**
+           أول نسخة من الترويسة دي كتبت أزرارها بإيدها — و`verify_reps_ui`
+           رفضها **بحق**: الماركب اليدوي بينفصل عن لغة النظام مع أول تعديل في
+           التوكنز، و`stat` هو اللي بيفرض «ممنوع رقم أصمّ» (بيرفض يترسم بلا
+           مصدر تفاصيل). الحل كان **نمط `hero` جديد في المكوّن نفسه** عشان
+           الشاشة يبقى ليها رقم مسيطر — مكسب للنظام كله مش ترقيع للشاشة دي. */ ?>
+  <?php partial('stat_grid', ['items' => 4, 'class' => 'rc-hero-grid',
+    'body' => function () use ($dayB, $pendingDaySum, $dayLeft, $rd, $dayLabel, $b, $tabUrl) { ?>
+    <?php partial('stat', [
+      'hero'  => true,
+      'label' => $pendingDaySum > 0 ? 'فاضل معاه (بعد المستني)' : 'فاضل من عهدة اليوم',
+      'value' => intf($dayLeft),
+      'icon'  => 'briefcase', 'tone' => $dayLeft < 0 ? 'red' : 'gold',
+      'drill' => $rd('rep_spent'), 'title' => 'الفاضل من عهدة ' . $dayLabel,
+    ]); ?>
+    <?php partial('stat', [
+      'label' => 'نزل له اليوم', 'value' => intf($dayB['deposits']),
+      'icon'  => 'wallet', 'tone' => 'green',
+      'drill' => $rd('rep_deposits'), 'title' => 'العهدة اللي نزلت له في ' . $dayLabel,
+    ]); ?>
+    <?php partial('stat', [
+      'label' => 'صرفه اليوم', 'value' => intf($dayB['spent']),
+      'icon'  => 'trending-down', 'tone' => 'red',
+      'drill' => $rd('rep_spent'), 'title' => 'اللي صرفه في ' . $dayLabel,
+    ]); ?>
+    <?php partial('stat', [
+      'label' => 'مستني اعتمادك', 'value' => intf($pendingDaySum),
+      'icon'  => 'hourglass', 'tone' => 'sader',
+      'drill' => $rd('rep_pending'), 'title' => 'البنود النقدية في ' . $dayLabel . ' المستنية اعتمادك',
+    ]); ?>
+    <?php /* ⚠️ **التراكمي بـ`url` مش `drill`**: بنوده شاشة كاملة (تبويب الحساب
+             الكامل) فيها كشوف وتصفية — النافذة كانت هتبقى نسخة أفقر من شاشة
+             موجودة. المكوّن بيدعم الوضعين وبيرسم نفس الشكل. */ ?>
+    <?php partial('stat', [
+      'label' => 'برّه معاه (كل الأيام)', 'value' => intf($b['balance']),
+      'icon'  => 'coins', 'tone' => 'navy',
+      'url'   => $tabUrl('account'), 'title' => 'كل حركة العهدة معاه',
+    ]); ?>
+  <?php }]); ?>
+  <?php if ($cardSplit): ?>
+    <div class="rc-hero-src"><?= e($cardSplit['text']) ?></div>
+  <?php endif; ?>
+</div>
+
+<?php /* شريط يوم العمل — سياق وتنقّل بس. **«برّه معاه» اتشال منه**: بقى رقمًا
+         في الترويسة فوق، وعرضه في الاتنين كان تكرارًا لنفس الرقم في شاشة واحدة. */ ?>
+<?php partial('day_bar', [
+  'day'     => $day,
+  'locked'  => $dayLocked,
+  'actions' => static function () use ($nav) { partial('day_nav', $nav); },
+]); ?>
 
 <?php partial('tabs', ['label' => 'أقسام كارت المندوب', 'items' => [
   ['label' => 'يوم ' . $dayLabel, 'url' => $tabUrl('day'),      'active' => $tab === 'day'],
@@ -145,50 +170,3 @@ switch ($tab) {
     default:         include __DIR__ . '/_tab_day.php';      break;
 }
 ?>
-
-<style>
-.rc-pend{background:var(--gold-light);border-color:var(--gold)}
-
-/* ── شرائح أداء اليوم ── */
-.rc-perf{display:flex;gap:10px;flex-wrap:wrap;padding:14px 18px}
-.rc-chip{display:flex;flex-direction:column;gap:2px;min-width:120px;flex:1 1 120px;
-  border:1px solid var(--line);border-radius:var(--radius-2);padding:10px 12px;background:var(--bg)}
-.rc-chip .k{font-size:var(--fs-1);color:var(--grey);font-weight:500}
-.rc-chip .v{font-size:var(--fs-4);font-weight:700;color:var(--navy);line-height:1.2}
-.rc-chip .n{font-size:var(--fs-1);color:var(--grey)}
-.rc-chip.on{border-color:var(--gold);background:var(--gold-light)}
-
-/* ── معادلة عهدة اليوم ── */
-.rc-eq{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:14px 18px;
-  font-size:var(--fs-2);color:var(--navy)}
-.rc-eq-part{display:flex;flex-direction:column;align-items:center;gap:1px;
-  padding:6px 12px;border:1px solid var(--line);border-radius:var(--radius-2);background:var(--bg);min-width:88px}
-.rc-eq-part .k{font-size:var(--fs-1);color:var(--grey);font-weight:500;white-space:nowrap}
-.rc-eq-part .v{font-weight:700}
-.rc-eq-part.res{background:var(--gold-light);border-color:var(--gold)}
-/* الخطوة «دفعه ومستني اعتمادك» — فلوس خرجت من إيده والبند لسه في المراجعة */
-.rc-eq-part.wait{background:var(--sader-lt);border-color:#e6cfae}
-.rc-eq-part.wait .v{color:var(--sader-dk)}
-.rc-eq-op{font-weight:700;color:var(--grey)}
-
-/* ── درج تعديل التحويل لزميل (2026-07-31) ──
-   ⚠️ `<details>` بلا جافاسكريبت عن قصد: الكارت بيترندر في تبويبات وروابط
-      حقيقية، فأي خطّاف JS هنا بيبقى نقطة فشل صامت زيادة. */
-.rc-trf-edit{margin:0 0 var(--space-2);border:1px solid var(--line);
-  border-radius:var(--radius-2);background:var(--zebra)}
-.rc-trf-edit[open]{background:var(--card);border-color:var(--navy)}
-.rc-trf-sum{padding:var(--space-2) var(--space-3);cursor:pointer;font-size:var(--fs-1);
-  color:var(--grey);font-weight:var(--fw-bold);list-style:none}
-.rc-trf-sum::-webkit-details-marker{display:none}
-.rc-trf-edit[open] .rc-trf-sum{color:var(--navy);border-bottom:1px solid var(--line)}
-.rc-trf-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-  gap:var(--space-3);padding:var(--space-3)}
-.rc-trf-acts{display:flex;align-items:end}
-.rc-trf-del{padding:0 var(--space-3) var(--space-3)}
-
-@media (max-width:640px){
-  .rc-trf-form{grid-template-columns:1fr}
-  .rc-eq{gap:6px;font-size:var(--fs-1)}
-  .rc-eq-part{min-width:72px;padding:6px 9px}
-}
-</style>

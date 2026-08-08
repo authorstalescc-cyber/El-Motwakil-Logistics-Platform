@@ -97,10 +97,10 @@ $others = array_values(array_filter(
         </div>
       <?php endif; ?>
 
-      <div class="note" style="margin:8px 0 0;font-size:var(--fs-1)">
-        <?= icon('info', 14) ?> التصفية بتقفل حساب العهدة مع المندوب بس —
-        <b>مش بتضيف ولا بتخصم من الخزنة</b>، لأن الخزنة بتتخصم وقت ما يصرف مش وقت ما تنزّل له.
-      </div>
+      <?php /* ⚠️ كانت فقرة ٢٥ كلمة بتشرح «ليه» الخزنة ما بتتأثرش. القاعدة:
+               الشرح التعليمي يتشال والتحذير الوظيفي يفضل في ≤٦ كلمات — فبقت
+               شارة. المعلومة نفسها ما ضاعتش: هي **أثر** الإجراء لا درس فيه. */ ?>
+      <span class="pill st-partial">بلا أثر على الخزنة</span>
     </div>
 
     <?php if (!$allEmpty && !$blocked): ?>
@@ -139,33 +139,3 @@ $others = array_values(array_filter(
   </div>
 </div>
 
-<style>
-.rc-zero-body{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;padding:14px 18px}
-.rc-zero-num{display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-width:150px;padding:12px 16px;border:1px solid var(--gold);border-radius:var(--radius-2);
-  background:var(--gold-light)}
-.rc-zero-num .k{font-size:var(--fs-1);color:var(--grey);font-weight:500;white-space:nowrap}
-.rc-zero-num .v{font-size:var(--fs-6);font-weight:700;color:var(--navy);line-height:1.1}
-.rc-zero-num .v.neg{color:#B3261E}
-.rc-zero-num .u{font-size:var(--fs-1);color:var(--grey)}
-.rc-zero-txt{flex:1 1 260px;font-size:var(--fs-2);color:var(--navy)}
-.rc-zero-txt p{margin:0}
-.rc-zero.is-clean .rc-zero-num{border-color:var(--line);background:var(--bg)}
-.rc-zero-acts{flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap}
-.rc-zero-block{display:flex;gap:8px;margin:10px 0 0;padding:10px 12px;border-radius:var(--radius-2);
-  background:#fdf3f2;border:1px solid #f0c8c4;color:#8a2b22;font-size:var(--fs-1);line-height:1.7}
-.rc-zero-block svg{flex:none;margin-top:2px}
-.rc-zero-days{margin:10px 0 0;font-size:var(--fs-1);color:var(--navy)}
-.rc-zero-days ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
-.rc-zero-days li{display:flex;gap:6px;align-items:center;padding:3px 9px;border-radius:var(--radius-pill);
-  background:var(--zebra);border:1px solid var(--line)}
-.rc-zero-days li b{font-weight:600}
-.rc-zero-days li b.neg{color:#B3261E}
-.rc-zero-days li.more{color:var(--grey)}
-@media (max-width:640px){
-  .rc-zero-body{gap:12px}
-  .rc-zero-num{width:100%}
-  .rc-zero-acts{flex-direction:column}
-  .rc-zero-acts form,.rc-zero-acts .btn{width:100%;justify-content:center}
-}
-</style>

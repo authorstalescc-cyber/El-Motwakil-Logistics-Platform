@@ -74,18 +74,15 @@ $eq = static function (string $label, $value, string $cls = '') {
       <?php endif; ?>
       <span class="rc-eq-op">=</span><?php $eq('فاضل معاه', $left, 'res'); ?>
     </div>
-    <?php if ($pend > 0.005): ?>
-      <div class="note" style="margin:0 18px 16px;font-size:var(--fs-1)">
-        <?= icon('hourglass', 14) ?> فيه <b><?= intf($pend) ?></b> دفعهم فعلاً ولسه مستنيين اعتمادك —
-        متخصومين من «فاضل معاه» عشان الرقم يوصف اللي في إيده دلوقتي.
-        قبل خصمهم الرصيد <b><?= intf($dayB['balance']) ?></b>.
-      </div>
-    <?php endif; ?>
+    <?php /* ⚠️ **سطرا الشرح اتشالوا** (قانون التصميم بند ١):
+             · «فيه X دفعهم فعلاً ولسه مستنيين اعتمادك — متخصومين من فاضل معاه
+               عشان الرقم يوصف اللي في إيده دلوقتي. قبل خصمهم الرصيد Y» —
+               **تعليمي بالكامل**: المعادلة فوقه بتوري الخطوة دي بالظبط
+               («− دفعه ومستني اعتمادك») فالجملة كانت بتشرح رسمة قدام العين.
+             · تحذير «صرف أكتر من عهدة اليوم» **فضل** لأنه بيمنع قرار غلط،
+               بس اتقلّب من جملتين لشارة ≤٦ كلمات. */ ?>
     <?php if ($left < 0): ?>
-      <div class="note" style="margin:0 18px 16px;font-size:var(--fs-1)">
-        <?= icon('alert', 14) ?> صرف أكتر من عهدة اليوم بـ<b><?= intf(abs($left)) ?></b> —
-        ده مسموح (بيغطّيها من فلوس يوم تاني أو من جيبه)، بس يفضل تنزّله عهدة تغطّي اليوم.
-      </div>
+      <div class="rc-eq-warn"><?= icon('alert', 14) ?> صرف أكتر من عهدة اليوم بـ<b><?= intf(abs($left)) ?></b></div>
     <?php endif; ?>
   <?php },
 ]); ?>
@@ -117,23 +114,33 @@ $eq = static function (string $label, $value, string $cls = '') {
         </button>
       <?php endforeach; ?>
     </div>
+    <?php /* ⚠️ **كانت فقرة فيها أزرار مدفونة جوّه الكلام** («منهم ٣ بند بـ٥٠٠
+             مدفوع بكارت الفيزا — ما اتخصمش من عهدته. و… الكاش اللي طلع من إيده
+             فعلاً: X.»). بقت شرايح بنفس شكل الصف اللي فوقها: نفس الأرقام ونفس
+             نقاط الضغط، بلا جملة واحدة. المعلومة الوظيفية (دول **برّه** العهدة)
+             بقت في التسمية نفسها. */ ?>
     <?php if ($act['visa']['cnt'] > 0 || $act['unpaid']['cnt'] > 0): ?>
-      <div class="note" style="margin:0 18px 16px;font-size:var(--fs-1)">
-        <?php if ($act['visa']['cnt'] > 0): ?>
-          <?= icon('credit-card', 14) ?> منهم
-          <button type="button" class="lnk-drill" data-drill="<?= e($rd('rep_visa')) ?>"
-                  data-drill-title="بنود الفيزا — <?= e($dayLabel) ?>"><b><?= intf($act['visa']['cnt']) ?></b> بند
-            بـ<b><?= money($act['visa']['sum'], false) ?></b></button>
-          مدفوع بكارت الفيزا — ما اتخصمش من عهدته.
-        <?php endif; ?>
-        <?php if ($act['unpaid']['cnt'] > 0): ?>
-          <?= icon('info', 14) ?> و
-          <button type="button" class="lnk-drill" data-drill="<?= e($rd('rep_unpaid')) ?>"
-                  data-drill-title="بنود غير مدفوعة — <?= e($dayLabel) ?>"><b><?= intf($act['unpaid']['cnt']) ?></b> بند
-            بـ<b><?= money($act['unpaid']['sum'], false) ?></b></button>
-          غير مدفوع — ما اتخصمش من أي محفظة.
-        <?php endif; ?>
-        الكاش اللي طلع من إيده فعلاً: <b><?= money($act['cash'], false) ?></b>.
+      <div class="rc-perf out">
+        <?php
+        $outside = [];
+        if ($act['visa']['cnt'] > 0) {
+            $outside[] = ['credit-card', 'بالفيزا — برّه العهدة', $act['visa'], 'rep_visa'];
+        }
+        if ($act['unpaid']['cnt'] > 0) {
+            $outside[] = ['info', 'غير مدفوع — برّه العهدة', $act['unpaid'], 'rep_unpaid'];
+        }
+        foreach ($outside as [$ic, $lbl, $box, $what]): ?>
+          <button type="button" class="rc-chip on" data-drill="<?= e($rd($what)) ?>"
+                  data-drill-title="<?= e($lbl . ' — ' . $dayLabel) ?>">
+            <span class="k"><?= icon($ic, 12) ?> <?= e($lbl) ?></span>
+            <span class="v"><?= intf($box['cnt']) ?></span>
+            <span class="n"><?= e(money($box['sum'], false)) ?></span>
+          </button>
+        <?php endforeach; ?>
+        <span class="rc-chip cash">
+          <span class="k"><?= icon('coins', 12) ?> كاش خرج من إيده</span>
+          <span class="v"><?= e(money($act['cash'], false)) ?></span>
+        </span>
       </div>
     <?php endif; ?>
   <?php },
@@ -153,7 +160,7 @@ $eq = static function (string $label, $value, string $cls = '') {
   'body'   => function () use ($act, $day, $kindOf) {
     if (!$act['rows']) {
       partial('empty', [
-        'emoji' => '🧾',
+        'icon' => 'receipt',
         'title' => 'ما صرفش حاجة في يوم ' . dfmt($day),
         'action' => ['label' => 'صندوق المراجعة', 'url' => url('rep-custody/inbox')],
       ]);
@@ -262,7 +269,10 @@ $eq = static function (string $label, $value, string $cls = '') {
          ويدوس «نزّل» فالعهدة تتسجّل هناك بلا ما ياخد باله. */ ?>
         <input type="date" name="dep_date" value="<?= e($depositOld['dep_date'] ?? $workDay) ?>"<?= fieldErrorAttrs('dep_date', $depositErrors) ?>>
         <?= fieldError('dep_date', $depositErrors) ?>
-        <div class="hint">الافتراضي يوم العمل المختار — العهدة بتتحسب على اليوم ده لوحده.</div></div>
+        <?php /* شرح «الافتراضي يوم العمل المختار — العهدة بتتحسب على اليوم ده
+                 لوحده» اتشال (قانون التصميم بند ١): الخانة نفسها بتوري التاريخ،
+                 والجملة كانت بتشرح حاجة ظاهرة قدام عين المستخدم. */ ?>
+        </div>
       <?php /* ═══ v61 (المرحلة ٢) — «الفلوس جاية منين؟»
                ⚠️ دي الخانة الوحيدة اللي بتحدّد أثر التنزيل على الخزنة. الغالب
                   «من البنك» (قرار المالك) وهو الافتراضي.
@@ -306,7 +316,7 @@ $eq = static function (string $label, $value, string $cls = '') {
     'scroll' => true,
     'body'   => function () use ($dayDeposits, $repId) {
       if (!$dayDeposits) {
-        partial('empty', ['emoji' => '📥', 'title' => 'مفيش عهدة نزلت له في اليوم ده',]);
+        partial('empty', ['icon' => 'inbox', 'title' => 'مفيش عهدة نزلت له في اليوم ده',]);
         return;
       }
       foreach ($dayDeposits as $d) {
