@@ -3576,6 +3576,18 @@ button.d-hchip{cursor:pointer;font-family:inherit}
 .page-back:hover{color:var(--navy);text-decoration:underline}
 .page-head-actions{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;flex:none}
 
+/* ⚠️ `pg-*` — ترويسة وحدة التتبّع. كانت **مطبوعة في ٥ شاشات وبلا ولا قاعدة CSS**
+   فبتقع على شكل المتصفح الافتراضي بالسكوت (نفس عائلة `.table-mobile-scroll`).
+   اتعرّفت 2026-08-09 كمرادف للترويسة القياسية فوق عشان الشاشات تبقى بلغة النظام
+   بدل ما نخترع لها شكلًا تاني. */
+.pg-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4);
+  flex-wrap:wrap;margin-bottom:var(--space-4)
+}
+.pg-title{font-size:var(--fs-6);font-weight:var(--fw-black);color:var(--navy);line-height:var(--lh-tight)}
+.pg-sub{margin:var(--space-1) 0 0;color:var(--grey);font-size:var(--fs-2)}
+.pg-actions{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;flex:none}
+
 /* --- إشارة القطع (count_note.php) ---
    ٣٥ استعلام بسقف ثابت بيقطعوا الصفوف بلا أي إشارة — السكوت هنا بيضلّل. */
 .count-note{

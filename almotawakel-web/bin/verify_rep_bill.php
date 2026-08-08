@@ -481,7 +481,8 @@ foreach ([
     'name="bill_date"'  => 'مفيش خانة تاريخ (يوم العمل بيتفرض — قاعدة v49)',
     'type="date"'       => 'مفيش منتقي تاريخ',
 ] as $needle => $label) {
-    !str_contains($view, $needle) ? ok($label) : bad("$label — «$needle» موجودة في الشاشة");
+    // ⚠️ `{$needle}` إجبارية — بايتات «» بتتحسب جزءًا من اسم المتغيّر (مصيدة موثَّقة)
+    !str_contains($view, $needle) ? ok($label) : bad("{$label} — «{$needle}» موجودة في الشاشة");
 }
 str_contains($view, "_workday.php")
     ? ok('الشاشة بتعرض بطاقة يوم العمل المشتركة') : bad('بطاقة يوم العمل ناقصة');
@@ -554,7 +555,16 @@ foreach (['handoverForm', 'handoverStore', 'handoverDelete'] as $m) {
 }
 hasnt('مسار /m/handover اتشال', 'public/index.php', "\$r->get('/m/handover'");
 hasnt('زرار «تسليم سائق» اتشال من /m', 'app/Views/m/home.php', "url('m/handover')");
-has('زرار «بوليصة جديدة» مكانه في /m', 'app/Views/m/home.php', "url('m/bill/new')");
+/* ⚠️ الفحص ده كان بيدوّر على الزرار في `m/home.php` حرفيًّا، والمالك نقله جوّه
+   الإذن (v64): «البوليصة لازمها إذن، وفتحها من الرئيسية كانت بتبدأ بسؤال أنهي
+   إذن؟ على ٣٧ إذن». فالفحص بقى على **وجود مدخل للشاشة** لا على مكانه —
+   مكان الزرار قرار تصميم بيتغيّر، ووجود المدخل هو اللي لو ضاع الميزة تموت. */
+$billEntry = false;
+foreach (glob(__DIR__ . '/../app/Views/m/*.php') as $__v) {
+    if (str_contains((string) file_get_contents($__v), "url('m/bill/new")) { $billEntry = true; break; }
+}
+$billEntry ? ok('فيه مدخل لشاشة «بوليصة جديدة» في بوابة المندوب')
+           : bad('مفيش أي مدخل لـ m/bill/new في app/Views/m — الشاشة بقت بلا زرار');
 
 // ⚠️ الجدول والموديل **لازم يفضلوا** — سجلاته بتتخصم من عهدة المناديب،
 //    وشيلها بيغيّر أرصدة تاريخية.
@@ -617,10 +627,13 @@ foreach (['app/Models/DailyReview.php', 'app/Controllers/DailyClosingController.
 has('شاشة التقفيل بتعرض شارة «دفعها المندوب»', 'app/Views/closing/index.php', "\$it['by_rep']");
 has('الطباعة فيها عمود «سلّمها»', 'app/Views/closing/print.php', 'custody_rep_name');
 
-/* ⚠️ الاسم في المعادلة بيتغيّر مع النموذج: «عهدة مضافة للدرج» على رقم فيه
-   فلوس ما دخلتش الدرج كان بيتقري جمعًا مع سطر التفكيك تحته. */
-has('المعادلة بتسمّي «عهدة مضافة» صح حسب النموذج', 'app/Views/closing/index.php',
-    "empty(\$pooled) ? ' للدرج' : ''");
+/* ⚠️ كان فحصًا على تسمية شرطية (`empty($pooled) ? ' للدرج' : ''`) اتشالت بطلب
+   المالك 2026-08-01 لصالح حل أوضح: **خانتان منفصلتان** «عهدة مضافة للدرج» و
+   «عهدة منزلة للمناديب» بدل رقم واحد اسمه بيتقلب. الخطر اللي كان بيتحرس منه
+   (رقم اسمه «للدرج» وهو مجمّع) بقى **ممنوع بالبناء** لأن كل خانة ليها متغيّرها.
+   فالفحص بقى على **الفصل نفسه**: لو حد لمّ الاتنين في رقم واحد، بيفشل. */
+has('«عهدة مضافة للدرج» رقم مستقل', 'app/Views/closing/index.php', '$totTopupsDrawer');
+has('«عهدة منزلة للمناديب» رقم مستقل', 'app/Views/closing/index.php', '$totBankToReps');
 has('الكنترولر بيمرّر علم النموذج للشاشة', 'app/Controllers/DailyClosingController.php',
     "'pooled'        => RepCustody::bankTopupActive()");
 

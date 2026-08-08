@@ -46,10 +46,14 @@ $catalog = [
     'verify_rep_settle_zero.php'  => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'تصفية عهدة المندوب بضغطة + عزل الخزنة داخل rollback'],
     'verify_rep_bill.php'         => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'بوليصة المندوب (v60) — عزل الخزنة وخصم عهدة السائق من محفظته، fixtures داخل rollback'],
     'verify_custody_epoch.php'    => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'خط الفصل لعهدة المناديب (docs/16) — تغطية نقاط المزامنة وعزل الخزنة وحارس البنود القديمة داخل rollback'],
+    'verify_data_aliases.php'     => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'الأسماء البديلة (DataAlias) — دمج تهجئة داخل transaction ثم rollback'],
+    'verify_excel_sync.php'       => ['impact' => 'read',       'self_guard' => false, 'note' => 'معاينة مزامنة الإكسل — قراءة ومقارنة بلا كتابة'],
     'verify_safe_rule.php'        => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'قاعدة الخزنة الجديدة (docs/16 المرحلة ٢) — الاتجاهان مع بعض والفلوس محفوظة والأيام المتقفلة ما بتتغيّرش، داخل rollback'],
     'verify_rep_deposit_source.php' => ['impact' => 'rollback', 'self_guard' => false, 'note' => 'تنزيل عهدة المندوب من الدرج — جدول حقيقة المصدر وحفظ الفلوس وحارس اليوم المتقفل ورندر الشاشتين، داخل rollback'],
     'verify_custody_cap.php'      => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'سقف عهدة البوليصة — تعديل البوليصة حر والفحص على الفرق، داخل rollback'],
-    'verify_data_quality.php'     => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'جودة المدخلات — حارس الأسماء وقياس معدّل الإزعاج على بيانات حقيقية داخل rollback'],
+    // ⚠️ المفتاح ده كان مكرَّرًا مرتين (السطر ده + واحد تحت) والتاني بيدهس الأول
+    //    **بالسكوت** فالتصنيف اللي بيتطبّق مش اللي فوق. اتشال المكرر 2026-08-09
+    //    وفضل التصنيف الأدق (`self_guard` = true).
     'verify_reps_day_scope.php'   => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'عهدة المناديب يوم واحد بس في الداشبورد وشاشات المندوب — fixtures ورندر داخل rollback'],
     'verify_unpaid_stages.php'    => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'بند «غير مدفوع» (v57) — عزل عن الخزنة وعهدة المندوب، fixtures داخل rollback'],
     'verify_v62.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'رحلة الشحنة (v62) — قاعدة الحالة والعزل عن الخزنة ورندر الشاشتين، fixtures داخل rollback'],
