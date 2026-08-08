@@ -75,6 +75,16 @@ try {
     Database::exec(
         "INSERT INTO rep_custody_deposits(rep_id,dep_date,amount,note) VALUES(?,?,?,?)",
         [$repId, $prevDay, 5000, $tag . ' عهدة إمبارح']);
+
+    /* ⚠️ **مندوب تاني عليه حركة في نفس اليوم واسمه مش مطابق للبحث** — موجود
+       عشان فحص ③ب يبقى له معنى: من غيره الفلترة بـ`$tag` بترجّع نفس المجموعة
+       فالإجماليات ما بتتغيّرش سواء الكود صح أو غلط، والفحص بيعدّي على الحالتين
+       (اتجرّب فعليًّا: عدّى على الكنترولر القايم **وعلى المعطوب** قبل ما يتزوّد). */
+    $tagOther = '__rcd2_' . bin2hex(random_bytes(4));
+    Database::exec("INSERT INTO reps(name,status) VALUES(?,'active')", [$tagOther]);
+    Database::exec(
+        "INSERT INTO rep_custody_deposits(rep_id,dep_date,amount,note) VALUES(?,?,?,?)",
+        [Database::lastId(), $day, 1700, $tagOther . ' عهدة اليوم']);
     $treasuryAfterDeposits = Closing::currentBalance();
 
     $stage = static function (string $d, string $key, string $note, int $qty, float $unit)
@@ -185,6 +195,36 @@ try {
         chk(str_contains($html, 'غيّر يوم العمل'),
             'فيه طريق واضح لتغيير يوم العمل من الشاشة');
     }
+
+    /* ═══ ③ب البحث بيفلتر الكروت بس — الإجماليات ما بتتغيّرش
+       ⚠️ **الباج اللي الفحص ده اتكتب عشانه:** `$dsum` كان بيتجمّع من
+       `cards($q)` المفلترة، فكتابة اسم في خانة البحث كانت بتغيّر الأربع أرقام
+       الكبيرة **بالسكوت** — بينما نوافذ التفاصيل (`dayDeposits`/`daySpending`/
+       `dayBalanceRows`) عمرها ما اتفلترت. النتيجة: الكارت يقول رقمًا وتدوس
+       عليه فتلاقي بنودًا بمجموع تاني، وده بيكسر قاعدة «ممنوع رقم أصمّ» من جوّه.
+       الفحص على **السلوك** (نفس قيم الـKPI مع البحث وبدونه) مش على رقم مزروع. */
+    sec('③ب البحث بيفلتر الكروت مش الإجماليات');
+    $kpis = static function (string $h): array {
+        preg_match_all('~<div class="d-kpi-val">\s*([^<]+?)\s*<~s', $h, $m);
+        return array_map('trim', $m[1] ?? []);
+    };
+    $_GET = [];
+    $htmlAll = $render(static fn () => $ctrl->index());
+    $_GET = ['q' => $tag];
+    $htmlQ  = $render(static fn () => $ctrl->index());
+    $kAll = $kpis($htmlAll);
+    $kQ   = $kpis($htmlQ);
+    chk($kAll !== [] && $kAll === $kQ,
+        '★ أرقام الشاشة زي ما هي مع البحث وبدونه (' . implode(' · ', $kAll) . ')');
+    chk(str_contains($htmlQ, 'الأرقام فوق لكل المناديب'),
+        'الشاشة بتقول صراحةً إن البحث بيفلتر الكروت بس');
+    chk(!str_contains($htmlAll, 'الأرقام فوق لكل المناديب'),
+        'وما بتقولهاش لما مفيش بحث');
+    // ★ الحقيقة المالية اللي كانت غايبة تمامًا عن الشاشة
+    chk(str_contains($htmlAll, 'برّه معاهم'),
+        '★ إجمالي الفلوس اللي برّه مع المناديب معروض على الشاشة');
+    chk(str_contains($htmlAll, money0(RepCustody::totalOutstanding())),
+        'والرقم المعروض هو `totalOutstanding()` نفسه مش جمع بالإيد في العرض');
 
     // ═══ ④ رندر كارت المندوب — التبويبات الأربعة
     sec('④ كارت المندوب: ٤ تبويبات وكلها بترندر');

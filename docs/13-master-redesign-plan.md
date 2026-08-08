@@ -263,7 +263,7 @@ partials/
 ## ٧. الحدود الحمرا — اللي **ممنوع** يتلمس
 
 1. **ولا معادلة مالية.** الخطة دي **طبقة عرض بحتة**. كل سكربت فحص لازم يتأكد إن `Custody::balance()` و`RepCustody::balance()` قبل = بعد.
-2. **نقاط التزامن الموثّقة كلها** (`RepCustody::excludeSql`, `RepMiscExpense::cashOnlySql`, `Rep::CASH_KINDS`, `container_norm`, `Closing::guard`) — دمج الشاشات **ما يغيّرش مين بينادي مين**.
+2. **نقاط التزامن الموثّقة كلها** (`RepCustody::safeChargeSql`/`officeDepositSql`/`bankTopupSql` — بدائل `excludeSql` المتشالة، `RepMiscExpense::cashOnlySql`, `Rep::CASH_KINDS`, `container_norm`, `Closing::guard`) — دمج الشاشات **ما يغيّرش مين بينادي مين**.
 3. **`legacy_bawalis` و`shamil` و`takhlis` و`generators`** — عرض فقط، ولا استعلام يتشال (بيغذّوا `Metrics` والمجاميع التاريخية).
 4. **مقارنات الوقت تفضل جوّه SQL** (قاعدة v48 — ساعة القاعدة UTC وPHP القاهرة).
 5. **`rep_custody/inbox`** اتعمل له إعادة بناء لسه جديدة وشغّالة — ينتقل مكانه بس، ما يتعادش بناؤه.

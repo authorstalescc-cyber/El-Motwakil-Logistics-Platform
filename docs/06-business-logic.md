@@ -127,7 +127,12 @@ primary_fees المقترح = الكشف + الضمان
 
 ---
 
-## 5.1 مطابقة التقفيل حسب العميل — `DailyReconciliation` (v28)
+## 5.1 ~~مطابقة التقفيل حسب العميل — `DailyReconciliation`~~ (v28 — **اتشالت في v50**)
+
+> **⚠️ القسم ده تاريخي — الموديل والمسار اتمسحوا بالكامل.** `App\Models\DailyReconciliation`
+> و`POST /closing/reconcile` مبقوش موجودين؛ البديل هو **`App\Models\DailyReview`**
+> (مراجعة بعلامة ✓ لكل بند — راجع [07-modules](07-modules.md) §التقفيل). جداول v28
+> باقية كأرشيف بلا قارئ. الوصف تحت متسيب للرجوع التاريخي بس — **لا تبني عليه كود**.
 
 - مصدر صفوف العملاء = بنود `permit_stages` التي يطابقها `Permit::expenseSql` وتاريخها `entry_date = يوم المطابقة` و`is_visa=0`.
 - كل أذونات الاسم نفسه في `permits.client` تُجمع بعد `Maintenance::normkey` في صف عميل واحد، وبقيمة واحدة: `system_total = Σ الإيصالات + Σ مصروفات الإذن`.

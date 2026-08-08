@@ -742,7 +742,14 @@ input.name-warn{border-color:#e0a94f!important;background:#fffdf5!important}
 .data td.start{text-align:start}
 
 /* ====================================================== لوحة التحكم — نسخة محدّثة */
-.section-head{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 12px}
+/* ⚠️ **تعريف تاني لنفس الكلاس** (الأول فوق عند `.section-head{font-size…}`) — متسيب
+   عن قصد لأنه بيضبط الهوامش، **بس `justify-content:space-between` اتشال منه**:
+   الكلاس ليه نمطان في الماركب — `<div class="section-head"><h2>…</h2><a>…</a></div>`
+   (٢ استخدام، عايز الطرفين متباعدين) و`<div class="section-head">أيقونة + نص</div>`
+   (٩١ استخدام، التباعد بيبعتر الشريط الذهبي عن النص). كان الشرط بيتطبّق على
+   الاتنين فاتّرقّع محليًّا في `.tab-panel .section-head` بدل ما يتصلّح من أصله. */
+.section-head{display:flex;align-items:center;margin:2px 2px 12px}
+.section-head:has(> h2){justify-content:space-between}
 .section-head h2{font-size:var(--fs-4);font-weight:600;color:var(--navy);display:flex;align-items:center;gap:8px}
 
 /* --- أزرار الوصول السريع --- */
@@ -2925,6 +2932,13 @@ button.d-hchip{cursor:pointer;font-family:inherit}
 
 /* ═══════════ لوحة متابعة عهدة المناديب (v35) — عرض فقط ═══════════ */
 .d-sec-head .d-sec-year.alert{background:var(--red-lt);border-color:#e6bcbc;color:var(--red)}
+
+/* شارة «البحث بيفلتر الكروت بس» — في `app.css` مش `<style>` محلي (قانون التصميم، بند ٧) */
+.rc-filter-note{display:flex;align-items:center;gap:9px;margin:0 2px 12px;padding:9px 13px;
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--card);
+  font-size:var(--fs-2);font-weight:500;color:var(--grey)}
+.rc-filter-note svg{color:var(--gold);flex-shrink:0}
+.rc-filter-note .btn{margin-inline-start:auto}
 
 .rp-panel{display:flex;flex-direction:column;gap:var(--d-gap)}
 

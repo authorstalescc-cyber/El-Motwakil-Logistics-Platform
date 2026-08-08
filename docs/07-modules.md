@@ -150,7 +150,7 @@
 
 **★ تغيير (v11): عهدة السائق = مصروف، والإضافات اليدوية إيراد يموّل الصندوق.** سابقاً كانت العهدة إيراداً يلغي نفسه (صافيها صفر). الآن: `المتاح = باقي سابق + عهد مضافة للرصيد اليوم (topups)`؛ `المرحّل = المتاح − مصروفات − Σ(عهدة كل بوليصة − 100)`. و`باقي سابق` يراكم (الإضافات اليدوية السابقة − مصروفات ومخصومات الأيام السابقة) + الرصيد الافتتاحي. **مهم:** بدون احتساب الإضافات اليدوية كإيراد يطلع «باقي سابق» سالباً (التقفيل يرى العهدة خارجة فقط). مبلغ الطرح من setting `custody_bill_deduction` (افتراضي 100).
 
-**الموديلات:** `Closing`, `DailyReconciliation`, `Permit` (`expenseSql`), `Custody` (`billDeduction`/`deductionRate`), `App`, `Database`. **الـ views:** `closing/index.php`, `closing/print.php` (A4 landscape).
+**الموديلات:** `Closing`, `DailyReview` (v50 — بديلة `DailyReconciliation` المتشالة), `Permit` (`expenseSql`), `Custody` (`billDeduction`/`deductionRate`), `App`, `Database`. **الـ views:** `closing/index.php`, `closing/print.php` (A4 landscape).
 
 > **قاعدة العهدة (v11):** عهدة السائق مصروف حقيقي يقلّل المرحّل (بعد خصم 100/بوليصة). ورصيدها في محفظة مستقلة — راجع «رصيد العهدة» أدناه.
 

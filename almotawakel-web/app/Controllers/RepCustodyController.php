@@ -36,7 +36,6 @@ class RepCustodyController extends Controller
             redirect('reps');
         }
         $q = trim((string) ($_GET['q'] ?? ''));
-        $cards = RepCustody::cards(false, $q);
 
         // ⚠️ الشاشة بقت **بعدسة يوم العمل** (Auth::workDate): الأرقام الكبيرة فوق
         //    وأعمدة الجدول كلها عن اليوم المختار، والتراكمي بيفضل ظاهر جنبه لأنه
@@ -44,10 +43,18 @@ class RepCustodyController extends Controller
         $day = work_date();
         $dayMap = RepCustody::dayTotalsByRep($day);
 
+        // ⚠️ **الإجماليات فوق بتتحسب على كل المناديب دايمًا — مش على نتيجة البحث.**
+        //    كانت بتتجمّع من الكروت المفلترة، فكتابة اسم في خانة البحث كانت
+        //    بتغيّر الأربع أرقام **بالسكوت**، بينما نوافذ التفاصيل
+        //    (`dayDeposits`/`daySpending`/`dayBalanceRows`) مفلترتش أبدًا — فالرقم
+        //    يقول حاجة والنافذة اللي بيفتحها تقول حاجة تانية. البحث بقى بيفلتر
+        //    **قايمة الكروت بس**، والشاشة بتقول ده صراحةً بشارة.
+        $all = RepCustody::cards(false, '');
+
         $sum = ['deposits' => 0.0, 'spent' => 0.0, 'returned' => 0.0, 'balance' => 0.0, 'carry' => 0.0];
         $dsum = ['deposits' => 0.0, 'spent' => 0.0, 'returned' => 0.0,
                  'balance' => 0.0, 'pending' => 0.0, 'pocket' => 0.0, 'reps' => 0];
-        foreach ($cards as &$c) {
+        foreach ($all as &$c) {
             $sum['deposits'] += $c['deposits'];
             $sum['spent']    += $c['spent'];
             $sum['returned'] += $c['returned'];
@@ -89,6 +96,17 @@ class RepCustodyController extends Controller
             $dsum[$k] = round($dsum[$k], 2);
         }
 
+        // ⚠️ الفلترة بتمرّ على **الموديل نفسه** (`cards($q)`) مش بشرط مكتوب هنا
+        //    بالإيد — قاعدة «المصدر الوحيد»: تعريف «المندوب ده مطابق للبحث؟»
+        //    لازم يفضل في مكان واحد وإلا الشاشة والموديل يفترقوا مع أول تعديل.
+        $cards = $all;
+        if ($q !== '') {
+            $keep = [];
+            foreach (RepCustody::cards(false, $q) as $m) { $keep[(int) $m['id']] = true; }
+            $cards = array_values(array_filter(
+                $all, static fn (array $c): bool => isset($keep[(int) $c['id']])));
+        }
+
         $this->render('rep_custody/index', [
             'title'  => 'عهدة المناديب',
             'cards'  => $cards,
@@ -97,6 +115,15 @@ class RepCustodyController extends Controller
             'day'    => $day,
             'locked' => RepCustody::isDayLocked($day),
             'q'      => $q,
+            // ⚠️ **الحقيقة المالية الأهم في الشاشة وكانت غايبة تمامًا**: الفلوس
+            //    اللي برّه مع المناديب دلوقتي. كانت بتتحسب في `$sum['balance']`
+            //    وما بتتعرضش، والمعروض بدالها «مفتوح من أيام سابقة» =
+            //    التراكمي − رصيد اليوم — ورصيد اليوم بيبقى **سالب** لما المندوب
+            //    يصرف أكتر من عهدة يومه (مسموح، v49)، فالرقم ده كان بيطلع
+            //    **أكبر من كل الفلوس الموجودة فعلاً** ويقول «محتاج تصفية».
+            //    المصدر `totalOutstanding()` مش جمع بالإيد — نفس رقم لوحة التحكم.
+            'outstanding' => RepCustody::totalOutstanding(),
+            'repsTotal'   => count($all),
         ]);
     }
 
