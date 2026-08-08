@@ -16,10 +16,14 @@ class WorkDateController extends Controller
     public function show(): void
     {
         $this->requireAuth();
+        // اليوم اللي اترفض لأنه متقفل — بيتعرض له مخرج «شوفه للعرض» (تحت).
+        $rejected = (string) ($_SESSION['_wd_locked'] ?? '');
+        unset($_SESSION['_wd_locked']);
         $this->render('workdate/pick', [
-            'title'   => 'تاريخ العمل',
-            'current' => Auth::workDate(),
-            'today'   => date('Y-m-d'),
+            'title'    => 'تاريخ العمل',
+            'current'  => Auth::workDate(),
+            'today'    => date('Y-m-d'),
+            'rejected' => $rejected,
         ], false);
     }
 
@@ -37,8 +41,14 @@ class WorkDateController extends Controller
             redirect('work-date');
         }
 
-        // منع اختيار يوم متقفل (لن تُقبل عليه أي كتابة) — نوجّه المستخدم لفتحه أو اختيار غيره.
+        /* منع اختيار يوم متقفل (لن تُقبل عليه أي كتابة) — نوجّه المستخدم لفتحه أو اختيار غيره.
+           ⚠️ **الرفض ده كان مصيدة مقفولة** (بلاغ المالك 2026-08-09): الشاشة دي
+              برّه التخطيط وبلا زر رجوع، فالرفض بيرجّعك لنفس الشاشة — والمخرج
+              الوحيد كان **تسجيل الخروج**. دلوقتي بنسيب أثرًا يخلّي الشاشة تعرض
+              مخرجين: «شوف اليوم ده للعرض» (القفل بيمنع الكتابة مش القراءة)
+              و«ابدأ بتاريخ النهاردة». */
         if (($msg = Closing::guard($date)) !== null) {
+            $_SESSION['_wd_locked'] = $date;
             flash('error', $msg);
             redirect('work-date');
         }

@@ -16,7 +16,13 @@
  *    («برّه معاه») بيفضل ظاهر لأنه الحقيقة المالية وأساس التسوية.
  */
 $dayTxt = dfmt($day);
-$drill = static fn (string $what): string => url('rep-custody/drill/' . $what);
+/* ⚠️ **`day` لازم تتنقل مع كل رابط.** الرقم بيعرض يوم العرض، فلو النافذة اللي
+   بيفتحها فضلت على يوم الشغل تبقى بتوريه بنود يوم تاني — نفس الباج اللي اتصلّح
+   في البحث بالظبط. و`$dayArg` بيبقى فاضي على يوم الشغل عشان الروابط تفضل نضيفة. */
+$dayArg = $day === $workDay ? '' : '?day=' . rawurlencode($day);
+$drill = static fn (string $what): string => url('rep-custody/drill/' . $what . $dayArg);
+$repUrl = static fn (int $id, string $tab = 'day'): string => url(
+    'rep-custody/' . $id . '?tab=' . $tab . ($dayArg === '' ? '' : '&day=' . rawurlencode($day)));
 ?>
 <div class="toolbar">
   <div class="section-head" style="margin:0"><?= icon('users', 18) ?> عهدة المناديب</div>
@@ -30,9 +36,13 @@ $drill = static fn (string $what): string => url('rep-custody/drill/' . $what);
   <a class="btn ghost" href="<?= url('reps') ?>">المرتبات والحسابات</a>
 </div>
 
+<?php /* ⚠️ **عدسة يوم للعرض** — أسهم بتفتح أي يوم (حتى المتقفل) بلا ما تلمس يوم
+         الشغل. زرار «غيّر يوم العمل» جوّه الشريط لسه مكانه لأنه حاجة تانية
+         خالص: بيحوّل النظام كله لوضع الكتابة على يوم تاني. */ ?>
 <?php partial('day_bar', [
-  'day'    => $day,
-  'locked' => $locked,
+  'day'     => $day,
+  'locked'  => $locked,
+  'actions' => static function () use ($nav) { partial('day_nav', $nav); },
 ]); ?>
 
 <?php /* ═══ الأرقام — كل واحد بيفتح بنوده ═══ */ ?>
@@ -113,7 +123,7 @@ $quiet  = array_values(array_filter($cards, static fn ($c) => !$c['day_active'])
   'badge'  => $active ? ['text' => intf(count($active)), 'tone' => 'navy'] : null,
   'action' => ['label' => 'سجل المناديب', 'url' => url('reps')],
   'class'  => 'mb',
-  'body'   => function () use ($active, $dayTxt) {
+  'body'   => function () use ($active, $dayTxt, $repUrl) {
     if (!$active) {
       partial('empty', [
         'emoji'  => '🗂️',
@@ -137,7 +147,7 @@ $quiet  = array_values(array_filter($cards, static fn ($c) => !$c['day_active'])
       }
       partial('entity_card', [
         'name'  => $c['name'],
-        'url'   => url('rep-custody/' . (int) $c['id'] . '?tab=day'),
+        'url'   => $repUrl((int) $c['id']),
         'value' => money0($c['day_pocket']),
         'value_label' => $c['day_pending'] > 0 ? 'فاضل معاه (بعد المستني)' : 'فاضل من عهدة اليوم',
         'value_tone'  => $c['day_pocket'] < 0 ? 'neg' : 'pos',
@@ -166,12 +176,12 @@ $quiet  = array_values(array_filter($cards, static fn ($c) => !$c['day_active'])
     'icon'   => 'clock',
     'badge'  => ['text' => intf(count($quiet)), 'tone' => 'navy'],
     'scroll' => true,
-    'body'   => function () use ($quiet) {
+    'body'   => function () use ($quiet, $repUrl) {
       foreach ($quiet as $c) {
         partial('row_item', [
           'title' => $c['name'],
           'icon'  => 'user',
-          'url'   => url('rep-custody/' . (int) $c['id']),
+          'url'   => $repUrl((int) $c['id']),
           'ref'   => $c['status'] === 'inactive' ? 'متوقف' : null,
           'meta'  => array_values(array_filter([
             $c['phone'] ? ['icon' => 'send', 'text' => $c['phone']] : null,

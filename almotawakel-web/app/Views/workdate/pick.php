@@ -38,6 +38,19 @@ $current = $current ?? $today;
         <div class="wd-warn" id="wd-warn" hidden><?= icon('alert',16) ?> انتبه: انت هتشتغل بيوم سابق مش النهاردة.</div>
         <button class="btn gold" type="submit" style="width:100%">ابدأ الشغل ←</button>
       </form>
+      <?php /* ⚠️ **مخرج من الشاشة** — كانت بلا أي طريق للخروج: صفحة برّه
+               التخطيط (مفيش قائمة ولا رجوع)، والاختيار المرفوض بيرجّعك ليها
+               تاني. فالمالك كان بيعمل **تسجيل خروج** عشان يخرج (بلاغ
+               2026-08-09). ودي كانت الشكوى الأصلية كلها. */ ?>
+      <div class="wd-outs">
+        <?php if (($rejected ?? '') !== ''): ?>
+          <?php /* القفل بيمنع الكتابة مش القراءة — فالعرض متاح لأي يوم */ ?>
+          <a class="btn ghost" href="<?= url('rep-custody?day=' . rawurlencode((string) $rejected)) ?>">
+            <?= icon('eye', 15) ?> شوف <?= e(dfmt((string) $rejected)) ?> للعرض بس
+          </a>
+        <?php endif; ?>
+        <a class="wd-skip" href="<?= url('') ?>">أشتغل بتاريخ النهاردة</a>
+      </div>
     </div>
   </div>
 </div>

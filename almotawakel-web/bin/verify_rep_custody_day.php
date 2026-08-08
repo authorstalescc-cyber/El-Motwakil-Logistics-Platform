@@ -226,6 +226,41 @@ try {
     chk(str_contains($htmlAll, money0(RepCustody::totalOutstanding())),
         'والرقم المعروض هو `totalOutstanding()` نفسه مش جمع بالإيد في العرض');
 
+    /* ═══ ③ج عدسة يوم العرض (`?day=`) — قراءة بس، ما بتلمسش يوم الشغل
+       ⚠️ **المشكلة اللي اتعملت عشانها:** الشاشة كانت متعلّقة بـ`work_date()`
+       وبس، والفرجة على يوم فات كانت بتستلزم تغيير يوم الشغل كله — و
+       `WorkDateController` بيرفض أي يوم متقفل، فحتى العرض كان ممنوعًا والمالك
+       كان بيعمل تسجيل خروج. الفحص بيثبت التلات ضمانات:
+       (١) العدسة بتفتح يوم تاني · (٢) `Auth::workDate()` ما اتغيّرتش ·
+       (٣) خانات التواريخ في الفورمات فضلت على **يوم الشغل** مش يوم العرض. */
+    sec('③ج عدسة يوم العرض — قراءة بلا مساس بيوم الشغل');
+    $workBefore = work_date();
+    $_GET = ['day' => $prevDay];
+    $htmlPrev = $render(static fn () => $ctrl->index());
+    $noPhpError($htmlPrev, '/rep-custody?day=');
+    chk(str_contains($htmlPrev, dfmt($prevDay)), 'العدسة بتعرض اليوم المطلوب');
+    chk(work_date() === $workBefore,
+        '★ يوم الشغل ما اتلمسش خالص بعد فتح العدسة (' . $workBefore . ')');
+    chk(str_contains($htmlPrev, 'بتتفرّج بس'),
+        'تحذير «بتتفرّج بس — شغلك يوم كذا» ظاهر');
+    chk(!str_contains($htmlAll, 'بتتفرّج بس'),
+        'وما بيظهرش وانت على يوم شغلك');
+    // ⚠️ التفاصيل لازم تمشي مع العدسة وإلا الرقم بيفتح بنود يوم تاني
+    chk(str_contains($htmlPrev, 'drill/deposits?day=' . $prevDay),
+        '★ روابط التفاصيل بتحمل يوم العرض مش يوم الشغل');
+    // الرابط مش مصدر ثقة: تاريخ بايظ أو في المستقبل يرجع ليوم الشغل بلا خطأ
+    foreach (['يوم-بايظ', date('Y-m-d', strtotime('+9 day'))] as $badDay) {
+        $_GET = ['day' => $badDay];
+        chk(str_contains($render(static fn () => $ctrl->index()), dfmt($workBefore)),
+            'تاريخ مرفوض (' . $badDay . ') بيرجع ليوم الشغل بلا خطأ');
+    }
+    // ★ الخط الأحمر: الكتابة تفضل على يوم الشغل مهما كان اللي بتتفرّج عليه
+    $_GET = ['tab' => 'day', 'day' => $prevDay];
+    $cardPrev = $render(static fn () => $ctrl->card((string) $repId));
+    $noPhpError($cardPrev, 'كارت المندوب بعدسة يوم');
+    chk(str_contains($cardPrev, 'name="dep_date" value="' . $workBefore . '"'),
+        '★★ خانة تاريخ تنزيل العهدة فضلت على **يوم الشغل** مش يوم العرض');
+
     // ═══ ④ رندر كارت المندوب — التبويبات الأربعة
     sec('④ كارت المندوب: ٤ تبويبات وكلها بترندر');
     $tabs = ['day', 'permits', 'account', 'settings'];

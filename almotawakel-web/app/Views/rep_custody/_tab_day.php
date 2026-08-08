@@ -257,7 +257,10 @@ $eq = static function (string $label, $value, string $cls = '') {
                value="<?= e($depositOld['amount'] ?? '') ?>"<?= fieldErrorAttrs('amount', $depositErrors) ?>>
         <?= fieldError('amount', $depositErrors) ?></div>
       <div class="field"><label>التاريخ</label>
-        <input type="date" name="dep_date" value="<?= e($depositOld['dep_date'] ?? $day) ?>"<?= fieldErrorAttrs('dep_date', $depositErrors) ?>>
+<?php /* ⚠️ **يوم الشغل مش يوم العرض.** الشاشة بقى ليها عدسة `?day=` تفتح أي يوم
+         للقراءة؛ لو الخانة دي اتعمّرت من يوم العرض، المالك يتفرّج على يوم فات
+         ويدوس «نزّل» فالعهدة تتسجّل هناك بلا ما ياخد باله. */ ?>
+        <input type="date" name="dep_date" value="<?= e($depositOld['dep_date'] ?? $workDay) ?>"<?= fieldErrorAttrs('dep_date', $depositErrors) ?>>
         <?= fieldError('dep_date', $depositErrors) ?>
         <div class="hint">الافتراضي يوم العمل المختار — العهدة بتتحسب على اليوم ده لوحده.</div></div>
       <?php /* ═══ v61 (المرحلة ٢) — «الفلوس جاية منين؟»

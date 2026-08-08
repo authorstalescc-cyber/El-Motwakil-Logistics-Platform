@@ -115,10 +115,19 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
           ]); ?>
         </td></tr>
       <?php else: foreach ($dayLedger as $d): ?>
+        <?php /* ⚠️ **الروابط دي كانت ميتة**: كل تاريخ كان `?tab=day` **بلا يوم**،
+                 فالضغط على أي صف مابيعملش حاجة — الجدول اللي فيه كل الأيام كان
+                 هو الحل لمشكلة «مش قادر أشوف يوم فات» وهو معطَّل من الأصل.
+                 دلوقتي كل صف بيفتح يومه في عدسة العرض. */ ?>
         <tr<?= $d['day'] === $day ? ' class="rc-row-today"' : '' ?>>
           <td style="white-space:nowrap;font-weight:600">
-            <a href="<?= url('rep-custody/' . $repId . '?tab=day') ?>"><?= e(dfmt($d['day'])) ?></a>
-            <?php if ($d['day'] === $day): ?><span class="pill st-done">يوم الشغل</span><?php endif; ?>
+            <a href="<?= url('rep-custody/' . $repId . '?tab=day'
+                . ($d['day'] === $workDay ? '' : '&day=' . rawurlencode((string) $d['day']))) ?>"><?=
+                e(dfmt($d['day'])) ?></a>
+            <?php /* «يوم الشغل» بيتقاس على `$workDay` مش على يوم العرض — لو
+                     اتقاس على المعروض كان كل يوم تفتحه يقول عن نفسه «يوم الشغل». */ ?>
+            <?php if ($d['day'] === $workDay): ?><span class="pill st-done">يوم الشغل</span><?php endif; ?>
+            <?php if ($d['day'] === $day && $day !== $workDay): ?><span class="pill st-partial">اللي بتشوفه</span><?php endif; ?>
           </td>
           <td><?= $d['deposits'] > 0 ? money($d['deposits']) : '—' ?></td>
           <td><?= $d['spent'] > 0 ? money($d['spent']) : '—' ?></td>
@@ -179,7 +188,8 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
                value="<?= e($settleOld['returned'] ?? (string) max($b['balance'], 0)) ?>"<?= fieldErrorAttrs('returned', $settleErrors) ?>>
         <?= fieldError('returned', $settleErrors) ?></div>
       <div class="field"><label>تاريخ التسوية</label>
-        <input type="date" name="settle_date" value="<?= e($settleOld['settle_date'] ?? $day) ?>"<?= fieldErrorAttrs('settle_date', $settleErrors) ?>>
+<?php /* ⚠️ يوم الشغل مش يوم العرض — نفس سبب خانة `dep_date` في تبويب اليوم. */ ?>
+        <input type="date" name="settle_date" value="<?= e($settleOld['settle_date'] ?? $workDay) ?>"<?= fieldErrorAttrs('settle_date', $settleErrors) ?>>
         <?= fieldError('settle_date', $settleErrors) ?></div>
     </div>
     <div class="field"><label>ملاحظة (اختياري)</label>

@@ -2577,6 +2577,13 @@ body.cmdk-lock{overflow:hidden}
 .workbar.warn .workbar-lbl,.workbar.warn .workbar-date,.workbar.warn .workbar-note{color:var(--sader-dk)}
 
 /* شاشة اختيار تاريخ العمل */
+/* مخارج شاشة تاريخ العمل — الشاشة برّه التخطيط فمن غيرهم مفيش طريق للخروج غير
+   تسجيل الخروج (بلاغ المالك 2026-08-09). */
+.wd-outs{display:flex;flex-direction:column;align-items:center;gap:9px;margin-top:14px;
+  padding-top:14px;border-top:1px solid var(--line)}
+.wd-outs .btn{width:100%;justify-content:center}
+.wd-skip{font-size:var(--fs-2);font-weight:500;color:var(--grey)}
+.wd-skip:hover{color:var(--navy)}
 .wd-quick{display:flex;gap:10px;margin-bottom:14px}
 .wd-quick .wd-preset{flex:1;line-height:1.35;padding:10px}
 .wd-quick .wd-preset small{font-weight:400;opacity:.7;font-size:var(--fs-1)}
@@ -2932,6 +2939,20 @@ button.d-hchip{cursor:pointer;font-family:inherit}
 
 /* ═══════════ لوحة متابعة عهدة المناديب (v35) — عرض فقط ═══════════ */
 .d-sec-head .d-sec-year.alert{background:var(--red-lt);border-color:#e6bcbc;color:var(--red)}
+
+/* تنقّل بين أيام العرض (`partials/day_nav.php`) — عدسة قراءة مش تغيير ليوم الشغل */
+.day-nav{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.day-nav-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--card);color:var(--navy)}
+.day-nav-btn:hover{background:var(--gold-light);border-color:var(--gold)}
+.day-nav-btn.off{opacity:.35;pointer-events:none}
+/* الرسمة واحدة (`chevron`) والاتجاه التاني بقلبها — بدل أيقونة تانية لنفس الشكل */
+.day-nav-btn .flip{display:inline-flex;transform:scaleX(-1)}
+.day-nav-back{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;
+  border:1px solid #e0c9a0;border-radius:var(--radius-pill);background:var(--gold-light);
+  color:var(--navy-dark);font-size:var(--fs-1);font-weight:600;white-space:nowrap}
+.day-nav-back svg{color:var(--gold-dark);flex-shrink:0}
+@media(max-width:640px){.day-nav-back{white-space:normal}}
 
 /* شارة «البحث بيفلتر الكروت بس» — في `app.css` مش `<style>` محلي (قانون التصميم، بند ٧) */
 .rc-filter-note{display:flex;align-items:center;gap:9px;margin:0 2px 12px;padding:9px 13px;

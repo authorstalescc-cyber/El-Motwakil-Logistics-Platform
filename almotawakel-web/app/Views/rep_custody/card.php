@@ -31,7 +31,10 @@ $accountOld = $accountState['old']; $accountErrors = $accountState['errors'];
 $assignOld  = $assignState['old'];  $assignErrors  = $assignState['errors'];
 $selectedPermits = array_map('intval', (array) ($assignOld['permit_ids'] ?? []));
 
-$tabUrl = static fn (string $t): string => url('rep-custody/' . $repId . '?tab=' . $t);
+/* ⚠️ يوم العرض بيتنقّل مع كل رابط في الكارت — التبويبات والنوافذ. لو تبويب
+   ضاع منه اليوم، الضغط عليه بيرجّعك ليوم الشغل فجأة وانت بتراجع يومًا فات. */
+$dayArg = $day === $workDay ? '' : '&day=' . rawurlencode($day);
+$tabUrl = static fn (string $t): string => url('rep-custody/' . $repId . '?tab=' . $t . $dayArg);
 $dayLabel = dfmt($day);
 $isToday  = $day === date('Y-m-d');
 // ⚠️ مبلغ المستنّي جاي من الكنترولر (`RepPortal::pendingAmount`) — كان بيتجمّع
@@ -56,8 +59,9 @@ $dayLeft = round((float) $dayB['balance'] - $pendingDaySum, 2);
 <?php /* شريط يوم العمل — المكوّن الموحّد (كان مكتوبًا بالإيد هنا `.rc-daybar`
          فبقى نسخة تانية بتفترق عن باقي الشاشات مع أول تعديل). */ ?>
 <?php partial('day_bar', [
-  'day'    => $day,
-  'locked' => $dayLocked,
+  'day'     => $day,
+  'locked'  => $dayLocked,
+  'actions' => static function () use ($nav) { partial('day_nav', $nav); },
   'facts'  => [[
     'label' => 'برّه معاه (كل الأيام)',
     'value' => intf($b['balance']),

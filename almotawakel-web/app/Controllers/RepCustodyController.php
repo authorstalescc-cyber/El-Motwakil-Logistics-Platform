@@ -40,7 +40,9 @@ class RepCustodyController extends Controller
         // ⚠️ الشاشة بقت **بعدسة يوم العمل** (Auth::workDate): الأرقام الكبيرة فوق
         //    وأعمدة الجدول كلها عن اليوم المختار، والتراكمي بيفضل ظاهر جنبه لأنه
         //    الحقيقة المالية (الفلوس اللي برّه مع المندوب فعلاً — قاعدة v49).
-        $day = work_date();
+        // ⚠️ **اليوم بقى `viewDay()` مش `work_date()`** — عدسة قراءة بـ`?day=`
+        //    تفتح أي يوم (حتى المتقفل) بلا ما تلمس يوم الشغل. التفاصيل فوق.
+        $day = self::viewDay();
         $dayMap = RepCustody::dayTotalsByRep($day);
 
         // ⚠️ **الإجماليات فوق بتتحسب على كل المناديب دايمًا — مش على نتيجة البحث.**
@@ -113,6 +115,10 @@ class RepCustodyController extends Controller
             'sum'    => $sum,
             'dsum'   => $dsum,
             'day'    => $day,
+            // ⚠️ **يوم الكتابة** — لازم يفضل مفصولًا عن يوم العرض عشان الشاشة
+            //    تقدر تحذّر لما المالك يتفرّج على يوم غير اللي هيكتب عليه.
+            'workDay' => work_date(),
+            'nav'    => self::dayNav($day, 0, '', $q),
             'locked' => RepCustody::isDayLocked($day),
             'q'      => $q,
             // ⚠️ **الحقيقة المالية الأهم في الشاشة وكانت غايبة تمامًا**: الفلوس
@@ -162,7 +168,10 @@ class RepCustodyController extends Controller
         if (!in_array($what, array_merge(self::DRILL_ALL, self::DRILL_REP, self::DRILL_INBOX), true)) {
             $this->notFound('نوع التفاصيل ده مش موجود.');
         }
-        $day = work_date();
+        // ⚠️ **لازم نفس عدسة الشاشة** — لو التفاصيل فضلت على يوم الشغل والشاشة
+        //    بتعرض يومًا تاني، الرقم بيفتح بنودًا مش بتاعته. ده بالظبط الباج
+        //    اللي اتصلّح في البحث؛ ممنوع نرجّعه من باب اليوم.
+        $day = self::viewDay();
 
         // ─── أرقام صندوق المراجعة — كل المستنّي على كل الأيام
         if (in_array($what, self::DRILL_INBOX, true)) {
@@ -305,7 +314,10 @@ class RepCustodyController extends Controller
         // المطلوب، وإلا الرقم السري يضيع للأبد (متشفّر ومستحيل نستخرجه بعدين).
         if ($cred) { $tab = self::TAB_SETTINGS; }
 
-        $day = work_date();
+        // ⚠️ **يوم العرض** (`?day=`) — عدسة قراءة. يوم الكتابة تحت في `$workDay`
+        //    وهو اللي كل الفورمات بتتعمّر منه؛ خلطهم = الكتابة تروح ليوم غلط.
+        $day = self::viewDay();
+        $workDay = work_date();
         $cardBack = 'rep-custody/' . $repId . '?tab=' . $tab;
         $depositState = FormState::consume('rep_custody.deposit.' . $repId, $cardBack);
         $settleState = FormState::consume('rep_custody.settle.' . $repId, $cardBack);
@@ -321,6 +333,12 @@ class RepCustodyController extends Controller
             'rep'         => $rep,
             'tab'         => $tab,
             'day'         => $day,
+            // ⚠️ **يوم الكتابة** — كل خانة تاريخ في أي فورم بتتعمّر منه هو، مش
+            //    من يوم العرض. لو اتعمّرت من `$day` فالمالك يتفرّج على يوم فات
+            //    ويدوس «نزّل عهدة» فتتسجّل هناك — وده بالظبط اللي العدسة اتعملت
+            //    عشان تمنعه.
+            'workDay'     => $workDay,
+            'nav'         => self::dayNav($day, $repId, $tab),
             'dayLocked'   => RepCustody::isDayLocked($day),
             // التراكمي = «الفلوس اللي برّه معاه فعلاً» (أساس التسوية وحد التحويل)
             'b'           => RepCustody::breakdown($repId),
@@ -1309,6 +1327,62 @@ class RepCustodyController extends Controller
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) { return false; }
         [$y, $m, $d] = array_map('intval', explode('-', $v));
         return checkdate($m, $d, $y);
+    }
+
+    /**
+     * **يوم العرض — عدسة قراءة فقط، مالهاش أي علاقة بيوم الشغل.**
+     *
+     * ⚠️ **المشكلة اللي اتعملت عشانها** (بلاغ المالك 2026-08-09): الشاشة كانت
+     *    متعلّقة بـ`work_date()` وبس، فالفرجة على يوم فات كانت بتستلزم تغيير
+     *    **يوم الشغل كله** — وده مش فرجة، ده تحويل النظام لوضع الكتابة على
+     *    اليوم ده. وأسوأ: `WorkDateController::save` بيرفض أي يوم متقفل عبر
+     *    `Closing::guard`، وأغلب الأيام القديمة متقفلة — فحتى العرض كان ممنوعًا،
+     *    والمالك كان بيعمل **تسجيل خروج** عشان يخرج من اللفة.
+     *
+     * ⚠️ **الفرق الحاكم: القفل بيمنع الكتابة مش القراءة.** فالعدسة دي بتفتح أي
+     *    يوم مهما كان متقفل، و**ما بتلمسش `Auth::workDate()` أبدًا** — أي بند
+     *    جديد بيفضل بينزل على يوم الشغل. نفس نمط `/m/entries` (v63) بالظبط.
+     *
+     * ⚠️ الرابط **مش مصدر ثقة**: أي تاريخ غلط الشكل أو في المستقبل بيرجّع
+     *    ليوم الشغل بدل ما يرمي خطأ (العدسة مالهاش أثر كتابة فمفيش خطر).
+     */
+    private static function viewDay(): string
+    {
+        $d = trim((string) ($_GET['day'] ?? ''));
+        if ($d === '' || !self::validDate($d) || $d > date('Y-m-d')) { return work_date(); }
+        return $d;
+    }
+
+    /**
+     * روابط التنقّل بين الأيام — **مصدر وحيد للشاشتين** (القايمة والكارت).
+     *
+     * ⚠️ مفيش «اليوم اللي بعده» لو إحنا على النهاردة — بيانات المستقبل مالهاش
+     *    معنى، و`viewDay()` بترفضها أصلاً فالرابط كان هيرجّعك لمكانك بالسكوت.
+     */
+    private static function dayNav(string $day, int $repId = 0, string $tab = '', string $q = ''): array
+    {
+        $work  = work_date();
+        $today = date('Y-m-d');
+        return [
+            'day'     => $day,
+            'workDay' => $work,
+            'prev'    => self::dayUrl(date('Y-m-d', strtotime($day . ' -1 day')), $repId, $tab, $q),
+            'next'    => $day < $today
+                ? self::dayUrl(date('Y-m-d', strtotime($day . ' +1 day')), $repId, $tab, $q) : '',
+            'work'    => $day === $work ? '' : self::dayUrl($work, $repId, $tab, $q),
+        ];
+    }
+
+    /** رابط الشاشة بيوم عرض معيّن — مصدر وحيد عشان الروابط ما تفترقش. */
+    public static function dayUrl(string $day, int $repId = 0, string $tab = '', string $q = ''): string
+    {
+        $base = $repId > 0 ? 'rep-custody/' . $repId : 'rep-custody';
+        $args = [];
+        if ($tab !== '')  { $args['tab'] = $tab; }
+        if ($q !== '')    { $args['q'] = $q; }
+        // يوم الشغل ما بيتحطّش في الرابط — الرابط النضيف معناه «يوم شغلي»
+        if ($day !== work_date()) { $args['day'] = $day; }
+        return url($base . ($args ? '?' . http_build_query($args) : ''));
     }
 
     // ═══════════════════════════════════════════ إشعارات قرار البند (v51)
