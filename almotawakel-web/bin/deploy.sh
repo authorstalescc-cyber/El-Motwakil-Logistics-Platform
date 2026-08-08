@@ -80,6 +80,11 @@ EXCLUDES=(
   --exclude 'storage/private_uploads' --exclude 'public/uploads'
   --exclude 'storage/*.log' --exclude '*.log' --exclude '*.command'
   --exclude '__pycache__' --exclude '.venv' --exclude 'node_modules'
+  # ⚠️ **حالة تشغيل محلية ومخرجات متولّدة — مالهاش لزوم على السيرفر.**
+  #    `.sync.lock` قفل `flock` (الحالة في نواة النظام مش في الملف، فرفعه
+  #    مش بيقفل حاجة) لكنه حالة جهاز محلي؛ و`bin/*.html` مخرجات طباعة
+  #    متولّدة (٣٩ كيلوبايت) زي اللي `.gitignore` بيمنعها من المستودع أصلاً.
+  --exclude '*.lock' --exclude 'bin/*.html' --exclude 'tmp'
 )
 # ⚠️ **`.htaccess` بقى مرفوعًا من المستودع (مش مستثنى زي الأول).**
 #    هو الحاجز الوحيد اللي بيمنع الإنترنت من config/config.php وbin/*.php،
