@@ -1308,7 +1308,14 @@ a.cl-wal-name:hover{color:var(--navy);text-decoration:underline}
   /* ⚠️ التطبيع إلزامي على الطرفين: `data-search` بيتطبّع في الخادم بـ`search_norm()`
      واللي المستخدم بيكتبه بيتطبّع هنا بـ`almSearchNorm` (نفس الجدول بالحرف).
      من غيره «إكرامية» ما بتلاقي «اكراميه» فالبند يبان مش موجود وهو موجود. */
-  var norm = window.almSearchNorm || function (v) { return String(v || '').trim().toLowerCase(); };
+  /* ⚠️ **بيتحلّ وقت النداء مش وقت التحميل.** `app.js` بقى `defer` (2026-08-09)
+     يعني بيتنفّذ **بعد** السكربت ده، فالتقاط `window.almSearchNorm` هنا كان
+     بيدّي `undefined` ويقع على البديل الضعيف **بالسكوت** — والبديل مالوش جدول
+     تطبيع عربي، يعني «إكرامية» ما تلاقيش «اكراميه» بالظبط زي ما التعليق فوق
+     بيحذّر. الفلترة بتشتغل بعد تفاعل المستخدم فالدالة بتبقى موجودة ساعتها. */
+  function norm(v) {
+    return (window.almSearchNorm || function (x) { return String(x || '').trim().toLowerCase(); })(v);
+  }
   function applyFilter() {
     var q = norm(search && search.value || '');
     var shown = 0;

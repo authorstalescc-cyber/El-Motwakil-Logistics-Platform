@@ -85,7 +85,7 @@ foreach ($groups as $g) { $totalDocs += count($g['docs'] ?? []); }
                     data-confirm="حذف «<?= e((string) $d['title']) ?>»؟ الملف هيتمسح خالص." data-danger="1">
                 <?= csrfField() ?>
                 <input type="hidden" name="_back" value="<?= e(current_app_path()) ?>">
-                <button type="submit" class="btn sm red"><?= icon('trash', 14) ?></button>
+                <button type="submit" class="btn sm red" title="حذف المستند" aria-label="حذف المستند"><?= icon('trash', 14) ?></button>
               </form>
             <?php endif; ?>
           </div>

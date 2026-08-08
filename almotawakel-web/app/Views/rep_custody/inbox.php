@@ -984,7 +984,12 @@ body.ib-has-bar{padding-bottom:78px}
   var fLocked = document.getElementById('ibOnlyLocked');
   var counter = document.getElementById('ibCount');
 
-  var ibNorm = window.almSearchNorm || function (v) { return String(v || '').trim().toLowerCase(); };
+  /* ⚠️ بيتحلّ وقت النداء مش وقت التحميل — `app.js` بقى `defer` فبيتنفّذ بعد
+     السكربت ده، والالتقاط هنا كان بيقع على بديل بلا تطبيع عربي **بالسكوت**
+     (نفس الإصلاح في `closing/index.php`). */
+  function ibNorm(v) {
+    return (window.almSearchNorm || function (x) { return String(x || '').trim().toLowerCase(); })(v);
+  }
   function applyFilters() {
     var q = ibNorm(fSearch.value || '');
     var day = fDay.value, onlyLocked = fLocked.checked;

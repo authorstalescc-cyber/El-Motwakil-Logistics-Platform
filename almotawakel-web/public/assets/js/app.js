@@ -2103,7 +2103,9 @@
     const dialogObserver = new MutationObserver((changes) => changes.forEach((change) => {
       const host = change.target;
       const dialog = host.matches?.('[role=dialog]') ? host : host.querySelector?.('[role=dialog]');
-      if (!dialog || dialog.closest('.confirm-overlay,.form-modal-overlay,.cmdk')) return;
+      /* ⚠️ `.nc` (لوحة الإشعارات) مستثناة — منسدلة **غير مشروطة** فممنوع
+         حبس التركيز فيها؛ فتحها/قفلها مُدار في وحدة الإشعارات فوق. */
+      if (!dialog || dialog.closest('.confirm-overlay,.form-modal-overlay,.cmdk,.nc')) return;
       const box = dialog.closest('[hidden]') || dialog;
       const open = !box.hidden && box.getAttribute('aria-hidden') !== 'true';
       if (open && !box.__focusTrap) { box.setAttribute('aria-hidden', 'false'); activateDialog(box, dialog.querySelector(focusableSelector)); }
@@ -2431,7 +2433,12 @@
       panel.hidden = false;
       btn.setAttribute('aria-expanded', 'true');
       paintList();
-      activateDialog(panel, panel.querySelector('a,button'));
+      /* ⚠️ اللوحة **منسدلة غير مشروطة** (`aria-modal="false"`) — فممنوع
+         `activateDialog` هنا: حبس التركيز في لوحة غير مشروطة بيمنع مستخدم
+         الكيبورد من إكمال الصفحة بـTab (فخّ WCAG 2.1.2). التركيز بيتحرّك
+         لأول بند **بلا حبس**، وEscape بيقفل ويرجّع التركيز للجرس (تحت). */
+      const first = panel.querySelector('a,button');
+      if (first) setTimeout(() => first.focus(), 20);
     }
     function closePanel() {
       if (panel.hidden) return;
@@ -2451,7 +2458,10 @@
         const fd = new FormData(); fd.append('_csrf', window.__CSRF || '');
         fetch(window.__NOTIF_READ_ALL, {
           method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        }).then(() => {
+        }).then((r) => {
+          /* ⚠️ كانت بتصفّر الواجهة من غير ما تتأكد إن الطلب نجح — لو الشبكة
+             وقعت كان العدّاد بيقول «صفر غير مقروء» **كدب** لحد الـping الجاي. */
+          if (!r.ok) throw new Error('http');
           events.forEach((i) => { i.read = true; });
           unread = 0; paintBadge(); paintList();
           document.querySelectorAll('.nl-item.unread').forEach((el) => el.classList.remove('unread'));
@@ -2480,7 +2490,9 @@
   (function notifPage() {
     if (!document.querySelector('.nl-item')) return;
     paintNotifTimes();
-    setInterval(() => paintNotifTimes(), 60000);
+    /* ⚠️ بلا طلب خادم (تحديث نصوص محلي) لكنه كان بيفضل يشتغل والتبويب
+       مخفي — نفس حارس «التبويب المخفي» اللي على مؤقّتات الجرس فوق. */
+    setInterval(() => { if (!document.hidden) paintNotifTimes(); }, 60000);
 
     document.addEventListener('click', (e) => {
       if (!e.target.closest) return;

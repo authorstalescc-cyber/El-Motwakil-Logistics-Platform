@@ -137,6 +137,7 @@ $printViews = [
     'closing/print.php', 'reports/print.php', 'reps/settlement_print.php',
     'statements/print.php', 'statements/batch_print.php',
     'permits/invoice_print.php', 'permits/_print_styles.php', 'legacy/statement.php',
+    'office/statement.php',
 ];
 foreach ($printViews as $rel) {
     $src = (string) file_get_contents($root . '/app/Views/' . $rel);
@@ -148,7 +149,106 @@ foreach (['permits/_print_styles.php', 'statements/batch_print.php'] as $rel) {
     chk(str_contains($src, 'override مقصود'), "`$rel`: الفرق عن الأساس موثَّق إنه مقصود");
 }
 
+// ═══ ⑥ب ⚠️ هوية الطباعة = هوية الشاشة **بالقيم** + الليلي الدلالي مقروء
+sec('⑥ب ⚠️ هوية الطباعة = هوية الشاشة بالقيم');
+/* ⚠️ القسم ⑥ كان بيتأكد إن `print_base` **موجود وفيه توكنز** — بس ما كانش
+   بيقارن **القيم** مع `app.css`، فانحرفت بالسكوت: `--warid` كان لونًا مختلفًا
+   خالص (كحلي `#1e4a7a` بدل تركواز `#0E7C86`) والورق اللي بيروح للعميل كان
+   بألوان غير ألوان الشاشة. الفحص ده بيقارن القيمة الفعلية لكل توكن مشترك. */
+$tokOf = function (string $src): array {
+    $out = [];
+    if (preg_match_all('/--([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,6})\b/', $src, $mm, PREG_SET_ORDER)) {
+        foreach ($mm as $t) { $out['--' . strtolower($t[1])] = strtolower($t[2]); }
+    }
+    return $out;
+};
+$appRootSrc = '';
+if (preg_match('~^:root\{(.*?)^\}~ms', $cssCode, $rm)) { $appRootSrc = $rm[1]; }
+$appTok  = $tokOf($appRootSrc);
+$baseTok = $tokOf($base);
+chk($appRootSrc !== '' && $appTok !== [], 'قادر أقرا توكنز `:root` من app.css');
+foreach ([ // print_base ← app.css
+    '--navy' => '--navy', '--navy2' => '--navy-mid', '--gold' => '--gold',
+    '--gold-l' => '--gold-light', '--gold-d' => '--gold-dark',
+    '--ink' => '--ink', '--muted' => '--grey', '--line' => '--line', '--bg' => '--bg',
+    '--red' => '--red', '--green' => '--green', '--sader' => '--sader', '--warid' => '--warid',
+] as $pTok => $aTok) {
+    $pv = $baseTok[$pTok] ?? null; $av = $appTok[$aTok] ?? null;
+    chk($pv !== null && $pv === $av,
+        "قيمة `$pTok` في الطباعة = `$aTok` في النظام" . ($pv !== $av ? " (طباعة:$pv ≠ نظام:$av)" : ''));
+}
+
+/* ⚠️ الألوان **الدلالية** (أحمر/أخضر) مش ألوان هوية، فقاعدة «الهوية ثابتة
+   في الليلي» ما تنطبقش عليها — ولازم تتكيّف. من غير تكيّف، `--red` الغامق
+   على `--card` الغامق كان **2.18:1** و`--green` كان **2.62:1** — كل مبلغ
+   سالب وكل رسالة خطأ وشارة حالة كانت شبه مقروءة. الفحص بيحسب التباين
+   **فعليًّا** (WCAG) مش بيدوّر على قيمة مكتوبة. */
+$lumi = function (string $hex): float {
+    $hex = ltrim($hex, '#');
+    if (strlen($hex) === 3) { $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2]; }
+    $c = array_map(static fn($h) => hexdec($h) / 255, str_split($hex, 2));
+    $c = array_map(static fn($v) => $v <= 0.03928 ? $v / 12.92 : (($v + 0.055) / 1.055) ** 2.4, $c);
+    return 0.2126 * $c[0] + 0.7152 * $c[1] + 0.0722 * $c[2];
+};
+$contrast = static fn(string $a, string $b): float =>
+    (max($lumi($a), $lumi($b)) + 0.05) / (min($lumi($a), $lumi($b)) + 0.05);
+$darkCode = (string) preg_replace('~/\*.*?\*/~s', '', $darkPart);
+foreach ([':root\[data-theme="dark"\]', ':root:not\(\[data-theme="light"\]\)'] as $sel) {
+    $blk = '';
+    if (preg_match('~' . $sel . '\s*\{(.*?)\}~s', $darkCode, $dm)) { $blk = $dm[1]; }
+    $dt = $tokOf($blk);
+    $dkCard = $dt['--card'] ?? null;
+    foreach (['--red', '--green', '--gold-dark'] as $tok) {
+        $v = $dt[$tok] ?? null;
+        chk($v !== null, "الليلي ($sel) بيعدّل `$tok` — لون دلالي/نصي بيتكيّف");
+        if ($v !== null && $dkCard !== null) {
+            $ratio = $contrast($v, $dkCard);
+            chk($ratio >= 4.5, sprintf('تباين `%s` على `--card` الليلي = %.2f:1 (≥ AA)', $tok, $ratio));
+        }
+    }
+}
+
 // ═══ ⑦ عناوين الأقسام
+/* ═══ ⑥ج ⚠️ المستند ما يرجّعش توكن هوية بعد ما ورثه من `print_base`
+   القسم ⑥ب بيثبت إن **المصدر** مطابق لـ`app.css` — وده مش كفاية: المستند
+   اللي بينادي `print_base` وبعدين يعيد تعريف نفس التوكن في `:root` محلي
+   بيرجع للقيمة القديمة **بالسكوت**، فالإصلاح يوصل للمصدر وما يوصلش للورقة
+   اللي بتطلع للعميل. حصل فعلاً: `permits/_print_styles.php` كان بيرجّع ٧
+   توكنز (منهم `--warid` بلون تاني خالص) و`statements/batch_print.php` بيرجّع
+   `--red` القديم — بعد ما `print_base` اتزامن بالظبط.
+
+   الاستثناءات الوحيدة هي فروق **مقصودة وموثَّقة في نفس الملف**: ورقة المراجعة
+   بخلفية وذهب أفتح، والكشف المجمّع بخطوط أفتح. أي توكن غيرهم = انحراف. */
+sec('⑥ج المستند ما يرجّعش توكن هوية ورثه من المصدر');
+$identityTokens = ['--navy', '--navy2', '--gold', '--gold-d', '--ink', '--muted',
+                   '--red', '--green', '--sader', '--warid', '--font'];
+$allowedOverride = [   // فرق مقصود موثَّق في الملف نفسه
+    'permits/_print_styles.php'  => ['--gold-l', '--bg'],
+    'statements/batch_print.php' => ['--line'],
+];
+$drift = [];
+foreach (glob($root . '/app/Views/*/*.php') as $f) {
+    $src = (string) file_get_contents($f);
+    // ⚠️ المصدر نفسه مستثنى — هو اللي بيعرّف التوكنز، وبيذكر `partial('print_base')` في توثيقه
+    if (str_ends_with($f, '/partials/print_base.php')) { continue; }
+    if (!str_contains($src, "partial('print_base')")) { continue; }
+    $rel = str_replace($root . '/app/Views/', '', $f);
+    if (!preg_match_all('~(--[a-z0-9-]+)\s*:\s*[^;}]+~', $src, $m)) { continue; }
+    foreach (array_unique($m[1]) as $tok) {
+        if (!in_array($tok, $identityTokens, true)) { continue; }
+        if (in_array($tok, $allowedOverride[$rel] ?? [], true)) { continue; }
+        $drift[] = $rel . ' ← ' . $tok;
+    }
+}
+chk(!$drift, 'ولا مستند بيرجّع توكن هوية من عنده'
+    . ($drift ? ' — لقينا: ' . implode(' · ', $drift) : ''));
+// والاستثناءات نفسها لازم تفضل موثَّقة، وإلا تبقى انحرافًا مستترًا
+foreach ($allowedOverride as $rel => $toks) {
+    $src = (string) @file_get_contents($root . '/app/Views/' . $rel);
+    chk($src !== '' && str_contains($src, 'override مقصود'),
+        "الفرق المقصود في $rel لسه موثَّقًا في الملف");
+}
+
 sec('⑦ عناوين الأقسام بأيقونات SVG');
 $emoji = [];
 foreach (glob($root . '/app/Views/*/*.php') as $f) {

@@ -154,7 +154,7 @@ $e = $edit ?: null;
           <form method="post" action="<?= url('tracking/places/' . (int) $p['id'] . '/delete') ?>"
                  data-confirm="تمسح «<?= e($p['name']) ?>»؟ الشحنات الرايحة لها مش هتوريك مسافة بعد كده.">
             <?= csrfField() ?>
-            <button class="btn sm danger" type="submit"><?= icon('trash', 13) ?></button>
+            <button class="btn sm danger" type="submit" title="حذف الوجهة" aria-label="حذف الوجهة"><?= icon('trash', 13) ?></button>
           </form>
         </td>
       </tr>

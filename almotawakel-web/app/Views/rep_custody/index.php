@@ -29,7 +29,7 @@ $repUrl = static fn (int $id, string $tab = 'day'): string => url(
   <div class="spacer"></div>
   <form method="get" action="<?= url('rep-custody') ?>" class="rc-search" role="search">
     <input type="search" name="q" value="<?= e($q) ?>" placeholder="ابحث باسم المندوب…" aria-label="ابحث باسم المندوب">
-    <button class="btn ghost" type="submit"><?= icon('search', 16) ?></button>
+    <button class="btn ghost" type="submit" title="بحث" aria-label="بحث"><?= icon('search', 16) ?></button>
   </form>
   <?php /* الأرصدة مقنّعة افتراضيًّا — المعالج عام في app.js مش سكربت محلي */ ?>
   <a class="btn ghost" href="<?= url('rep-custody/inbox') ?>"><?= icon('inbox', 16) ?> مراجعة البنود</a>

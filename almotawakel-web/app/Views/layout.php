@@ -443,7 +443,7 @@ foreach ($cmdCreate as [$label, $seg, $ic, $kw]) {
 <?php /* شركة الشحن = العميل تلقائيًا — ملف مشترك بين المكتب وبوابة المندوب
          (`/m` ما بتحمّلش app.js — نفس سبب `resume-scroll.js`). */ ?>
 <script defer src="<?= url('assets/js/lookup-autofill.js') ?>?v=<?= is_file($laJs) ? filemtime($laJs) : 1 ?>"></script>
-<script src="<?= url('assets/js/app.js') ?>?v=<?= $appJsV ?>"></script>
+<script defer src="<?= url('assets/js/app.js') ?>?v=<?= $appJsV ?>"></script>
 <?= $scripts ?? '' ?>
 </body>
 </html>

@@ -42,7 +42,7 @@ $hasBase = $base !== '';
   <form method="get" action="<?= url('tracking') ?>" class="trk-search">
     <input type="hidden" name="status" value="<?= e($status) ?>">
     <input type="search" name="q" value="<?= e($q) ?>" placeholder="بحث">
-    <button class="btn sm" type="submit"><?= icon('search', 15) ?></button>
+    <button class="btn sm" type="submit" title="بحث" aria-label="بحث"><?= icon('search', 15) ?></button>
   </form>
 </div>
 

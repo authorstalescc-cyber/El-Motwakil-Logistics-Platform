@@ -65,7 +65,7 @@ $visaCards = \App\Models\VisaCard::all(true);
               </select>
             </td>
             <td><input name="it_note[]" value="<?= e($note) ?>"></td>
-            <td><button type="button" class="del rm-row"><?= icon('trash', 14) ?></button></td>
+            <td><button type="button" class="del rm-row" title="احذف البند" aria-label="احذف البند"><?= icon('trash', 14) ?></button></td>
           </tr>
           <?php return ob_get_clean();
         };

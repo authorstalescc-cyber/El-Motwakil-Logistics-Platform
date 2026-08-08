@@ -1,10 +1,13 @@
 <?php partial('print_base'); ?>
 <style>
   /* ⚠ override مقصود فوق `print_base`: ورقة المراجعة بخلفية أفتح
-     وذهب أفتح شوية عشان الجداول الكتير فيها ما تبقاش تقيلة. */
-  :root{ --navy:#15355B; --navy2:#1e4a7a; --gold:#C9A227; --gold-l:#f6edcf; --gold-d:#8a6d10;
-         --ink:#1A2433; --muted:#5A6472; --line:#E2E7EE; --bg:#EEF1F6; --red:#B4383E; --green:#1f7a52;
-         --sader:#a76a1e; --warid:#1e4a7a; }
+     وذهب أفتح شوية عشان الجداول الكتير فيها ما تبقاش تقيلة.
+     ⚠️ **الاتنين دول بس.** كان هنا نسخة كاملة من اللوحة، فلما `print_base`
+        اتزامن مع `app.css` (2026-08-09) الورقة دي فضلت على القديم: `--warid`
+        كان لونًا تانيًا خالص، و`--red/--green/--sader/--navy2` درجات قديمة —
+        يعني الإصلاح وصل للمصدر وما وصلش للورقة اللي بتطلع للعميل.
+        **ممنوع ترجّع أي توكن هوية هنا؛ اللي مش مكتوب بيتورَّث من المصدر.** */
+  :root{ --gold-l:#f6edcf; --bg:#EEF1F6; }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--ink);
     font-family:var(--font);direction:rtl;text-align:right;

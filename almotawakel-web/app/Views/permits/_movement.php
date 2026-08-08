@@ -242,7 +242,7 @@ $customBlock = function(string $key, array $st, array $S, int $mid) use ($status
                   <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank"><?= icon('file-text', 14) ?></a><?php endif; ?>
                   <span class="ms-sp"></span>
                   <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل البند"><?= icon('edit', 14) ?></button>
-                  <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>"><?= csrfField() ?><button class="btn ghost xs danger" type="submit"><?= icon('trash', 14) ?></button></form>
+                  <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>"><?= csrfField() ?><button class="btn ghost xs danger" type="submit" title="حذف البند" aria-label="حذف البند"><?= icon('trash', 14) ?></button></form>
                 </div>
                 <div class="ms-edit-wrap" hidden><?= $customForm($key, $en, $mid) ?></div>
               </div>
