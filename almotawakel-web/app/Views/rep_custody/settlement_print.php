@@ -148,7 +148,7 @@ $eq[] = ['اتقفل واتسلّم', $back2, '−'];
 
 <div class="bar noprint">
   <button class="btn gold" onclick="window.print()"><?= icon('file-text', 14) ?> طباعة / حفظ PDF</button>
-  <a class="btn ghost" href="<?= url('rep-custody/' . (int) $rep['id'] . '?tab=account') ?>">‹ رجوع لكارت المندوب</a>
+  <?php partial('back_link', ['to' => 'rep-custody/' . (int) $rep['id'] . '?tab=account', 'label' => 'رجوع لكارت المندوب']); ?>
 </div>
 
 <div class="sheet">

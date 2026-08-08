@@ -17,7 +17,7 @@ $query = static fn(array $override = []) => http_build_query(array_merge(
     <h1><?= icon('clipboard', 24) ?> مراجعة مزامنة Excel</h1>
     <p>افتح كل بوليصة، قارن النظام مع Excel، واختر بنفسك الحقول التي تريد اعتمادها.</p>
   </div>
-  <a class="btn ghost" href="<?= url('bawalis') ?>"><?= icon('chevron', 14) ?> رجوع للبوالص</a>
+  <?php partial('back_link', ['to' => 'bawalis', 'label' => 'رجوع للبوالص']); ?>
 </div>
 
 <?php if ($error): ?>
@@ -80,7 +80,7 @@ $query = static fn(array $override = []) => http_build_query(array_merge(
           <option value="<?= e($key) ?>" <?= $filter===$key?'selected':'' ?>><?= e($label) ?></option>
         <?php endforeach; ?>
       </select>
-      <input type="search" name="q" value="<?= e($q) ?>" placeholder="رقم بوليصة / صاحب بيان / سيارة">
+      <input type="search" name="q" value="<?= e($q) ?>" placeholder="بحث…">
       <button class="btn sm" type="submit">عرض</button>
     </form>
     <span class="count-badge"><?= intf($total) ?> نتيجة</span>
@@ -152,19 +152,19 @@ $query = static fn(array $override = []) => http_build_query(array_merge(
 .excel-upload-card form{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.excel-upload-card p{margin:6px 0;color:var(--muted)}
 .flash.warning{background:var(--gold-light);color:var(--gold-dark);border:1px solid var(--gold)}
 .excel-rules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;margin:14px 0}
-.excel-rules b{grid-column:1/-1}.excel-rules span:before{content:"✓";color:var(--green);font-weight:800;margin-left:6px}
+.excel-rules b{grid-column:1/-1}.excel-rules span:before{content:"✓";color:var(--green);font-weight:700;margin-left:6px}
 .excel-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:14px 0}
-.excel-stats .card{padding:14px}.excel-stats small{display:block;color:var(--muted);margin-bottom:6px}.excel-stats b{font-size:1.35rem}
+.excel-stats .card{padding:14px}.excel-stats small{display:block;color:var(--muted);margin-bottom:6px}.excel-stats b{font-size:var(--fs-6)}
 .excel-toolbar{margin:8px 0 12px}.excel-review-list{display:grid;gap:11px}
 .excel-row-card{display:flex;align-items:stretch;justify-content:space-between;gap:18px;border-inline-start:4px solid var(--line2)}
 .excel-row-main{flex:1;min-width:0}.excel-row-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.excel-row-title h3{margin:0}
-.excel-row-no{color:var(--muted);font-size:.78rem}.office-mark{color:var(--gold-dark);font-size:.78rem;font-weight:700}
+.excel-row-no{color:var(--muted);font-size:var(--fs-1)}.office-mark{color:var(--gold-dark);font-size:var(--fs-1);font-weight:700}
 .excel-row-sides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:12px 0}
 .excel-row-sides>div{background:var(--zebra);border:1px solid var(--line);border-radius:9px;padding:9px 11px;display:grid;gap:3px}
-.excel-row-sides small{color:var(--muted)}.excel-row-sides span{font-size:.82rem;color:var(--muted)}
-.excel-change-chips{display:flex;gap:6px;flex-wrap:wrap}.excel-change-chips span{background:var(--gold-light);color:var(--gold-dark);border-radius:999px;padding:4px 8px;font-size:.76rem}
+.excel-row-sides small{color:var(--muted)}.excel-row-sides span{font-size:var(--fs-2);color:var(--muted)}
+.excel-change-chips{display:flex;gap:6px;flex-wrap:wrap}.excel-change-chips span{background:var(--gold-light);color:var(--gold-dark);border-radius:999px;padding:4px 8px;font-size:var(--fs-1)}
 .excel-row-action{min-width:145px;display:flex;flex-direction:column;justify-content:center;gap:8px}
-.excel-msg{padding:7px 8px;border-radius:8px;margin-top:7px;font-size:.82rem}.excel-msg.conflict{background:var(--red-lt);color:var(--red)}.excel-msg.warning{background:var(--gold-light);color:var(--gold-dark)}
+.excel-msg{padding:7px 8px;border-radius:8px;margin-top:7px;font-size:var(--fs-2)}.excel-msg.conflict{background:var(--red-lt);color:var(--red)}.excel-msg.warning{background:var(--gold-light);color:var(--gold-dark)}
 .pager{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px}
 @media(max-width:900px){.excel-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.excel-rules{grid-template-columns:1fr}.excel-source,.excel-upload-card,.excel-row-card{align-items:flex-start;flex-direction:column}.excel-upload-card form,.excel-row-action{width:100%}.excel-row-sides{grid-template-columns:1fr}}
 </style>

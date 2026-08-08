@@ -83,7 +83,7 @@ $ctLbl = function (array $b): string {
 
       <div class="bc-find">
         <label for="q" class="bc-find-lbl"><?= icon('search', 14) ?> دوّر بالبوليصة أو السائق أو العربية</label>
-        <input type="search" id="q" autocomplete="off" placeholder="مثال: 12345 أو محمد أو 1474">
+        <input type="search" id="q" autocomplete="off" placeholder="بحث…">
       </div>
 
       <h3 class="hm-group"><?= count($bills) ?> بوليصة عهدتها لسه على المكتب</h3>
