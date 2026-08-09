@@ -216,10 +216,15 @@ chk(strpos($js, 'userDecimalComma') !== false && strpos($js, '__moneyPrev') !== 
 /* ══════════════ 8) تطابق PHP وجافاسكريبت ══════════════ */
 sec('8) نفس الجدول بيدّي نفس الناتج في اللغتين');
 
+/* ⚠️ على الإنتاج **كل دوال تشغيل العمليات مقفولة** (`disable_functions`) —
+   ونداء دالة مقفولة في PHP 8 بيرمي `Error: Call to undefined function`
+   فيقتل باقي الفحص بلا رسالة. الحارس ده إجباري، مش تجميل. */
 $node = null;
-foreach (['node', '/usr/local/bin/node', '/opt/homebrew/bin/node'] as $cand) {
-    $which = @shell_exec('command -v ' . escapeshellarg($cand) . ' 2>/dev/null');
-    if (is_string($which) && trim($which) !== '') { $node = trim($which); break; }
+if (function_exists('shell_exec')) {
+    foreach (['node', '/usr/local/bin/node', '/opt/homebrew/bin/node'] as $cand) {
+        $which = @shell_exec('command -v ' . escapeshellarg($cand) . ' 2>/dev/null');
+        if (is_string($which) && trim($which) !== '') { $node = trim($which); break; }
+    }
 }
 if ($node === null) {
     skip('node مش متاح — تطابق اللغتين ما اتفحصش (الفحص ده بيعدّي محليًّا)');
