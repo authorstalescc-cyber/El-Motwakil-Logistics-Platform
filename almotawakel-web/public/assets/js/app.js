@@ -387,12 +387,16 @@
       fly.classList.add('open');
       btn.setAttribute('aria-expanded', 'true');
       openBtn = btn;
-      /* ⚠️ لو اللوحة طلعت برّه الشاشة من تحت، بنرفعها — الأقسام الأخيرة في
-         الشريط بتبقى قريبة من أسفل الصفحة واللوحة بتتقص من غير ده. */
-      fly.style.top = '';
+      /* ⚠️ **الموضع بيتحسب هنا لأن اللوحة `position:fixed`** — وهي كده عشان
+         تهرب من قص `.nav` (اللي `overflow-y:auto` بيخلّيه يقصّ الأفقي كمان،
+         فاللوحة كانت بتفتح وهي مقصوصة = «مش شغال»). `fixed` معناها الإحداثيات
+         بالنسبة للشاشة، فلازم نجيبها من مكان الزرار الحالي.
+         ولو طلعت برّه الشاشة من تحت بنرفعها — الأقسام الأخيرة قريبة من أسفلها. */
+      const b = btn.getBoundingClientRect();
+      fly.style.top = Math.round(b.top - 6) + 'px';
       const r = fly.getBoundingClientRect();
-      if (r.bottom > window.innerHeight - 8) {
-        fly.style.top = Math.min(0, window.innerHeight - 8 - r.bottom - 6) + 'px';
+      if (r.bottom > window.innerHeight - 10) {
+        fly.style.top = Math.max(10, window.innerHeight - 10 - r.height) + 'px';
       }
     }
 
@@ -410,6 +414,10 @@
       if (e.key === 'Escape' && openBtn) { const b = openBtn; closeFly(); b.focus(); }
     });
     window.addEventListener('resize', closeFly);
+    /* ⚠️ اللوحة `fixed` والزرار جوّه قائمة بتتلفّ — فلو المستخدم لفّ القائمة
+       واللوحة مفتوحة، هتفضل واقفة مكانها بعيد عن زرارها. القفل أوضح من
+       إعادة حساب مستمرة. */
+    nav.addEventListener('scroll', closeFly, { passive: true });
   })();
 
   // ===== مودال تأكيد أنيق (للحفظ والحذف في كل النماذج) =====
