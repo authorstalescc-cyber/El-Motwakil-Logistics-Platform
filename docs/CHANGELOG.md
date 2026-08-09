@@ -1643,7 +1643,7 @@ node** لمطابقة PHP/JS ولاختبار قاعدة الفاصلة على �
 وفوق كده `App::setSetting()` كانت بتكتب في القاعدة **بلا تحقّق ولا دور ولا أي
 أثر**: `vat_rate = 14` بدل `0.14` كانت تعدّي وتغلّط كل الفواتير بلا دليل واحد.
 
-شغّل `php bin/migrate_v70.php`. فحص: `php bin/verify_settings_registry.php`
+شغّل `php bin/migrate_v73.php`. فحص: `php bin/verify_settings_registry.php`
 (**٢٥ فحص**) و`php bin/verify_settings_coverage.php` (**٢٠ فحص**).
 
 ### المرحلة ٠ — الأساس (صفر تغيير في السلوك)

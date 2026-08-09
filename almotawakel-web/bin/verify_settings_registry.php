@@ -247,7 +247,7 @@ $throws('مفتاح_مخترع_مش_موجود', 'x')
 sec('⑤ الكتابة بتسيب أثرًا فعليًّا (سلوك — جوّه rollback)');
 
 if (!Settings::refreshHistoryReady()) {
-    skp('جدول settings_history مش موجود — شغّل bin/migrate_v70.php الأول');
+    skp('جدول settings_history مش موجود — شغّل bin/migrate_v73.php الأول');
 } else {
     $pdo = Database::conn();
     $pdo->beginTransaction();

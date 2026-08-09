@@ -183,7 +183,7 @@ Access::allows('owner', 'SettingsController@saveSection', 'POST')
 sec('⑤ الحفظ العام بيشتغل ويرفض الغلط (سلوك — جوّه rollback)');
 
 if (!Settings::historyReady()) {
-    skp('جدول settings_history مش موجود — شغّل bin/migrate_v70.php الأول');
+    skp('جدول settings_history مش موجود — شغّل bin/migrate_v73.php الأول');
 } else {
     $pdo = Database::conn();
     $pdo->beginTransaction();

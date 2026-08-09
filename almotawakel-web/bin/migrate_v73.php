@@ -2,8 +2,19 @@
 // ═══ حارس: سطر الأوامر فقط ═══
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /**
- * v70 — سجل الإعدادات: كل تغيير في أي إعداد بيسيب أثرًا وبيرجع بضغطة.
+ * v73 — سجل الإعدادات: كل تغيير في أي إعداد بيسيب أثرًا وبيرجع بضغطة.
  *       (docs/19-settings-control-center-plan.md · المرحلة ٠)
+ *
+ * ⚠️⚠️ **الملف ده كان `migrate_v70.php` واترقّم لـv73 — والسبب مش تنظيم.**
+ *   جلستان اشتغلتا في نفس الوقت: التانية طبّقت **v71** على قاعدة الإنتاج
+ *   قبل ما v70 توصلها. وسجل الهجرات **صارم في الترتيب**: `MigrationRunner`
+ *   بيرمي «لا يمكن إدخال v70 قبل آخر إصدار مطبّق v71» — والأداة `reconcile`
+ *   مخصّصة لحادثة v2…v41 المثبتة وبس.
+ *   **والأخطر إن الحالة دي بتقفل كل رفع جاي**: أي `deploy` بيمرّ على الهجرات
+ *   وبيلاقي v70 معلّقة تحت آخر مطبَّق فبيفشل — مش بس الرفع ده.
+ *   الحل اللي رسالة الحارس نفسها بتقوله (`MigrationRunner` سطر ٣٨٦):
+ *   **«أنشئ إصدارًا جديدًا»**. والترحيل idempotent (بيتخطّى لو الجدول موجود)
+ *   فتطبيقه على الإنتاج بيسجّله في السجل بلا ما يغيّر حاجة.
  *
  * ═══ اللزمة ═══
  * `App::setSetting()` كانت بتكتب في القاعدة **بلا أي أثر**: مفيش صف في
@@ -32,7 +43,7 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
  * ⚠️ `verify()` بتثبت **حالة بنيوية دائمة** (جدول · أعمدة · فهارس · حارس
  *    التقنيع) — مش لقطة بيانات لحظية (درس v61 الموثَّق).
  *
- * التشغيل:  php bin/migrate_v70.php [--dry-run]
+ * التشغيل:  php bin/migrate_v73.php [--dry-run]
  */
 require_once dirname(__DIR__) . '/app/bootstrap.php';
 
@@ -43,34 +54,34 @@ use App\Core\SettingsSchema;
 use App\Models\CompanySafe;
 use App\Models\Custody;
 
-$v70Dry    = in_array('--dry-run', $argv ?? [], true);
-$v70Direct = isset($argv[0]) && realpath($argv[0]) === realpath(__FILE__);
-$v70Say = static function (string $m) use ($v70Direct): void { if ($v70Direct) { echo $m . "\n"; } };
+$v73Dry    = in_array('--dry-run', $argv ?? [], true);
+$v73Direct = isset($argv[0]) && realpath($argv[0]) === realpath(__FILE__);
+$v73Say = static function (string $m) use ($v73Direct): void { if ($v73Direct) { echo $m . "\n"; } };
 
-$v70HasTbl = static function (string $t): bool {
+$v73HasTbl = static function (string $t): bool {
     return (bool) Database::scalar(
         'SELECT COUNT(*) FROM information_schema.tables
           WHERE table_schema = DATABASE() AND table_name = ?', [$t]);
 };
-$v70HasCol = static function (string $t, string $c): bool {
+$v73HasCol = static function (string $t, string $c): bool {
     return (bool) Database::scalar(
         'SELECT COUNT(*) FROM information_schema.columns
           WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$t, $c]);
 };
-$v70HasIdx = static function (string $t, string $i): bool {
+$v73HasIdx = static function (string $t, string $i): bool {
     return (bool) Database::scalar(
         'SELECT COUNT(*) FROM information_schema.statistics
           WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', [$t, $i]);
 };
 
 /** أعمدة `settings_history` — المصدر الوحيد للترحيل والتحقّق. */
-$v70Cols = [
+$v73Cols = [
     'id', 'setting_key', 'old_value', 'new_value',
     'changed_by', 'changed_by_id', 'reason', 'source', 'created_at',
 ];
-$v70Idx = ['idx_sh_key' => 'setting_key', 'idx_sh_time' => 'created_at'];
+$v73Idx = ['idx_sh_key' => 'setting_key', 'idx_sh_time' => 'created_at'];
 
-$v70Up = static function () use ($v70Dry, $v70Say, $v70HasTbl, $v70HasIdx): void {
+$v73Up = static function () use ($v73Dry, $v73Say, $v73HasTbl, $v73HasIdx): void {
     /* ⚠️ لقطة «ممنوع يتغيّر». بنقيس **قبل** أي DDL لأن `CREATE TABLE` بيعمل
        commit ضمني ومستحيل يترجع (المصيدة الموثَّقة في v59). */
     $before = [
@@ -86,10 +97,10 @@ $v70Up = static function () use ($v70Dry, $v70Say, $v70HasTbl, $v70HasIdx): void
     ];
 
     // ①  جدول السجل
-    if ($v70HasTbl('settings_history')) {
-        $v70Say('  = جدول settings_history (موجود)');
-    } elseif ($v70Dry) {
-        $v70Say('  • (تجربة) هيتعمل جدول settings_history');
+    if ($v73HasTbl('settings_history')) {
+        $v73Say('  = جدول settings_history (موجود)');
+    } elseif ($v73Dry) {
+        $v73Say('  • (تجربة) هيتعمل جدول settings_history');
     } else {
         Database::exec(
             "CREATE TABLE settings_history (
@@ -107,15 +118,15 @@ $v70Up = static function () use ($v70Dry, $v70Say, $v70HasTbl, $v70HasIdx): void
              ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                COMMENT='سجل تغييرات الإعدادات — معزول بالبناء، صفر أثر مالي (v70)'"
         );
-        $v70Say('  + جدول settings_history');
+        $v73Say('  + جدول settings_history');
     }
 
     // ②  الفهارس (لو الجدول كان موجودًا من نسخة أقدم بلا فهرس)
-    if (!$v70Dry && $v70HasTbl('settings_history')) {
+    if (!$v73Dry && $v73HasTbl('settings_history')) {
         foreach (['idx_sh_key' => '(setting_key, id)', 'idx_sh_time' => '(created_at)'] as $name => $spec) {
-            if (!$v70HasIdx('settings_history', $name)) {
+            if (!$v73HasIdx('settings_history', $name)) {
                 Database::exec("ALTER TABLE settings_history ADD INDEX $name $spec");
-                $v70Say("  + فهرس $name");
+                $v73Say("  + فهرس $name");
             }
         }
     }
@@ -123,9 +134,9 @@ $v70Up = static function () use ($v70Dry, $v70Say, $v70HasTbl, $v70HasIdx): void
     /* ③ ⚠️ تصفير الكاش الساكن **إلزامي**: `Settings::historyReady()` اتقرت
           قبل الـDDL (وقت اللقطة) فبترجّع false للأبد جوّه نفس العملية —
           والتحقّق بعد الترحيل كان هيفشل بإنذار كاذب (مصيدة v57 الموثَّقة). */
-    if (!$v70Dry) {
+    if (!$v73Dry) {
         Settings::refreshHistoryReady();
-        $v70Say('  ✓ Settings::historyReady اتصفّرت واتقرت من جديد');
+        $v73Say('  ✓ Settings::historyReady اتصفّرت واتقرت من جديد');
     }
 
     // ④  إثبات إن ولا مليم ولا إعداد اتحرّك
@@ -142,30 +153,30 @@ $v70Up = static function () use ($v70Dry, $v70Say, $v70HasTbl, $v70HasIdx): void
     foreach ($before as $k => $v) {
         if ($after[$k] !== $v) {
             // ⚠️ `{$k}` مش `$k` — بايتات «» بتتحسب جزءًا من اسم المتغيّر (مصيدة v38).
-            throw new \RuntimeException("v70: «{$k}» اتغيّر أثناء الترحيل — الترحيل ده سجل بس.");
+            throw new \RuntimeException("v73: «{$k}» اتغيّر أثناء الترحيل — الترحيل ده سجل بس.");
         }
     }
-    $v70Say('  ✓ الأرصدة وصفوف الإقفال وكل قيم الإعدادات ما اتغيّروش');
+    $v73Say('  ✓ الأرصدة وصفوف الإقفال وكل قيم الإعدادات ما اتغيّروش');
 };
 
-$v70Verify = static function () use ($v70Say, $v70HasTbl, $v70HasCol, $v70HasIdx, $v70Cols, $v70Idx): bool {
-    if (!$v70HasTbl('settings_history')) { $v70Say('✗ جدول settings_history ناقص.'); return false; }
-    $v70Say('  ✓ جدول settings_history موجود');
+$v73Verify = static function () use ($v73Say, $v73HasTbl, $v73HasCol, $v73HasIdx, $v73Cols, $v73Idx): bool {
+    if (!$v73HasTbl('settings_history')) { $v73Say('✗ جدول settings_history ناقص.'); return false; }
+    $v73Say('  ✓ جدول settings_history موجود');
 
-    foreach ($v70Cols as $col) {
-        if (!$v70HasCol('settings_history', $col)) {
-            $v70Say("✗ العمود settings_history.$col ناقص."); return false;
+    foreach ($v73Cols as $col) {
+        if (!$v73HasCol('settings_history', $col)) {
+            $v73Say("✗ العمود settings_history.$col ناقص."); return false;
         }
     }
-    $v70Say('  ✓ كل أعمدة v70 موجودة (' . count($v70Cols) . ')');
+    $v73Say('  ✓ كل أعمدة v70 موجودة (' . count($v73Cols) . ')');
 
-    foreach (array_keys($v70Idx) as $name) {
-        if (!$v70HasIdx('settings_history', $name)) { $v70Say("✗ الفهرس $name ناقص."); return false; }
+    foreach (array_keys($v73Idx) as $name) {
+        if (!$v73HasIdx('settings_history', $name)) { $v73Say("✗ الفهرس $name ناقص."); return false; }
     }
-    $v70Say('  ✓ فهارس السجل موجودة');
+    $v73Say('  ✓ فهارس السجل موجودة');
 
-    if (!Settings::refreshHistoryReady()) { $v70Say('✗ Settings::historyReady بترجّع false.'); return false; }
-    $v70Say('  ✓ Settings::historyReady فعّالة');
+    if (!Settings::refreshHistoryReady()) { $v73Say('✗ Settings::historyReady بترجّع false.'); return false; }
+    $v73Say('  ✓ Settings::historyReady فعّالة');
 
     /* ⚠️ شرط بنيوي دائم: **ولا قيمة مفتاح سرّي متخزّنة صريحة في السجل.**
        التقنيع بيحصل في `Settings::maskIfSecret` — والفحص ده هو اللي بيمنع
@@ -182,27 +193,27 @@ $v70Verify = static function () use ($v70Say, $v70HasTbl, $v70HasCol, $v70HasIdx
                 AND ((old_value <> '' AND old_value IS NOT NULL AND old_value NOT LIKE '••••%')
                   OR (new_value <> '' AND new_value IS NOT NULL AND new_value NOT LIKE '••••%'))",
             $secrets);
-        if ($bad > 0) { $v70Say("✗ فيه $bad صف بمفتاح سرّي غير مقنّع في السجل."); return false; }
-        $v70Say('  ✓ ولا مفتاح سرّي متخزّن صريحًا في السجل (' . count($secrets) . ' مفتاح محروس)');
+        if ($bad > 0) { $v73Say("✗ فيه $bad صف بمفتاح سرّي غير مقنّع في السجل."); return false; }
+        $v73Say('  ✓ ولا مفتاح سرّي متخزّن صريحًا في السجل (' . count($secrets) . ' مفتاح محروس)');
     }
 
     // شرط بنيوي دائم: ولا مصدر كتابة خارج القايمة المعتمدة.
     $badSrc = Database::all(
         "SELECT DISTINCT source FROM settings_history WHERE source NOT IN ('ui','cli','system')");
     if ($badSrc) {
-        $v70Say('✗ مصدر كتابة مجهول: ' . implode(', ', array_column($badSrc, 'source'))); return false;
+        $v73Say('✗ مصدر كتابة مجهول: ' . implode(', ', array_column($badSrc, 'source'))); return false;
     }
-    $v70Say('  ✓ ولا مصدر كتابة خارج القايمة');
+    $v73Say('  ✓ ولا مصدر كتابة خارج القايمة');
     return true;
 };
 
-if ($v70Direct) {
-    echo 'v70 — سجل الإعدادات' . ($v70Dry ? '  (تجربة — مفيش كتابة)' : '') . "\n";
+if ($v73Direct) {
+    echo 'v73 — سجل الإعدادات' . ($v73Dry ? '  (تجربة — مفيش كتابة)' : '') . "\n";
     echo str_repeat('=', 62) . "\n";
-    $v70Up();
-    if ($v70Dry) { echo "\nشغّل من غير --dry-run عشان يتطبّق.\n"; exit(0); }
-    if ($v70Verify() !== true) { fwrite(STDERR, "فشل التحقق بعد تطبيق v70.\n"); exit(1); }
+    $v73Up();
+    if ($v73Dry) { echo "\nشغّل من غير --dry-run عشان يتطبّق.\n"; exit(0); }
+    if ($v73Verify() !== true) { fwrite(STDERR, "فشل التحقق بعد تطبيق v70.\n"); exit(1); }
     echo "\n✓ تمّ.\n";
 }
 
-return ['up' => $v70Up, 'verify' => $v70Verify];
+return ['up' => $v73Up, 'verify' => $v73Verify];
