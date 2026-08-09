@@ -21,6 +21,12 @@ $entryRow = static function (array $r) use ($labels): void {
     $meta = [['icon' => 'calendar', 'text' => dfmt((string) $r['entry_date'])]];
     // ⚠️ نفس قاعدة الشاشة: الجهة عنوان والنوع ميتا — النافذة والقايمة لازم يتطابقوا.
     if (!empty($r['subtitle'])) { $meta[] = ['icon' => CompanySafe::icon($kind), 'text' => (string) $r['subtitle']]; }
+    /* ⚠️ **اسم الكارت/المندوب** (طلب المالك: «لو من فيزا يتم كتابة أي فيزا») —
+       «سحب كاش من كارت فيزا» من غير اسم الكارت ما بتجاوبش على السؤال. */
+    if (!empty($r['wallet'])) {
+        $meta[] = ['icon' => in_array($kind, CompanySafe::VISA_KINDS, true) ? 'credit-card' : 'truck',
+                   'text' => (string) $r['wallet']];
+    }
     if (!empty($r['category'])) { $meta[] = ['icon' => 'tag', 'text' => CompanySafe::catLabel((string) $r['category'])]; }
     if ($r['note'])   { $meta[] = ['icon' => 'file-text', 'text' => (string) $r['note']]; }
     if (!empty($r['custody_id']))      { $meta[] = ['icon' => 'landmark', 'text' => 'أثّرت على خزنة المكتب']; }
@@ -85,6 +91,94 @@ case 'wallets':
                     'amount_tone' => $w['balance'] < 0 ? 'neg' : 'pos',
                 ]);
             }
+        },
+    ]);
+    break;
+
+/* ═══ نوافذ كروت النظرة العامة — كل واحدة **بنطاق كارتها بالظبط** ═══
+   ⚠️ المجموع بيتحسب من **نفس الصفوف المعروضة** لا من استعلام تاني: أي اختلاف
+      في الشرط بين الرقم وبنوده هو بالظبط «البيان المضلِّل» اللي المالك رفضه. */
+case 'day_in':
+    partial('drill', [
+        'how'   => 'كل اللي دخل خزنة الشركة في يوم العمل ده — بمصدره: بنك ولا عميل ولا رجوع من كارت فيزا.',
+        'count' => count($rows),
+        'total' => ['label' => 'دخل يوم ' . dfmt($day),
+                    'value' => money(array_sum(array_map(static fn ($r) => (float) $r['amount'], $rows)), false)],
+        'more'  => ['label' => 'كل الداخل', 'url' => url('company-safe') . '?tab=moves&from=' . $day . '&to=' . $day],
+        'empty' => ['title' => 'مفيش حاجة دخلت النهارده'],
+        'body'  => function () use ($rows, $entryRow) { foreach ($rows as $r) { $entryRow($r); } },
+    ]);
+    break;
+
+case 'day_to_office':
+    partial('drill', [
+        'how'   => 'اللي اتحوّل من خزنة الشركة لخزنة المكتب في اليوم ده — وبيبان في التقفيل اليومي كإضافة عهدة.',
+        'count' => count($rows),
+        'total' => ['label' => 'نزل للمكتب يوم ' . dfmt($day),
+                    'value' => money(array_sum(array_map(static fn ($r) => (float) $r['amount'], $rows)), false)],
+        'more'  => ['label' => 'خزنة المكتب', 'url' => url('custody')],
+        'empty' => ['title' => 'مفيش تحويل للمكتب النهارده'],
+        'body'  => function () use ($rows, $entryRow) { foreach ($rows as $r) { $entryRow($r); } },
+    ]);
+    break;
+
+case 'day_expense':
+    partial('drill', [
+        'how'   => 'المصروفات اللي خرجت من خزنة الشركة في اليوم ده. معزولة عن سجل المصروفات العام.',
+        'count' => count($rows),
+        'total' => ['label' => 'مصروفات يوم ' . dfmt($day),
+                    'value' => money(array_sum(array_map(static fn ($r) => (float) $r['amount'], $rows)), false)],
+        'more'  => ['label' => 'كل المصروفات', 'url' => url('company-safe') . '?tab=expenses'],
+        'empty' => ['title' => 'مفيش مصروفات النهارده'],
+        'body'  => function () use ($rows, $entryRow) { foreach ($rows as $r) { $entryRow($r); } },
+    ]);
+    break;
+
+/* ⚠️⚠️ **الكارتان دول رقمان مختلفان فعلاً** — «عهدة المكتب» بتشمل اللي في جيوب
+   المناديب، و«الفعلي في الدرج» هو اللي المالك يقدر يعدّه بإيده. النافذتان
+   بتوضّحا الفرق صراحةً بدل ما المالك يفتكرهم نفس الرقم. */
+case 'office_total':
+    partial('drill', [
+        'how'   => 'عهدة المكتب = الكاش اللي في الدرج + اللي في جيوب المناديب. دي مش «الفعلي في الدرج».',
+        'count' => 1 + count($wallets['reps']),
+        'total' => ['label' => 'عهدة المكتب الحالية', 'value' => money($wallets['total'], false)],
+        'more'  => ['label' => 'خزنة المكتب', 'url' => url('custody')],
+        'body'  => function () use ($wallets) {
+            partial('row_item', [
+                'title' => 'الفعلي في الدرج', 'icon' => 'landmark',
+                'url'   => url('custody'),
+                'amount' => money($wallets['drawer'], false),
+                'amount_tone' => $wallets['drawer'] < 0 ? 'neg' : 'pos',
+            ]);
+            foreach ($wallets['reps'] as $w) {
+                partial('row_item', [
+                    'title' => $w['name'], 'icon' => 'truck',
+                    'url'   => url('rep-custody/' . (int) $w['id']),
+                    'meta'  => [['icon' => 'user', 'text' => 'في جيب المندوب']],
+                    'amount' => money($w['balance'], false),
+                    'amount_tone' => $w['balance'] < 0 ? 'neg' : 'pos',
+                ]);
+            }
+        },
+    ]);
+    break;
+
+case 'office_drawer':
+    partial('drill', [
+        'how'   => 'الكاش اللي في درج المكتب دلوقتي — من غير اللي مع المناديب. ده الرقم اللي المفروض تعدّه بإيدك.',
+        'count' => 2,
+        'total' => ['label' => 'الفعلي في الدرج', 'value' => money($wallets['drawer'], false)],
+        'more'  => ['label' => 'افتح خزنة المكتب', 'url' => url('custody')],
+        'body'  => function () use ($wallets) {
+            partial('row_item', [
+                'title' => 'عهدة المكتب كلها', 'icon' => 'wallet',
+                'amount' => money($wallets['total'], false), 'amount_tone' => 'pos',
+            ]);
+            partial('row_item', [
+                'title' => 'ناقص اللي مع المناديب', 'icon' => 'truck',
+                'meta'  => [['icon' => 'users', 'text' => intf(count($wallets['reps'])) . ' مندوب']],
+                'amount' => '- ' . money($wallets['reps_total'], false), 'amount_tone' => 'ex',
+            ]);
         },
     ]);
     break;

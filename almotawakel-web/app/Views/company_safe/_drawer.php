@@ -65,22 +65,41 @@ $selKind = (string) $val('kind', 'to_office');
           </div>
           <input type="hidden" name="kind" value="<?= e((string) $editRow['kind']) ?>">
         <?php else: ?>
-          <fieldset class="cs-types">
-            <legend>نوع الحركة</legend>
-            <div class="cs-types-grid">
-            <?php foreach (CompanySafe::MANUAL_KINDS as $k): ?>
-              <?php /* ⚠️ **بلا `required`**: واحد منهم `checked` دايمًا، و`app.js`
-                       بيحقن نجمة «مطلوب» على كل حقل `required` — فكانت بتطلع
-                       نجوم حمرا على الكروت وتشوّه الشبكة بلا فايدة. */ ?>
-              <label class="cs-type<?= CompanySafe::isIn($k) ? ' in' : ' out' ?>">
-                <input type="radio" name="kind" value="<?= e($k) ?>" <?= $selKind === $k ? 'checked' : '' ?>>
-                <span class="ic"><?= icon(CompanySafe::icon($k), 18) ?></span>
-                <span class="t"><?= e($labels[$k]) ?></span>
-                <span class="h"><?= e($kindHint[$k] ?? '') ?></span>
-              </label>
-            <?php endforeach; ?>
-            </div>
-          </fieldset>
+          <?php /* ⚠️⚠️ **الداخل مفصول عن الخارج** (طلب المالك: «افصل بين الصرف
+                   والإيداع حتى لا تشتت المستخدم»). سبعة كروت في شبكة واحدة كانت
+                   بتخلّي المالك يقرا السبعة عشان يلاقي اللي عايزه؛ دلوقتي بيروح
+                   للقسم الصح على طول. **القسمة من `isIn()`** لا مكتوبة بالإيد،
+                   فأي نوع جديد بيقع في قسمه تلقائيًّا. */ ?>
+          <?php
+          $groups = ['in' => [], 'out' => []];
+          foreach (CompanySafe::MANUAL_KINDS as $k) {
+              $groups[CompanySafe::isIn($k) ? 'in' : 'out'][] = $k;
+          }
+          $groupMeta = [
+              'in'  => ['فلوس داخلة',  'trending-up'],
+              'out' => ['فلوس خارجة', 'trending-down'],
+          ];
+          foreach ($groups as $g => $kinds):
+              if (!$kinds) { continue; }
+              [$gLabel, $gIcon] = $groupMeta[$g];
+          ?>
+            <fieldset class="cs-types <?= e($g) ?>">
+              <legend><?= icon($gIcon, 13) ?> <?= e($gLabel) ?></legend>
+              <div class="cs-types-grid">
+              <?php foreach ($kinds as $k): ?>
+                <?php /* ⚠️ **بلا `required`**: واحد منهم `checked` دايمًا، و`app.js`
+                         بيحقن نجمة «مطلوب» على كل حقل `required` — فكانت بتطلع
+                         نجوم حمرا على الكروت وتشوّه الشبكة بلا فايدة. */ ?>
+                <label class="cs-type <?= e($g) ?>">
+                  <input type="radio" name="kind" value="<?= e($k) ?>" <?= $selKind === $k ? 'checked' : '' ?>>
+                  <span class="ic"><?= icon(CompanySafe::icon($k), 18) ?></span>
+                  <span class="t"><?= e($labels[$k]) ?></span>
+                  <span class="h"><?= e($kindHint[$k] ?? '') ?></span>
+                </label>
+              <?php endforeach; ?>
+              </div>
+            </fieldset>
+          <?php endforeach; ?>
           <?= fieldError('kind', $errors) ?>
         <?php endif; ?>
 

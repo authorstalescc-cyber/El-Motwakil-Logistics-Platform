@@ -12,7 +12,12 @@ use App\Models\CompanySafe;
 
 $grand = max((float) $wallets['grand'], 0.0001);
 $pc    = static fn (float $v): float => round(max($v, 0) / $grand * 100, 2);
-$net   = round($dayTotals['in'] - $dayTotals['out'], 2);
+
+/* ⚠️ أرقام الكروت **من `dayTotals()` مباشرةً** بمفتاح كل نوع — مفيش جمع ولا
+   اشتقاق في الشاشة، فالكارت ونافذته بيقروا نفس الشرط بالظبط. */
+$dayIn       = (float) $dayTotals['in'];
+$dayToOffice = (float) $dayTotals['to_office'];
+$dayExpense  = (float) $dayTotals['expense'];
 ?>
 
 <?php /* ═══ ① كارت الرصيد — الرقم هو البطل والاتجاه جنبه ═══ */ ?>
@@ -27,21 +32,47 @@ $net   = round($dayTotals['in'] - $dayTotals['out'], 2);
       </span>
     </button>
 
+    <?php /* ⚠️⚠️ **كل كارت رقمه هو ونافذته هي** (طلب المالك: «أبعد عن أي بيانات
+             مضللة… كل كارت بيعرض بياناته التفصيلية فقط»). التلاتة الأولى نطاقهم
+             **يوم العمل** بالظبط، والاتنين الأخيرة تفكيك محفظة المكتب. */ ?>
     <div class="cs-kpis">
-      <button type="button" class="cs-kpi" data-drill="<?= e($cd('day')) ?>" data-drill-title="حركة اليوم">
-        <span class="k">حركة اليوم</span>
-        <b class="<?= $net < 0 ? 'neg' : 'pos' ?>"><?= ($net >= 0 ? '+' : '−') . money0(abs($net), false) ?></b>
-        <em><?= intf($dayTotals['count']) ?> حركة</em>
+      <button type="button" class="cs-kpi" data-drill="<?= e($cd('day_in')) ?>"
+              data-drill-title="اللي دخل خزنة الشركة النهارده">
+        <span class="k">دخل النهارده</span>
+        <b class="<?= $dayIn > 0.005 ? 'pos' : '' ?>">+<?= money0($dayIn, false) ?></b>
+        <em>إيداع وتحصيل</em>
       </button>
-      <a class="cs-kpi" href="<?= url('custody') ?>">
-        <span class="k">درج المكتب</span>
-        <b class="<?= $officeBal < 0.005 ? 'neg' : '' ?>"><?= money0($officeBal, false) ?></b>
-        <em>افتح الخزنة</em>
-      </a>
-      <button type="button" class="cs-kpi" data-drill="<?= e($cd('budget')) ?>" data-drill-title="مصروفات الشهر">
-        <span class="k">مصروفات الشهر</span>
-        <b class="<?= $budget['over'] ? 'neg' : '' ?>"><?= money0($budget['spent'], false) ?></b>
-        <em><?= $budget['on'] ? intf($budget['pct']) . '% من السقف' : 'بلا سقف' ?></em>
+
+      <button type="button" class="cs-kpi" data-drill="<?= e($cd('day_to_office')) ?>"
+              data-drill-title="اللي نزل لخزنة المكتب النهارده">
+        <span class="k">نزل للمكتب</span>
+        <b class="<?= $dayToOffice > 0.005 ? 'neg' : '' ?>"><?= money0($dayToOffice, false) ?></b>
+        <em>تحويل للخزنة</em>
+      </button>
+
+      <button type="button" class="cs-kpi" data-drill="<?= e($cd('day_expense')) ?>"
+              data-drill-title="مصروفات خزنة الشركة النهارده">
+        <span class="k">مصروفات النهارده</span>
+        <b class="<?= $dayExpense > 0.005 ? 'neg' : '' ?>"><?= money0($dayExpense, false) ?></b>
+        <em>خرجت من الشركة</em>
+      </button>
+
+      <?php /* ⚠️ **الرقمان دول مختلفان فعلاً ولازم يفضلوا منفصلين**: «عهدة
+               المكتب» = كل كاش المكتب (الدرج + اللي في جيوب المناديب)،
+               و«الفعلي في الدرج» = اللي المالك يقدر يعدّه بإيده دلوقتي.
+               عرض واحد منهم باسم التاني هو بالظبط البيان المضلِّل. */ ?>
+      <button type="button" class="cs-kpi" data-drill="<?= e($cd('office_total')) ?>"
+              data-drill-title="عهدة المكتب الحالية">
+        <span class="k">عهدة المكتب</span>
+        <b><?= money0($wallets['total'], false) ?></b>
+        <em>درج + مناديب</em>
+      </button>
+
+      <button type="button" class="cs-kpi" data-drill="<?= e($cd('office_drawer')) ?>"
+              data-drill-title="الفعلي في درج المكتب">
+        <span class="k">الفعلي في الدرج</span>
+        <b class="<?= $wallets['drawer'] < 0.005 ? 'neg' : '' ?>"><?= money0($wallets['drawer'], false) ?></b>
+        <em>كاش في المكتب</em>
       </button>
     </div>
   </div>
@@ -138,6 +169,8 @@ $newUrl = static fn (string $kind): string =>
       $meta = [['icon' => 'calendar', 'text' => dfmt((string) $r['entry_date'])]];
       if ($r['subtitle'])          { $meta[] = ['icon' => (string) $r['icon'], 'text' => (string) $r['subtitle']]; }
       if (!empty($r['cat_label'])) { $meta[] = ['icon' => 'tag', 'text' => (string) $r['cat_label']]; }
+      if (!empty($r['wallet']))  { $meta[] = ['icon' => $r['kind'] === 'to_rep' ? 'truck' : 'credit-card',
+                                            'text' => (string) $r['wallet']]; }
       // ⚠️ الملاحظة لازم تفضل ظاهرة — هي المكان الوحيد اللي المالك بيكتب فيه
       //    «شيك رقم كذا» أو سبب الحركة، وإخفاؤها بيخلّي الصف مبهمًا.
       if ($r['note'])              { $meta[] = ['icon' => 'file-text', 'text' => (string) $r['note']]; }

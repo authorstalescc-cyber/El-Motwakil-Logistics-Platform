@@ -105,6 +105,8 @@ $q = static function (array $over = []) use ($filters): string {
       $meta = [];
       if ($r['subtitle'])          { $meta[] = ['icon' => (string) $r['icon'], 'text' => (string) $r['subtitle']]; }
       if (!empty($r['cat_label'])) { $meta[] = ['icon' => 'tag', 'text' => (string) $r['cat_label']]; }
+      if (!empty($r['wallet']))  { $meta[] = ['icon' => $r['kind'] === 'to_rep' ? 'truck' : 'credit-card',
+                                            'text' => (string) $r['wallet']]; }
       if ($r['note'])   { $meta[] = ['icon' => 'file-text', 'text' => (string) $r['note']]; }
       if (!empty($r['custody_id']))      { $meta[] = ['icon' => 'landmark', 'text' => 'مسّت خزنة المكتب']; }
       if (!empty($r['visa_deposit_id'])) { $meta[] = ['icon' => 'credit-card', 'text' => 'مسّت كارت الفيزا']; }

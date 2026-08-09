@@ -45,12 +45,43 @@ $val = static function (string $k, $fallback = '') use ($old, $editRow) {
   'primary' => ['label' => '+ حركة جديدة',
                 'url'   => url('company-safe') . '?tab=' . $tab . '&new=1',
                 'class' => 'btn gold'],
-  'actions' => function () use ($tab) { ?>
-    <a class="btn ghost" target="_blank" rel="noopener" href="<?= url('company-safe/statement') ?>">
+  'actions' => function () { ?>
+    <?php /* ⚠️ الكشف بيسأل عن الفترة **قبل** ما يفتح (طلب المالك) — قبل كده كان
+             بيطبع الشهر الحالي بلا سؤال، فالمالك اللي عايز يوم واحد كان يطبع
+             ورقة غلط ويرجع. النافذة هي نفس مكوّن التفاصيل العام. */ ?>
+    <button type="button" class="btn ghost" data-drill="#csStmtPick"
+            data-drill-title="اطبع كشف حساب">
       <?= icon('file-text', 15) ?> كشف حساب
-    </a>
+    </button>
   <?php },
 ]); ?>
+
+<?php /* نافذة اختيار فترة الكشف — محتوى في الصفحة (`#csStmtPick`) فمفيش رحلة
+         سيرفر، والفورم `GET` عادي فشغّال بلا جافاسكريبت لو اتفتح بالرابط. */ ?>
+<div id="csStmtPick" hidden>
+  <form class="cs-pick" method="get" action="<?= url('company-safe/statement') ?>" target="_blank">
+    <div class="cs-pick-quick">
+      <?php
+      $today = work_date();
+      $pm    = date('Y-m-d', strtotime(date('Y-m-01', strtotime($today)) . ' -1 day'));
+      $presets = [
+        'اليوم'          => [$today, $today],
+        'الشهر الحالي'   => [date('Y-m-01', strtotime($today)), date('Y-m-t', strtotime($today))],
+        'الشهر اللي فات' => [date('Y-m-01', strtotime($pm)),    date('Y-m-t', strtotime($pm))],
+        'السنة'          => [date('Y-01-01', strtotime($today)), date('Y-12-31', strtotime($today))],
+      ];
+      foreach ($presets as $lbl => [$a, $b]): ?>
+        <a class="cs-pick-btn" target="_blank" rel="noopener"
+           href="<?= url('company-safe/statement') ?>?from=<?= e($a) ?>&to=<?= e($b) ?>"><?= e($lbl) ?></a>
+      <?php endforeach; ?>
+    </div>
+    <div class="cs-pick-range">
+      <label>من <input type="date" name="from" value="<?= e(date('Y-m-01', strtotime($today))) ?>"></label>
+      <label>إلى <input type="date" name="to" value="<?= e($today) ?>"></label>
+      <button class="btn gold" type="submit"><?= icon('file-text', 15) ?> اطبع</button>
+    </div>
+  </form>
+</div>
 
 <?php partial('tabs', [
   'label' => 'أقسام خزنة الشركة',

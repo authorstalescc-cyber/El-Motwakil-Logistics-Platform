@@ -371,6 +371,66 @@ try {
     near('الرصيد الجاري لأحدث صف = الرصيد الكلي',
          (float) $recent[0]['running'], CompanySafe::balance());
 
+    /* ⚠️⚠️ **أهم حارس في الشاشة (طلب المالك: «أبعد عن أي بيانات مضللة»)**:
+       رقم كل كارت لازم يساوي **مجموع بنود نافذته بالمليم**، والنافذة ما
+       تعرضش ولا صف برّه نطاقها. كارت بيقول رقمًا ونافذته بتقول غيره هو
+       بالظبط الشكوى اللي الشاشة اتعادت عشانها. */
+    $dt   = CompanySafe::dayTotals($day);
+    $sumOf = static fn (array $f) => round(array_sum(array_map(
+        static fn ($r) => (float) $r['amount'], CompanySafe::ledger($f, 500))), 2);
+    near('كارت «دخل النهارده» = مجموع نافذته',
+         $dt['in'],        $sumOf(['dir' => 'in', 'from' => $day, 'to' => $day]));
+    near('كارت «نزل للمكتب» = مجموع نافذته',
+         $dt['to_office'], $sumOf(['kind' => 'to_office', 'from' => $day, 'to' => $day]));
+    near('كارت «مصروفات النهارده» = مجموع نافذته',
+         $dt['expense'],   $sumOf(['kind' => 'expense', 'from' => $day, 'to' => $day]));
+    $w2 = Closing::walletSplit();
+    near('كارت «عهدة المكتب» = الدرج + المناديب', $w2['total'],
+         round($w2['drawer'] + $w2['reps_total'], 2));
+
+    // ولا صف برّه نطاق الكارت — لا يوم تاني ولا اتجاه تاني.
+    $dayInRows = CompanySafe::ledger(['dir' => 'in', 'from' => $day, 'to' => $day], 500);
+    $stray = array_filter($dayInRows, static fn ($r) =>
+        (string) $r['entry_date'] !== $day || !$r['is_in']);
+    $stray ? bad('نافذة «دخل النهارده» فيها ' . count($stray) . ' صف برّه نطاقها')
+           : ok('نافذة «دخل النهارده» يومها واتجاهها بس');
+    $dayExpRows = CompanySafe::ledger(['kind' => 'expense', 'from' => $day, 'to' => $day], 500);
+    $stray2 = array_filter($dayExpRows, static fn ($r) =>
+        (string) $r['entry_date'] !== $day || (string) $r['kind'] !== 'expense');
+    $stray2 ? bad('نافذة «مصروفات النهارده» فيها صف برّه نطاقها')
+            : ok('نافذة «مصروفات النهارده» يومها ونوعها بس');
+
+    /* ⚠️ اسم كارت الفيزا/المندوب لازم يبان (طلب المالك: «لو من فيزا يتم كتابة
+       أي فيزا») — «سحب كاش من كارت فيزا» بلا اسم مابيجاوبش على السؤال. */
+    if ($cardId) {
+        // ⚠️ بنزرع صفًّا هنا: صفوف الفيزا اللي فوق اتمسحت في اختبار الحذف.
+        $vId = CompanySafe::create(['entry_date' => $day, 'kind' => 'from_visa',
+                                    'amount' => 900, 'visa_card_id' => $cardId]);
+        $vRows = array_values(array_filter(
+            CompanySafe::ledger(['kind' => 'from_visa'], 50),
+            static fn ($r) => (int) $r['id'] === $vId));
+        ($vRows && ($vRows[0]['wallet'] ?? '') !== '')
+            ? ok('اسم كارت الفيزا بيظهر على بند الفيزا (' . ($vRows[0]['wallet'] ?? '') . ')')
+            : bad('بند الفيزا بلا اسم كارت');
+        CompanySafe::delete($vId);
+    }
+
+    // ⚠️ الفترات: كل مفتاح بيدّي مدى صحيح، والمجهول بيرجع لليوم.
+    foreach (['day' => [$day, $day],
+              'month' => [date('Y-m-01', strtotime($day)), date('Y-m-t', strtotime($day))],
+              'year'  => [date('Y-01-01', strtotime($day)), date('Y-12-31', strtotime($day))]] as $k => [$a, $b]) {
+        $p = CompanySafe::periodRange($k, $day);
+        ($p['from'] === $a && $p['to'] === $b) ? ok("فترة «{$k}» مداها صح")
+            : bad("فترة «{$k}»: {$p['from']} → {$p['to']}");
+    }
+    (CompanySafe::periodRange('__hack__', $day)['key'] === 'day')
+        ? ok('فترة مجهولة بترجع لليوم (الافتراضي اللي طلبه المالك)')
+        : bad('فترة مجهولة مش بترجع لليوم');
+    // ⚠️ الترتيب المقلوب بيتصلّح بدل ما يرجّع فترة فاضية بلا سبب ظاهر.
+    $rev = CompanySafe::periodRange('custom', $day, '2026-08-09', '2026-08-01');
+    ($rev['from'] === '2026-08-01' && $rev['to'] === '2026-08-09')
+        ? ok('فترة مخصصة مقلوبة بتتصلّح') : bad('الفترة المقلوبة ما اتصلّحتش');
+
     // ═══ الأرقام متسقة
     sec('⑥ الأرقام متسقة — التفكيك والكشف');
     $bd = CompanySafe::breakdown();
@@ -437,7 +497,39 @@ try {
     str_contains($render('index', ['tab' => 'expenses']), 'cs-budget-set')
         ? ok('ضبط سقف الميزانية في تبويب المصروفات') : bad('ضبط الميزانية ناقص');
 
-    foreach (['balance','in','out','to_office','expense','day','wallets','cats','parties','budget'] as $w) {
+    /* ⚠️ **الدرج مقسوم لداخل وخارج** (طلب المالك: «افصل بين الصرف والإيداع») —
+       والقسمة من `isIn()` فأي نوع جديد بيقع في قسمه تلقائيًّا. */
+    (substr_count($open, 'class="cs-types in"') === 1 && substr_count($open, 'class="cs-types out"') === 1)
+        ? ok('كروت النوع مقسومة لقسمين: داخل وخارج') : bad('أقسام الدرج مش اتنين');
+    $inCount  = count(array_filter(CompanySafe::MANUAL_KINDS, [CompanySafe::class, 'isIn']));
+    $outCount = count(CompanySafe::MANUAL_KINDS) - $inCount;
+    (substr_count($open, 'class="cs-type in"') === $inCount
+        && substr_count($open, 'class="cs-type out"') === $outCount)
+        ? ok("قسمة الكروت مطابقة لـ`isIn()` ({$inCount} داخل · {$outCount} خارج)")
+        : bad('قسمة كروت النوع مش مطابقة لـ`isIn()`');
+
+    /* ⚠️ **التقارير بتفتح على اليوم** — الشهر كان بيخالف كروت النظرة العامة. */
+    $rep = $render('index', ['tab' => 'reports']);
+    (str_contains($rep, 'cs-period') && str_contains($rep, 'داخل اليوم'))
+        ? ok('التقارير بتفتح على اليوم ومعاها شريط الفترة')
+        : bad('التقارير مش بتفتح على اليوم');
+    foreach (['month', 'prev_month', 'year'] as $pk) {
+        $h2 = $render('index', ['tab' => 'reports', 'period' => $pk]);
+        (!str_starts_with($h2, '__ERR__') && !preg_match($errPat, $h2))
+            ? ok("تبويب التقارير بفترة «{$pk}» بيرندر") : bad("التقارير بفترة «{$pk}» وقعت");
+    }
+    $h2 = $render('index', ['tab' => 'reports', 'period' => 'custom',
+                            'from' => date('Y-m-01'), 'to' => date('Y-m-d')]);
+    (!str_starts_with($h2, '__ERR__') && str_contains($h2, 'cs-period-custom'))
+        ? ok('الفترة المخصصة بترندر') : bad('الفترة المخصصة وقعت');
+
+    // نافذة اختيار فترة كشف الحساب — محتوى في الصفحة وفورم GET حقيقي.
+    (str_contains($home, 'id="csStmtPick"') && str_contains($home, 'cs-pick-range'))
+        ? ok('نافذة اختيار فترة الكشف موجودة (فورم GET حقيقي)')
+        : bad('زرار كشف الحساب بيطبع بلا ما يسأل عن الفترة');
+
+    foreach (['balance','in','out','to_office','expense','day','wallets','cats','parties','budget',
+              'day_in','day_to_office','day_expense','office_total','office_drawer'] as $w) {
         $h = $render('drill', ['__args' => [$w]]);
         (!str_starts_with($h, '__ERR__') && !preg_match($errPat, $h) && trim($h) !== '')
             ? ok("نافذة «{$w}» بترندر") : bad("نافذة «{$w}»: " . substr(strip_tags($h), 0, 140));

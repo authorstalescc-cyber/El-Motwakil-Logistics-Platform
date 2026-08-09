@@ -2864,3 +2864,23 @@
     if (close) { window.location.href = close.getAttribute('href'); }
   });
 })();
+
+/* ══════════════════════════════════════════════════════════════════════
+   خزنة الشركة — زرار «فترة محددة» في تبويب التقارير (v68b).
+   ⚠️ **تحسين تدريجي**: بدون السكربت الخانات بتفضل ظاهرة والفورم `GET` عادي
+      شغّال بالكامل — السكربت بيخفيها لحد ما تطلبها وبس.
+   ══════════════════════════════════════════════════════════════════════ */
+(function companySafePeriod() {
+  var box = document.getElementById('csPeriodCustom');
+  if (!box) return;
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-cs-period-toggle]');
+    if (!btn) return;
+    e.preventDefault();
+    box.hidden = !box.hidden;
+    if (!box.hidden) {
+      var first = box.querySelector('input[type="date"]');
+      if (first) first.focus();
+    }
+  });
+})();

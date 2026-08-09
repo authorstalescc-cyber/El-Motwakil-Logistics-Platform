@@ -1,31 +1,60 @@
 <?php
 /**
- * تبويب «التقارير» — الشهر بالأرقام + كشف حساب جاهز للطباعة.
+ * تبويب «التقارير» — الفترة بالأرقام + كشف حساب جاهز للطباعة.
  *
- * ⚠️ الأرقام هنا من نفس دوال باقي التبويبات (`monthTotals` · `breakdown` ·
- *    `statement`) — فمستحيل التقرير يقول رقمًا يخالف كارت النظرة العامة.
+ * ⚠️ **الافتراضي «اليوم»** (طلب المالك) — الشهر كان بيخلّي أرقام التقرير تخالف
+ *    كروت النظرة العامة اليومية بلا سبب ظاهر. والفترة كلها من
+ *    `CompanySafe::periodRange()` — المصدر الوحيد لأي فترة في الوحدة.
+ * ⚠️ الأرقام من نفس دوال باقي التبويبات — فمستحيل التقرير يقول رقمًا يخالفهم.
  *
- * متغيّرات: $monthTotals $breakdown $trend $statement $balance $cd $mStart $mEnd $labels
+ * متغيّرات: $period $choices $rangeTotals $breakdown $trend $statement $balance $cd $labels
  */
 use App\Models\CompanySafe;
 
-$monthNet = round($monthTotals['in'] - $monthTotals['out'], 2);
+$net    = round($rangeTotals['in'] - $rangeTotals['out'], 2);
+$pUrl   = static fn (string $k): string => url('company-safe') . '?tab=reports&period=' . $k;
+$isCustom = $period['key'] === 'custom';
 ?>
 
+<?php /* ═══ شريط الفترة ═══ */ ?>
+<form class="cs-period" method="get" action="<?= url('company-safe') ?>">
+  <input type="hidden" name="tab" value="reports">
+  <div class="cs-period-tabs">
+    <?php foreach ($choices as $k => $lbl): ?>
+      <?php if ($k === 'custom'): ?>
+        <button type="button" class="cs-period-btn<?= $isCustom ? ' on' : '' ?>"
+                data-cs-period-toggle><?= icon('calendar', 13) ?> <?= e($lbl) ?></button>
+      <?php else: ?>
+        <a class="cs-period-btn<?= $period['key'] === $k ? ' on' : '' ?>"
+           href="<?= e($pUrl($k)) ?>"><?= e($lbl) ?></a>
+      <?php endif; ?>
+    <?php endforeach; ?>
+    <span class="cs-period-now"><?= e($period['label']) ?></span>
+  </div>
+  <?php /* الفترة المخصصة — بتظهر لو مختارة، والزرار فوق بيفتحها بالجافاسكريبت.
+           بدون سكربت بتفضل ظاهرة والفورم شغّال زي ما هو. */ ?>
+  <div class="cs-period-custom" id="csPeriodCustom" <?= $isCustom ? '' : 'hidden' ?>>
+    <input type="hidden" name="period" value="custom">
+    <label>من <input type="date" name="from" value="<?= e($period['from']) ?>" required></label>
+    <label>إلى <input type="date" name="to" value="<?= e($period['to']) ?>" required></label>
+    <button class="btn" type="submit"><?= icon('filter', 14) ?> اعرض</button>
+  </div>
+</form>
+
 <?php /* ═══ ① الشهر في ٤ أرقام ═══ */ ?>
-<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($monthTotals, $monthNet, $balance, $cd) { ?>
+<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($rangeTotals, $net, $balance, $cd, $period) { ?>
   <?php partial('stat', [
-    'label' => 'داخل الشهر', 'value' => intf($monthTotals['in']),
+    'label' => 'داخل ' . $period['label'], 'value' => intf($rangeTotals['in']),
     'icon'  => 'wallet', 'tone' => 'green', 'drill' => $cd('in'), 'title' => 'الكاش الداخل',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'خارج الشهر', 'value' => intf($monthTotals['out']),
+    'label' => 'خارج ' . $period['label'], 'value' => intf($rangeTotals['out']),
     'icon'  => 'trending-down', 'tone' => 'red', 'drill' => $cd('out'), 'title' => 'الكاش الخارج',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'صافي الشهر', 'value' => intf($monthNet),
-    'icon'  => $monthNet < 0 ? 'trending-down' : 'trending-up',
-    'tone'  => $monthNet < 0 ? 'red' : 'green',
+    'label' => 'صافي ' . $period['label'], 'value' => intf($net),
+    'icon'  => $net < 0 ? 'trending-down' : 'trending-up',
+    'tone'  => $net < 0 ? 'red' : 'green',
     'drill' => $cd('balance'), 'title' => 'رصيد خزنة الشركة',
   ]); ?>
   <?php partial('stat', [
@@ -39,7 +68,7 @@ $monthNet = round($monthTotals['in'] - $monthTotals['out'], 2);
             هتسيب أي نوع جديد برّه التفكيك **بلا أي خطأ ظاهر**. */ ?>
 <div class="cs-two">
   <?php partial('panel', [
-    'title' => 'الرصيد راح منين لفين',
+    'title' => 'راح منين لفين — ' . $period['label'],
     'icon'  => 'shuffle',
     'body'  => function () use ($breakdown, $labels, $cd) {
       $any = false;
@@ -70,10 +99,10 @@ $monthNet = round($monthTotals['in'] - $monthTotals['out'], 2);
 
 <?php /* ═══ ③ كشف حساب الشهر — نفس أرقام الورقة المطبوعة بالحرف ═══ */ ?>
 <?php partial('panel', [
-  'title'  => 'كشف حساب ' . dfmt($mStart) . ' — ' . dfmt($mEnd),
+  'title'  => 'كشف حساب ' . dfmt($period['from']) . ' — ' . dfmt($period['to']),
   'icon'   => 'file-text',
   'action' => ['label' => 'اطبع', 'url' => url('company-safe/statement')
-                                         . '?from=' . $mStart . '&to=' . $mEnd],
+                                         . '?from=' . $period['from'] . '&to=' . $period['to']],
   'body'   => function () use ($statement) { ?>
     <div class="cs-stmt">
       <div class="cs-stmt-cell">

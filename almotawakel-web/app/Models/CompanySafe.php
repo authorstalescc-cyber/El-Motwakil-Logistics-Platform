@@ -254,8 +254,11 @@ class CompanySafe
     /** إجماليات يوم واحد (لشريط اليوم في الشاشة). */
     public static function dayTotals(string $date): array
     {
-        $out = ['in' => 0.0, 'out' => 0.0, 'to_office' => 0.0, 'from_office' => 0.0,
-                'expense' => 0.0, 'count' => 0];
+        /* ⚠️ **كل نوع له مفتاحه** — كروت النظرة العامة بتقرا منها مباشرةً، وكل
+           كارت لازم يعرض **رقمه هو** لا رقمًا مجمّعًا (طلب المالك: «أبعد عن أي
+           بيانات مضللة»). الجمع بيحصل في `in`/`out` بس. */
+        $out = array_fill_keys(self::KINDS, 0.0);
+        $out += ['in' => 0.0, 'out' => 0.0, 'count' => 0];
         if (!self::ready()) { return $out; }
         foreach (Database::all(
             'SELECT kind, COALESCE(SUM(amount),0) t, COUNT(*) c
@@ -411,11 +414,121 @@ class CompanySafe
             $r['title']     = trim((string) ($r['source'] ?? '')) !== ''
                 ? (string) $r['source'] : self::label($k);
             $r['subtitle']  = $r['title'] === self::label($k) ? null : self::label($k);
+            /* ⚠️ **اسم الكارت/المندوب لازم يبان** (طلب المالك: «لو من فيزا يتم
+               كتابة أي فيزا»). بيتحلّ في استعلامين بعد الحلقة — واحد لكل صف
+               كان هيدّي N+1. */
+            $r['wallet'] = null;
             // ⚠️ الحركة المولَّدة من وحدة تانية ممنوع تتعدّل/تتمسح من هنا.
             $r['editable']  = $k !== 'from_client';
         }
         unset($r);
+        self::attachWallets($rows);
         return array_reverse($rows);
+    }
+
+    /**
+     * بيحطّ اسم كارت الفيزا / المندوب على الصفوف اللي بتخصّهم.
+     *
+     * ⚠️ **استعلامان لكل القايمة لا استعلام لكل صف** (N+1). و⚠️ الاسم **بيتقرا
+     *    وقت العرض لا بيتخزَّن**: لو المالك غيّر اسم الكارت، السجل القديم لازم
+     *    يعرض الاسم الجديد — تخزين نسخة كان هيدّي اسمين لنفس الكارت.
+     * ⚠️ الكارت/المندوب الممسوح بيرجّع `null` والشاشة بتعرض النوع بس — ما
+     *    بنخترعش اسمًا.
+     */
+    private static function attachWallets(array &$rows): void
+    {
+        $cardIds = $repIds = [];
+        foreach ($rows as $r) {
+            if (!empty($r['visa_card_id'])) { $cardIds[(int) $r['visa_card_id']] = true; }
+            if (!empty($r['rep_id']))       { $repIds[(int) $r['rep_id']] = true; }
+        }
+        $cards = $reps = [];
+        if ($cardIds) {
+            $in = implode(',', array_fill(0, count($cardIds), '?'));
+            foreach (Database::all("SELECT id, name, owner FROM visa_cards WHERE id IN ($in)",
+                                   array_keys($cardIds)) as $c) {
+                $cards[(int) $c['id']] = trim((string) $c['name']
+                    . (($c['owner'] ?? '') !== '' ? ' — ' . $c['owner'] : ''));
+            }
+        }
+        if ($repIds) {
+            $in = implode(',', array_fill(0, count($repIds), '?'));
+            foreach (Database::all("SELECT id, name FROM reps WHERE id IN ($in)",
+                                   array_keys($repIds)) as $x) {
+                $reps[(int) $x['id']] = (string) $x['name'];
+            }
+        }
+        foreach ($rows as &$r) {
+            if (!empty($r['visa_card_id'])) { $r['wallet'] = $cards[(int) $r['visa_card_id']] ?? null; }
+            elseif (!empty($r['rep_id']))   { $r['wallet'] = $reps[(int) $r['rep_id']] ?? null; }
+        }
+        unset($r);
+    }
+
+    // ───────────────────────────────────────────── فترات التقارير
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لأي فترة في الشاشة** — التقارير والكشف والنوافذ
+     *    بيقروا منها، فمستحيل «الشهر» يعني حاجة في تبويب وحاجة تانية في نافذته.
+     *
+     * @return array{key:string,label:string,from:string,to:string}
+     */
+    public static function periodRange(?string $key, string $day, ?string $from = null, ?string $to = null): array
+    {
+        $ok = static fn ($v) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $v) === 1;
+        $key = (string) $key;
+        if ($key === 'custom' && $ok($from) && $ok($to)) {
+            // ⚠️ الترتيب المقلوب بيتصلّح بدل ما يرجّع فترة فاضية بلا سبب ظاهر.
+            if ($from > $to) { [$from, $to] = [$to, $from]; }
+            return ['key' => 'custom', 'label' => dfmt($from) . ' — ' . dfmt($to),
+                    'from' => (string) $from, 'to' => (string) $to];
+        }
+        $prev = date('Y-m-d', strtotime(date('Y-m-01', strtotime($day)) . ' -1 day'));
+        return match ($key) {
+            'month'      => ['key' => 'month', 'label' => 'الشهر الحالي',
+                             'from' => date('Y-m-01', strtotime($day)), 'to' => date('Y-m-t', strtotime($day))],
+            'prev_month' => ['key' => 'prev_month', 'label' => 'الشهر اللي فات',
+                             'from' => date('Y-m-01', strtotime($prev)), 'to' => date('Y-m-t', strtotime($prev))],
+            'year'       => ['key' => 'year', 'label' => 'السنة',
+                             'from' => date('Y-01-01', strtotime($day)), 'to' => date('Y-12-31', strtotime($day))],
+            // ⚠️ **الافتراضي اليوم** (طلب المالك) — الشهر كان بيخلّي أرقام
+            //    التقارير تخالف كروت النظرة العامة اليومية بلا سبب ظاهر.
+            default      => ['key' => 'day', 'label' => 'اليوم', 'from' => $day, 'to' => $day],
+        };
+    }
+
+    /** خيارات شريط الفترة — نفس المفاتيح اللي `periodRange` بتفهمها. */
+    public static function periodChoices(): array
+    {
+        return ['day' => 'اليوم', 'month' => 'الشهر', 'prev_month' => 'الشهر اللي فات',
+                'year' => 'السنة', 'custom' => 'فترة محددة'];
+    }
+
+    /** إجماليات أي فترة (بديل عام لـ`monthTotals`). */
+    public static function rangeTotals(string $from, string $to): array
+    {
+        $out = ['in' => 0.0, 'out' => 0.0];
+        if (!self::ready()) { return $out; }
+        $in = "'" . implode("','", self::IN_KINDS) . "'";
+        $r  = Database::row(
+            "SELECT COALESCE(SUM(CASE WHEN kind IN ($in) THEN amount ELSE 0 END),0) tin,
+                    COALESCE(SUM(CASE WHEN kind IN ($in) THEN 0 ELSE amount END),0) tout
+               FROM company_safe_entries WHERE entry_date BETWEEN ? AND ?", [$from, $to]);
+        return ['in' => round((float) ($r['tin'] ?? 0), 2), 'out' => round((float) ($r['tout'] ?? 0), 2)];
+    }
+
+    /** تفكيك الرصيد بالنوع داخل فترة — للتقارير (`breakdown` كلها بلا فترة). */
+    public static function breakdownRange(string $from, string $to): array
+    {
+        $out = array_fill_keys(self::KINDS, 0.0);
+        if (!self::ready()) { return $out; }
+        foreach (Database::all(
+            'SELECT kind, COALESCE(SUM(amount),0) t FROM company_safe_entries
+              WHERE entry_date BETWEEN ? AND ? GROUP BY kind', [$from, $to]) as $r) {
+            $k = (string) $r['kind'];
+            if (isset($out[$k])) { $out[$k] = round((float) $r['t'], 2); }
+        }
+        return $out;
     }
 
     /** عدد الصفوف المطابقة للفلترة (عشان «بنعرض N من M» — ممنوع قطع صامت). */
@@ -439,6 +552,14 @@ class CompanySafe
         $cat = (string) ($f['cat'] ?? '');
         if ($cat !== '' && isset(self::EXPENSE_CATS[$cat])) {
             $w[] = "kind = 'expense' AND category = ?"; $p[] = $cat;
+        }
+        /* اتجاه الحركة (داخل/خارج) — لكارت «إيداع اليوم» اللي بيجمّع أكتر من
+           نوع. ⚠️ الشرط من `IN_KINDS` لا مكتوب بالإيد، فأي نوع جديد بيدخل
+           الفلترة تلقائيًّا. */
+        $dir = (string) ($f['dir'] ?? '');
+        if ($dir === 'in' || $dir === 'out') {
+            $list = "'" . implode("','", self::IN_KINDS) . "'";
+            $w[] = 'kind ' . ($dir === 'in' ? 'IN' : 'NOT IN') . " ($list)";
         }
         foreach (['from' => '>=', 'to' => '<='] as $key => $op) {
             $d = (string) ($f[$key] ?? '');

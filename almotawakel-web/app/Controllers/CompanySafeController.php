@@ -119,16 +119,25 @@ class CompanySafeController extends Controller
                 'rows'      => CompanySafe::ledger(
                     ['kind' => 'expense', 'cat' => $f['cat'], 'from' => $mStart, 'to' => $mEnd], 100),
             ],
-            'reports' => [
-                'monthTotals' => CompanySafe::monthTotals($day),
-                'breakdown'   => CompanySafe::breakdown(),
-                'trend'       => $this->trendBars($day),
-                'statement'   => CompanySafe::statement($mStart, $mEnd),
-            ],
+            /* ⚠️ **التقارير بتفتح على اليوم افتراضيًّا** (طلب المالك): الشهر كان
+               بيخلّي أرقام التقرير تخالف كروت النظرة العامة اليومية بلا سبب
+               ظاهر. الفترة كلها من `periodRange()` — المصدر الوحيد. */
+            'reports' => (static function () use ($day) {
+                $p = CompanySafe::periodRange($_GET['period'] ?? null, $day,
+                                              $_GET['from'] ?? null, $_GET['to'] ?? null);
+                return [
+                    'period'      => $p,
+                    'choices'     => CompanySafe::periodChoices(),
+                    'rangeTotals' => CompanySafe::rangeTotals($p['from'], $p['to']),
+                    'breakdown'   => CompanySafe::breakdownRange($p['from'], $p['to']),
+                    'trend'       => self::trendBars($day),
+                    'statement'   => CompanySafe::statement($p['from'], $p['to']),
+                ];
+            })(),
             default => [   // overview
                 'breakdown' => CompanySafe::breakdown(),
                 'dayTotals' => CompanySafe::dayTotals($day),
-                'trend'     => $this->trendBars($day),
+                'trend'     => self::trendBars($day),
                 'recent'    => CompanySafe::ledger([], 8),
             ],
         };
@@ -140,7 +149,7 @@ class CompanySafeController extends Controller
      * أعمدة اتجاه آخر ١٤ يوم — استعلام واحد.
      * كل عمود بيفلتر تبويب الحركات على يومه، فالرسم **نقطة دخول مش صورة**.
      */
-    private function trendBars(string $day): array
+    private static function trendBars(string $day): array
     {
         $bars = [];
         foreach (CompanySafe::daily($day, 14) as $p) {
@@ -168,8 +177,18 @@ class CompanySafeController extends Controller
      *    هو الافتراضي — تحذير ٥). بيرندر بلا layout ويرجّع HTML عشان الصفوف
      *    تستخدم نفس مكوّن `row_item`.
      */
-    private const DRILL = ['balance', 'in', 'out', 'to_office', 'expense', 'day',
-                           'wallets', 'cats', 'parties', 'budget'];
+    /**
+     * ⚠️⚠️ **كل كارت له نوع تفاصيل خاص بنطاقه بالظبط** (طلب المالك: «كل كارت
+     *    بيتداس عليه بيعرض بياناته التفصيلية فقط وليس كل البيانات»).
+     *    الأنواع الـ`day_*` مقصورة على **يوم العمل**، و`office_*` على تفكيك
+     *    محفظة المكتب. خلط نطاقين في نافذة واحدة = رقم في الكارت ورقم مخالف
+     *    في نافذته.
+     */
+    private const DRILL = [
+        'balance', 'in', 'out', 'to_office', 'expense', 'day',
+        'wallets', 'cats', 'parties', 'budget',
+        'day_in', 'day_to_office', 'day_expense', 'office_total', 'office_drawer',
+    ];
 
     public function drill(string $what): void
     {
@@ -191,13 +210,19 @@ class CompanySafeController extends Controller
            لو اتحسبت على كل الفترات هتقول رقمًا مختلفًا عن اللي المالك ضغط عليه
            (درس `/payments` في المرحلة ١٤). */
         $rows = match ($what) {
-            'wallets', 'cats', 'parties' => [],
+            'wallets', 'cats', 'parties', 'office_total', 'office_drawer' => [],
             'day'       => CompanySafe::ledger(['from' => $day, 'to' => $day], 500),
             'to_office' => CompanySafe::ledger(['kind' => 'to_office'], 500),
             'expense', 'budget' => CompanySafe::ledger(
                 ['kind' => 'expense', 'from' => $mStart, 'to' => $mEnd], 500),
+            // ── نطاق اليوم بالظبط: كل كارت وبنوده هو
+            'day_in'        => CompanySafe::ledger(['dir' => 'in',  'from' => $day, 'to' => $day], 500),
+            'day_to_office' => CompanySafe::ledger(['kind' => 'to_office', 'from' => $day, 'to' => $day], 500),
+            'day_expense'   => CompanySafe::ledger(['kind' => 'expense',   'from' => $day, 'to' => $day], 500),
             default     => CompanySafe::ledger([], 500),
         };
+
+        $needWallets = in_array($what, ['wallets', 'office_total', 'office_drawer'], true);
 
         $this->render('company_safe/_drill', [
             'what'      => $what,
@@ -205,12 +230,13 @@ class CompanySafeController extends Controller
             'mStart'    => $mStart,
             'mEnd'      => $mEnd,
             'breakdown' => CompanySafe::breakdown(),
+            'dayTotals' => CompanySafe::dayTotals($day),
             'balance'   => CompanySafe::balance(),
             'budget'    => $what === 'budget' ? CompanySafe::budgetProgress($day) : null,
             'cats'      => $what === 'cats'    ? CompanySafe::byCategory($mStart, $mEnd) : [],
             'parties'   => $what === 'parties' ? CompanySafe::byParty($mStart, $mEnd) : [],
             // ⚠️ نفس `Closing::walletSplit()` بتاعة الشاشة وشاشة التقفيل.
-            'wallets'   => $what === 'wallets' ? Closing::walletSplit() : null,
+            'wallets'   => $needWallets ? Closing::walletSplit() : null,
             'rows'      => $rows,
         ], false);
     }
