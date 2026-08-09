@@ -103,13 +103,38 @@ class App
         return self::$settingsCache[$key] ?? $default;
     }
 
+    /**
+     * كتابة إعداد.
+     *
+     * ⚠️⚠️ **مش دي بوابة الشاشة** — دي الكتابة الخام. أي كتابة جاية من المستخدم
+     *    لازم تعدّي على `Settings::set()` (تحقّق من النوع والنطاق والدور + Audit).
+     *    الدالة دي فضلت متسامحة عشان الهجرات والسكربتات القديمة تفضل شغّالة
+     *    بلا كسر (docs/19 · المرحلة ٠).
+     *
+     * ⚠️ **القيمة القديمة بتتقرا قبل الكتابة** — بعدها الكاش بقى بالجديدة
+     *    فالسجل كان هيقول «من س لـس».
+     */
     public static function setSetting(string $key, string $value): void
     {
+        $old = (string) (self::setting($key, '') ?? '');
         Database::exec(
             'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)
              ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
             [$key, $value]
         );
         self::$settingsCache[$key] = $value;
+        // بتبلع أي خطأ جوّاها — السجل عمره ما يوقف كتابة إعداد ولا يكسر ترحيل.
+        Settings::record($key, $old, $value);
+    }
+
+    /**
+     * تصفير كاش الإعدادات كله.
+     * ⚠️ لازمة بعد أي كتابة مباشرة على جدول `settings` من برّه `setSetting`
+     *    (استعادة نسخة احتياطية · استيراد إعدادات) — من غيرها الطلب بيفضل
+     *    شايف القيم القديمة لحد ما ينتهي.
+     */
+    public static function flushSettingsCache(): void
+    {
+        self::$settingsCache = [];
     }
 }
