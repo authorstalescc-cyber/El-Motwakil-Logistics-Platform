@@ -227,6 +227,19 @@ class SettingsSchema
             'affects' => ['custody', 'closing', 'rep-custody'],
             'refresh' => ['\App\Models\RepCustody', 'refreshSafeRule'],
         ],
+        /* ⚠️ **المفتاح ده اكتشفه الفاحص على قاعدة الإنتاج وحدها** (2026-08-10):
+           موجود هناك ومش موجود محليًّا، لأن `bin/activate_drawer_only.php` بيكتبه
+           **على السيرفر بس** عشان يفتكر القيمة القديمة قبل ما يقلب النموذج —
+           و`--off` بترجّعها منه. ده **رمز تراجع** لا إعداد: مالوش خانة ولا
+           بيتعدّل من الشاشة، بس تغييره بيتسجّل (مش زي مفاتيح الحالة). */
+        'rep_bank_topup_from_prev' => [
+            'label' => 'القيمة السابقة لقاعدة «الخزنة = كل كاش الشركة»',
+            'section' => 'business', 'type' => self::T_DATE, 'default' => '',
+            'role' => 'owner', 'tier' => self::TIER_MANAGED,
+            'writer' => 'bin/activate_drawer_only.php',
+            'help' => 'بيتحفظ تلقائيًّا عشان `--off` تقدر ترجّع القاعدة زي ما كانت.',
+            'affects' => ['custody', 'closing'],
+        ],
         'rep_bank_topup_from' => [
             'label' => 'من إمتى «الخزنة = كل كاش الشركة»', 'section' => 'business',
             'type' => self::T_DATE, 'default' => '', 'role' => 'owner',
