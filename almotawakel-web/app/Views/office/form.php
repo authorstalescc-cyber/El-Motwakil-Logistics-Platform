@@ -25,7 +25,7 @@
     <?php if (!$isEdit): ?>
     <div class="field">
       <label>رصيد مبدئي (اختياري)</label>
-      <input type="number" step="0.01" name="init_amount" value="<?= e($val('init_amount')) ?>" placeholder="0">
+      <input data-money type="number" step="0.01" name="init_amount" value="<?= e($val('init_amount')) ?>" placeholder="0">
     </div>
     <div class="field">
       <label>بتاريخ الرصيد المبدئي</label>

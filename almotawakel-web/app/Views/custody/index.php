@@ -103,7 +103,7 @@ $returnPath = current_app_path() ?: 'custody';
     </div>
     <div class="field flush w150">
       <label>المبلغ</label>
-      <input type="number" step="0.01" min="0.01" name="amount" value="<?= e($topupOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $topupErrors) ?>>
+      <input data-money type="number" step="0.01" min="0.01" name="amount" value="<?= e($topupOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $topupErrors) ?>>
       <?= fieldError('amount', $topupErrors) ?>
     </div>
     <button class="btn gold" type="submit" data-primary-submit>إضافة للرصيد</button>
@@ -143,7 +143,7 @@ $returnPath = current_app_path() ?: 'custody';
     </div>
     <div class="field flush w150">
       <label>المبلغ</label>
-      <input type="number" step="0.01" min="0.01" name="amount" value="<?= e($repDepOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $repDepErrors) ?>>
+      <input data-money type="number" step="0.01" min="0.01" name="amount" value="<?= e($repDepOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $repDepErrors) ?>>
       <?= fieldError('amount', $repDepErrors) ?>
     </div>
     <button class="btn gold" type="submit" data-primary-submit><?= icon('plus', 15) ?> نزّل من الدرج</button>

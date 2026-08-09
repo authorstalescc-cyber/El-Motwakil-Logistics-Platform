@@ -66,9 +66,9 @@ $receiptForm = function(string $key, ?array $en, int $mid) use ($pid, $visaField
       <?php if ($isEdit): ?><input type="hidden" name="stage_id" value="<?= (int)$en['id'] ?>"><?php endif; ?>
       <div class="ms-quick">
         <label class="ms-fld"><span>المبلغ</span>
-          <input type="number" step="0.01" name="amount" value="<?= $isEdit ? e($en['amount']) : '' ?>" placeholder="0" required></label>
+          <input data-money type="number" step="0.01" name="amount" value="<?= $isEdit ? e($en['amount']) : '' ?>" placeholder="0" required></label>
         <label class="ms-fld"><span>الفعلي (للعميل)</span>
-          <input type="number" step="0.01" name="actual_amount" value="<?= $isEdit ? e($en['actual_amount'] ?? '') : '' ?>" placeholder="0"></label>
+          <input data-money type="number" step="0.01" name="actual_amount" value="<?= $isEdit ? e($en['actual_amount'] ?? '') : '' ?>" placeholder="0"></label>
         <button class="btn gold sm" type="submit"><?= icon('download', 14) ?> <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
         <button type="button" class="btn ghost sm ms-more-btn">المزيد <?= icon('chevron', 13) ?></button>
       </div>
@@ -114,9 +114,9 @@ $receiptEntryForm = function(string $key, ?array $en, int $mid, bool $hidden = f
         <label class="ms-fld"><span>الكمية</span>
           <input type="number" min="1" step="1" name="qty" value="<?= e($qty) ?>" class="js-rc-qty mv-qty"></label>
         <label class="ms-fld"><span>سعر الوحدة</span>
-          <input type="number" step="0.01" name="amount" value="<?= e($unit) ?>" placeholder="0" class="js-rc-unit" required></label>
+          <input data-money type="number" step="0.01" name="amount" value="<?= e($unit) ?>" placeholder="0" class="js-rc-unit" required></label>
         <label class="ms-fld"><span>الفعلي للوحدة (للعميل)</span>
-          <input type="number" step="0.01" name="actual_amount" value="<?= e($unitActual) ?>" placeholder="0"></label>
+          <input data-money type="number" step="0.01" name="actual_amount" value="<?= e($unitActual) ?>" placeholder="0"></label>
         <span class="rc-total">الإجمالي: <b class="js-rc-total neg">0</b></span>
         <button class="btn gold sm" type="submit"><?= icon('download', 14) ?> <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
         <button type="button" class="btn ghost sm ms-more-btn">المزيد <?= icon('chevron', 13) ?></button>
@@ -197,8 +197,8 @@ $customForm = function(string $key, ?array $en, int $mid, bool $hidden = false) 
             <option value="expense" <?= $dir==='expense'?'selected':'' ?>>مصروف</option>
             <option value="revenue" <?= $dir==='revenue'?'selected':'' ?>>محصّل</option>
           </select></label>
-        <label class="ms-fld"><span>المبلغ</span><input type="number" step="0.01" name="amount" value="<?= $isEdit ? e($en['amount']) : '' ?>" placeholder="0" required></label>
-        <label class="ms-fld"><span>الفعلي</span><input type="number" step="0.01" name="actual_amount" value="<?= $isEdit ? e($en['actual_amount'] ?? '') : '' ?>" placeholder="0"></label>
+        <label class="ms-fld"><span>المبلغ</span><input data-money type="number" step="0.01" name="amount" value="<?= $isEdit ? e($en['amount']) : '' ?>" placeholder="0" required></label>
+        <label class="ms-fld"><span>الفعلي</span><input data-money type="number" step="0.01" name="actual_amount" value="<?= $isEdit ? e($en['actual_amount'] ?? '') : '' ?>" placeholder="0"></label>
         <label class="ms-fld wide"><span>اسم البند</span><input list="dl_mv_expense" name="note" value="<?= $isEdit ? e($en['note']) : '' ?>" placeholder="أرضية / غرامة / عمولة"></label>
         <button class="btn gold sm" type="submit"><?= icon('download', 14) ?> <?= $isEdit ? 'حفظ' : 'إضافة' ?></button>
         <button type="button" class="btn ghost sm ms-more-btn">المزيد <?= icon('chevron', 13) ?></button>
@@ -388,8 +388,8 @@ $billGrid = function(?array $bl, array $p) {
       <section class="bf-sec bf-money">
         <div class="bf-head"><span class="bf-ic"><?= icon('coins', 14) ?></span> القيم المالية <span class="bf-cur">(ج.م)</span></div>
         <div class="bf-grid bf-grid-money">
-          <div class="bf-fld"><label>النولون</label><input type="number" step="0.01" name="freight" value="<?= $bl ? e($bl['freight']) : '' ?>" placeholder="0"></div>
-          <div class="bf-fld"><label>العهدة</label><input type="number" step="0.01" name="custody" value="<?= $bl ? e($bl['custody']) : '' ?>" placeholder="0"></div>
+          <div class="bf-fld"><label>النولون</label><input data-money type="number" step="0.01" name="freight" value="<?= $bl ? e($bl['freight']) : '' ?>" placeholder="0"></div>
+          <div class="bf-fld"><label>العهدة</label><input data-money type="number" step="0.01" name="custody" value="<?= $bl ? e($bl['custody']) : '' ?>" placeholder="0"></div>
           <?php /* ⚠️ **مين سلّم السائق؟** — الافتراضي خزنة المكتب. اختيار مندوب
                    بيستثني البوليصة من الخزنة **و**يضيف مبلغها لصرف المندوب (الاتنين
                    مع بعض في `RepBillCustody`). المخصوم `العهدة − 100` في الحالتين.
@@ -398,9 +398,9 @@ $billGrid = function(?array $bl, array $p) {
           <?php if ($payerSel !== ''): ?>
             <div class="bf-fld"><label>مين سلّم السائق؟</label><?= $payerSel ?></div>
           <?php endif; ?>
-          <div class="bf-fld"><label>التحويلة</label><input type="number" step="0.01" name="transfer" value="<?= $bl ? e($bl['transfer']) : '' ?>" placeholder="0"></div>
-          <div class="bf-fld"><label>الخصم</label><input type="number" step="0.01" name="discount" value="<?= $bl ? e($bl['discount']) : e($__discDefault) ?>"></div>
-          <div class="bf-fld"><label>البياتة</label><input type="number" step="0.01" name="overnight_collection" value="<?= $bl ? e($bl['overnight_collection']) : '' ?>" placeholder="0"></div>
+          <div class="bf-fld"><label>التحويلة</label><input data-money type="number" step="0.01" name="transfer" value="<?= $bl ? e($bl['transfer']) : '' ?>" placeholder="0"></div>
+          <div class="bf-fld"><label>الخصم</label><input data-money type="number" step="0.01" name="discount" value="<?= $bl ? e($bl['discount']) : e($__discDefault) ?>"></div>
+          <div class="bf-fld"><label>البياتة</label><input data-money type="number" step="0.01" name="overnight_collection" value="<?= $bl ? e($bl['overnight_collection']) : '' ?>" placeholder="0"></div>
         </div>
       </section>
     </div>

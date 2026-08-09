@@ -76,7 +76,7 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
         </div>
         <div class="field flush w150">
           <label>المبلغ *</label>
-          <input type="number" step="0.01" min="0.01" name="amount" value="<?= e($formOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $formErrors) ?>>
+          <input data-money type="number" step="0.01" min="0.01" name="amount" value="<?= e($formOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $formErrors) ?>>
           <?= fieldError('amount', $formErrors) ?>
         </div>
         <div class="field flush grow">

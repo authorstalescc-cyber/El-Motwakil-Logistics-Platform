@@ -30,7 +30,7 @@ $payOld = $paymentState['old']; $payErrors = $paymentState['errors'];
     <form class="inline-form js-dirty-form" method="post" action="<?= url('debts/account/'.$acc['id'].'/pay') ?>">
       <?= csrfField() ?>
       <?= formStateFields($paymentState['token'], $paymentState['back']) ?>
-      <div class="field flush"><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required class="dbt-amt"<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
+      <div class="field flush"><input data-money type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required class="dbt-amt"<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
       <input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>">
       <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)">
       <label class="dbt-visa-lbl">

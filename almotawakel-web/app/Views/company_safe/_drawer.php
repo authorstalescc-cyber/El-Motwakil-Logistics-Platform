@@ -88,7 +88,7 @@ $selKind = (string) $val('kind', 'to_office');
         <div class="cs-amt-field">
           <label for="csAmount">المبلغ</label>
           <div class="cs-amt-box<?= isset($errors['amount']) ? ' bad' : '' ?>">
-            <input type="number" step="0.01" min="0.01" name="amount" id="csAmount" inputmode="decimal"
+            <input data-money type="number" step="0.01" min="0.01" name="amount" id="csAmount" inputmode="decimal"
                    value="<?= e((string) $val('amount')) ?>" placeholder="0" required autocomplete="off"
                    data-cs-amount-input>
             <span class="cur"><?= e(App\Core\App::config('currency', 'ج.م')) ?></span>

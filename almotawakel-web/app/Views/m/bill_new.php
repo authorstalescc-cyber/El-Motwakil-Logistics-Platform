@@ -234,7 +234,7 @@ $carD = (string) ($old['car_digits'] ?? '');
     <div class="field" id="field-custody" <?= $err('custody') ? 'data-error="1"' : '' ?>>
       <label for="cus">عهدة السائق</label>
       <div class="money-in">
-        <input type="text" id="cus" name="custody" required inputmode="decimal"
+        <input data-money type="text" id="cus" name="custody" required inputmode="decimal"
                value="<?= $o('custody') ?>" placeholder="0" autocomplete="off"
                aria-describedby="err-custody" <?= $err('custody') ? 'aria-invalid="true"' : '' ?>>
         <span class="cur">جنيه</span>

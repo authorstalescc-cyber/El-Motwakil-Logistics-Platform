@@ -184,7 +184,7 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
     <?php endif; ?>
     <div class="form-grid two">
       <div class="field"><label>رجّع كام؟ (<?= $b['balance'] < 0 ? 'مستحق له ' . money(abs($b['balance']), false) : 'الباقي معاه ' . money($b['balance'], false) ?>)</label>
-        <input type="number" step="0.01" min="0" name="returned" required
+        <input data-money type="number" step="0.01" min="0" name="returned" required
                max="<?= e((string) max($b['balance'], 0)) ?>"
                value="<?= e($settleOld['returned'] ?? (string) max($b['balance'], 0)) ?>"<?= fieldErrorAttrs('returned', $settleErrors) ?>>
         <?= fieldError('returned', $settleErrors) ?></div>
@@ -316,7 +316,7 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
             </label>
             <label class="field">
               <span>المبلغ</span>
-              <input type="number" step="0.01" min="0" name="amount" value="<?= e((string) (float) $t['amount']) ?>">
+              <input data-money type="number" step="0.01" min="0" name="amount" value="<?= e((string) (float) $t['amount']) ?>">
             </label>
             <label class="field">
               <span>التاريخ</span>

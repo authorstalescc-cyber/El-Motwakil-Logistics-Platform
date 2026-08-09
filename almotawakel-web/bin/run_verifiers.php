@@ -71,6 +71,7 @@ $catalog = [
     'verify_reps_ui.php'          => ['impact' => 'read',       'self_guard' => false, 'note' => 'وحدة المناديب باللغة الجديدة — رندر التبويبات والنوافذ بلا كتابة'],
     'verify_permits_ui.php'       => ['impact' => 'read',       'self_guard' => false, 'note' => 'شاشة الإذن الواحدة بوضعين — رندر الوضعين بلا كتابة'],
     'verify_money_ui.php'         => ['impact' => 'read',       'self_guard' => false, 'note' => 'شاشات الفلوس باللغة الجديدة — رندر الشاشات ونوافذها بلا كتابة'],
+    'verify_money_input.php'      => ['impact' => 'none',       'self_guard' => false, 'note' => 'فواصل الآلاف في خانات المبالغ — دوال خالصة وتغطية الخانات وتطابق PHP/JS بلا قاعدة'],
     'verify_dark_print.php'       => ['impact' => 'none',       'self_guard' => false, 'note' => 'الوضع الليلي وتوحيد هوية الطباعة — فحص ملفات بلا قاعدة'],
     'verify_dark_mode.php'        => ['impact' => 'none',       'self_guard' => false, 'note' => 'فصل دور اللون (تعبئة ≠ نص) وتطابق البلوكين الليليين و`var()` لتوكن معرَّف — فحص ملفات بلا قاعدة'],
     'verify_typography.php'       => ['impact' => 'none',       'self_guard' => false, 'note' => 'الخط والأوزان وسلالم المقاس/الاستدارة وشرايط الترويسة — فحص ملفات بلا قاعدة'],

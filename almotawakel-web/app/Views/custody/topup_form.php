@@ -16,7 +16,7 @@
     </div>
     <div class="field">
       <label>المبلغ</label>
-      <input type="number" step="0.01" min="0.01" name="amount" value="<?= e($val('amount')) ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $errors) ?>>
+      <input data-money type="number" step="0.01" min="0.01" name="amount" value="<?= e($val('amount')) ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $errors) ?>>
       <?= fieldError('amount', $errors) ?>
     </div>
     <div class="field" style="grid-column:1/-1">

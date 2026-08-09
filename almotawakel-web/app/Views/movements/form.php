@@ -49,7 +49,7 @@ $visaCards = \App\Models\VisaCard::all(true);
               </select>
             </td>
             <td><input list="dl_mvcat" name="it_category[]" value="<?= e($cat) ?>" autocomplete="off"></td>
-            <td><input type="number" step="0.01" name="it_amount[]" value="<?= e($amt) ?>" placeholder="0"></td>
+            <td><input data-money type="number" step="0.01" name="it_amount[]" value="<?= e($amt) ?>" placeholder="0"></td>
             <td>
               <select name="it_visa[]" title="طريقة الدفع" class="js-pay-sel">
                 <option value="0" <?= (int)$visa===0?'selected':'' ?>>نقدي</option>

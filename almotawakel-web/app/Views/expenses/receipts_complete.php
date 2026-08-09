@@ -86,7 +86,7 @@ $oldIds = array_map('intval', (array) ($formState['old']['id'] ?? []));
                 <?php if (!empty($rrow['is_visa'])): ?><span class="rc-visa">فيزا</span><?php endif; ?>
               </td>
               <td>
-                <input type="number" name="actual_unit[]" value="<?= e($unit) ?>"
+                <input data-money type="number" name="actual_unit[]" value="<?= e($unit) ?>"
                        min="0" step="0.01" placeholder="<?= $rrow['actual_amount'] !== null ? 'موجود' : 'الفعلي…' ?>">
               </td>
               <td>

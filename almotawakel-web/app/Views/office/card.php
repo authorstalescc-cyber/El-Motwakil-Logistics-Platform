@@ -112,7 +112,7 @@ $returnPath = current_app_path() ?: 'office/'.(int)$card['id'];
       <?= formStateFields($depositState['token'], $depositState['back']) ?>
       <div class="field flush w150"><label>التاريخ</label><input type="date" name="dep_date" value="<?= e($depositOld['dep_date'] ?? work_date()) ?>"></div>
       <div class="field flush grow"><label>البيان (اختياري)</label><input type="text" name="note" value="<?= e($depositOld['note'] ?? '') ?>" placeholder="مصدر الشحن"></div>
-      <div class="field flush w140"><label>المبلغ</label><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($depositOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $depositErrors) ?>><?= fieldError('amount', $depositErrors) ?></div>
+      <div class="field flush w140"><label>المبلغ</label><input data-money type="number" step="0.01" min="0.01" name="amount" value="<?= e($depositOld['amount'] ?? '') ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $depositErrors) ?>><?= fieldError('amount', $depositErrors) ?></div>
       <button class="btn gold" type="submit" data-primary-submit>شحن الرصيد</button>
     </form>
   </div>

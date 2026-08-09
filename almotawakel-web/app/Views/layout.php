@@ -496,6 +496,12 @@ foreach ($cmdCreate as [$label, $seg, $ic, $kw]) {
 <?php /* شركة الشحن = العميل تلقائيًا — ملف مشترك بين المكتب وبوابة المندوب
          (`/m` ما بتحمّلش app.js — نفس سبب `resume-scroll.js`). */ ?>
 <script defer src="<?= url('assets/js/lookup-autofill.js') ?>?v=<?= is_file($laJs) ? filemtime($laJs) : 1 ?>"></script>
+<?php $miJs = \App\Core\App::basePath('public/assets/js/money-input.js'); ?>
+<?php /* فواصل الآلاف في خانات المبالغ — ملف مشترك مع بوابة المندوب (`/m` ما
+         بتحمّلش app.js). ⚠️ **قبل app.js** عن قصد: الاتنين بيمسكوا `beforeinput`
+         في طور الالتقاط، ولازم ده يسبق عشان معالج الأرقام العربية ما يقصّش
+         بمؤشّر النص المعروض على القيمة الخام. */ ?>
+<script defer src="<?= url('assets/js/money-input.js') ?>?v=<?= is_file($miJs) ? filemtime($miJs) : 1 ?>"></script>
 <script defer src="<?= url('assets/js/app.js') ?>?v=<?= $appJsV ?>"></script>
 <?= $scripts ?? '' ?>
 </body>

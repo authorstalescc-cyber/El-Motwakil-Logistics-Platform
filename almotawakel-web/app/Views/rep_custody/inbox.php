@@ -480,13 +480,13 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
                                    value="<?= e($editFailed ? ($inboxOld['qty'] ?? '') : (string) (int) $r['qty']) ?>"
                                    <?= $editFailed ? fieldErrorAttrs('qty', $inboxErrors) : '' ?>><?= $editFailed ? fieldError('qty', $inboxErrors) : '' ?></label>
                           <label>اللي دفعه المندوب (للوحدة)
-                            <input type="number" step="0.01" min="0.01" name="unit_amount" form="<?= $eid ?>f"
+                            <input data-money type="number" step="0.01" min="0.01" name="unit_amount" form="<?= $eid ?>f"
                                    value="<?= e($editFailed ? ($inboxOld['unit_amount'] ?? '') : (string) round((float) $r['unit_amount'], 2)) ?>"
                                    <?= $editFailed ? fieldErrorAttrs('unit_amount', $inboxErrors) : '' ?>><?= $editFailed ? fieldError('unit_amount', $inboxErrors) : '' ?></label>
                           <?php if (!$isMisc): ?>
                             <?php /* مفيش «فعلي للعميل» للنثرية — مفيش عميل يتحاسب أصلاً (v39) */ ?>
                             <label class="hi">الفعلي للعميل (للوحدة)
-                              <input type="number" step="0.01" min="0" name="actual_unit" form="<?= $eid ?>f"
+                              <input data-money type="number" step="0.01" min="0" name="actual_unit" form="<?= $eid ?>f"
                                      placeholder="سيبه فاضي وحطه بعدين"
                                      value="<?= e($editFailed ? ($inboxOld['actual_unit'] ?? '') : ($hasActual ? (string) round((float) $r['actual_unit'], 2) : '')) ?>"
                                      <?= $editFailed ? fieldErrorAttrs('actual_unit', $inboxErrors) : '' ?>><?= $editFailed ? fieldError('actual_unit', $inboxErrors) : '' ?></label>

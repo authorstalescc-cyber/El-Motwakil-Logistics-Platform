@@ -109,7 +109,7 @@ $groupIsOffice = static function (array $fields): bool {
           <?php elseif ($isCalc): ?>
             <input type="text" name="<?= $k ?>" value="<?= $val($k)!==''?e(money($val($k),false)):'' ?>" readonly tabindex="-1">
           <?php elseif ($type==='money'): ?>
-            <input type="number" step="0.01" name="<?= $k ?>" value="<?= e($val($k)) ?>" placeholder="0">
+            <input data-money type="number" step="0.01" name="<?= $k ?>" value="<?= e($val($k)) ?>" placeholder="0">
           <?php elseif ($type==='int'): ?>
             <input type="number" step="1" name="<?= $k ?>" value="<?= e($val($k)) ?>" placeholder="0">
           <?php else: ?>
@@ -127,7 +127,7 @@ $groupIsOffice = static function (array $fields): bool {
     <div class="form-grid">
       <div class="field">
         <label>إجمالي ما استلمه صاحب البيان لهذه البوليصة</label>
-        <input type="number" step="0.01" min="0" name="legacy_paid" value="<?= e($legacyPaid ?? 0) ?>" placeholder="0"<?= fieldErrorAttrs('legacy_paid', $errors) ?>>
+        <input data-money type="number" step="0.01" min="0" name="legacy_paid" value="<?= e($legacyPaid ?? 0) ?>" placeholder="0"<?= fieldErrorAttrs('legacy_paid', $errors) ?>>
         <?= fieldError('legacy_paid', $errors) ?>
         <small class="hint">معزولة — مش بتدخل التقفيل</small>
       </div>

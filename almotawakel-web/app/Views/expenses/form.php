@@ -60,7 +60,7 @@ $errors = $errors ?? [];
     </div>
     <div class="field">
       <label for="expense-amount">المبلغ</label>
-      <input id="expense-amount" type="number" step="0.01" min="0.01" name="amount" value="<?= e($val('amount')) ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $errors) ?>>
+      <input data-money id="expense-amount" type="number" step="0.01" min="0.01" name="amount" value="<?= e($val('amount')) ?>" placeholder="0" required<?= fieldErrorAttrs('amount', $errors) ?>>
       <?= fieldError('amount', $errors) ?>
     </div>
     <div class="field field-full">

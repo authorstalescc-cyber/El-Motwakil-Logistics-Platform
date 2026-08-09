@@ -219,6 +219,9 @@ input[type=text], input[type=number], input[type=date], input[type=password], in
   border:1.5px solid var(--line); border-radius:12px; background:#fff; color:var(--ink);
 }
 input:focus, select:focus, textarea:focus{border-color:var(--navy); outline:none; box-shadow:0 0 0 3px rgba(21,53,91,.12)}
+/* خانة المبلغ: أرقام بعرض ثابت عشان الفاصلة التلقائية ما تخلّيش الرقم يهتزّ.
+   `money-input.js` بيتحمّل هنا كمان (`/m` ما بتحمّلش app.js). */
+input[data-money]{font-variant-numeric:tabular-nums}
 .optional{font-size:.74rem;font-weight:500;color:var(--grey);margin-inline-start:4px}
 .field[data-error="1"] input,.field[data-error="1"] select{border-color:var(--red);box-shadow:0 0 0 2px rgba(155,44,44,.08)}
 .field-error{font-size:.8rem;font-weight:600;color:var(--red);margin-top:6px}

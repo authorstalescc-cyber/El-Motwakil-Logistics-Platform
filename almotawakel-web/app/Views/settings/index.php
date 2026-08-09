@@ -68,7 +68,7 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         <div class="field"><label>سنة التقارير</label>
           <input type="number" name="report_year" value="<?= e($general['report_year']) ?>"></div>
         <div class="field"><label>باقي عهدة سابقة (رصيد افتتاحي)</label>
-          <input type="number" step="0.01" name="opening_balance" value="<?= e($general['opening_balance']) ?>"></div>
+          <input data-money type="number" step="0.01" name="opening_balance" value="<?= e($general['opening_balance']) ?>"></div>
         <div class="field field-full"><label>تاريخ بداية احتساب الرصيد الافتتاحي</label>
           <input type="date" name="opening_balance_date" value="<?= e($general['opening_balance_date']) ?>"></div>
       </div>

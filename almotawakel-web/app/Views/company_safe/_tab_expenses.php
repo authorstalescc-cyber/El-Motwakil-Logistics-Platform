@@ -37,7 +37,7 @@ $selCat = (string) ($filters['cat'] ?? '');
       <?= csrfField() ?>
       <?= formStateFields($st['token'], $retPath) ?>
       <label for="csBudget">سقف الشهر</label>
-      <input type="number" step="0.01" min="0" name="budget" id="csBudget" placeholder="بلا سقف"
+      <input data-money type="number" step="0.01" min="0" name="budget" id="csBudget" placeholder="بلا سقف"
              value="<?= $budget['budget'] > 0 ? e((string) $budget['budget']) : '' ?>">
       <button class="btn" type="submit"><?= icon('check', 14) ?></button>
     </form>

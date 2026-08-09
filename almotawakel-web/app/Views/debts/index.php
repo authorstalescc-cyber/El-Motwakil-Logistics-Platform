@@ -129,7 +129,7 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
         <form class="inline-form js-dirty-form" method="post" action="<?= url('debts/account/'.$a['id'].'/pay') ?>">
           <?= csrfField() ?>
           <?= formStateFields($payState['token'], $payState['back']) ?>
-          <div class="field flush"><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
+          <div class="field flush"><input data-money type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
           <input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>">
           <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)">
           <label class="dbt-visa-lbl">
@@ -212,7 +212,7 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
           <div class="field"><label>اسم الجهة الدائنة</label>
             <input type="text" name="name" value="<?= e($accountState['old']['name'] ?? '') ?>" required<?= fieldErrorAttrs('name', $accountState['errors']) ?>><?= fieldError('name', $accountState['errors']) ?></div>
           <div class="field"><label>أصل المديونية</label>
-            <input type="number" step="0.01" name="opening" value="<?= e($accountState['old']['opening'] ?? '') ?>" placeholder="0"></div>
+            <input data-money type="number" step="0.01" name="opening" value="<?= e($accountState['old']['opening'] ?? '') ?>" placeholder="0"></div>
           <div class="field"><label>ملاحظة (اختياري)</label>
             <input type="text" name="note" value="<?= e($accountState['old']['note'] ?? '') ?>"></div>
         </div>
@@ -279,7 +279,7 @@ $visaState = $visaState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
       <input type="date" name="exp_date" value="<?= e($visaState['old']['exp_date'] ?? work_date()) ?>">
       <input list="dl_visa_cat" name="category" value="<?= e($visaState['old']['category'] ?? '') ?>" placeholder="الفئة (إيجار / رسوم…)" autocomplete="off">
       <input type="text" name="beneficiary" value="<?= e($visaState['old']['beneficiary'] ?? '') ?>" placeholder="الجهة / المستفيد">
-      <div class="field flush"><input type="number" step="0.01" name="amount" value="<?= e($visaState['old']['amount'] ?? '') ?>" placeholder="المبلغ" required class="dbt-amt"<?= fieldErrorAttrs('amount', $visaState['errors']) ?>><?= fieldError('amount', $visaState['errors']) ?></div>
+      <div class="field flush"><input data-money type="number" step="0.01" name="amount" value="<?= e($visaState['old']['amount'] ?? '') ?>" placeholder="المبلغ" required class="dbt-amt"<?= fieldErrorAttrs('amount', $visaState['errors']) ?>><?= fieldError('amount', $visaState['errors']) ?></div>
       <input type="text" name="note" value="<?= e($visaState['old']['note'] ?? '') ?>" placeholder="بيان (اختياري)">
       <?= visa_card_select((int)($visaState['old']['visa_card_id'] ?? 0), 'visa_card_id', 'narrow') ?>
       <button class="btn gold sm" type="submit" data-primary-submit><?= icon('credit-card', 14) ?> إضافة</button>

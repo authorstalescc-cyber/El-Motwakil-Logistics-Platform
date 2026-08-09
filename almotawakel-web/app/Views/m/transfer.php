@@ -79,7 +79,7 @@ $num = fn($v) => number_format((float) $v, 0);
     <div class="field" id="field-amount" <?= $err('amount') ? 'data-error="1"' : '' ?>>
       <label for="amt">تحوّل كام؟</label>
       <div class="money-in">
-        <input type="text" id="amt" name="amount" required inputmode="decimal"
+        <input data-money type="text" id="amt" name="amount" required inputmode="decimal"
                value="<?= $o('amount') ?>" placeholder="0" autocomplete="off"
                aria-describedby="err-amount" <?= $err('amount') ? 'aria-invalid="true"' : '' ?>>
         <span class="cur">جنيه</span>

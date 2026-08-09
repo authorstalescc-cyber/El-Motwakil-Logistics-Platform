@@ -88,7 +88,7 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
         </div>
         <div class="field flush w150">
           <label>المبلغ *</label>
-          <input type="number" step="0.01" min="0" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="0" required>
+          <input data-money type="number" step="0.01" min="0" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="0" required>
         </div>
         <div class="field flush grow">
           <label>البيان (اختياري)</label>

@@ -23,7 +23,7 @@ $val = fn($k) => $row[$k] ?? '';
     </div>
     <div class="field">
       <label>المرتب الشهري</label>
-      <input type="number" step="0.01" name="monthly_salary" value="<?= e($val('monthly_salary')) ?>" placeholder="0">
+      <input data-money type="number" step="0.01" name="monthly_salary" value="<?= e($val('monthly_salary')) ?>" placeholder="0">
     </div>
     <div class="field">
       <label>تاريخ التعيين</label>

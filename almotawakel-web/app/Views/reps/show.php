@@ -95,7 +95,7 @@ $kindColor = function(string $k) use ($creditKinds): string {
     </div>
     <div class="field w140">
       <label>المبلغ</label>
-      <input type="number" step="0.01" name="amount" value="<?= e($eOld['amount'] ?? '') ?>" placeholder="0" required>
+      <input data-money type="number" step="0.01" name="amount" value="<?= e($eOld['amount'] ?? '') ?>" placeholder="0" required>
     </div>
     <div class="field grow">
       <label>البيان / ملاحظة</label>

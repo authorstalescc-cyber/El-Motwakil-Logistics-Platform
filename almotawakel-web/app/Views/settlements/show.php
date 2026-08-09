@@ -35,7 +35,7 @@ $payOld = $paymentState['old']; $payErrors = $paymentState['errors']; ?>
     <form class="inline-form js-dirty-form" method="post" action="<?= url('settlements/'.$bill['id'].'/pay') ?>">
       <?= csrfField() ?>
       <?= formStateFields($paymentState['token'], $paymentState['back']) ?>
-      <div class="field flush"><input type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required class="dbt-amt"<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
+      <div class="field flush"><input data-money type="number" step="0.01" min="0.01" name="amount" value="<?= e($payOld['amount'] ?? '') ?>" placeholder="المبلغ" required class="dbt-amt"<?= fieldErrorAttrs('amount', $payErrors) ?>><?= fieldError('amount', $payErrors) ?></div>
       <div class="field flush"><input type="date" name="pay_date" value="<?= e($payOld['pay_date'] ?? work_date()) ?>"<?= fieldErrorAttrs('pay_date', $payErrors) ?>><?= fieldError('pay_date', $payErrors) ?></div>
       <input type="text" name="note" value="<?= e($payOld['note'] ?? '') ?>" placeholder="ملاحظة (اختياري)">
       <button class="btn gold sm" type="submit" data-primary-submit><?= icon('plus', 14) ?> دفع</button>

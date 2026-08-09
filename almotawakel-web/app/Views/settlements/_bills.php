@@ -71,7 +71,7 @@ $payOld = $payState['old'];
               <td><span class="pill st-<?= e($b['pay_status']) ?>"><?= e(Bill::STATUS_LABELS[$b['pay_status']]) ?></span></td>
               <td>
                 <?php if ($due): ?>
-                  <input type="number" step="0.01" min="0" max="<?= e(number_format($rem, 2, '.', '')) ?>"
+                  <input data-money type="number" step="0.01" min="0" max="<?= e(number_format($rem, 2, '.', '')) ?>"
                          name="amount[<?= $b['id'] ?>]" value="<?= e($payOld['amount'][$b['id']] ?? '') ?>" class="pay-amt" placeholder="0" class="st-pay-in"<?= fieldErrorAttrs('amount.'.(int)$b['id'], $payState['errors']) ?>>
                   <?= fieldError('amount.'.(int)$b['id'], $payState['errors']) ?>
                 <?php elseif ($b['pay_status'] === Bill::STATUS_PAID): ?>

@@ -351,7 +351,7 @@ $expAction = $editExp ? url('cars/expense/' . (int) $editExp['id'] . '/update')
       </div>
       <div class="field">
         <label for="ce-amt">المبلغ *</label>
-        <input id="ce-amt" type="number" step="0.01" min="0" name="amount" required
+        <input data-money id="ce-amt" type="number" step="0.01" min="0" name="amount" required
                value="<?= e($expOld['amount'] ?? '') ?>"<?= fieldErrorAttrs('amount', $expState['errors']) ?>>
         <?= fieldError('amount', $expState['errors']) ?>
       </div>

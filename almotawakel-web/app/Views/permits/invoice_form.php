@@ -334,7 +334,7 @@ $billRow = function (array $b, string $amount, string $tone): void {
                 <?php if ($actualFreight>0): ?><button type="button" class="mini-btn" id="useActual">استخدم الفعلي</button><?php endif; ?></div><?php endif; ?>
             </td>
             <td><input type="number" step="0.01" name="item_qty[]" value="<?= e($rr['qty']) ?>" class="i-qty" aria-label="كمية البند <?= (int)$rowIndex+1 ?>"></td>
-            <td><input type="number" step="0.01" name="item_price[]" value="<?= e($rr['price']) ?>" placeholder="0.00" class="i-price" aria-label="سعر البند <?= (int)$rowIndex+1 ?>"></td>
+            <td><input data-money type="number" step="0.01" name="item_price[]" value="<?= e($rr['price']) ?>" placeholder="0.00" class="i-price" aria-label="سعر البند <?= (int)$rowIndex+1 ?>"></td>
             <td class="i-total">0.00</td>
             <td><?php if(!$isFreightRow): ?><button type="button" class="row-del" title="حذف البند"><?= icon('x', 14) ?></button><?php endif; ?></td>
           </tr>
@@ -564,7 +564,7 @@ $billRow = function (array $b, string $amount, string $tone): void {
       '<input type="hidden" name="item_freight[]" value="0">'+
       '<input type="hidden" name="item_src[]" value="new"></td>'+
       '<td><input type="number" step="0.01" name="item_qty[]" value="1" class="i-qty" aria-label="كمية البند الجديد"></td>'+
-      '<td><input type="number" step="0.01" name="item_price[]" value="" placeholder="0.00" class="i-price" aria-label="سعر البند الجديد"></td>'+
+      '<td><input data-money type="number" step="0.01" name="item_price[]" value="" placeholder="0.00" class="i-price" aria-label="سعر البند الجديد"></td>'+
       '<td class="i-total">0.00</td>'+
       '<td><button type="button" class="row-del" title="حذف البند">✕</button></td>';
     tbody.appendChild(tr);
@@ -589,7 +589,7 @@ $billRow = function (array $b, string $amount, string $tone): void {
         '<input type="hidden" name="item_freight[]" value="0">'+
         '<input type="hidden" name="item_src[]"></td>'+
         '<td><input type="number" step="0.01" name="item_qty[]" class="i-qty" aria-label="كمية بند المصروف"></td>'+
-        '<td><input type="number" step="0.01" name="item_price[]" class="i-price" aria-label="سعر بند المصروف"></td>'+
+        '<td><input data-money type="number" step="0.01" name="item_price[]" class="i-price" aria-label="سعر بند المصروف"></td>'+
         '<td class="i-total">0.00</td>'+
         '<td><button type="button" class="row-del" title="حذف البند">✕</button></td>';
       // ⚠️ القيم بتتحط بـ`value` مش جوّه الـHTML — البيان جاي من إدخال المستخدم

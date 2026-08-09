@@ -267,7 +267,7 @@ $eq = static function (string $label, $value, string $cls = '') {
       <?= csrfField() ?>
       <?= formStateFields($depositState['token'], $depositState['back']) ?>
       <div class="field"><label>المبلغ</label>
-        <input type="number" step="0.01" min="0.01" name="amount" required placeholder="مثلاً 2000"
+        <input data-money type="number" step="0.01" min="0.01" name="amount" required placeholder="مثلاً 2000"
                value="<?= e($depositOld['amount'] ?? '') ?>"<?= fieldErrorAttrs('amount', $depositErrors) ?>>
         <?= fieldError('amount', $depositErrors) ?></div>
       <div class="field"><label>التاريخ</label>

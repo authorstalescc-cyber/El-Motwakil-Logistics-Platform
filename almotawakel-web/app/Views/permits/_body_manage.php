@@ -46,7 +46,7 @@ $stageForm = function(string $key, ?array $entry) use ($pid, $primaryDef) {
       <input type="hidden" name="stage_key" value="<?= e($key) ?>">
       <?php if ($isEdit): ?><input type="hidden" name="stage_id" value="<?= (int)$entry['id'] ?>"><?php endif; ?>
       <div class="tl-fields">
-        <label>المبلغ<input type="number" step="0.01" name="amount" value="<?= e($amtVal) ?>" placeholder="0"></label>
+        <label>المبلغ<input data-money type="number" step="0.01" name="amount" value="<?= e($amtVal) ?>" placeholder="0"></label>
         <label>التاريخ<input type="date" name="entry_date" value="<?= $isEdit? e($entry['entry_date']) : work_date() ?>"></label>
         <label>رقم مرجعي<input name="ref_no" value="<?= $isEdit? e($entry['ref_no']) : '' ?>" placeholder="اختياري"></label>
         <label>الحالة
@@ -178,8 +178,8 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
               <label>التاريخ<input type="date" name="permit_date" value="<?= e($p['permit_date']) ?>"></label>
               <label>عدد الحاويات (الإجمالي)<input type="number" min="0" name="containers" value="<?= e($p['containers'] ?? 0) ?>"></label>
               <?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','value'=>$p['container_type'] ?? '','label'=>'تصنيف الحاويات']); ?>
-              <label>سعر الكشف لكل حاوية<input type="number" step="0.01" min="0" name="inspection_rate" value="<?= e($p['inspection_rate'] ?? '') ?>" placeholder="0"></label>
-              <label>سعر الضمان لكل حاوية<input type="number" step="0.01" min="0" name="guarantee_rate" value="<?= e($p['guarantee_rate'] ?? '') ?>" placeholder="0"></label>
+              <label>سعر الكشف لكل حاوية<input data-money type="number" step="0.01" min="0" name="inspection_rate" value="<?= e($p['inspection_rate'] ?? '') ?>" placeholder="0"></label>
+              <label>سعر الضمان لكل حاوية<input data-money type="number" step="0.01" min="0" name="guarantee_rate" value="<?= e($p['guarantee_rate'] ?? '') ?>" placeholder="0"></label>
               <label>الوكيل (العميل)<input list="dl_client" id="permit_client" name="client" value="<?= e($p['client']) ?>" autocomplete="off"></label>
               <label>لصالح شركة<input list="dl_company" id="permit_company" name="company" value="<?= e($p['company']) ?>" autocomplete="off"></label>
               <label>الجهة<input list="dl_dest" name="destination" value="<?= e($p['destination']) ?>" autocomplete="off"></label>

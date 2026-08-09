@@ -193,7 +193,7 @@ $spent = (float) $s['totals']['expenses'] + (float) $s['totals']['receipts'];
                 <option value="<?= e($k) ?>"><?= e($def['label']) ?></option>
               <?php endforeach; ?>
             </select></div>
-            <div class="field"><label>المبلغ</label><input type="number" step="0.01" min="0.01" name="amount" required></div>
+            <div class="field"><label>المبلغ</label><input data-money type="number" step="0.01" min="0.01" name="amount" required></div>
             <div class="field"><label>البيان</label><input name="note"></div>
           </div>
           <div class="od-form-actions">

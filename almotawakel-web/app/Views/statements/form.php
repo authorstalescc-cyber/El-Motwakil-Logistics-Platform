@@ -102,7 +102,7 @@ $issuedStatements = array_values(array_filter(
       <td><?= dfmt($b['bill_date']) ?></td><td><?= e($b['company'] ?: '—') ?></td><td><?= e($b['destination'] ?: '—') ?></td><td><?= e($b['classification'] ?: '—') ?></td><td><?= e($b['container_no'] ?: '—') ?></td><td><?= money($b['custody'],false) ?></td><td><?= money($b['discount'],false) ?></td>
       <td colspan="2"><form method="post" action="<?= url('bawalis/bulk-freight') ?>" class="st-quick-freight">
         <?= csrfField() ?><input type="hidden" name="back" value="<?= e($drillBack) ?>">
-        <input type="number" name="freight[<?= (int)$b['id'] ?>]" min="0.01" step="0.01" required placeholder="النولون">
+        <input data-money type="number" name="freight[<?= (int)$b['id'] ?>]" min="0.01" step="0.01" required placeholder="النولون">
         <button type="submit" class="btn gold sm">حفظ النولون</button>
       </form></td>
       <td><a class="btn ghost sm" href="<?= url('bawalis/'.(int)$b['id'].'/edit') ?>" target="_blank" rel="noopener"><?= icon('edit', 14) ?> تعديل</a></td>

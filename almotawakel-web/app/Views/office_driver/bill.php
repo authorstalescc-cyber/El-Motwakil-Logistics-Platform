@@ -85,7 +85,7 @@ $billNo = $bill['bill_number'] ?: ('#' . $bid);
             </div>
             <div class="field od-entry-amount">
               <label>المبلغ</label>
-              <input class="js-driver-expense" type="number" step="0.01" min="0"
+              <input data-money class="js-driver-expense" type="number" step="0.01" min="0"
                      name="item_amount[]" value="<?= e($r['amount'] ?? '') ?>" placeholder="0">
             </div>
             <button class="od-remove js-remove-line" type="button" title="حذف السطر"
@@ -127,7 +127,7 @@ $billNo = $bill['bill_number'] ?: ('#' . $bid);
             </div>
             <label class="od-receipt-input">
               <span>دفع السائق</span>
-              <input class="js-driver-expense" type="number" step="0.01" min="0" max="<?= e($max) ?>"
+              <input data-money class="js-driver-expense" type="number" step="0.01" min="0" max="<?= e($max) ?>"
                      name="receipt_amount[<?= (int) $r['id'] ?>]"
                      value="<?= e((float) $posted > 0 ? $posted : '') ?>" placeholder="0">
             </label>
@@ -164,7 +164,7 @@ $billNo = $bill['bill_number'] ?: ('#' . $bid);
             </div>
             <div class="field od-entry-amount">
               <label>المبلغ</label>
-              <input class="js-driver-move" type="number" step="0.01" min="0"
+              <input data-money class="js-driver-move" type="number" step="0.01" min="0"
                      name="move_amount[]" value="<?= e($m['amount'] ?? '') ?>" placeholder="0">
             </div>
             <button class="od-remove js-remove-line" type="button" title="حذف السطر"
@@ -193,7 +193,7 @@ $billNo = $bill['bill_number'] ?: ('#' . $bid);
       <option value="<?= e($k) ?>"><?= e($label) ?></option>
     <?php endforeach; ?></select></div>
     <div class="field od-entry-desc"><label>البيان</label><input name="item_description[]" placeholder="مثال: طرق وكباري"></div>
-    <div class="field od-entry-amount"><label>المبلغ</label><input class="js-driver-expense" type="number" step="0.01" min="0" name="item_amount[]" placeholder="0"></div>
+    <div class="field od-entry-amount"><label>المبلغ</label><input data-money class="js-driver-expense" type="number" step="0.01" min="0" name="item_amount[]" placeholder="0"></div>
     <button class="od-remove js-remove-line" type="button" title="حذف السطر" aria-label="حذف السطر"><?= icon('trash', 14) ?></button>
   </div>
 </template>
@@ -206,7 +206,7 @@ $billNo = $bill['bill_number'] ?: ('#' . $bid);
     <?php endforeach; ?></select></div>
     <div class="field"><label>التاريخ</label><input type="date" name="move_move_date[]" value="<?= e($bill['bill_date'] ?: work_date()) ?>"></div>
     <div class="field od-entry-desc"><label>البيان</label><input name="move_note[]" placeholder="سبب الحركة"></div>
-    <div class="field od-entry-amount"><label>المبلغ</label><input class="js-driver-move" type="number" step="0.01" min="0" name="move_amount[]" placeholder="0"></div>
+    <div class="field od-entry-amount"><label>المبلغ</label><input data-money class="js-driver-move" type="number" step="0.01" min="0" name="move_amount[]" placeholder="0"></div>
     <button class="od-remove js-remove-line" type="button" title="حذف السطر" aria-label="حذف السطر"><?= icon('trash', 14) ?></button>
   </div>
 </template>

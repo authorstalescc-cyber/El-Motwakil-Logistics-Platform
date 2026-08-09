@@ -24,7 +24,7 @@ $bulkAllowOwner   = $bulkAllowOwner ?? true;
       <?= csrfField() ?><input type="hidden" name="back" value="<?= e($bulkBack) ?>">
       <div class="bulk-unified">
         <label>قيمة موحّدة (اختياري)</label>
-        <input type="number" min="0" step="0.01" id="bulkUnifiedFreight" placeholder="قيمة">
+        <input data-money type="number" min="0" step="0.01" id="bulkUnifiedFreight" placeholder="قيمة">
         <button type="button" class="btn ghost sm" id="applyUnifiedFreight">تطبيق على الكل</button>
       </div>
       <p class="bulk-hint">يمكنك تعديل نولون كل بوليصة منفردًا. القيمة تستبدل النولون الحالي وتعيد حساب المديونية؛ البوالص القديمة تظل معزولة عن العهدة والتقفيل.</p>

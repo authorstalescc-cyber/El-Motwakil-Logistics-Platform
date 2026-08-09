@@ -91,7 +91,7 @@ $wdToday = $wd === $today;
     <div class="field" id="field-unit_amount" <?= $err('unit_amount') ? 'data-error="1"' : '' ?>>
       <label for="amt">دفعت كام؟ <span class="optional">سعر الواحدة</span></label>
       <div class="money-in">
-        <input type="text" id="amt" name="unit_amount" required inputmode="decimal"
+        <input data-money type="text" id="amt" name="unit_amount" required inputmode="decimal"
                enterkeyhint="next" value="<?= $o('unit_amount') ?>" placeholder="0"
                autocomplete="off" aria-describedby="totalHint err-unit_amount"
                <?= $err('unit_amount') ? 'aria-invalid="true"' : '' ?>>

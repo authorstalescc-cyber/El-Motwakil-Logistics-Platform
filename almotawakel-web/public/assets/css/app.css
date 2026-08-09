@@ -501,6 +501,9 @@ table.table-sticky-first tbody td:first-child{background:var(--card)}table.table
    نفس عائلة `.table-mobile-scroll`: الماركب موجود والشكل ناقص فيفشل بالسكوت. */
 .field input,.field select,.field textarea{border:1px solid var(--line2);border-radius:var(--radius-1);padding:9px 12px;background:var(--input);transition:.15s}
 .field textarea{font-family:inherit;resize:vertical}
+/* خانة المبلغ: أرقام بعرض ثابت عشان الفاصلة التلقائية ما تخلّيش الرقم يهتزّ
+   وانت بتكتب. الخانة نفسها بيرقّيها `money-input.js` من `type=number` لنصّية. */
+input[data-money]{font-variant-numeric:tabular-nums;letter-spacing:.01em}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--gold);background:var(--card);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
 .field.calc input{background:var(--tint-navy);font-style:italic;color:var(--accent-2);font-weight:500}
 .field .hint{font-size:var(--fs-1);color:var(--grey)}
@@ -4483,6 +4486,10 @@ a.mb-col:hover{background:var(--bg)}
 .mv-items input:focus,.mv-items select:focus{outline:none;border-color:var(--gold);
   background:var(--card);box-shadow:0 0 0 3px rgba(201,162,39,.12)}
 .mv-items input[type=number]{text-align:center;font-variant-numeric:tabular-nums}
+/* ⚠️ `[data-money]` مطلوبة هنا: خانة المبلغ بتتحوّل بجافاسكريبت من `type=number`
+   لـ`type=text` عشان تقدر توري فواصل الآلاف — فلو الانتقاء فضل على النوع بس
+   كانت هتفقد التوسيط **بالسكوت**. */
+.mv-items input[type=number],.mv-items input[data-money]{text-align:center;font-variant-numeric:tabular-nums}
 .mv-items .col-kind{width:130px} .mv-items .col-amt{width:130px}
 .mv-items .col-pay{width:110px}  .mv-items .col-card{width:150px}
 .mv-items .col-del{width:60px}

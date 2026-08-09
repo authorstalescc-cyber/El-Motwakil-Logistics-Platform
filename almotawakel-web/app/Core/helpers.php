@@ -94,6 +94,72 @@ function ar2en_normalize_request(): void
     if (!empty($_REQUEST) && is_array($_REQUEST)) { $walk($_REQUEST); }
 }
 
+/**
+ * نصّ رقم فيه فواصل ← رقم خام صالح لـ`(float)` — **المصدر الوحيد** لفكّ
+ * فواصل الآلاف في PHP، ونظيره في الواجهة `toRaw()` جوّه `money-input.js`.
+ *
+ * ⚠️ ليه لازم: خانات المبالغ بقت بتوري «1,000» (فواصل تلقائية تمنع خطأ
+ *    الإدخال)، و`FormData(form)` بتقرا **النص المعروض** مش القيمة الخام —
+ *    و`(float)"1,000"` في PHP بترجّع **1**. يعني ٩٩٩ جنيه بيضيعوا بالسكوت.
+ *
+ * القاعدة (نفس قرار المالك في الواجهة بالحرف):
+ *   • رقم مجمَّع سليم («1,000» · «1,250,000.50») ← الفواصل آلاف، تتشال.
+ *   • فاصلة واحدة وبعدها خانة أو اتنين («1500,25») ← قروش، تبقى نقطة.
+ *   • أي نص تاني يرجع **زي ما هو بالحرف** — المطابقة على النص كامله فقط،
+ *     فجملة فيها رقم بفاصلة ما بتتلمسش.
+ */
+function money_unformat(string $s): string
+{
+    $t = str_replace(['٫', '٬', '،'], ['.', ',', ','], trim(ar2en_digits($s)));
+    // لازم يكون **النص كامله** رقمًا بفواصل — وإلا يرجع بالحرف (معرّف/جملة)
+    if ($t === '' || !preg_match('/^-?[0-9][0-9,]*(?:\.[0-9]+)?$/', $t)) { return $s; }
+    if (strpos($t, ',') === false) { return $s; }
+
+    $neg = $t[0] === '-';
+    if ($neg) { $t = substr($t, 1); }
+    $dot = strpos($t, '.');
+    $int = $dot === false ? $t : substr($t, 0, $dot);
+    $dec = $dot === false ? null : substr($t, $dot + 1);
+
+    if (preg_match('/^\d{1,3}(,\d{3})*$/', $int)) {
+        $int = str_replace(',', '', $int);          // تجميع سليم ← فواصل آلاف
+    } else {                                        // فاصلة في موضع غلط ← قروش
+        $last = strrpos($int, ',');
+        $tail = str_replace(',', '', substr($int, $last + 1));
+        $int  = str_replace(',', '', substr($int, 0, $last));
+        $dec  = $dec === null ? $tail : $tail . $dec;
+    }
+    if ($int === '') { $int = '0'; }
+    return ($neg ? '-' : '') . $int . ($dec === null ? '' : '.' . $dec);
+}
+
+/**
+ * فكّ فواصل الآلاف من كل قيم الطلب — طبقة أمان خلف `money-input.js`.
+ * نفس نمط `ar2en_normalize_request()`: نقطة واحدة في `bootstrap.php` بتغطّي
+ * كل مسارات الكتابة، فمفيش كنترولر محتاج يعرف إن الخانة بقت بتوري فواصل.
+ *
+ * ⚠️ الواجهة بتشيل الفواصل عند الحفظ بالفعل، **بس** `new FormData(form)`
+ *    (بوابة المندوب بتستخدمها) بتقرا النص المعروض — فالطبقة دي مش زيادة.
+ *
+ * بيستثني الحقول اللي قيمتها **معرّف أو نص حرّ** (رقم بوليصة/إذن/حاوية/سيارة
+ * وملاحظات) عشان «1,000» فيها تفضل بالحرف لو كانت فعلاً كده.
+ */
+function money_normalize_request(): void
+{
+    $skip = '/(pass|pwd|token|csrf|secret|api_?key|ai_key|container_no|bill_number|permit_no|ref_no|note|plate|car_)/i';
+    $walk = function (array &$arr) use (&$walk, $skip): void {
+        foreach ($arr as $k => &$v) {
+            if (is_string($k) && preg_match($skip, $k)) { continue; }
+            if (is_array($v))      { $walk($v); }
+            elseif (is_string($v)) { $v = money_unformat($v); }
+        }
+        unset($v);
+    };
+    if (!empty($_POST)    && is_array($_POST))    { $walk($_POST); }
+    if (!empty($_GET)     && is_array($_GET))     { $walk($_GET); }
+    if (!empty($_REQUEST) && is_array($_REQUEST)) { $walk($_REQUEST); }
+}
+
 /** رابط داخل التطبيق */
 function url(string $path = ''): string
 {
