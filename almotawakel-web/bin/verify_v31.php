@@ -49,8 +49,24 @@ try{
     v31Assert(count($ownerDocs)===1 && (int)$ownerDocs[0]['declaration_owner_id']===$ownerId,
         'اسم صاحب البيان البديل يصل إلى كشوف المعرف الأساسي');
 
-    $permit=Database::row('SELECT * FROM permits WHERE agent_id IS NOT NULL ORDER BY id LIMIT 1');
-    v31Assert((bool)$permit,'يوجد إذن مرتبط بمعرف وكيل للاختبار');
+    /* ⚠️⚠️ **الإذن لازم يكون لوكيل مالوش فاتورة مفتوحة تانية** — ودي مش تجميلة:
+       `auto_allocate` بيوزّع التحصيل على **كل** فواتير الوكيل المفتوحة بالأقدم
+       الأول (`PermitInvoice::openForAgent`). أول إذن في القاعدة (`ORDER BY id`)
+       وكيله عنده فاتورة حقيقية من ٢٠٢٦-٠٧-١٢ برصيد ١٥٣ ألف، فالـ٤٠٠ بتاعة
+       الفحص كانت بتروح **لها** وفاتورة الاختبار تفضل `issued` — والفحص يفشل
+       بإنذار كاذب رغم إن السلوك سليم تمامًا.
+       الفحص كان مكتوب على **افتراض بيانات** («مفيش فاتورة مفتوحة تانية للوكيل
+       ده») بدل ما يعزل نفسه — وده بالظبط النمط اللي `CLAUDE.md` بيحذّر منه.
+       اتصلّح 2026-08-10 بعد ما فشل على نسخة HEAD نضيفة (يعني مش ارتداد تعديل). */
+    $permit=Database::row(
+        "SELECT p.* FROM permits p
+          WHERE p.agent_id IS NOT NULL
+            AND NOT EXISTS (
+                SELECT 1 FROM permit_invoices i
+                 WHERE i.agent_id = p.agent_id AND i.status IN ('issued','partially_paid'))
+          ORDER BY p.id LIMIT 1"
+    );
+    v31Assert((bool)$permit,'يوجد إذن لوكيل بلا فاتورة مفتوحة تانية (عزل التخصيص التلقائي)');
     $invoiceId=PermitInvoice::create([
         'permit_id'=>(int)$permit['id'],'doc_kind'=>'invoice','taxable'=>0,'invoice_date'=>work_date(),
         'due_date'=>work_date(),'client'=>$permit['client'],'company'=>$permit['company'],
