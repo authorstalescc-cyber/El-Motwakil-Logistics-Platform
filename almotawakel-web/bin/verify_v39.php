@@ -190,6 +190,8 @@ try {
     sec('7) الرحلة: المندوب يبعت ← المالك يعتمد');
     $subId = RepPortal::submit($repId, [
         'permit_id' => 0, 'kind' => 'misc', 'note' => '__v39_شاي',
+        // v71 — الوسم بقى إجباريًّا على أي نثرية (شوف verify_v71)
+        'misc_kind' => 'general',
         'qty' => 3, 'unit_amount' => 40, 'entry_date' => $today,
     ]);
     $sub = Database::row("SELECT * FROM rep_submissions WHERE id=?", [$subId]);
@@ -224,6 +226,7 @@ try {
     sec('8) ما ينفعش تقلب نثرية لبند على إذن أو العكس');
     $sub2 = RepPortal::submit($repId, [
         'permit_id' => 0, 'kind' => 'misc', 'note' => '__v39_تصوير',
+        'misc_kind' => 'general',   // v71
         'qty' => 1, 'unit_amount' => 15, 'entry_date' => $today,
     ]);
     try {

@@ -2,6 +2,7 @@
 use App\Core\FormState;
 use App\Models\Permit;
 use App\Models\RepInbox;
+use App\Models\RepMiscKind;
 use App\Models\RepPortal;
 
 /**
@@ -345,6 +346,14 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
                           <span class="ib-note"><?= e($r['note']) ?></span>
                           <?php if ($isMisc): ?>
                             <span class="pill ib-misc" title="مصروف عام مش على إذن — بيروح للمصروفات مش لحساب أي عميل"><?= icon('anchor', 14) ?> نثرية</span>
+                            <?php /* v71 — وسم النثرية. مفيش وسم = بند قديم قبل الترحيل، والشارة بتقولها
+                                     عشان المالك يعرف إنه لازم يختار قبل الاعتماد بدل ما يفتكرها متوسّمة. */ ?>
+                            <?php $mk = (string) ($r['misc_kind'] ?? ''); ?>
+                            <span class="pill ib-mkind<?= $mk === '' ? ' none' : '' ?>">
+                              <?= $mk === ''
+                                    ? icon('alert', 14) . ' بلا نوع'
+                                    : icon(RepMiscKind::icon($mk), 14) . ' ' . e(RepMiscKind::label($mk)) ?>
+                            </span>
                           <?php else: ?>
                             <span class="pill <?= $r['kind'] === 'receipt' ? 'st-done' : 'st-partial' ?>">
                               <?= $r['kind'] === 'receipt' ? 'إيصال' : 'مصروف' ?></span>
@@ -445,6 +454,18 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
                             <?php /* النثرية ما تتحوّلش لبند على إذن (الخادم بيرفضها كمان):
                                      مالهاش إذن ولا حركة، فالقلب كان هيسيب بند ناقص. */ ?>
                             <input type="hidden" name="kind" form="<?= $eid ?>f" value="misc">
+                            <?php /* v71 — المالك يصحّح وسم المندوب قبل الاعتماد: الوسم ده
+                                     هيتحاسب عليه في الراتب ومصروف الأسبوع. */ ?>
+                            <label>نوع النثرية
+                              <?php $editMk = $editFailed ? (string) ($inboxOld['misc_kind'] ?? '') : (string) ($r['misc_kind'] ?? ''); ?>
+                              <select name="misc_kind" form="<?= $eid ?>f" required>
+                                <option value="">— اختر النوع —</option>
+                                <?php foreach (RepMiscKind::all() as $mkKey => $mkDef): ?>
+                                  <option value="<?= e($mkKey) ?>" <?= $editMk === (string) $mkKey ? 'selected' : '' ?>>
+                                    <?= e($mkDef['label']) ?> — <?= e($mkDef['sub']) ?>
+                                  </option>
+                                <?php endforeach; ?>
+                              </select></label>
                           <?php else: ?>
                             <label>النوع
                               <?php $editKind = $editFailed ? ($inboxOld['kind'] ?? '') : $r['kind']; ?>
@@ -667,6 +688,10 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
             <td style="text-align:right">
               <?php if (RepPortal::isMisc((string) $r['kind'])): ?>
                 <span class="pill ib-misc"><?= icon('anchor', 14) ?> نثرية</span>
+                <?php if (($r['misc_kind'] ?? '') !== ''): ?>
+                  <span class="pill ib-mkind"><?= icon(RepMiscKind::icon((string) $r['misc_kind']), 14) ?>
+                    <?= e(RepMiscKind::label((string) $r['misc_kind'])) ?></span>
+                <?php endif; ?>
               <?php else: ?>
                 <a href="<?= url('permits/' . $r['permit_id'] . '/manage') ?>"><?= e($r['permit_no'] ?: '#' . $r['permit_id']) ?></a>
               <?php endif; ?>
@@ -811,6 +836,10 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
 .ib-warn{margin:6px 0 0;font-size:var(--fs-1);font-weight:500;color:var(--red-fg);line-height:1.6}
 .ib-link{background:0;border:0;padding:0;font:inherit;font-weight:700;color:var(--red-fg);text-decoration:underline;cursor:pointer}
 .pill.ib-misc{background:var(--gold-light);color:var(--gold-fg);border:1px solid var(--gold-line)}
+/* وسم النثرية (v71) — لون محايد عشان ما يزاحمش شارة «نثرية» الدهبية جنبه،
+   و«بلا نوع» بلون التحذير لأنه بند لازم يتوسم قبل الاعتماد. */
+.pill.ib-mkind{background:var(--zebra);color:var(--ink);border:1px solid var(--line)}
+.pill.ib-mkind.none{background:var(--red-lt);color:var(--red-fg);border-color:var(--red-line)}
 
 .ib-money{flex:none;text-align:center;min-width:112px;display:flex;flex-direction:column}
 .ib-paid{font-size:var(--fs-4);font-weight:700;color:var(--red-fg);font-variant-numeric:tabular-nums}

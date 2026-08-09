@@ -20,10 +20,22 @@ use App\Core\Database;
  *
  *    بتظهر في:   `/expenses` (مصدر `rep_misc`) + رصيد عهدة المندوب (بتتخصم منه)
  *    ولا تظهر في: أي فاتورة عميل أو تايم لاين إذن.
+ *
+ * ⚠️ **الوسم (v71):** بقى لكل نثرية نوع (`misc_kind`) بيختاره المندوب وقت
+ *    الإدخال — سلفة · مواصلات داخلية · مواصلات خارجية · عامة. الكتالوج كله في
+ *    `RepMiscKind`، و`category` بيتولّد منه فالعرض في `/expenses` وكشف حساب
+ *    المندوب بيقول النوع بلا أي تعديل في الشاشتين.
+ *    **الوسم ما غيّرش أي معاملة مالية**: السلفة لسه مصروف شركة بيتخصم من
+ *    الخزنة ومن العهدة زي أي نثرية. تحويلها لمستحق على المندوب قرار مالي
+ *    جديد بتاع وحدة الرواتب — ساعتها الطريق الصح استثناؤها من `cashOnlySql()`.
  */
 class RepMiscExpense
 {
-    /** تصنيف العرض الافتراضي في سجل المصروفات. */
+    /**
+     * تصنيف العرض الافتراضي في سجل المصروفات.
+     * ⚠️ لازم يفضل مطابقًا لـ`RepMiscKind::category('general')` — `verify_v71`
+     *    بيفشل لو اتفرّقوا، وإلا النثرية العامة تتعرض باسمين حسب مين كتب الصف.
+     */
     public const CATEGORY = 'نثريات';
 
     /** هل الجدول موجود؟ (يخلّي النظام يشتغل عادي قبل migrate_v39) */
@@ -51,29 +63,76 @@ class RepMiscExpense
     {
         $qty  = max(1, (int) ($d['qty'] ?? 1));
         $unit = round((float) ($d['unit_amount'] ?? 0), 2);
-        $isVisa = !empty($d['is_visa']) ? 1 : 0;
+        /* ⚠️ الوسم (v71) بيتطبّع هنا كمان مش في المستدعي بس — الموديل هو الحارس
+           والفورم مش مصدر ثقة (قاعدة ③). وأي قيمة مجهولة بتقع على `general`،
+           فمستحيل يدخل الجدول وسم برّه الكتالوج مهما كان مصدر النداء. */
+        $kind = RepMiscKind::normalize($d['misc_kind'] ?? null);
+        /* ⚠️ السلفة كاش دايمًا: كارت المكتب ما بينزّلش كاش لجيب المندوب، فالوسم
+           ده بيلغي الفيزا هنا برضه مش في التحقّق بس. */
+        $isVisa = (!empty($d['is_visa']) && !RepMiscKind::isCashOnly($kind)) ? 1 : 0;
+        /* التصنيف المعروض بيتولّد من الوسم — المستدعي ما بيكتبوش بإيده، وإلا
+           بقى فيه تعريفان للاسم ممكن يختلفوا (قاعدة ②). */
+        $category = RepMiscKind::category($kind);
+
+        $kindReady = self::kindReady();
+        $cols = 'rep_id, submission_id, exp_date, category, note, qty, unit_amount,
+                 amount, ref_no, attachment, is_visa, visa_card_id, created_by'
+              . ($kindReady ? ', misc_kind' : '');
+        $args = [
+            (int) $d['rep_id'],
+            !empty($d['submission_id']) ? (int) $d['submission_id'] : null,
+            $d['exp_date'],
+            $category,
+            (string) $d['note'],
+            $qty,
+            $unit,
+            round($unit * $qty, 2),
+            ($d['ref_no'] ?? '') !== '' ? $d['ref_no'] : null,
+            ($d['attachment'] ?? '') !== '' ? $d['attachment'] : null,
+            $isVisa,
+            $isVisa && !empty($d['visa_card_id']) ? (int) $d['visa_card_id'] : null,
+            Auth::user(),
+        ];
+        if ($kindReady) { $args[] = $kind; }
+
         Database::exec(
-            "INSERT INTO rep_misc_expenses
-                (rep_id, submission_id, exp_date, category, note, qty, unit_amount,
-                 amount, ref_no, attachment, is_visa, visa_card_id, created_by)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            [
-                (int) $d['rep_id'],
-                !empty($d['submission_id']) ? (int) $d['submission_id'] : null,
-                $d['exp_date'],
-                trim((string) ($d['category'] ?? '')) !== '' ? $d['category'] : self::CATEGORY,
-                (string) $d['note'],
-                $qty,
-                $unit,
-                round($unit * $qty, 2),
-                ($d['ref_no'] ?? '') !== '' ? $d['ref_no'] : null,
-                ($d['attachment'] ?? '') !== '' ? $d['attachment'] : null,
-                $isVisa,
-                $isVisa && !empty($d['visa_card_id']) ? (int) $d['visa_card_id'] : null,
-                Auth::user(),
-            ]
+            "INSERT INTO rep_misc_expenses ($cols)
+             VALUES (" . implode(',', array_fill(0, count($args), '?')) . ")",
+            $args
         );
         return Database::lastId();
+    }
+
+    /**
+     * ⚠️ **خاصية ساكنة على الكلاس** مش `static` جوّه الدالة — دي الصيغة الوحيدة
+     *    اللي `refreshKindReady()` تقدر تصفّرها (مصيدة v57 الموثَّقة).
+     */
+    private static ?bool $kindReady = null;
+
+    /**
+     * هل عمود الوسم اترحّل؟ (migrate_v71) — قبله النظام بيفضل بسلوكه القديم
+     * بالحرف: بيكتب بلا وسم، والقراءة بتعتبر كل نثرية `general`.
+     *
+     * ⚠️ بنسأل عن **العمود** مباشرةً مش عن الجدول الأول: العمود ما يوجدش إلا
+     *    والجدول موجود، وكده الدالة مش مربوطة بكاش `available()` اللي مفيش
+     *    طريقة تصفّره من برّه.
+     */
+    public static function kindReady(): bool
+    {
+        if (self::$kindReady === null) {
+            self::$kindReady = (bool) Database::scalar(
+                "SELECT COUNT(*) FROM information_schema.columns
+                  WHERE table_schema = DATABASE() AND table_name = 'rep_misc_expenses'
+                    AND column_name = 'misc_kind'");
+        }
+        return self::$kindReady;
+    }
+
+    /** ⚠️ إلزامية في `migrate_v71` — الكاش بيتقرا قبل الـALTER فيفضل false بعده. */
+    public static function refreshKindReady(): bool
+    {
+        self::$kindReady = null;
+        return self::kindReady();
     }
 
     /**
@@ -180,6 +239,78 @@ class RepMiscExpense
             "SELECT rep_id, SUM(amount) total FROM rep_misc_expenses
              WHERE " . self::cashOnlySql() . $dayW . RepCustody::epochSql('exp_date')
              . " GROUP BY rep_id", $args) as $r) {
+            $out[(int) $r['rep_id']] = round((float) $r['total'], 2);
+        }
+        return $out;
+    }
+
+    // ─────────────────────────────────────────────── الوسم (v71)
+
+    /**
+     * ⚠️ **المصدر الوحيد** لشرط «النثرية دي من النوع الفلاني» في SQL.
+     * بيتعامل مع الصف القديم (NULL) كأنه `general` عبر `RepMiscKind::sqlKey()`،
+     * فمفيش صف بيقع برّه أي فلتر. وبيرجع `'1'` قبل الترحيل (كل النثريات نوع
+     * واحد ساعتها) عشان الاستعلام يفضل صالحًا بدل ما يكسر.
+     *
+     * ⚠️ ممنوع أي ملف يكتب `misc_kind = 'advance'` بإيده — `verify_v71` بيمسكها.
+     */
+    public static function kindSql(string $kind, string $alias = ''): string
+    {
+        if (!self::kindReady()) {
+            return RepMiscKind::normalize($kind) === RepMiscKind::DEFAULT ? '1' : '0';
+        }
+        return RepMiscKind::sqlKey($alias) . ' = ' . RepMiscKind::sqlLiteral($kind);
+    }
+
+    /**
+     * [وسم => إجمالي كاش] لمندوب واحد أو لكل المناديب، في فترة اختيارية.
+     * الأساس اللي وحدة الرواتب ومصروف المناديب الأسبوعي هيقروا منه (v71).
+     *
+     * ⚠️ **الكاش بس** زي كل حسابات العهدة: المدفوع بكارت المكتب خرج من الكارت
+     *    مش من جيب المندوب، فما ينفعش يتخصم من راتبه ولا من مصروف الأسبوع.
+     * كل مفاتيح الكتالوج بترجع حتى لو صفر، فالشاشة ما تحتاجش تعرف الكتالوج.
+     *
+     * @return array<string,float>
+     */
+    public static function totalsByKind(int $repId = 0, string $from = '', string $to = ''): array
+    {
+        $out = array_fill_keys(RepMiscKind::keys(), 0.0);
+        if (!self::available()) { return $out; }
+
+        $args = []; $w = '';
+        if ($repId > 0)  { $w .= ' AND rep_id = ?';   $args[] = $repId; }
+        if ($from !== '') { $w .= ' AND exp_date >= ?'; $args[] = $from; }
+        if ($to !== '')   { $w .= ' AND exp_date <= ?'; $args[] = $to; }
+
+        $key = self::kindReady() ? RepMiscKind::sqlKey() : RepMiscKind::sqlLiteral(RepMiscKind::DEFAULT);
+        foreach (Database::all(
+            "SELECT $key AS k, SUM(amount) total FROM rep_misc_expenses
+              WHERE " . self::cashOnlySql() . $w . RepCustody::epochSql('exp_date')
+            . " GROUP BY k", $args) as $r) {
+            $k = RepMiscKind::normalize((string) $r['k']);
+            $out[$k] = round($out[$k] + (float) $r['total'], 2);
+        }
+        return $out;
+    }
+
+    /**
+     * [rep_id => إجمالي كاش] لنوع واحد في فترة — كارت «سلف المناديب» أو
+     * «مواصلات الأسبوع» بيقرا منها بلا استعلام لكل مندوب.
+     *
+     * @return array<int,float>
+     */
+    public static function totalsByRepForKind(string $kind, string $from = '', string $to = ''): array
+    {
+        if (!self::available()) { return []; }
+        $args = []; $w = '';
+        if ($from !== '') { $w .= ' AND exp_date >= ?'; $args[] = $from; }
+        if ($to !== '')   { $w .= ' AND exp_date <= ?'; $args[] = $to; }
+
+        $out = [];
+        foreach (Database::all(
+            "SELECT rep_id, SUM(amount) total FROM rep_misc_expenses
+              WHERE " . self::cashOnlySql() . ' AND ' . self::kindSql($kind) . $w
+            . RepCustody::epochSql('exp_date') . ' GROUP BY rep_id', $args) as $r) {
             $out[(int) $r['rep_id']] = round((float) $r['total'], 2);
         }
         return $out;

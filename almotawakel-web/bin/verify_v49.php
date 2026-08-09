@@ -226,6 +226,7 @@ try {
         $tried++;
         try {
             RepPortal::submit($repA, ['kind' => 'misc', 'note' => $tag,
+                'misc_kind' => 'general',   // v71 — الوسم إجباري
                 'qty' => 1, 'unit_amount' => 10, 'entry_date' => $lockedDay]);
             bad('★ نثرية على يوم متقفل اتقبلت!');
         } catch (RepSubmissionValidationException $e) { $rejected++; }

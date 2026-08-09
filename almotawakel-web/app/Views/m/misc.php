@@ -7,11 +7,25 @@ $editing = !empty($submission);
 $o = fn(string $k, $d = '') => e((string) ($old[$k] ?? $d));
 $err = fn(string $k) => (string) ($errors[$k] ?? '');
 $qtyValue = max(1, (int) ($old['qty'] ?? 1));
-$miscNotes = array_values(array_unique(\App\Models\Lookup::ofType('mv_misc')));
-if (!$miscNotes) {
-    // أول مرة: اقتراحات مبدئية لحد ما المالك يعتمد نثريات فتتعلّم من الواقع
-    $miscNotes = ['مواصلات', 'شاي وقهوة', 'تصوير مستندات', 'إكرامية'];
+
+/* ── وسم النثرية (v71) — الكتالوج كله من `RepMiscKind`، الشاشة ما بتعرفش
+      ولا نوع بالاسم. زوّد نوعًا هناك وهو بيظهر هنا لوحده. */
+$kinds       = \App\Models\RepMiscKind::all();
+$kindValue   = (string) ($old['misc_kind'] ?? '');
+if ($kindValue !== '' && !isset($kinds[$kindValue])) { $kindValue = ''; }
+$kindNotes   = [];   // [مفتاح => اقتراحات البيان]
+$kindCashOnly = [];  // [مفتاح => ممنوع بالفيزا؟]
+foreach ($kinds as $kKey => $kDef) {
+    $kindNotes[$kKey]    = $kDef['notes'];
+    $kindCashOnly[$kKey] = (bool) $kDef['cash_only'];
 }
+
+/* الاقتراحات المتعلّمة من الواقع (`mv_misc`) بتتضمّ لاقتراحات النوع في الـ
+   datalist، فالمندوب يلاقي اللي كتبه قبل كده مهما كان النوع. */
+$learned  = array_values(array_unique(\App\Models\Lookup::ofType('mv_misc')));
+$allNotes = array_values(array_unique(array_merge(
+    $learned, ...array_values($kindNotes)
+)));
 $action = $editing ? url('m/entry/' . (int) $submission['id']) : url('m/misc');
 $today = date('Y-m-d');
 // تاريخ الصرف الافتراضي = عهدة يوم العمل (وعند التعديل بيفضل تاريخ النثرية الأصلي)
@@ -68,10 +82,24 @@ $wdToday = $wd === $today;
       <span>مصروف عام مش على إذن</span>
     </div>
 
-    <div class="hint misc-hint">
-      النثرية دي بتتخصم من عهدتك وبتتحسب <b>مصروف على الشركة</b> — مش على حساب أي عميل.
-      لو المبلغ ده مخصوص بإذن، سجّله من صفحة الإذن نفسه مش من هنا.
-    </div>
+    <?php /* ── سلايدر نوع النثرية (v71) — إجباري وبلا اختيار مسبق.
+             ⚠️ ما بنحطّش «عامة» افتراضيًّا: الوسم الغلط أسوأ من الناقص لأن
+                وحدة الرواتب هتخصم بيه من راتب المندوب. */ ?>
+    <fieldset class="field mk-field" id="field-misc_kind" <?= $err('misc_kind') ? 'data-error="1"' : '' ?>>
+      <legend>نوعها إيه؟</legend>
+      <div class="mk-slide" role="radiogroup" aria-describedby="err-misc_kind">
+        <?php foreach ($kinds as $kKey => $kDef): ?>
+          <input type="radio" name="misc_kind" id="mk_<?= e($kKey) ?>" value="<?= e($kKey) ?>"
+                 <?= $kindValue === (string) $kKey ? 'checked' : '' ?>>
+          <label for="mk_<?= e($kKey) ?>" class="mk-card">
+            <span class="mk-ic"><?= icon($kDef['icon'], 18) ?></span>
+            <b><?= e($kDef['label']) ?></b>
+            <em><?= e($kDef['sub']) ?></em>
+          </label>
+        <?php endforeach; ?>
+      </div>
+      <p class="field-error" id="err-misc_kind" <?= $err('misc_kind') ? '' : 'hidden' ?>><?= e($err('misc_kind')) ?></p>
+    </fieldset>
 
     <div class="field" id="field-note" <?= $err('note') ? 'data-error="1"' : '' ?>>
       <label for="note">النثرية دي إيه؟</label>
@@ -79,12 +107,9 @@ $wdToday = $wd === $today;
              list="notes-misc" enterkeyhint="next" value="<?= $o('note') ?>"
              placeholder="مثال: مواصلات أو تصوير مستندات" aria-describedby="err-note"
              <?= $err('note') ? 'aria-invalid="true"' : '' ?>>
-      <div class="suggestions">
-        <?php foreach (array_slice($miscNotes, 0, 4) as $v): ?>
-          <button type="button" data-note="<?= e($v) ?>"><?= e($v) ?></button>
-        <?php endforeach; ?>
-      </div>
-      <datalist id="notes-misc"><?php foreach ($miscNotes as $v): ?><option value="<?= e($v) ?>"></option><?php endforeach; ?></datalist>
+      <?php /* بتتملى بالجافاسكريبت من اقتراحات النوع المختار — فاضية قبل الاختيار */ ?>
+      <div class="suggestions" id="noteSuggest" hidden></div>
+      <datalist id="notes-misc"><?php foreach ($allNotes as $v): ?><option value="<?= e($v) ?>"></option><?php endforeach; ?></datalist>
       <p class="field-error" id="err-note" <?= $err('note') ? '' : 'hidden' ?>><?= e($err('note')) ?></p>
     </div>
 
@@ -199,8 +224,58 @@ $wdToday = $wd === $today;
     }
   }
 
-  form.querySelectorAll('[data-note]').forEach(function (b) {
-    b.addEventListener('click', function () { note.value = b.dataset.note; note.focus(); saveDraft(); });
+  /* ── وسم النثرية (v71) — الاختيار بيحرّك ٣ حاجات مع بعض:
+       ① اقتراحات البيان بتبقى بتاعة النوع ده
+       ② البيان بيتملى تلقائيًّا لو المندوب لسه ما كتبش (السلفة = تابين وخلاص)
+       ③ خانة الفيزا بتختفي للنوع «كاش بس»
+     الكتالوج جاي من `RepMiscKind` — الشاشة ما بتعرفش ولا مفتاح بالاسم. */
+  var MK_NOTES = <?= js_json($kindNotes) ?>;
+  var MK_CASH  = <?= js_json($kindCashOnly) ?>;
+  var suggestBox = document.getElementById('noteSuggest');
+  var visaField  = document.getElementById('field-visa_card_id');
+  var autoNote   = '';   // آخر بيان حطّيناه إحنا — عشان ما ندهسش كتابة المندوب
+
+  function currentKind() {
+    var picked = form.querySelector('input[name="misc_kind"]:checked');
+    return picked ? picked.value : '';
+  }
+  function renderSuggestions(kind) {
+    var list = MK_NOTES[kind] || [];
+    suggestBox.innerHTML = '';
+    list.slice(0, 4).forEach(function (v) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.dataset.note = v; b.textContent = v;
+      suggestBox.appendChild(b);
+    });
+    suggestBox.hidden = list.length === 0;
+  }
+  function syncKind(userPicked) {
+    var kind = currentKind();
+    clearFieldError('misc_kind');
+    renderSuggestions(kind);
+
+    // ② البيان الافتراضي — بيتحطّ بس لو الخانة فاضية أو لسه فيها اقتراحنا القديم
+    if (userPicked && kind && (note.value.trim() === '' || note.value === autoNote)) {
+      autoNote = (MK_NOTES[kind] || [''])[0] || '';
+      note.value = autoNote;
+    }
+
+    /* ③ ⚠️ الإخفاء **مش حماية** — `RepPortal` بيلغي وسم الفيزا للنوع ده على
+          الخادم كمان (قاعدة ③). هنا بنصفّر الخانة عشان المسودة تفضل نضيفة. */
+    if (!visaField) { return; }
+    var cashOnly = kind !== '' && MK_CASH[kind] === true;
+    visaField.hidden = cashOnly;
+    if (cashOnly && visaChk && visaChk.checked) { visaChk.checked = false; syncVisa(); }
+  }
+  form.querySelectorAll('input[name="misc_kind"]').forEach(function (r) {
+    r.addEventListener('change', function () { syncKind(true); saveDraft(); });
+  });
+
+  // التفويض إجباري: أزرار الاقتراح بتتولد من جديد مع كل تغيير نوع
+  suggestBox.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-note]');
+    if (!b) { return; }
+    note.value = b.dataset.note; autoNote = b.dataset.note; note.focus(); saveDraft();
   });
 
   document.getElementById('multiToggle').addEventListener('click', function () {
@@ -298,7 +373,7 @@ $wdToday = $wd === $today;
   if (visaChk) { visaChk.addEventListener('change', syncVisa); syncVisa(); }
 
   function clearErrors() {
-    ['note','unit_amount','qty','ref_no','entry_date','photo','visa_card_id'].forEach(clearFieldError);
+    ['misc_kind','note','unit_amount','qty','ref_no','entry_date','photo','visa_card_id'].forEach(clearFieldError);
     document.getElementById('errorSummary').hidden = true;
     document.getElementById('errorList').innerHTML = '';
   }
@@ -319,6 +394,8 @@ $wdToday = $wd === $today;
   }
   function clientErrors() {
     var errors = {};
+    // v71 — النوع أول سؤال: من غيره الوسم بيضيع والراتب بيتحاسب غلط بعدين.
+    if (!currentKind()) { errors.misc_kind = 'اختر نوع النثرية.'; }
     if (!note.value.trim()) { errors.note = 'اكتب النثرية دي إيه، زي مواصلات.'; }
     if (moneyValue() <= 0) { errors.unit_amount = 'اكتب المبلغ اللي دفعته.'; }
     var q = parseInt(qty.value, 10); if (!q || q < 1 || q > 10000) { errors.qty = 'العدد لازم يكون من 1 لـ10000.'; }
@@ -380,6 +457,7 @@ $wdToday = $wd === $today;
   });
 
   restoreDraft();
+  syncKind(false);   // v71 — يظبط الاقتراحات وخانة الفيزا على النوع المستعاد
   total(); networkState(false);
 })();
 </script>

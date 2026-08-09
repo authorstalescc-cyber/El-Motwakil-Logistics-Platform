@@ -1112,6 +1112,7 @@ class RepCustody
                 'note' => $m['note'], 'qty' => (int) $m['qty'], 'amount' => $m['amount'],
                 'ref_no' => $m['ref_no'], 'stage_key' => 'custom', 'direction' => 'expense',
                 'category' => $m['category'],
+                'misc_kind' => $m['misc_kind'] ?? null,   // v71 — وسم النثرية للأيقونة والشارة
                 'is_visa' => (int) ($m['is_visa'] ?? 0), 'visa_card_id' => $m['visa_card_id'] ?? null,
                 'unpaid' => 0,
                 'permit_id' => null, 'permit_no' => null, 'permit_type' => null,

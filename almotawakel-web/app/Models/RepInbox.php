@@ -291,10 +291,37 @@ class RepInbox
 
         // الفيزا (v45) — المالك يقدر يصحّح وسم الدفع أو الكارت قبل الاعتماد،
         // زي أي حقل تاني. الكارت إلزامي لو الوسم مفعّل وإلا المبلغ ما يتنسبش لحد.
+        /* وسم النثرية (v71) — المالك يقدر يصحّحه قبل الاعتماد زي أي حقل، لأن
+           المندوب ممكن يكون اختار غلط والوسم ده هيتحاسب عليه في الراتب.
+           ⚠️ النثرية بس: البند على إذن بياخد NULL دايمًا مهما بعت الفورم. */
+        $miscKind = null;
+        if ($wasMisc) {
+            if (array_key_exists('misc_kind', $d)) {
+                // الفورم بعت الحقل صراحةً → إجباري وصالح. النثرية القديمة (قبل
+                // v71) بتوصل هنا بقيمة فاضية فالمالك مضطر يختار — وده المطلوب.
+                $miscKind = trim((string) $d['misc_kind']);
+                if ($miscKind === '') {
+                    throw new RuntimeException('اختر نوع النثرية: سلفة أو مواصلات داخلية أو خارجية أو عامة.');
+                }
+                if (!RepMiscKind::has($miscKind)) {
+                    throw new RuntimeException('نوع النثرية مش من القايمة المعتمدة.');
+                }
+            } else {
+                /* ⚠️ الحقل مش مبعوت خالص (تعديل جماعي للتاريخ مثلاً) → بنسيب
+                   المخزَّن زي ما هو **بلا تحقّق**. من غير الاستثناء ده، تعديل
+                   دفعة فيها نثرية قديمة بلا وسم كان هيرمي ويرجّع الدفعة كلها. */
+                $miscKind = ($s['misc_kind'] ?? '') !== '' ? (string) $s['misc_kind'] : null;
+            }
+        }
+
         $isVisa = array_key_exists('is_visa', $d) ? !empty($d['is_visa']) : !empty($s['is_visa']);
         $cardId = array_key_exists('visa_card_id', $d)
             ? ((int) $d['visa_card_id'] ?: null)
             : (!empty($s['visa_card_id']) ? (int) $s['visa_card_id'] : null);
+        // ⚠️ v71 — السلفة كاش بنيويًّا (كارت المكتب ما بينزّلش كاش لجيب المندوب).
+        if ($isVisa && $miscKind !== null && RepMiscKind::isCashOnly($miscKind)) {
+            $isVisa = false; $cardId = null;
+        }
         if (!$isVisa) {
             $cardId = null;
         } elseif ($cardId === null) {
@@ -312,15 +339,19 @@ class RepInbox
             throw new RuntimeException('اختار واحدة بس: يا «مدفوع بالفيزا» يا «غير مدفوع».');
         }
 
+        $kindCol = RepPortal::miscKindReady();   // v71
+        $set = [$note, $kind, $qty, $unit, $actual, round($unit * $qty, 2),
+                $date, $ref !== '' ? $ref : null, $movementId, $isVisa ? 1 : 0, $cardId,
+                $unpaid ? 1 : 0];
+        if ($kindCol) { $set[] = $miscKind; }
         Database::exec(
             "UPDATE rep_submissions
              SET note=?, kind=?, qty=?, unit_amount=?, actual_unit=?, amount=?,
-                 entry_date=?, ref_no=?, movement_id=?, is_visa=?, visa_card_id=?, unpaid=?,
+                 entry_date=?, ref_no=?, movement_id=?, is_visa=?, visa_card_id=?, unpaid=?"
+                 . ($kindCol ? ', misc_kind=?' : '') . ",
                  edited_by=?, edited_at=NOW()
              WHERE id=? AND status='pending'",
-            [$note, $kind, $qty, $unit, $actual, round($unit * $qty, 2),
-             $date, $ref !== '' ? $ref : null, $movementId, $isVisa ? 1 : 0, $cardId,
-             $unpaid ? 1 : 0, Auth::user(), $subId]);
+            array_merge($set, [Auth::user(), $subId]));
 
         Audit::log('update', 'rep_submissions', $subId, $s, self::find($subId),
             'تعديل بند مندوب قبل الاعتماد «' . $note . '» — ' . number_format($unit * $qty, 2, '.', ','),
@@ -570,6 +601,10 @@ class RepInbox
                 'is_visa'       => (int) ($s['is_visa'] ?? 0),
                 'visa_card_id'  => !empty($s['is_visa']) && !empty($s['visa_card_id'])
                                      ? (int) $s['visa_card_id'] : null,
+                /* v71 — وسم النثرية بيتنقل زي ما هو من اختيار المندوب.
+                   `RepMiscExpense::create` هي اللي بتطبّعه وبتشتقّ منه
+                   `category` — فمفيش تسمية بتتكتب هنا بالإيد. */
+                'misc_kind'     => $s['misc_kind'] ?? null,
             ]);
 
             $changed = Database::exec(

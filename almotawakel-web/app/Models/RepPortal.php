@@ -40,6 +40,31 @@ class RepPortal
         return $kind === 'misc';
     }
 
+    /**
+     * ⚠️ **خاصية ساكنة على الكلاس** مش `static` جوّه الدالة — عشان
+     *    `refreshMiscKindReady()` تقدر تصفّرها بعد الترحيل (مصيدة v57).
+     */
+    private static ?bool $miscKindReady = null;
+
+    /** هل عمود وسم النثرية اترحّل على `rep_submissions`؟ (migrate_v71) */
+    public static function miscKindReady(): bool
+    {
+        if (self::$miscKindReady === null) {
+            self::$miscKindReady = (bool) Database::scalar(
+                "SELECT COUNT(*) FROM information_schema.columns
+                  WHERE table_schema = DATABASE() AND table_name = 'rep_submissions'
+                    AND column_name = 'misc_kind'");
+        }
+        return self::$miscKindReady;
+    }
+
+    /** ⚠️ إلزامية في `migrate_v71` — الكاش بيتقرا قبل الـALTER فيفضل false بعده. */
+    public static function refreshMiscKindReady(): bool
+    {
+        self::$miscKindReady = null;
+        return self::miscKindReady();
+    }
+
     // ─────────────────────────────────────────── الأذونات المفتوحة
 
     /** أقصى عدد أذونات بتتحمّل على شاشة الموبايل (بحث الصفحة بيفلترها محليًّا). */
@@ -436,6 +461,9 @@ class RepPortal
             'is_visa'     => !empty($s['is_visa']) ? '1' : '',
             'visa_card_id'=> (string) ($s['visa_card_id'] ?? ''),
             'unpaid'      => !empty($s['unpaid']) ? '1' : '',   // v57
+            /* v71 — النثرية القديمة (قبل الوسم) بترجع بلا نوع، فالفورم بيطلب
+               من المندوب يختار بدل ما يفترض «عامة» ويوسمها غلط. */
+            'misc_kind'   => (string) ($s['misc_kind'] ?? ''),
         ];
     }
 
@@ -646,16 +674,21 @@ class RepPortal
         // لا دلوقتي ولا بعد الاعتماد (مدفوع من عهدة المندوب — v35).
 
         try {
+            // v71 — الوسم بيتضاف للاستعلام بس لو العمود اترحّل، فالنظام يفضل
+            // شغّالًا بالحرف على قاعدة قبل الترحيل بدل ما يرمي خطأ SQL.
+            $kindCol = self::miscKindReady();
+            $args = [$repId, $token, $n['permit_id'], $n['movement_id'], $n['kind'], $n['note'],
+                     $n['qty'], $n['unit_amount'], $n['amount'], $n['entry_date'], $n['ref_no'],
+                     ($d['photo'] ?? '') !== '' ? $d['photo'] : null,
+                     $n['is_visa'], $n['visa_card_id'], $n['unpaid']];
+            if ($kindCol) { $args[] = $n['misc_kind']; }
             Database::exec(
                 "INSERT INTO rep_submissions
                     (rep_id, client_token, permit_id, movement_id, kind, note, qty,
                      unit_amount, amount, entry_date, ref_no, photo, is_visa, visa_card_id,
-                     unpaid, status)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending')",
-                [$repId, $token, $n['permit_id'], $n['movement_id'], $n['kind'], $n['note'],
-                 $n['qty'], $n['unit_amount'], $n['amount'], $n['entry_date'], $n['ref_no'],
-                 ($d['photo'] ?? '') !== '' ? $d['photo'] : null,
-                 $n['is_visa'], $n['visa_card_id'], $n['unpaid']]);
+                     unpaid" . ($kindCol ? ', misc_kind' : '') . ", status)
+                 VALUES (" . implode(',', array_fill(0, count($args), '?')) . ", 'pending')",
+                $args);
         } catch (\Throwable $e) {
             // خط دفاع للطلبين المتزامنين بنفس الرمز؛ لا نخفي أي خطأ آخر.
             $existing = Database::scalar(
@@ -689,14 +722,18 @@ class RepPortal
         $n = self::normaliseSubmission($repId, $d);
 
         $photo = array_key_exists('photo', $d) ? trim((string) $d['photo']) : (string) ($old['photo'] ?? '');
+        $kindCol = self::miscKindReady();   // v71
+        $set = [$n['movement_id'], $n['kind'], $n['note'], $n['qty'], $n['unit_amount'],
+                $n['amount'], $n['entry_date'], $n['ref_no'], $photo !== '' ? $photo : null,
+                $n['is_visa'], $n['visa_card_id'], $n['unpaid']];
+        if ($kindCol) { $set[] = $n['misc_kind']; }
         $affected = Database::exec(
             "UPDATE rep_submissions
              SET movement_id=?, kind=?, note=?, qty=?, unit_amount=?, amount=?, entry_date=?,
-                 ref_no=?, photo=?, is_visa=?, visa_card_id=?, unpaid=?, updated_at=NOW()
+                 ref_no=?, photo=?, is_visa=?, visa_card_id=?, unpaid=?"
+                 . ($kindCol ? ', misc_kind=?' : '') . ", updated_at=NOW()
              WHERE id=? AND rep_id=? AND status='pending' AND review_started_at IS NULL",
-            [$n['movement_id'], $n['kind'], $n['note'], $n['qty'], $n['unit_amount'],
-             $n['amount'], $n['entry_date'], $n['ref_no'], $photo !== '' ? $photo : null,
-             $n['is_visa'], $n['visa_card_id'], $n['unpaid'], $subId, $repId]);
+            array_merge($set, [$subId, $repId]));
 
         if ($affected !== 1) {
             // MySQL قد يرجع 0 لو المستخدم حفظ نفس القيم في نفس الثانية.
@@ -754,6 +791,19 @@ class RepPortal
             catch (\Throwable $e) { $errors['_form'] = $e->getMessage(); }
         }
 
+        /* ── وسم النثرية (v71) — النوع إجباري على النثرية وممنوع على غيرها.
+           ⚠️ **بلا افتراضي صامت**: لو المندوب ما اختارش، بنرفض بدل ما نحطّه
+              «عامة» من ورا ظهره — الوسم الغلط أسوأ من الوسم الناقص لأن وحدة
+              الرواتب هتخصم بيه من راتبه. والبند على إذن بياخد NULL دايمًا،
+              فمفيش وسم يتيم على حاجة مش نثرية. */
+        $miscKind = null;
+        if ($misc) {
+            $raw = trim((string) ($d['misc_kind'] ?? ''));
+            if ($raw === '') { $errors['misc_kind'] = 'اختر نوع النثرية.'; }
+            elseif (!RepMiscKind::has($raw)) { $errors['misc_kind'] = 'نوع النثرية مش من القايمة.'; }
+            else { $miscKind = $raw; }
+        }
+
         $note = preg_replace('/\s+/u', ' ', trim((string) ($d['note'] ?? '')));
         if ($note === '') { $errors['note'] = 'اكتب البيان، زي تخصيص أو حمولة.'; }
         elseif (mb_strlen($note) > 255) { $errors['note'] = 'البيان لازم يكون 255 حرف أو أقل.'; }
@@ -796,6 +846,12 @@ class RepPortal
         // (مش منسوب لحد) ولا من العهدة (اتستثنى) ولا من الخزنة (is_visa=1).
         $isVisa = !empty($d['is_visa']);
         $cardId = (int) ($d['visa_card_id'] ?? 0) ?: null;
+        /* ⚠️ v71 — النوع اللي «كاش بس» (السلفة) بيلغي الفيزا هنا بلا رسالة خطأ:
+           الشاشة أصلاً بتخفي الخانة لما النوع ده يتختار، فالقيمة الواصلة معناها
+           فورم متزوّر أو مسودة قديمة — والصح نتجاهلها لا نوقف المندوب. */
+        if ($isVisa && $miscKind !== null && RepMiscKind::isCashOnly($miscKind)) {
+            $isVisa = false; $cardId = null;
+        }
         if (!$isVisa) {
             $cardId = null;   // الاختيار بيتخزّن بس لو الفيزا مفعّلة (نمط v22)
         } elseif ($cardId === null) {
@@ -827,6 +883,7 @@ class RepPortal
             'entry_date' => $date, 'ref_no' => $ref !== '' ? $ref : null,
             'is_visa' => $isVisa ? 1 : 0, 'visa_card_id' => $cardId,
             'unpaid' => $unpaid ? 1 : 0,
+            'misc_kind' => $miscKind,   // v71 — NULL على أي بند مربوط بإذن
         ];
     }
 

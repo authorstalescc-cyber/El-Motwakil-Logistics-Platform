@@ -86,12 +86,18 @@ $dayUrl = fn(string $d, string $st) => url('m/entries?day=' . $d . ($st !== '' ?
   <?php else: foreach ($submissions as $s): ?>
     <?php $isMisc = \App\Models\RepPortal::isMisc((string) $s['kind']); ?>
     <article class="hm-slip is-<?= e($s['status']) ?>">
-      <span class="hm-slip-ic" aria-hidden="true"><?= $isMisc ? icon('tag', 18) : ($s['kind'] === 'receipt' ? icon('receipt', 18) : icon('banknote', 18)) ?></span>
+      <?php /* v71 — أيقونة النثرية بقت أيقونة وسمها، فالمندوب يفرّق بين
+               السلفة والمواصلات من الشكل قبل ما يقرا. */ ?>
+      <span class="hm-slip-ic" aria-hidden="true"><?= $isMisc
+            ? icon(\App\Models\RepMiscKind::icon($s['misc_kind'] ?? null), 18)
+            : ($s['kind'] === 'receipt' ? icon('receipt', 18) : icon('banknote', 18)) ?></span>
       <div class="hm-slip-mid">
         <b><?= e($s['note']) ?></b>
         <div class="hm-slip-meta">
           <span><?= e(dfmt($s['entry_date'])) ?></span>
-          <span>· <?= $isMisc ? 'نثرية' : e($s['permit_no'] ?: '#' . $s['permit_id']) ?></span>
+          <span>· <?= $isMisc
+                ? e(\App\Models\RepMiscKind::label($s['misc_kind'] ?? null))
+                : e($s['permit_no'] ?: '#' . $s['permit_id']) ?></span>
           <?php if ((int) $s['qty'] > 1): ?><span>· <?= (int) $s['qty'] ?>×<?= $num($s['unit_amount']) ?></span><?php endif; ?>
           <?php if (!empty($s['is_visa'])): ?><span>· <?= icon('credit-card', 14) ?></span><?php endif; ?>
         </div>

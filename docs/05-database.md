@@ -326,3 +326,34 @@ PK مركّب `(agent_id, company_id)`, FK **CASCADE** على الطرفين. و
 **⚠️ نسخة سريعة لنفس السؤال:** `PartyDoc::keySet()` + `permitHasDocs()` — استعلامان للشاشة
 كلها بدل `resolve()` لكل إذن (قائمة المندوب تصل ٣٠٠ إذن). تطابق في PHP بنفس دالة التطبيع،
 والفاحص يقارن مخرج الطريقتين.
+
+---
+
+## `rep_misc_expenses.misc_kind` · `rep_submissions.misc_kind` — وسم النثرية (v71)
+
+`bin/migrate_v71.php` يضيف عمودًا واحدًا بنفس التعريف على الجدولين:
+
+| العمود | النوع | المعنى |
+|---|---|---|
+| `misc_kind` | `VARCHAR(16) NULL` | مفتاح آلة من `App\Models\RepMiscKind` — `advance` (مسحوب شخصي/سلفة) · `transport_in` (مواصلات داخل الميناء) · `transport_out` (مواصلات خارجها) · `general` (نثرية عامة) |
+
+ومعاهما فهرسان: `idx_sub_misc_kind (misc_kind, entry_date)` و
+`idx_rme_misc_kind (misc_kind, exp_date)`.
+
+- **NULL = `general`.** الصف اللي قبل الترحيل ما اتلمسش، و`RepMiscKind::sqlKey()`
+  بتلفّ العمود بـ`COALESCE(NULLIF(...),'general')` في أي قراءة — فمفيش صف بيقع
+  برّه `GROUP BY` ويختفي مجموعه بالسكوت.
+- **`rep_submissions.misc_kind` بيبقى NULL دايمًا لأي بند مربوط بإذن** (الموديل
+  بيفرضه، و`verify()` بتاعة الترحيل بتثبته كشرط بنيوي دائم).
+- **العمود مفتاح آلة، مش نص عرض.** النص المعروض هو `rep_misc_expenses.category`
+  و`RepMiscExpense::create()` **بتشتقّه من الوسم** — فسجل `/expenses` وكشف حساب
+  المندوب بيقولوا النوع بلا تعديل في الشاشتين، ولو المالك غيّر تسمية بكرة ما
+  بيتكسرش أي استعلام بيفلتر بالنوع.
+- **⚠️ صفر أثر مالي**: النثرية بكل أنواعها لسه بتتخصم من عهدة المندوب ومن الخزنة
+  يوم صرفها (لو كاش). **السلفة لسه مصروف شركة** — تحويلها لمستحق يتخصم من الراتب
+  قرار مالي جديد بتاع وحدة الرواتب، وطريقه الصح استثناء `advance` من
+  `RepMiscExpense::cashOnlySql()` **مش** لمس أي جدول خزنة.
+
+القراءة الجاهزة للوحدات القادمة: `RepMiscExpense::totalsByKind($repId, $from, $to)`
+و`totalsByRepForKind($kind, $from, $to)` — **الكاش بس** زي كل حسابات العهدة.
+فحص: `php bin/verify_v71.php` (٦٨ فحص).

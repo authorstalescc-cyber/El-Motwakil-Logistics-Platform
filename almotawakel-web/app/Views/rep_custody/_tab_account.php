@@ -219,7 +219,10 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
       $src = $s['src'] ?? 'permit';
       $isReceipt = $src === 'permit' && ($s['stage_key'] ?? '') === 'receipts';
       [$ic, $kind] = match ($src) {
-        'misc'     => ['coins', $s['category'] ?: 'نثرية'],
+        // v71 — الأيقونة والاسم الاتنين من وسم النثرية، فالسطر بيقول نوعها
+        //        (سلفة/مواصلات) بدل «نثرية» المسطّحة.
+        'misc'     => [\App\Models\RepMiscKind::icon($s['misc_kind'] ?? null),
+                       $s['category'] ?: \App\Models\RepMiscKind::label($s['misc_kind'] ?? null)],
         'handover' => ['truck', 'تسليم سائق'],
         'bill'     => ['truck', 'عهدة بوليصة'],   // v60 — أضافها من موبايله
         'transfer' => ['shuffle', 'تحويل لمندوب'],
@@ -228,6 +231,9 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
       $meta = [['icon' => 'layers', 'text' => $kind]];
       if ($src === 'misc') {
         $meta[] = ['icon' => 'file-text', 'text' => 'مصروف عام بلا إذن'];
+        if (($s['misc_kind'] ?? '') !== '') {
+            $meta[] = ['icon' => 'tag', 'text' => \App\Models\RepMiscKind::sub($s['misc_kind'])];
+        }
       } elseif ($src === 'handover') {
         $meta[] = ['icon' => 'user', 'text' => $s['driver_name'] ?: '—'];
         if (!empty($s['bill_number'])) { $meta[] = ['icon' => 'truck', 'text' => 'بوليصة ' . $s['bill_number']]; }
