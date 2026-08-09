@@ -2165,3 +2165,114 @@ dialog{
    لونه من نفسه، والـSVG بياخد `currentColor` — فمن غير السطر ده كان هياخد
    لون النص الأسود ويبقى تقيلًا فوق اللازم. */
 .hm-slip-ic svg{color:var(--hm-muted,#66748A)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   «تحب تروح فين؟» + «حسابي» (v72) — بوابة الاختيار وشاشة حساب المندوب.
+   ⚠️ الشاشتين على بوابة `/m` اللي **ما بتحمّلش `app.css` ولا `app.js`** —
+      فكل كلاس هنا لازم يعيش في الملف ده، وكل سلوك بلا جافاسكريبت.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── بوابة الاختيار ─────────────────────────────────────────────────────── */
+.ms-wrap{max-width:440px}
+.ms-picks{display:flex; flex-direction:column; gap:13px}
+/* كارت واحد كبير لكل طريق — هدف لمس ضخم، والرقم جوّه الكارت مش تحته */
+.ms-pick{
+  position:relative; display:grid; gap:3px;
+  grid-template-columns:auto 1fr auto; grid-template-areas:'ic ttl go' 'ic sub go' 'ic amt go';
+  align-items:center; padding:17px 16px; border-radius:19px;
+  background:var(--card); border:1.5px solid var(--line); color:var(--ink);
+  box-shadow:0 2px 6px rgba(16,36,64,.06), 0 14px 30px rgba(16,36,64,.07);
+}
+.ms-pick:active{transform:translateY(1px)}
+.ms-pick .ms-ic{
+  grid-area:ic; width:52px; height:52px; margin-inline-end:13px; flex:none;
+  border-radius:16px; display:grid; place-items:center;
+}
+.ms-pick b{grid-area:ttl; font-size:1.08rem; font-weight:700}
+.ms-pick em{grid-area:sub; font-style:normal; font-size:.8rem; color:var(--grey); font-weight:500}
+.ms-pick .ms-go{grid-area:go; font-size:1.5rem; color:var(--grey); font-weight:700; padding-inline-start:8px}
+/* الرقم البطل جوّه كارت «حسابي» */
+.ms-pick .ms-amt{grid-area:amt; display:flex; align-items:baseline; gap:4px; margin-top:3px}
+.ms-pick .ms-amt i{font-style:normal; font-size:.8rem; color:var(--grey); font-weight:600}
+.ms-pick .ms-amt b{font-size:1.5rem; font-weight:800; color:var(--navy); font-variant-numeric:tabular-nums}
+/* لونان مختلفان عشان الطريقين ما يتلخبطوش من بعيد */
+.ms-pick.is-work .ms-ic{background:#E4EAF1; color:var(--navy)}
+.ms-pick.is-acct .ms-ic{background:var(--gold-lt); color:#6B540A}
+.ms-out{margin-top:20px; text-align:center}
+.ms-out button{
+  min-height:44px; padding:0 18px; border:1px solid var(--line); border-radius:11px;
+  background:transparent; color:var(--grey); font:inherit; font-weight:600; cursor:pointer;
+}
+
+/* ── حسابي ──────────────────────────────────────────────────────────────── */
+/* شريط الفترة: سهم · اسم الفترة · سهم */
+.ma-period{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  margin-bottom:14px; padding:7px 8px; border-radius:13px;
+  background:var(--card); border:1px solid var(--line);
+}
+.ma-period b{font-size:.88rem; font-weight:700; text-align:center; flex:1}
+.ma-arrow{
+  min-width:40px; min-height:40px; display:grid; place-items:center; flex:none;
+  border-radius:10px; background:#EEF2F7; color:var(--navy); font-size:1.15rem; font-weight:700;
+}
+.ma-arrow.is-off{opacity:.3}
+/* الرقم البطل */
+.ma-hero{
+  padding:19px 17px; border-radius:19px; margin-bottom:13px;
+  background:linear-gradient(160deg,var(--navy-dk),var(--navy)); color:#fff;
+}
+.ma-hero>span{font-size:.85rem; color:rgba(255,255,255,.72); font-weight:500}
+.ma-hero.is-owed{background:linear-gradient(160deg,#6B1F1F,var(--red))}
+.ma-amt{display:flex; align-items:baseline; gap:6px; margin-top:5px}
+.ma-amt i{font-style:normal; font-size:1rem; color:var(--gold); font-weight:700}
+.ma-amt b{font-size:2.5rem; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums}
+.ma-warn{
+  display:flex; align-items:center; gap:7px; margin-bottom:11px; padding:10px 12px;
+  border-radius:11px; background:var(--red-lt); color:var(--red); font-size:.83rem; font-weight:600;
+}
+/* الصف = رقم مضغوط بيفتح صفوفه (ممنوع رقم أصمّ) — `<details>` أصلي بلا JS */
+.ma-row{background:var(--card); border:1px solid var(--line); border-radius:14px; margin-bottom:9px}
+.ma-row>summary{
+  display:flex; align-items:center; gap:10px; min-height:var(--tap);
+  padding:11px 13px; cursor:pointer; list-style:none;
+}
+/* ⚠️ المثلث الافتراضي بيتشال من المحركين مع بعض، وإلا بيبان في سفاري بس */
+.ma-row>summary::-webkit-details-marker{display:none}
+.ma-row>summary::marker{content:''}
+.ma-row .ma-ic{
+  width:34px; height:34px; flex:none; border-radius:11px; display:grid; place-items:center;
+  background:#EEF2F7; color:var(--navy);
+}
+.ma-row .ma-lbl{flex:1; min-width:0; font-size:.88rem; font-weight:600}
+.ma-row .ma-val{font-size:1.12rem; font-weight:800; font-variant-numeric:tabular-nums; color:var(--navy)}
+.ma-row.is-minus .ma-val{color:var(--red)}
+.ma-row.is-minus .ma-ic{background:var(--red-lt); color:var(--red)}
+/* السهم اللي بيلفّ — الإشارة الوحيدة إن الصف بيفتح */
+.ma-row>summary::after{
+  content:'⌄'; flex:none; color:var(--grey); font-size:1.1rem; font-weight:700;
+  transition:transform .18s;
+}
+.ma-row[open]>summary::after{transform:rotate(180deg)}
+.ma-row[data-empty="1"]>summary::after{opacity:.35}
+.ma-body{padding:0 13px 11px; border-top:1px dashed var(--line); margin-top:2px; padding-top:9px}
+.ma-note{font-size:.79rem; color:var(--grey)}
+.ma-line{display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px dashed var(--line)}
+.ma-line:last-child{border-bottom:0}
+.ma-line-d{font-size:.73rem; color:var(--grey); flex:none; font-variant-numeric:tabular-nums}
+.ma-line-n{flex:1; min-width:0; font-size:.83rem; overflow-wrap:anywhere}
+.ma-line-v{font-size:.9rem; font-weight:700; font-variant-numeric:tabular-nums; flex:none}
+.ma-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+  margin:18px 0 9px; font-size:.9rem; font-weight:700; color:var(--navy);
+}
+.ma-head span{font-size:1rem; font-weight:800; font-variant-numeric:tabular-nums}
+.ma-pending{
+  display:flex; align-items:center; gap:7px; margin-top:12px; padding:9px 12px;
+  border-radius:11px; background:var(--gold-lt); color:#6B540A; font-size:.8rem; font-weight:600;
+}
+.ma-work{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  min-height:var(--tap); margin-top:18px; border-radius:14px;
+  background:var(--navy); color:#fff; font-weight:700;
+}

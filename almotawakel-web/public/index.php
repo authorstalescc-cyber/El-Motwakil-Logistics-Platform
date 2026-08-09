@@ -164,6 +164,10 @@ $r->get('/m/login',   'RepPortalController@showLogin');
 $r->post('/m/login',  'RepPortalController@login');
 $r->post('/m/logout', 'RepPortalController@logout');
 $r->get('/m/ping', 'RepPortalController@ping');   // إشعارات حيّة (قراءة فقط) — حرفي قبل الجشع
+// بوابة الاختيار بعد الدخول + «حسابي» (v72) — حرفية قبل الجشعة (تحذير ٤).
+// الاتنين **قراءة بحتة**: مفيش POST ولا كتابة، فمفيش CSRF عليهم.
+$r->get('/m/start',   'RepPortalController@start');
+$r->get('/m/account', 'RepPortalController@account');
 // تاريخ العمل للمندوب — حرفي قبل الجشع `/m/permit/{id}` و`/m/entry/{sid}` (تحذير 4)
 $r->get('/m/work-date',  'RepPortalController@workDateForm');
 $r->post('/m/work-date', 'RepPortalController@workDateSave');

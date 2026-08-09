@@ -43,6 +43,8 @@ final class RepMiscKind
      *   icon      اسم من `icon()` — ⚠️ الاسم الغلط بيرسم دايرة فاضية بلا خطأ
      *   notes     اقتراحات البيان لما النوع ده يتختار
      *   cash_only النوع ده ما ينفعش يتدفع بكارت فيزا المكتب
+ *   salary    النوع ده **بيتخصم من راتب المندوب** (v72) — المصدر الوحيد
+ *             للسؤال ده. شاشة «حسابي» بتسأل الكتالوج بدل ما تكتب `'advance'`.
      */
     private const CATALOG = [
         'advance' => [
@@ -54,6 +56,10 @@ final class RepMiscKind
             // السلفة فلوس المندوب أخدها كاش من عهدته لنفسه — كارت المكتب
             // ما بينزّلش كاش، فالوسم ده متنافي مع الفيزا بنيويًّا مش ذوقًا.
             'cash_only' => true,
+            // ⚠️ **النوع الوحيد اللي بيتخصم من الراتب** (قرار المالك 2026-08-10):
+            //    المواصلات مصروف شركة بتتحاسب من مصروف المناديب الأسبوعي، مش
+            //    على المندوب. عكسها من هنا بيغيّر «المتبقي» في شاشة «حسابي».
+            'salary'    => true,
         ],
         'transport_in' => [
             'label'     => 'مواصلات داخلية',
@@ -62,6 +68,7 @@ final class RepMiscKind
             'icon'      => 'crane',
             'notes'     => ['مواصلات داخل الميناء', 'توكتوك', 'عربية جوّه الميناء'],
             'cash_only' => false,
+            'salary'    => false,
         ],
         'transport_out' => [
             'label'     => 'مواصلات خارجية',
@@ -70,6 +77,7 @@ final class RepMiscKind
             'icon'      => 'map-pin',
             'notes'     => ['مواصلات خارج الميناء', 'تاكسي', 'أتوبيس'],
             'cash_only' => false,
+            'salary'    => false,
         ],
         'general' => [
             'label'     => 'نثرية عامة',
@@ -78,6 +86,7 @@ final class RepMiscKind
             'icon'      => 'coins',
             'notes'     => ['شاي وقهوة', 'تصوير مستندات', 'إكرامية'],
             'cash_only' => false,
+            'salary'    => false,
         ],
     ];
 
@@ -140,6 +149,46 @@ final class RepMiscKind
     public static function isCashOnly(?string $kind): bool
     {
         return (bool) self::CATALOG[self::normalize($kind)]['cash_only'];
+    }
+
+    /**
+     * النوع ده بيتخصم من راتب المندوب؟ (v72 — المصدر الوحيد للسؤال).
+     * ⚠️ ممنوع أي ملف يكتب `'advance'` بإيده عشان يجاوب على السؤال ده —
+     *    `verify_rep_account` بيفشل لو حصل.
+     */
+    public static function deductsSalary(?string $kind): bool
+    {
+        return (bool) self::CATALOG[self::normalize($kind)]['salary'];
+    }
+
+    /** @return string[] الأنواع اللي بتتخصم من الراتب. */
+    public static function salaryKeys(): array
+    {
+        return array_keys(array_filter(self::CATALOG, static fn($d) => $d['salary']));
+    }
+
+    /** @return string[] الأنواع اللي **ما بتتخصمش** من الراتب (مصروف شركة). */
+    public static function nonSalaryKeys(): array
+    {
+        return array_keys(array_filter(self::CATALOG, static fn($d) => !$d['salary']));
+    }
+
+    /**
+     * حلّ اسم نوع من نصّ المالك — بيقبل **المفتاح الإنجليزي أو الاسم العربي**
+     * (`transport_in` · «مواصلات داخلية» · «مواصلات داخلية — جوّه الميناء»).
+     * ⚠️ عشان إعداد «أنهي مصروفات تظهر في حسابي» يتكتب بالعربي: صاحب الشركة
+     *    مش مبرمج وما ينفعش نطلب منه يكتب مفاتيح آلة.
+     * بيرجع NULL لو مش معروف — المستدعي بيتجاهله بدل ما يخترع نوعًا.
+     */
+    public static function resolve(string $raw): ?string
+    {
+        $t = preg_replace('/\s+/u', ' ', trim($raw));
+        if ($t === '') { return null; }
+        if (isset(self::CATALOG[$t])) { return $t; }
+        foreach (self::CATALOG as $key => $d) {
+            if ($d['label'] === $t || ($d['label'] . ' — ' . $d['sub']) === $t) { return $key; }
+        }
+        return null;
     }
 
     /**

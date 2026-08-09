@@ -316,6 +316,29 @@ class RepMiscExpense
         return $out;
     }
 
+    /**
+     * صفوف مندوب من أنواع بعينها في فترة — تفاصيل شاشة «حسابي» (v72).
+     *
+     * ⚠️ **الكاش بس** زي `totalsByKind` بالحرف: لو الصفوف هنا خالفت المجموع
+     *    فوق، الكارت يقول رقم والقايمة تحته تقول رقم تاني.
+     * $kinds فاضية = مفيش نوع مختار ⇒ **صفر صفوف** لا «كل الصفوف» — الفرق ده
+     * هو اللي بيخلّي إعداد فاضي يعرض فاضي بدل ما يعرض كل حاجة.
+     */
+    public static function rowsForKinds(int $repId, array $kinds, string $from = '', string $to = ''): array
+    {
+        if (!self::available() || !$kinds) { return []; }
+        $args = [$repId]; $w = '';
+        if ($from !== '') { $w .= ' AND exp_date >= ?'; $args[] = $from; }
+        if ($to !== '')   { $w .= ' AND exp_date <= ?'; $args[] = $to; }
+
+        $or = implode(' OR ', array_map(static fn($k) => self::kindSql($k), $kinds));
+        return Database::all(
+            "SELECT * FROM rep_misc_expenses
+              WHERE rep_id = ? AND " . self::cashOnlySql() . " AND ($or)" . $w
+            . RepCustody::epochSql('exp_date')
+            . ' ORDER BY exp_date DESC, id DESC', $args);
+    }
+
     /** نثريات مندوب (الأحدث أولاً) — لكشف حسابه. */
     public static function forRep(int $repId): array
     {

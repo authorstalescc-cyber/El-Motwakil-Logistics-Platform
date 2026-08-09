@@ -64,6 +64,7 @@ $catalog = [
     'verify_v66.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'خزنة الشركة (v66) — العزل بالبناء والاتجاه صح والفلوس محفوظة وتوجيه التحصيل، fixtures داخل rollback'],
     'verify_v67.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'خزنة الشركة الموسّعة (v67) — مصروفات وفيزا وعهدة مندوب ومرفقات وتعديل وميزانية وكشف A4، الاتجاهان مع بعض والفلوس محفوظة، fixtures داخل rollback'],
     'verify_v71.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'وسم النثرية (v71) — الحياد المالي ووصول الوسم للجدول النهائي وإجباريّته والسلفة كاش بنيويًّا، fixtures داخل rollback'],
+    'verify_rep_account.php'      => ['impact' => 'rollback',   'self_guard' => false, 'note' => '«حسابي» للمندوب (v72) — فترة الرواتب بأي يوم بداية والمتبقي = الراتب − السلف وبس، والإعدادات بتتغيّر جوّه transaction ثم rollback'],
     'verify_design_system.php'    => ['impact' => 'read',       'self_guard' => false, 'note' => 'لغة تصميم النظام + قاعدة «ممنوع رقم أصمّ» + نافذة التفاصيل الواحدة'],
     'verify_density.php'          => ['impact' => 'read',       'self_guard' => false, 'note' => 'قانون التصميم: صفر جملة تعليمية — الشرح يتشال والتحذير الوظيفي يفضل'],
     'verify_reports_ui.php'       => ['impact' => 'read',       'self_guard' => false, 'note' => 'التقارير بلغة النظام — يرندر التبويبات ونوافذ التفاصيل ويطابق مجاميعها بالأرقام'],

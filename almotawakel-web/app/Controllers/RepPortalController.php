@@ -7,6 +7,7 @@ use App\Core\Controller;
 use App\Core\RepAuth;
 use App\Core\PrivateFile;
 use App\Models\PartyDoc;
+use App\Models\RepAccount;
 use App\Models\Permit;
 use App\Models\PermitTrack;
 use App\Models\RepDriverHandover;
@@ -99,8 +100,12 @@ class RepPortalController extends Controller
             flash('error', $res['msg']);
             redirect('m/login');
         }
-        // نسأله بيشتغل بتاريخ إمتى قبل ما يبدأ (زي بوابة المكتب) — الافتراضي النهاردة.
-        redirect('m/work-date');
+        /* v72 — بيختار الأول: شاشة العمل ولا حسابي (طلب المالك 2026-08-10).
+           ⚠️ **سؤال يوم العمل اتأخّر لبعد الاختيار** عن قصد: «حسابي» شاشة
+              عرض على فترة رواتب، فسؤاله عن يوم العمل قبلها كان بيطلب قرارًا
+              مالوش لازمة للطريق اللي اختاره. الطريق التاني (شاشة العمل)
+              بيعدّي على `m/work-date` زي ما كان بالحرف. */
+        redirect('m/start');
     }
 
     public function logout(): void
@@ -108,6 +113,61 @@ class RepPortalController extends Controller
         $this->requireCsrf();
         RepAuth::logout();
         redirect('m/login');
+    }
+
+    // ═══════════════════════════════════════════ بوابة الاختيار + حسابي (v72)
+
+    /**
+     * «تحب تروح فين؟» — شاشة العمل ولا حسابي. بتظهر عقب الدخول (طلب المالك).
+     * ⚠️ مسار مستقل مش شرط: المندوب يقدر يفتح `/m` أو `/m/account` مباشرةً
+     *    من الاختصار على شاشته، فالشاشة دي **توجيه مش بوابة حماية**.
+     *
+     * ⚠️ **الاسم `start` مش `startForm` عن قصد**: `verify_navigation` بيصنّف أي
+     *    معالِج اسمه `*Form` على إنه **فورم إنشاء**، وبيمنع أي زرار «رجوع» إنه
+     *    يوصّل له (عشان ما ينتجش مستند مكرَّر — الباج اللي المالك بلّغ عنه).
+     *    الشاشة دي محطة تنقّل ما بتنشئ حاجة، فالاسم الغلط كان بيدّي إنذارًا
+     *    صحيحًا على قاعدة سليمة.
+     */
+    public function start(): void
+    {
+        $this->requireRep();
+        $this->render('m/start', [
+            'title'   => 'تحب تروح فين؟',
+            'repName' => RepAuth::repName(),
+            'account' => RepAccount::summary(RepAuth::repId(), RepAccount::period()),
+        ], false);
+    }
+
+    /**
+     * «حسابي» — راتبه وسلفه ومصروفاته في فترة الرواتب.
+     *
+     * ⚠️ **عرض بحت**: ولا كتابة واحدة هنا. و`RepAccount` بيقرا من `reps` و
+     *    `rep_misc_expenses` وبس — مفيش أي مساس بخزنة ولا عهدة.
+     * ⚠️ **المندوب بيشوف حسابه هو وبس**: الـid جاي من الجلسة (`RepAuth::repId`)
+     *    مش من الرابط، فمفيش رقم يتزوّر أصلاً.
+     */
+    public function account(): void
+    {
+        $this->requireRep();
+        $repId = RepAuth::repId();
+
+        $period = RepAccount::period((string) ($_GET['p'] ?? ''));
+        // ⚠️ الفترة الجاية مالهاش معنى — سهم «التالي» مقفول عندها في الشاشة،
+        //    والحارس هنا لأن الرابط ممكن يتكتب بالإيد.
+        if (RepAccount::isFuture($period)) { $period = RepAccount::period(); }
+
+        $this->render('m/account', [
+            'title'     => 'حسابي',
+            'repName'   => RepAuth::repName(),
+            'period'    => $period,
+            'prev'      => RepAccount::shift($period, -1),
+            'next'      => RepAccount::isFuture(RepAccount::shift($period, 1))
+                             ? null : RepAccount::shift($period, 1),
+            'sum'       => RepAccount::summary($repId, $period),
+            'advances'  => RepAccount::advanceRows($repId, $period),
+            'expenses'  => RepAccount::expenseRows($repId, $period),
+            'pending'   => RepAccount::pendingCount($repId, $period),
+        ], false);
     }
 
     // ═══════════════════════════════════════════ الشاشة الرئيسية

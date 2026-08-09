@@ -563,6 +563,15 @@ $permitCard = function (array $p) use ($num, $portMark, $isReefer) {
     <span>بنودي</span>
     <?php if ($counts['pending']): ?><i class="hm-badge is-wait"><?= $counts['pending'] ?></i><?php endif; ?>
   </a>
+  <?php /* v72 — «حسابي» في الشريط كمان مش في بوابة الدخول بس: المندوب بيفتح
+           التطبيق من الاختصار على شاشته فما بيعدّيش على `/m/start` أصلاً. */ ?>
+  <?php /* ⚠️ رسمة **مملوءة** بالإيد لا `icon()`: القاعدة `.hm-tabs svg{fill:currentColor}`
+           بتغلب سمة `fill="none"` بتاعة أيقونات `icon()` الخطّية، فكانت هتطلع
+           كتلة صمّاء. و`.cut` هي نفس الحيلة اللي باقي التبويبات بتستعملها. */ ?>
+  <a href="<?= url('m/account') ?>">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 016.5 4H16a1 1 0 010 2H6.5a.5.5 0 000 1H19a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V6.5z"/><circle cx="17" cy="13" r="1.7" class="cut"/></svg>
+    <span>حسابي</span>
+  </a>
   <?php /* v47 — تبويب المتابعة بيظهر للمشرف بس (Rep::canWatchReps) */ ?>
   <?php if (!empty($canWatchTeam)): ?>
     <a href="<?= url('m/team') ?>">
