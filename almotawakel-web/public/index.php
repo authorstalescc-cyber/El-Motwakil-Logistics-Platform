@@ -435,6 +435,8 @@ $r->get('/quality/{key}',               'QualityController@field');
 
 $r->get('/settings',                    'SettingsController@index');
 $r->post('/settings/general',           'SettingsController@saveGeneral');
+// حفظ أي قسم من السجل المعرَّف (docs/19 · المرحلة ١) — المسار الحرفي قبل الجشع
+$r->post('/settings/section/{section}', 'SettingsController@saveSection');
 $r->post('/settings/permits',           'SettingsController@savePermits');
 $r->post('/settings/lookup',            'SettingsController@addLookup');
 $r->post('/settings/lookup/{id}/delete','SettingsController@deleteLookup');

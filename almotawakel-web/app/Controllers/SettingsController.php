@@ -7,6 +7,8 @@ use App\Core\Access;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Groq;
+use App\Core\Settings;
+use App\Core\SettingsSchema;
 use App\Models\Lookup;
 use App\Models\Permit;
 use App\Models\Maintenance;
@@ -15,6 +17,30 @@ use App\Models\Audit;
 
 class SettingsController extends Controller
 {
+    /**
+     * الأقسام اللي ليها تبويب وفورم حفظ عام (docs/19 · المرحلة ١).
+     *
+     * ⚠️ **مش كل أقسام `SettingsSchema` هنا عن قصد**: `identity` بتتحفظ من فورم
+     *    «عام» القديم (مع مفاتيح `business` العامة)، و`permits` ليها فورم خاص
+     *    فيه جدول المراحل، و`master` مفاتيحها كلها مُدارة من شاشاتها،
+     *    و`maintenance` كلها حالة للعرض. القيمة = أقل دور بيفتح التبويب.
+     */
+    private const EDITABLE_SECTIONS = [
+        'business' => 'owner',      // قواعد مالية — خطر، للمالك بس
+        'ops'      => 'owner',      // تشغيل وتتبع ومفاتيح
+        'notify'   => 'owner',      // إشعارات الأجهزة
+    ];
+
+    /**
+     * مفاتيح فورم «عام» — بتخلط `identity` و`business` زي ما الشاشة عاملة من
+     * الأول. **الترتيب هنا هو ترتيب الحفظ مش ترتيب العرض.**
+     */
+    private const GENERAL_KEYS = [
+        'company_name', 'currency', 'company_phone', 'company_email',
+        'company_address', 'company_tax_id', 'company_tagline', 'company_activity',
+        'vat_rate', 'report_year', 'opening_balance', 'opening_balance_date',
+    ];
+
     public function index(): void
     {
         $this->requireRole(['owner', 'manager']);
@@ -35,6 +61,14 @@ class SettingsController extends Controller
                 'company_tax_id'  => App::setting('company_tax_id', ''),
                 'company_email'   => App::setting('company_email', ''),
             ],
+            /* ═══ أقسام السجل المعرَّف (docs/19 · المرحلة ١) ═══════════════════
+               ⚠️ **الشاشة ما بتعرفش أي مفتاح بالاسم** — بتلفّ على السجل. إعداد
+                  جديد = سطر في `SettingsSchema` وبيظهر لوحده، و`verify_settings_coverage`
+                  بيفشل لو مفتاح قابل للتعديل مالوش خانة. */
+            'sections'     => $this->sectionData($owner),
+            'sectionMeta'  => SettingsSchema::SECTIONS,
+            'stateRows'    => $this->stateRows(),
+            'recentChanges'=> Settings::recent(10),
             'permitCfg'  => Permit::stageConfig(),
             'userState'  => \App\Core\FormState::consume('settings.user.add', 'settings#tab-users'),
             // قواعد مرشد الإيصالات (v32): قوائم التوكيلات — سطر لكل توكيل
@@ -59,6 +93,48 @@ class SettingsController extends Controller
             'repMaint'       => \App\Models\RepMaintenance::state(),
             'repMaintBackAt' => \App\Models\RepMaintenance::backAtLabel(),
         ]);
+    }
+
+    /**
+     * بيانات أقسام السجل للعرض: المفتاح · تعريفه · قيمته الحالية.
+     *
+     * ⚠️ **الأقسام اللي دورها `owner` بتتشال كلها لغير المالك** — الإخفاء هنا
+     *    راحة عرض مش حماية؛ الحماية في `Settings::set()` (قاعدة ③).
+     */
+    private function sectionData(bool $owner): array
+    {
+        $out = [];
+        foreach (self::EDITABLE_SECTIONS as $section => $minRole) {
+            if ($minRole === 'owner' && !$owner) { continue; }
+            $fields = [];
+            foreach (SettingsSchema::bySection($section) as $key => $def) {
+                if (in_array($def['tier'], [SettingsSchema::TIER_STATE, SettingsSchema::TIER_MANAGED], true)) { continue; }
+                $fields[$key] = ['def' => $def, 'value' => (string) Settings::get($key)];
+            }
+            if ($fields) { $out[$section] = $fields; }
+        }
+        return $out;
+    }
+
+    /**
+     * صفوف «حالة النظام» — بيكتبها عامل خلفي والمالك بيقراها بس.
+     *
+     * ⚠️ ما بتتعرضش كخانات إدخال عن قصد: `Settings::set()` بترفضها، فخانة
+     *    قابلة للكتابة كانت هتوعد بحاجة الخادم رافضها.
+     */
+    private function stateRows(): array
+    {
+        $rows = [];
+        foreach (SettingsSchema::all() as $key => $raw) {
+            $def = SettingsSchema::get($key);
+            if ($def['tier'] !== SettingsSchema::TIER_STATE) { continue; }
+            $rows[] = [
+                'label'  => $def['label'],
+                'value'  => (string) Settings::get($key),
+                'writer' => $def['writer'],
+            ];
+        }
+        return $rows;
     }
 
     /**
@@ -349,25 +425,82 @@ class SettingsController extends Controller
         $this->done('تم حفظ إعدادات التايم لاين والأذونات.', 'settings#tab-permits');
     }
 
+    /**
+     * حفظ الإعدادات العامة — بقت بتمرّ على `Settings::set()` زي أي قسم تاني.
+     *
+     * ⚠️ **السلوك ما اتغيّرش**: التسامحات اللي كانت مكتوبة هنا بالإيد
+     *    (١٤ تعني ٠.١٤ · التاريخ لازم YYYY-MM-DD وإلا فاضي · `trim`) بقت
+     *    معرَّفة في `SettingsSchema::normalize()` بالحرف، و`verify_settings_registry`
+     *    بيختبرها. الفرق الوحيد إن الكتابة بقت **بتتحقّق وتسجّل في Audit**.
+     */
     public function saveGeneral(): void
     {
         $this->requireRole(['owner', 'manager']);
         $this->requireCsrf();
-        App::setSetting('company_name', trim($_POST['company_name'] ?? 'شركة المتوكل'));
-        $vat = (float)($_POST['vat_rate'] ?? 0.14);
-        if ($vat > 1) { $vat = $vat / 100; }   // لو أدخل 14 بدل 0.14
-        App::setSetting('vat_rate', (string)$vat);
-        App::setSetting('report_year', (string)(int)($_POST['report_year'] ?? date('Y')));
-        App::setSetting('currency', trim($_POST['currency'] ?? 'ج.م'));
-        App::setSetting('opening_balance', (string)(float)($_POST['opening_balance'] ?? 0));
-        // تاريخ الرصيد الافتتاحي: يُقبل فقط بصيغة YYYY-MM-DD (وإلا يُخزَّن فارغاً) — يُستخدم في استعلامات التقفيل اليومي
-        $obDate = trim($_POST['opening_balance_date'] ?? '');
-        App::setSetting('opening_balance_date', preg_match('/^\d{4}-\d{2}-\d{2}$/', $obDate) ? $obDate : '');
-        App::setSetting('company_phone',   trim($_POST['company_phone'] ?? ''));
-        App::setSetting('company_address', trim($_POST['company_address'] ?? ''));
-        App::setSetting('company_tax_id',  trim($_POST['company_tax_id'] ?? ''));
-        App::setSetting('company_email',   trim($_POST['company_email'] ?? ''));
-        $this->done('تم حفظ الإعدادات العامة.', 'settings#tab-general');
+        $this->writeSection(self::GENERAL_KEYS, 'تم حفظ الإعدادات العامة.', 'tab-general');
+    }
+
+    /**
+     * **حفظ أي قسم من السجل المعرَّف** — مفيش كود لكل حقل.
+     *
+     * القسم بيتحدّد من الرابط، والمفاتيح بتتقرا من `SettingsSchema` نفسها.
+     * يعني إعداد جديد = سطر في السجل، **وبلا أي تعديل هنا ولا في الشاشة**.
+     *
+     * ⚠️ **الحارس في الموديل مش هنا** (قاعدة ③): `Settings::set()` بتتحقّق من
+     *    الدور والنوع والنطاق. الفحص هنا على القسم بس عشان الرابط ما يفتحش
+     *    بابًا لمفتاح برّه الشاشة.
+     */
+    public function saveSection(string $section): void
+    {
+        $this->requireRole(['owner', 'manager']);
+        $this->requireCsrf();
+
+        if (!isset(SettingsSchema::SECTIONS[$section]) || !isset(self::EDITABLE_SECTIONS[$section])) {
+            $this->fail('قسم الإعدادات ده مش معروف.', 'settings');
+        }
+
+        $keys = [];
+        foreach (SettingsSchema::bySection($section) as $key => $def) {
+            // الحالة والمُدار ليهم كتّابهم — `Settings::set()` بترفضهم أصلاً،
+            // فاستبعادهم هنا بيمنع رسالة خطأ على حقل الشاشة مش بترسمه.
+            if (in_array($def['tier'], [SettingsSchema::TIER_STATE, SettingsSchema::TIER_MANAGED], true)) { continue; }
+            $keys[] = $key;
+        }
+        $this->writeSection($keys, 'تم حفظ ' . SettingsSchema::SECTIONS[$section] . '.', 'tab-' . $section);
+    }
+
+    /**
+     * الكتابة الفعلية لمجموعة مفاتيح.
+     *
+     * ⚠️ **المفتاح اللي الفورم ما بعتوش ما بيتلمسش** — نفس درس `savePermits`
+     *    الموثَّق: الإرسال الجزئي كان بيصفّر إعدادات مش في النموذج.
+     * ⚠️ **المفتاح السرّي الفاضي = إبقاء المحفوظ** لا مسحه.
+     */
+    private function writeSection(array $keys, string $okMsg, string $anchor): never
+    {
+        $changed = 0;
+        $errors  = [];
+
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $_POST)) { continue; }
+            $def = SettingsSchema::get($key);
+            $raw = (string) $_POST[$key];
+            if ($def !== null && $def['type'] === SettingsSchema::T_SECRET && trim($raw) === '') { continue; }
+
+            try {
+                if (Settings::set($key, $raw)) { $changed++; }
+            } catch (\InvalidArgumentException $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+
+        if ($errors) {
+            // ⚠️ **ما بنرجّعش الحقول متعبّية عن قصد**: القيم اللي عدّت اتحفظت
+            //    فعلاً، فإعادة تعبئة الفورم بالمرفوض بس كانت هتوري حالة نصّها
+            //    محفوظ ونصّها لأ من غير ما تقول أنهي نص.
+            $this->fail(implode(' · ', $errors), 'settings', $anchor);
+        }
+        $this->done($changed > 0 ? $okMsg : 'مفيش حاجة اتغيّرت.', 'settings', $anchor);
     }
 
     public function addLookup(): void

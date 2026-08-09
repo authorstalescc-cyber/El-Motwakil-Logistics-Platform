@@ -32,6 +32,7 @@ $html = partial_str('empty', [...]);   // بترجّع نص بدل ما تطبع
 | `toolbar.php` | شريط أدوات (عنوان + فراغ + أزرار) | `.toolbar` |
 | `filters.php` | شريط فلترة `GET` مبني من مواصفة | `.toolbar > form` |
 | `field.php` | حقل نموذج بعلامة إلزامي ورسالة خطأ | `.field` · `.field-error` · `.hint` |
+| `setting_field.php` | خانة إعداد **بتترسم من `SettingsSchema`** (النوع بيحدّد الشكل والنطاق بيبقى `min`/`max` والشرح تلميح) | `.field` (عبر `field.php`) · `.free-login-option` للـcheckbox |
 | `kpi_grid.php` | شبكة بطاقات (**ممنوع `grid-template-columns` inline**) | `.kpi-grid.two…six` |
 | `tabs.php` | شريط تبويبات موحّد (**جديد** — للشاشات المحوَّلة) | `.tabs` |
 | `page_head.php` | ترويسة صفحة: عنوان + وصف + إجراءات (**جديد**) | `.page-head` |

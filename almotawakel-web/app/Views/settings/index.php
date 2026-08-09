@@ -37,6 +37,14 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
   <button type="button" class="tab-btn active" data-tab="general"><?= icon('settings', 14) ?> عام</button>
   <button type="button" class="tab-btn" data-tab="lists"><?= icon('clipboard', 14) ?> القوائم المنسدلة</button>
   <button type="button" class="tab-btn" data-tab="permits"><?= icon('folder', 14) ?> الأذونات والتايم لاين</button>
+  <?php /* تبويبات السجل المعرَّف (docs/19 · المرحلة ١) — بتظهر لوحدها من
+           `EDITABLE_SECTIONS`، فقسم جديد ما بيحتاجش سطر هنا. */ ?>
+  <?php foreach (($sections ?? []) as $sKey => $sFields): ?>
+    <button type="button" class="tab-btn" data-tab="<?= e($sKey) ?>">
+      <?= icon($sKey === 'business' ? 'calculator' : ($sKey === 'notify' ? 'bell' : 'cpu'), 14) ?>
+      <?= e($sectionMeta[$sKey] ?? $sKey) ?>
+    </button>
+  <?php endforeach; ?>
   <?php if ($canManageSecrets): ?>
     <button type="button" class="tab-btn" data-tab="ai">🤖 المساعد الذكي</button>
     <button type="button" class="tab-btn" data-tab="users"><?= icon('users', 14) ?> المستخدمون</button>
@@ -63,6 +71,10 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
           <input type="text" name="company_address" value="<?= e($general['company_address']) ?>" placeholder="العنوان بالكامل"></div>
         <div class="field"><label><?= icon('receipt', 14) ?> البطاقة الضريبية / السجل التجاري</label>
           <input type="text" name="company_tax_id" value="<?= e($general['company_tax_id']) ?>" placeholder="اختياري"></div>
+        <?php /* الاتنين دول كانوا **بيتطبعوا في تقرير السيارات وكشف خزنة الشركة
+                 وقيمتهم مزروعة في الـview نفسه** — أول مرة يبقى ليهم خانة (المرحلة ١). */ ?>
+        <?php partial('setting_field', ['key' => 'company_tagline', 'value' => \App\Core\Settings::get('company_tagline')]); ?>
+        <?php partial('setting_field', ['key' => 'company_activity', 'value' => \App\Core\Settings::get('company_activity')]); ?>
         <div class="field"><label>نسبة القيمة المضافة (0.14 أو 14)</label>
           <input type="number" step="0.01" name="vat_rate" value="<?= e($general['vat_rate']) ?>"></div>
         <div class="field"><label>سنة التقارير</label>
@@ -173,6 +185,43 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
     </form>
   </div>
 </div>
+
+<!-- ============ تبويبات السجل المعرَّف (docs/19 · المرحلة ١) ============ -->
+<?php /* ⚠️ **اللوحة دي ما بتعرفش ولا اسم مفتاح واحد** — بتلفّ على `$sections`
+         اللي جاية من `SettingsSchema`. المفتاح اللي كان طريقه الوحيد سكربت SSH
+         (`bin/activate_custody_epoch.php` وإخواته) بقى ليه خانة من غير ما
+         الشاشة تتكتب من تاني. */ ?>
+<?php foreach (($sections ?? []) as $sKey => $sFields): ?>
+  <div class="tab-panel" id="tab-<?= e($sKey) ?>">
+    <div class="card set-pad narrow">
+      <div class="section-head"><?= e($sectionMeta[$sKey] ?? $sKey) ?></div>
+      <?php
+        $hasDanger = false;
+        foreach ($sFields as $f) {
+          if ($f['def']['tier'] === \App\Core\SettingsSchema::TIER_DANGER) { $hasDanger = true; break; }
+        }
+      ?>
+      <?php if ($hasDanger): ?>
+        <?php /* تحذير **وظيفي** لا تعليمي (قانون التصميم ⑤): بيقول نتيجة الفعل
+                 مش بيشرح الشاشة، وفي ≤٦ كلمات مفيدة. */ ?>
+        <p class="maint-note"><?= icon('alert', 15) ?> البنود المعلَّمة ⚠️ بتحرّك أرقامًا محسوبة. كل تغيير بيتسجّل باسمك وبيرجع بضغطة.</p>
+      <?php endif; ?>
+      <form method="post" action="<?= url('settings/section/' . $sKey) ?>">
+        <?= csrfField() ?>
+        <div class="set-grid">
+          <?php foreach ($sFields as $fKey => $f): ?>
+            <?php partial('setting_field', [
+              'key'   => $fKey,
+              'value' => $f['value'],
+              'class' => $f['def']['type'] === \App\Core\SettingsSchema::T_LIST ? 'field-full' : '',
+            ]); ?>
+          <?php endforeach; ?>
+        </div>
+        <div class="mt-4"><button class="btn gold" type="submit"><?= icon('download', 14) ?> حفظ <?= e($sectionMeta[$sKey] ?? '') ?></button></div>
+      </form>
+    </div>
+  </div>
+<?php endforeach; ?>
 
 <!-- ============ تبويب: المساعد الذكي ============ -->
 <?php if ($canManageSecrets): ?>
@@ -420,6 +469,55 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         </form>
       <?php endif; ?>
     </div>
+
+    <?php /* ══ حالة النظام (docs/19 · المرحلة ١) ═══════════════════════════
+             ⚠️ **عرض بس بلا خانات إدخال**: المفاتيح دي بيكتبها عامل خلفي
+                (`bin/backup_cron.sh` · `bin/push_worker.php`) و`Settings::set()`
+                بترفضها — فخانة قابلة للكتابة كانت هتوعد بحاجة الخادم رافضها.
+                وقبل كده كانت **بتتقرا وما بتتعرضش في أي شاشة** أصلاً. */ ?>
+    <?php if (!empty($stateRows)): ?>
+    <div class="card set-pad">
+      <?php /* ⚠️ `icon('اسم-غلط')` ما بترميش خطأ — بترسم دايرة فاضية.
+               الأسماء دي متأكَّد إنها في كتالوج `helpers.php`. */ ?>
+      <div class="section-head"><?= icon('monitor', 17) ?> حالة النظام</div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th class="g-identity">البند</th><th>القيمة</th><th class="g-meta">مين بيكتبه</th></tr></thead>
+        <tbody>
+          <?php foreach ($stateRows as $st): ?>
+            <tr>
+              <td><?= e($st['label']) ?></td>
+              <td><?= $st['value'] === '' ? '<span class="dim">— لسه —</span>' : '<bdi>' . e($st['value']) . '</bdi>' ?></td>
+              <td class="dim"><?= e($st['writer']) ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table></div>
+    </div>
+    <?php endif; ?>
+
+    <?php /* ══ آخر تغييرات الإعدادات — «مين غيّر إيه وإمتى» (v70) ═══════════ */ ?>
+    <?php if (!empty($recentChanges)): ?>
+    <div class="card set-pad">
+      <div class="section-head"><?= icon('clipboard', 17) ?> آخر تغييرات الإعدادات</div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr>
+          <th class="g-identity">الإعداد</th><th>من</th><th>لـ</th>
+          <th class="g-meta">مين</th><th class="g-meta">إمتى</th>
+        </tr></thead>
+        <tbody>
+          <?php foreach ($recentChanges as $ch): ?>
+            <tr>
+              <td><?= e($ch['label']) ?></td>
+              <td class="dim"><bdi><?= e(mb_substr((string) $ch['old_value'], 0, 40)) ?></bdi></td>
+              <td><b><bdi><?= e(mb_substr((string) $ch['new_value'], 0, 40)) ?></bdi></b></td>
+              <td class="dim"><?= e((string) ($ch['changed_by'] ?? '—')) ?></td>
+              <td class="dim nowrap"><?= e(dtfmt($ch['created_at'])) ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table></div>
+    </div>
+    <?php endif; ?>
 
     <div class="card set-pad">
       <div class="section-head"><?= icon('file-text', 17) ?> توحيد المسميات المكررة</div>

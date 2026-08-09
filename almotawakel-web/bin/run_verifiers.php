@@ -103,6 +103,7 @@ $catalog = [
     'verify_v52.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'أساس نظام الإشعارات الموحَّد داخل transaction ثم rollback'],
     'verify_v53.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'تفضيلات الإشعارات والتأجيل والتذكيرات التلقائية داخل transaction ثم rollback'],
     'verify_v54.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'سيارات المكتب وعزل مصاريفها عن الخزنة — fixtures ورندر داخل transaction ثم rollback'],
+    'verify_settings_coverage.php'=> ['impact' => 'rollback',   'self_guard' => false, 'note' => 'تغطية شاشة الإعدادات (docs/19 المرحلة ١) — كل مفتاح قابل للتعديل له خانة فعلاً في الشاشة المرسومة، ومفاتيح الحالة معروضة بلا خانة، داخل transaction ثم rollback'],
     'verify_settings_registry.php'=> ['impact' => 'rollback',   'self_guard' => false, 'note' => 'سجل الإعدادات المعرَّف (docs/19 المرحلة ٠) — ولا مفتاح يتيم، والتحقّق والحرّاس والسجل والرجوع بسلوك حقيقي داخل transaction ثم rollback'],
     'verify_security.php'         => ['impact' => 'none',       'self_guard' => false, 'note' => 'فحص أمان بنيوي على الملفات بلا قاعدة'],
     'verify_security_panel.php'   => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'لوحة المراقبة الأمنية داخل transaction ثم rollback'],
