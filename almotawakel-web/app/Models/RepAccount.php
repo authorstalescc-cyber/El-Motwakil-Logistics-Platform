@@ -1,7 +1,7 @@
 <?php
 namespace App\Models;
 
-use App\Core\Settings;
+use App\Core\App;
 
 /**
  * حساب المندوب الشخصي (v72) — «حسابي» على بوابة الموبايل.
@@ -40,6 +40,17 @@ final class RepAccount
     public const SETTING_KINDS = 'rep_account_expense_kinds';
 
     /**
+     * ⚠️⚠️ **الافتراضيان مكتوبان هنا عن قصد — مش تكرارًا للسجل المعرَّف.**
+     * `App::setting` بترجّع الافتراضي اللي المستدعي باعته، و`Settings::get`
+     * (اللي بتوصل افتراضي `SettingsSchema`) جزء من **وحدة سجل الإعدادات**.
+     * الوحدة دي بتشتغل **سواء اتنشرت وحدة السجل أو لأ**، فبتقرا بالطريق
+     * الأقدم المضمون وجوده. و`verify_rep_account` بيثبت إن القيمتين هنا
+     * **مطابقتان** لافتراضي السجل لما يكون موجودًا — فمفيش تعريفان يختلفوا.
+     */
+    public const DEFAULT_START_DAY = '1';
+    public const DEFAULT_KINDS     = 'مواصلات داخلية، مواصلات خارجية';
+
+    /**
      * ⚠️ **الحد ٢٨ مقصود**: يوم ٢٩/٣٠/٣١ مالوش مقابل في كل شهر، ففترة بتبدأ
      *    يوم ٣١ كانت هتتخطّى فبراير بالكامل أو تزحلق نفسها شهرًا. ٢٨ أكبر يوم
      *    موجود في كل شهر بلا استثناء.
@@ -48,11 +59,9 @@ final class RepAccount
 
     public static function startDay(): int
     {
-        /* ⚠️ **`Settings::get` مش `App::setting`**: `App::setting` بترجّع
-           الافتراضي **اللي بتبعتهوله انت**، والافتراضي المعرَّف في
-           `SettingsSchema` بيتتجاهل — فالإعداد اللي المالك عمره ما فتحه كان
-           بيرجع فاضي. `Settings::get` هي اللي بتوصل السجل المعرَّف. */
-        $d = (int) Settings::get(self::SETTING_START_DAY);
+        /* ⚠️ الافتراضي **بيتبعت صراحةً**: `App::setting` بترجّع اللي بتبعتهوله
+           وبس، ومن غيره كان بيرجع فاضي فالفترة تقع على يوم ١ بالسكوت. */
+        $d = (int) App::setting(self::SETTING_START_DAY, self::DEFAULT_START_DAY);
         return max(1, min(self::MAX_START_DAY, $d ?: 1));
     }
 
@@ -118,7 +127,7 @@ final class RepAccount
      */
     public static function expenseKinds(): array
     {
-        $raw = trim((string) Settings::get(self::SETTING_KINDS));
+        $raw = trim((string) App::setting(self::SETTING_KINDS, self::DEFAULT_KINDS));
         if ($raw === '') { return []; }
 
         $out = [];

@@ -24,8 +24,7 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 
 use App\Core\Database;
 use App\Core\RepAuth;
-use App\Core\Settings;
-use App\Core\SettingsSchema;
+use App\Core\App;
 use App\Models\Closing;
 use App\Models\RepAccount;
 use App\Models\RepCustody;
@@ -68,7 +67,8 @@ $model = codeA('app/Models/RepAccount.php');
 foreach (['INSERT', 'UPDATE ', 'DELETE', 'ALTER', 'REPLACE'] as $w) {
     chk(!preg_match('~\b' . $w . '\b~i', $model), "RepAccount مفهاش «$w»");
 }
-chk(!str_contains($model, 'Settings::set'), 'وما بتكتبش أي إعداد');
+chk(!str_contains($model, 'setSetting') && !str_contains($model, 'Settings::set'),
+    'وما بتكتبش أي إعداد');
 
 /* ⚠️ السؤال «أنهي نوع بيتخصم من الراتب؟» لازم يتجاوب من الكتالوج لا من شرط
    مكتوب هنا — تغيير المفتاح بعدها بيسيب المقارنة بتقارن على قيمة مالهاش وجود
@@ -79,22 +79,30 @@ foreach (RepMiscKind::keys() as $k) {
 }
 chk(str_contains($model, 'salaryKeys'), '★ وبتسأل الكتالوج عن أنواع الخصم (RepMiscKind::salaryKeys)');
 
-/* الإعداد لازم يكون **معرَّف في السجل** وإلا `verify_settings_registry` بيفشل،
-   و`Settings::get` بترجّع null فالفترة بتقع على يوم ١ بالسكوت. */
-foreach ([RepAccount::SETTING_START_DAY, RepAccount::SETTING_KINDS] as $key) {
-    chk(SettingsSchema::has($key), "الإعداد «{$key}» معرَّف في SettingsSchema");
+/* ⚠️ **الوحدة ما بتعتمدش على وحدة سجل الإعدادات**: بتقرا بـ`App::setting`
+   بافتراضٍ مبعوت صراحةً، فبتشتغل سواء اتنشر السجل أو لأ. لكن الافتراضي
+   لازم يفضل **مطابقًا** للسجل لما يكون موجودًا، وإلا تعريفان يختلفوا. */
+chk(str_contains($model, 'App::setting'), 'بتقرا الإعداد بـApp::setting (بلا اعتماد على وحدة السجل)');
+chk(!preg_match('~App::setting\([^,)]+\)~', $model),
+    '★ وبتبعت الافتراضي صراحةً في كل نداء (بلا نداء بمعامل واحد)');
+
+if (class_exists(\App\Core\SettingsSchema::class)) {
+    foreach ([[RepAccount::SETTING_START_DAY, RepAccount::DEFAULT_START_DAY],
+              [RepAccount::SETTING_KINDS,     RepAccount::DEFAULT_KINDS]] as [$key, $def]) {
+        chk(\App\Core\SettingsSchema::has($key), "الإعداد «{$key}» معرَّف في SettingsSchema");
+        chk(\App\Core\SettingsSchema::defaultOf($key) === $def,
+            "★ وافتراضي «{$key}» مطابق للسجل (مفيش تعريفان يختلفوا)");
+    }
+} else {
+    echo "  (وحدة سجل الإعدادات مش منشورة هنا — فحص التطابق اتخطّى)\n";
 }
-/* ⚠️ `App::setting` بترجّع الافتراضي اللي المستدعي باعته لا افتراضي السجل —
-   استخدامها هنا كان بيدّي إعدادًا فاضيًا للأبد (مصيدة اتصادفت فعليًّا). */
-chk(!str_contains($model, 'App::setting'),
-    '★ وبتقرا بـSettings::get لا App::setting (وإلا افتراضي السجل بيتتجاهل)');
 
 /* ⚠️⚠️ **المعاملة بتفتح من هنا** — الفحص بيغيّر إعدادات حقيقية (يوم بداية
    الرواتب وأنواع المصروفات)، و`App::setSetting` بقت بتكتب في `settings_history`
    كمان (v70). كتابة برّه معاملة كانت هتسيب أثرًا في سجل التغييرات بتاع المالك
    حتى لو رجّعنا القيمة، ولو السكربت وقع في النص كانت هتسيب النظام بإعداد فحص. */
-$origDay = (string) Settings::get(RepAccount::SETTING_START_DAY);
-$origKin = (string) Settings::get(RepAccount::SETTING_KINDS);
+$origDay = (string) App::setting(RepAccount::SETTING_START_DAY, RepAccount::DEFAULT_START_DAY);
+$origKin = (string) App::setting(RepAccount::SETTING_KINDS, RepAccount::DEFAULT_KINDS);
 $pdo = Database::conn();
 $pdo->beginTransaction();
 
@@ -105,7 +113,7 @@ sec('② فترة الرواتب: أي يوم بداية · تقليب السن�
 
 /** بيظبّط الإعداد ويرجّع الفترة بتاعة تاريخ معيّن. */
 $periodWith = static function (int $day, string $anchor): array {
-    \App\Core\App::setSetting(RepAccount::SETTING_START_DAY, (string) $day);
+    App::setSetting(RepAccount::SETTING_START_DAY, (string) $day);
     return RepAccount::period($anchor);
 };
 
@@ -127,13 +135,13 @@ chk($p['from'] === '2026-02-28' && $p['to'] === '2026-03-27', 'وفبراير م
 
 /* ⚠️ يوم ٢٩/٣٠/٣١ مالوش مقابل في كل شهر — لازم يتقصّ على ٢٨ وإلا فبراير
    بيتخطّى أو الفترة بتزحلق نفسها شهرًا. */
-\App\Core\App::setSetting(RepAccount::SETTING_START_DAY, '31');
+App::setSetting(RepAccount::SETTING_START_DAY, '31');
 chk(RepAccount::startDay() === 28, '★ يوم ٣١ بيتقصّ على ٢٨ (ما فيش شهر أقصر من كده)');
-\App\Core\App::setSetting(RepAccount::SETTING_START_DAY, '0');
+App::setSetting(RepAccount::SETTING_START_DAY, '0');
 chk(RepAccount::startDay() === 1, 'وصفر بيرجع ١');
 
 // الفترة السابقة/التالية بتمشي شهرًا بشهر بلا فجوة ولا تداخل
-\App\Core\App::setSetting(RepAccount::SETTING_START_DAY, '26');
+App::setSetting(RepAccount::SETTING_START_DAY, '26');
 $cur  = RepAccount::period('2026-08-10');
 $prev = RepAccount::shift($cur, -1);
 $next = RepAccount::shift($cur, 1);
@@ -148,7 +156,7 @@ chk(RepAccount::isFuture(RepAccount::period(date('Y-m-d'))) === false,
 sec('③ إعداد المصروفات: بيتفلتر من الكتالوج ومش بيكرّر السلفة');
 
 $setKinds = static function (string $v): array {
-    \App\Core\App::setSetting(RepAccount::SETTING_KINDS, $v);
+    App::setSetting(RepAccount::SETTING_KINDS, $v);
     return RepAccount::expenseKinds();
 };
 chk($setKinds('') === [], 'الإعداد الفاضي = صفر أنواع (القسم بيختفي) لا كل الأنواع');
@@ -171,8 +179,8 @@ chk(count($dup) === 1, 'والمكرَّر بيتلمّ مرة واحدة');
     $rep = (int) Database::scalar("SELECT id FROM reps WHERE status = 'active' ORDER BY id LIMIT 1");
     if (!$rep) { throw new RuntimeException('مفيش مندوب نشط — الفحص محتاج واحد.'); }
 
-    \App\Core\App::setSetting(RepAccount::SETTING_START_DAY, '1');
-    \App\Core\App::setSetting(RepAccount::SETTING_KINDS, implode('، ', $labels));
+    App::setSetting(RepAccount::SETTING_START_DAY, '1');
+    App::setSetting(RepAccount::SETTING_KINDS, implode('، ', $labels));
     $period = RepAccount::period();
 
     // بيئة نظيفة: بنصفّر أي نثريات سابقة للمندوب في الفترة عشان الأرقام تبقى معروفة
@@ -284,7 +292,7 @@ chk(count($dup) === 1, 'والمكرَّر بيتلمّ مرة واحدة');
        الساكن في `App` لأ** — فبنصفّره عشان القراءة اللي بعده تيجي من القاعدة
        المرجَّعة. وبنصفّره **بلا كتابة**: إعادة `setSetting` هنا كانت هتسجّل
        تغييرًا وهميًّا في سجل المالك بعد ما المعاملة رجعت. */
-    \App\Core\App::flushSettingsCache();
+    App::flushSettingsCache();
 }
 
 // ═══════════════════════════════ ⑧ الواجهة والمسارات
@@ -349,8 +357,9 @@ near('رصيد الخزنة قبل = بعد', Closing::currentBalance(), $treasu
 if (RepCustody::available()) {
     near('وإجمالي عهد المناديب قبل = بعد', RepCustody::totalOutstanding(), $repsBefore);
 }
-near('ويوم بداية الرواتب رجع لقيمته', (float) Settings::get(RepAccount::SETTING_START_DAY),
-    (float) ($origDay !== '' ? $origDay : SettingsSchema::defaultOf(RepAccount::SETTING_START_DAY)));
+near('ويوم بداية الرواتب رجع لقيمته',
+    (float) App::setting(RepAccount::SETTING_START_DAY, RepAccount::DEFAULT_START_DAY),
+    (float) $origDay);
 
 echo "\nنجح: $pass | فشل: $fail\n";
 exit($fail > 0 ? 1 : 0);
