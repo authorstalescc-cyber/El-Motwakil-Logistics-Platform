@@ -183,10 +183,15 @@ chk(count($dup) === 1, 'والمكرَّر بيتلمّ مرة واحدة');
     App::setSetting(RepAccount::SETTING_KINDS, implode('، ', $labels));
     $period = RepAccount::period();
 
-    // بيئة نظيفة: بنصفّر أي نثريات سابقة للمندوب في الفترة عشان الأرقام تبقى معروفة
-    Database::exec('DELETE FROM rep_misc_expenses WHERE rep_id = ? AND exp_date BETWEEN ? AND ?',
-        [$rep, $period['from'], $period['to']]);
+    /* ⚠️⚠️ **بنقيس فروقًا لا أرقامًا مطلقة.** أول نسخة كانت بتمسح نثريات
+       المندوب في الفترة عشان الأرقام تبقى معروفة — وده **فشل على الإنتاج**:
+       الصفوف المعتمدة مربوطة بـ`rep_submissions.misc_id` بمفتاح أجنبي، فالمسح
+       بيرمي 1451. والأهم إنه فحص مكتوب على **حالة قاعدة** لا على سلوك، فبيفشل
+       بإنذار كاذب أول ما تتغيّر البيانات (القاعدة الموثَّقة في CLAUDE.md). */
     Database::exec('UPDATE reps SET monthly_salary = 9000 WHERE id = ?', [$rep]);
+    $base = RepAccount::summary($rep, $period);
+    $baseAdvRows = count(RepAccount::advanceRows($rep, $period));
+    $baseExpRows = count(RepAccount::expenseRows($rep, $period));
 
     $day = $period['from'];
     $add = static function (string $kind, float $amt) use ($rep, $day): void {
@@ -203,8 +208,9 @@ chk(count($dup) === 1, 'والمكرَّر بيتلمّ مرة واحدة');
     $add($advKind, 300);
     $s = RepAccount::summary($rep, $period);
     near('الراتب من كارت المندوب', $s['salary'], 9000);
-    near('السلف اتجمعت', $s['advances'], 1500);
-    near('★ المتبقي = ٩٠٠٠ − ١٥٠٠', $s['net'], 7500);
+    near('السلف زادت ١٥٠٠ بالظبط', $s['advances'], $base['advances'] + 1500);
+    near('★ المتبقي = الراتب − السلف', $s['net'], 9000 - $s['advances']);
+    near('★ والمتبقي قلّ ١٥٠٠ عن قبل السلف', $s['net'], 9000 - $base['advances'] - 1500);
 
     /* ⚠️ **جوهر قرار المالك**: زوّد مواصلات وشوف «المتبقي» — لازم يفضل هو هو
        بالظبط. لو اتغيّر، يبقى المواصلات بقت بتتخصم من راتبه بالسكوت. */
@@ -212,19 +218,21 @@ chk(count($dup) === 1, 'والمكرَّر بيتلمّ مرة واحدة');
     $add($expKind, 500);
     $s2 = RepAccount::summary($rep, $period);
     near('★★ المتبقي ما اتغيّرش بعد إضافة ٥٠٠ مواصلات', $s2['net'], $s['net']);
-    near('والمصروفات ظهرت في قسمها', $s2['expenses'][$expKind] ?? -1, 500);
-    near('وإجمالي المصروفات', $s2['expensesTotal'], 500);
+    near('والمصروفات زادت ٥٠٠ في قسمها',
+        $s2['expenses'][$expKind] ?? -1, ($base['expenses'][$expKind] ?? 0) + 500);
+    near('وإجماليها زاد ٥٠٠', $s2['expensesTotal'], $base['expensesTotal'] + 500);
 
     sec('⑤ الكارت = القايمة (مجموع كل قسم يساوي صفوفه)');
 
     $advRows = RepAccount::advanceRows($rep, $period);
     near('★ مجموع صفوف السلف = رقم الكارت',
         array_sum(array_column($advRows, 'amount')), $s2['advances']);
-    chk(count($advRows) === 2, 'وعدد صفوف السلف صح (٢)');
+    chk(count($advRows) === $baseAdvRows + 2, 'وعدد صفوف السلف زاد ٢');
 
     $expRows = RepAccount::expenseRows($rep, $period);
     near('★ ومجموع صفوف المصروفات = إجماليها',
         array_sum(array_column($expRows, 'amount')), $s2['expensesTotal']);
+    chk(count($expRows) === $baseExpRows + 1, 'وعدد صفوف المصروفات زاد ١');
 
     /* ⚠️ صفوف المصروفات **ما تحتويش سلفة** — لو احتوت، القايمة تحت الكارت
        هتقول رقم والكارت يقول تاني. */
@@ -286,6 +294,11 @@ chk(count($dup) === 1, 'والمكرَّر بيتلمّ مرة واحدة');
         chk(!str_contains($html, 'icon-missing'), "و$view مفيهاش أيقونة ناقصة");
     }
 
+} catch (\Throwable $e) {
+    /* ⚠️ **إمساك كل شيء إجباري**: `ErrorHandler` بتاعة `bootstrap` بتبلع أي
+       استثناء غير ملتقَط في CLI، فالفاحص كان **بيموت في نص الشاشة بلا ولا
+       رسالة**. اتصادفت على الإنتاج مرتين. */
+    bad('انقطع قسم السلوك: ' . get_class($e) . ' — ' . $e->getMessage());
 } finally {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }
     /* ⚠️ الـrollback بيرجّع صفوف `settings` و`settings_history`، لكن **الكاش
