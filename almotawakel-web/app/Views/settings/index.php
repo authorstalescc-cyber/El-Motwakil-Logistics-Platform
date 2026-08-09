@@ -372,6 +372,55 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
     </div>
     <?php endif; ?>
 
+    <?php /* ══ قفل بوابة المناديب للصيانة (v68) ═══════════════════════════
+             ⚠️ **مش زرار بلا رجعة**: القفل بياخد مدة متوقَّعة وبيفتح لوحده
+                لما تعدّي، والشريط الأحمر فوق كل شاشة بيفضل ظاهر لحد ما يتفتح
+                — عشان محدّش ينسى المناديب واقفين في الميناء. */ ?>
+    <div class="card set-pad" id="rep-maint">
+      <div class="section-head"><?= icon('wrench', 17) ?> بوابة المناديب</div>
+      <?php if ($repMaint['on']): ?>
+        <p class="set-p">
+          البوابة <b>مقفولة دلوقتي</b> — المندوب بيشوف شاشة «النظام بيتظبّط».
+          <?php if ($repMaintBackAt !== ''): ?>
+            متوقع تفتح لوحدها الساعة <b><bdi dir="ltr"><?= e($repMaintBackAt) ?></bdi></b>.
+          <?php else: ?>
+            مفيش وقت محدَّد — هتفضل مقفولة لحد ما تفتحها.
+          <?php endif; ?>
+        </p>
+        <?php if (($repMaint['message'] ?? '') !== ''): ?>
+          <p class="set-p">الرسالة اللي شايفها: «<?= e($repMaint['message']) ?>»</p>
+        <?php endif; ?>
+        <form method="post" action="<?= url('settings/rep-maintenance') ?>" class="no-confirm">
+          <?= csrfField() ?>
+          <input type="hidden" name="action" value="off">
+          <button class="btn gold" type="submit"><?= icon('check-circle', 14) ?> افتح البوابة وابعتلهم إشعار</button>
+        </form>
+      <?php else: ?>
+        <p class="set-p">
+          بتقفل شاشة المندوب وانت بتظبّط حاجة، وبتبعتلهم إشعار على طول —
+          وإشعار تاني أول ما ترجع. <b>مسوّداتهم ما بتضيعش.</b>
+        </p>
+        <form method="post" action="<?= url('settings/rep-maintenance') ?>" class="no-confirm">
+          <?= csrfField() ?>
+          <input type="hidden" name="action" value="on">
+          <div class="field">
+            <label for="rmMsg">رسالة للمناديب (اختيارية)</label>
+            <?php /* ⚠️ بلا `placeholder` تعليمي (قانون التصميم ①) — العنوان
+                     بيقول المطلوب، والمثال جوّه الخانة بيتقري كأنه قيمة. */ ?>
+            <input type="text" id="rmMsg" name="message" maxlength="200">
+          </div>
+          <div class="field">
+            <label for="rmMin">المدة المتوقّعة بالدقايق</label>
+            <input type="number" id="rmMin" name="minutes" inputmode="numeric"
+                   min="<?= (int) \App\Models\RepMaintenance::MIN_MINUTES ?>"
+                   max="<?= (int) \App\Models\RepMaintenance::MAX_MINUTES ?>" value="30">
+            <small class="dim">سيبها فاضية يعني مفتوح لحد ما تقفله بإيدك.</small>
+          </div>
+          <button class="btn" type="submit"><?= icon('lock', 14) ?> اقفل بوابة المناديب</button>
+        </form>
+      <?php endif; ?>
+    </div>
+
     <div class="card set-pad">
       <div class="section-head"><?= icon('file-text', 17) ?> توحيد المسميات المكررة</div>
       <p class="set-p">

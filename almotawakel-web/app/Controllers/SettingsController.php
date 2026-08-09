@@ -55,7 +55,40 @@ class SettingsController extends Controller
             'currentUid' => (int)($_SESSION['uid'] ?? 0),
             'canManageSecrets' => $owner,
             'roleLabels' => Access::ROLES,
+            // قفل بوابة المناديب للصيانة (v68)
+            'repMaint'       => \App\Models\RepMaintenance::state(),
+            'repMaintBackAt' => \App\Models\RepMaintenance::backAtLabel(),
         ]);
+    }
+
+    /**
+     * قفل/فتح بوابة المناديب للصيانة (v68).
+     *
+     * ⚠️ **الحارس الحقيقي هنا مش في إخفاء الزرار** — `requireRole` قبل أي
+     *    كتابة، و`RepMaintenance` هي اللي بتسجّل في `Audit` وتبعت الإشعار،
+     *    فأي طريق تاني للقفل بيعدّي على نفس النقطة.
+     *
+     * ⚠️ **صفر أثر مالي** — ولا رصيد ولا خزنة ولا عهدة بتتلمس هنا.
+     */
+    public function repMaintenance(): void
+    {
+        $this->requireRole(['owner', 'manager']);
+        $this->requireCsrf();
+
+        $by = trim((string) (Auth::user() ?? '')) ?: 'المكتب';
+
+        if ((string) ($_POST['action'] ?? '') === 'on') {
+            $minutes = trim((string) ($_POST['minutes'] ?? ''));
+            \App\Models\RepMaintenance::start(
+                (string) ($_POST['message'] ?? ''),
+                $minutes === '' ? 0 : (int) $minutes,
+                $by
+            );
+            $this->done('اتقفلت بوابة المناديب واتبعتلهم إشعار.', 'settings', 'rep-maint');
+        }
+
+        \App\Models\RepMaintenance::end($by);
+        $this->done('اتفتحت بوابة المناديب واتبعتلهم إشعار.', 'settings', 'rep-maint');
     }
 
     /** إضافة مستخدم جديد (اسم دخول + كلمة سر) */

@@ -67,6 +67,19 @@ class NotificationController extends Controller
             }
             redirect(RepAuth::check() ? 'm' : 'login');
         }
+        /* ⚠️ قفل الصيانة (v68) — المسارات دي مشتركة بين المكتب والمندوب،
+           و`/m/notifications/prefs` من ضمنها. من غير السطرين دول كان المندوب
+           يقدر يفتح صفحة تفضيلاته والبوابة «مقفولة»، وده تناقض ظاهر له.
+           **الفحص على المندوب وحده** — الصيانة بتقفل بوابته هو، والمكتب
+           المفروض يفضل شغّال وهو بيظبّط. */
+        if ($pt === 'rep' && \App\Models\RepMaintenance::isOn()) {
+            if ($this->wantsJson()) {
+                http_response_code(503);
+                $this->json(['ok' => false, 'maintenance' => 1]);
+                exit;   // ⚠️ `json()` بتطبع وما بتوقفش — بلا ده التحذير بيلزق في الرد
+            }
+            redirect('m');
+        }
         return [$pt, $pk];
     }
 

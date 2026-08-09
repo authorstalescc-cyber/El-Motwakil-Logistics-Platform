@@ -102,7 +102,7 @@ $num = fn($v) => number_format((float) $v, 0);
     <?php endif; ?>
 
     <?php if ($recent): ?>
-      <h3 class="hm-group" style="margin-top:22px">تحويلاتك في اليوم ده</h3>
+      <h3 class="hm-group is-spaced">تحويلاتك في اليوم ده</h3>
       <?php foreach ($recent as $t): ?>
         <article class="hm-slip">
           <span class="hm-slip-ic" aria-hidden="true"><?= icon('shuffle', 14) ?></span>

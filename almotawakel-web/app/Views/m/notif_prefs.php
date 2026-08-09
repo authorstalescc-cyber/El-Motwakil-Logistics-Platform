@@ -43,7 +43,7 @@
     <form method="post" action="<?= e(url('m/notifications/prefs')) ?>">
       <?= csrfField() ?>
       <ul class="ntp-list">
-        <li class="ntp-head"><span>النوع</span><span><?= icon('bell', 14) ?></span><span>📱</span></li>
+        <li class="ntp-head"><span>النوع</span><span><?= icon('bell', 14) ?></span><span><?= icon('smartphone', 14) ?></span></li>
         <?php foreach ($rows as $r): ?>
           <li class="ntp-row">
             <label class="ntp-lbl" for="ia-<?= e($r['kind']) ?>"><?= e($r['label']) ?></label>

@@ -87,7 +87,7 @@ $canClear = $amt > 0.005 && !$blocked;
       <?php if ($blocked): ?>
         <?php /* ⚠️ البنود المستنية بتوقف التصفية دلوقتي (بدل ما تتخصم من
                  المبلغ وتسيب رصيدًا مفتوح) — قرار المالك 2026-07-27. */ ?>
-        <div class="hm-locked" style="background:#FFF7E0;border-color:#E0B44A;color:#4A3A10">
+        <div class="hm-locked is-wait">
           <b>استنى — فيه <?= $num($pending) ?> ج لسه مستني مراجعة المكتب</b>
           <span>لازم المكتب يراجع البنود دي الأول (<?= (int) ($snap['pending_cnt'] ?? 0) ?> بند).
                 بعدها التصفية هتقفل حسابك بالظبط.</span>
@@ -101,11 +101,11 @@ $canClear = $amt > 0.005 && !$blocked;
     <?php endif; ?>
 
     <?php if ($recent): ?>
-      <h3 class="hm-group" style="margin-top:22px">آخر تصفياتك</h3>
+      <h3 class="hm-group is-spaced">آخر تصفياتك</h3>
       <?php foreach (array_slice($recent, 0, 10) as $s): ?>
         <?php $r = (float) $s['returned']; ?>
         <article class="hm-slip">
-          <span class="hm-slip-ic" aria-hidden="true">🤝</span>
+          <span class="hm-slip-ic" aria-hidden="true"><?= icon('handshake', 18) ?></span>
           <div class="hm-slip-mid">
             <b><?= $r < 0 ? 'المكتب دفع لك' : 'سلّمت للمكتب' ?></b>
             <div class="hm-slip-meta">
@@ -132,16 +132,5 @@ $canClear = $amt > 0.005 && !$blocked;
   <?php endif; ?>
 </form>
 
-<style>
-.ms-calc{display:flex;flex-direction:column;gap:2px;margin:4px 0 14px}
-.ms-calc > div{display:flex;justify-content:space-between;align-items:center;
-  padding:10px 12px;border-bottom:1px solid rgba(0,0,0,.06)}
-.ms-calc dt{font-weight:500;color:#4A5568;margin:0}
-.ms-calc dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
-.ms-calc .ms-res{border:0;margin-top:6px;border-radius:var(--radius-2);background:#F3EAD3}
-.ms-calc .ms-res dt{color:#1C2B45}
-.ms-calc .ms-res dd{font-size:var(--fs-6)}
-.ms-hint{margin:14px 2px;line-height:1.9;color:#4A5568}
-</style>
 </body>
 </html>

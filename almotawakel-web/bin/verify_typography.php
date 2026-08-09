@@ -392,6 +392,74 @@ chk(str_contains($appJs, 'package') || !str_contains($appJs, 'notifIcon'),
     'وخريطة أيقونات الجرس في `app.js` لسه موجودة (الأيقونة لازم في المكانين)');
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('⑧ بوابة المندوب `app/Views/m/` — نفس القانون بلا استثناء');
+
+/* ⚠️⚠️ **ليه القسم ده موجود:** البوابة دي كانت بتنجو من قانون التصميم
+   **بالسكوت** لسببين مقيسين:
+
+   (١) فحص الإيموجي فوق بيشيل كتل PHP قبل ما يعدّ («الجزء الظاهر للمستخدم =
+       برّه كتل PHP»)، والبوابة بتطبع أيقوناتها من **جوّه** `<?= ?>`
+       (`<?= $isMisc ? '🧷' : '🧾' ?>`) — فـ٢٨ إيموجي ظاهرة للمندوب كانت
+       بتتحسب صفرًا. الفحص التاني تحت بيعدّ **جوّه PHP كمان**.
+
+   (٢) مفيش أي فاحص كان بيسأل عن `<style>` محلي ولا `style=` في ملف عرض —
+       يعني البند السابع من قانون التصميم كان **بلا حارس خالص**. بلوكين
+       عاشوا في `m/workdate.php` و`m/settle.php` بألوان مكتوبة بالإيد
+       (`#4A5568` · `#F3EAD3`) برّه نظام التوكنز.
+
+   المدى هنا **البوابة وبس** عن قصد: شاشات المكتب فيها ٥٢ بلوك `<style>`
+   أغلبهم أوراق طباعة مشروعة، فالصفر المطلق هناك مش واقعي دلوقتي. */
+
+$mViews = [];
+foreach ($views as $p => $src) {
+    if (str_contains(str_replace('\\', '/', $p), 'app/Views/m/')) { $mViews[$p] = $src; }
+}
+chk(count($mViews) >= 15, 'الفحص شايف ملفات البوابة فعلاً (' . count($mViews) . ' ملف)');
+
+$mStyleBlocks = [];
+foreach ($mViews as $p => $src) {
+    $n = preg_match_all('~<style\b~i', php_code($src));
+    if ($n) { $mStyleBlocks[] = basename($p) . "($n)"; }
+}
+chk($mStyleBlocks === [],
+    'ولا بلوك `<style>` محلي في البوابة — مكانه `m.css`'
+    . ($mStyleBlocks ? ': ' . implode(', ', $mStyleBlocks) : ''));
+
+/* ⚠️ `style=` **الثابت** بس هو الممنوع. الديناميكي (`width:<?= $pct ?>%`)
+   مستحيل يتعمل بكلاس، وهو الاستثناء المعتمد الوحيد. */
+$mInline = [];
+foreach ($mViews as $p => $src) {
+    if (!preg_match_all('~\sstyle\s*=\s*"([^"]*)"~i', php_code($src), $mm)) { continue; }
+    foreach ($mm[1] as $val) {
+        if (!str_contains($val, '<?')) { $mInline[] = basename($p); }
+    }
+}
+chk($mInline === [],
+    'ولا `style=` ثابت في البوابة (الديناميكي للنِّسَب مستثنى)'
+    . ($mInline ? ': ' . implode(', ', array_unique($mInline)) : ''));
+
+$mEmoji = 0; $mEmojiFiles = [];
+foreach ($mViews as $p => $src) {
+    $code = preg_replace('~<script\b.*?</script>|<style\b.*?</style>|<!--.*?-->~s', '', php_code($src)) ?? '';
+    $n = preg_match_all($emojiRe, $code);
+    if ($n) { $mEmoji += $n; $mEmojiFiles[] = basename($p) . "($n)"; }
+}
+chk($mEmoji === 0,
+    'وولا إيموجي ظاهرة للمندوب — **شامل اللي بيتطبع من جوّه `<?= ?>`** (كانت ٢٨)'
+    . ($mEmoji ? ': ' . implode(', ', $mEmojiFiles) : ''));
+
+/* ⚠️ العدّاد الأشمل للنظام كله — **سقف بينزل ولا يطلع أبدًا** (قاعدة
+   `BASELINE` في CLAUDE.md). الرقم ده هو الحقيقة اللي الفحص القديم ما كانش
+   شايفها: ٢١ في العدّ القديم مقابل ٩٠ لما نعدّ جوّه PHP كمان. */
+$deepEmoji = 0;
+foreach ($views as $p => $src) {
+    $code = preg_replace('~<script\b.*?</script>|<style\b.*?</style>|<!--.*?-->~s', '', php_code($src)) ?? '';
+    $deepEmoji += preg_match_all($emojiRe, $code);
+}
+chk($deepEmoji <= 90,
+    'وإيموجي كل الشاشات (شامل جوّه PHP) = ' . $deepEmoji . ' — السقف ٩٠ وما يترفعش');
+
+// ═══════════════════════════════════════════════════════════════════════
 echo "\n" . str_repeat('=', 62) . "\n";
 echo 'نجح: ' . $pass . '   |   فشل: ' . count($failures) . "\n";
 if ($failures) {

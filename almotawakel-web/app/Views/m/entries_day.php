@@ -86,7 +86,7 @@ $dayUrl = fn(string $d, string $st) => url('m/entries?day=' . $d . ($st !== '' ?
   <?php else: foreach ($submissions as $s): ?>
     <?php $isMisc = \App\Models\RepPortal::isMisc((string) $s['kind']); ?>
     <article class="hm-slip is-<?= e($s['status']) ?>">
-      <span class="hm-slip-ic" aria-hidden="true"><?= $isMisc ? '🧷' : ($s['kind'] === 'receipt' ? '🧾' : '💸') ?></span>
+      <span class="hm-slip-ic" aria-hidden="true"><?= $isMisc ? icon('tag', 18) : ($s['kind'] === 'receipt' ? icon('receipt', 18) : icon('banknote', 18)) ?></span>
       <div class="hm-slip-mid">
         <b><?= e($s['note']) ?></b>
         <div class="hm-slip-meta">

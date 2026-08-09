@@ -29,19 +29,19 @@ $wa = wa_phone((string) ($rep['phone'] ?? ''));
 $spendRow = function (array $s) use ($num) {
     $src = $s['src'] ?? 'permit';
     if ($src === 'misc') {
-        $icon = '🧷'; $head = $s['category'] ?: 'نثرية'; $sub = 'مصروف عام بلا إذن';
+        $ic = 'tag'; $head = $s['category'] ?: 'نثرية'; $sub = 'مصروف عام بلا إذن';
     } elseif ($src === 'handover') {
-        $icon = '🚚'; $head = 'تسليم لسائق';
+        $ic = 'truck'; $head = 'تسليم لسائق';
         $sub = trim((string) ($s['driver_name'] ?? '')) !== '' ? (string) $s['driver_name'] : '—';
         if (!empty($s['bill_number'])) { $sub .= ' · بوليصة ' . $s['bill_number']; }
     } elseif ($src === 'bill') {
-        $icon = '🚚'; $head = 'عهدة بوليصة';
+        $ic = 'truck'; $head = 'عهدة بوليصة';
         $sub = trim((string) ($s['driver_name'] ?? '')) !== '' ? (string) $s['driver_name'] : '—';
         if (!empty($s['bill_number'])) { $sub .= ' · بوليصة ' . $s['bill_number']; }
     } elseif ($src === 'transfer') {
-        $icon = '🔁'; $head = 'تحويل لمندوب'; $sub = 'لـ ' . ($s['other_name'] ?? '—');
+        $ic = 'shuffle'; $head = 'تحويل لمندوب'; $sub = 'لـ ' . ($s['other_name'] ?? '—');
     } else {
-        $icon = ($s['stage_key'] ?? '') === 'receipts' ? '🧾' : '💸';
+        $ic = ($s['stage_key'] ?? '') === 'receipts' ? 'receipt' : 'banknote';
         $head = ($s['permit_type'] ?? 'sader') === 'warid' ? 'شهادة ' : 'إذن ';
         $head .= $s['permit_no'] ?: '#' . (int) $s['permit_id'];
         $sub = trim((string) ($s['client'] ?: $s['company'] ?: '')) ?: '—';
@@ -49,7 +49,7 @@ $spendRow = function (array $s) use ($num) {
     $visa = !empty($s['is_visa']);
     ?>
     <article class="hm-slip">
-      <span class="hm-slip-ic" aria-hidden="true"><?= $icon ?></span>
+      <span class="hm-slip-ic" aria-hidden="true"><?= icon($ic, 18) ?></span>
       <div class="hm-slip-mid">
         <b><?= e($s['note'] ?: $head) ?></b>
         <div class="hm-slip-meta">
@@ -92,7 +92,7 @@ $spendRow = function (array $s) use ($num) {
       <b><?= e($rep['name']) ?></b>
     </span>
     <?php if ($wa !== ''): ?>
-      <a class="hm-icon-btn" href="https://wa.me/<?= e($wa) ?>" target="_blank" rel="noopener" aria-label="واتساب">💬</a>
+      <a class="hm-icon-btn" href="https://wa.me/<?= e($wa) ?>" target="_blank" rel="noopener" aria-label="واتساب"><?= icon('send', 16) ?></a>
     <?php endif; ?>
   </header>
 
@@ -188,7 +188,7 @@ $spendRow = function (array $s) use ($num) {
     <?php else: foreach ($d['submissions'] as $s): ?>
       <?php $isMisc = \App\Models\RepPortal::isMisc((string) $s['kind']); ?>
       <article class="hm-slip is-<?= e($s['status']) ?>">
-        <span class="hm-slip-ic" aria-hidden="true"><?= $isMisc ? '🧷' : ($s['kind'] === 'receipt' ? '🧾' : '💸') ?></span>
+        <span class="hm-slip-ic" aria-hidden="true"><?= $isMisc ? icon('tag', 18) : ($s['kind'] === 'receipt' ? icon('receipt', 18) : icon('banknote', 18)) ?></span>
         <div class="hm-slip-mid">
           <b><?= e($s['note']) ?></b>
           <div class="hm-slip-meta">

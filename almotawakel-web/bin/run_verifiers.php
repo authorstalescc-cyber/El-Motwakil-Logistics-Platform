@@ -45,6 +45,7 @@ $catalog = [
     'verify_rep_custody_day.php'  => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'رندر عهدة المناديب بعدسة اليوم + تبويبات كارت المندوب داخل rollback'],
     'verify_rep_settle_zero.php'  => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'تصفية عهدة المندوب بضغطة + عزل الخزنة داخل rollback'],
     'verify_rep_bill.php'         => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'بوليصة المندوب (v60) — عزل الخزنة وخصم عهدة السائق من محفظته، fixtures داخل rollback'],
+    'verify_rep_maintenance.php'  => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'قفل بوابة المندوب للصيانة (v68) — نقطة القفل الوحيدة واستثناء ping والحارس العميق والانتهاء التلقائي، ومفاتيح settings بترجع في finally'],
     'verify_custody_epoch.php'    => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'خط الفصل لعهدة المناديب (docs/16) — تغطية نقاط المزامنة وعزل الخزنة وحارس البنود القديمة داخل rollback'],
     'verify_data_aliases.php'     => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'الأسماء البديلة (DataAlias) — دمج تهجئة داخل transaction ثم rollback'],
     'verify_excel_sync.php'       => ['impact' => 'read',       'self_guard' => false, 'note' => 'معاينة مزامنة الإكسل — قراءة ومقارنة بلا كتابة'],

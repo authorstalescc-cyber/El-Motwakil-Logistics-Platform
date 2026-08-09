@@ -418,7 +418,20 @@ $wdToday = $wd === $today;
       netText.textContent = 'الاتصال ضعيف — استنى تأكيد التسجيل قبل ما تقفل الصفحة.'; retry.hidden = true;
     } else { net.hidden = true; retry.hidden = true; }
   }
-  window.addEventListener('online', function () { networkState(false); });
+  /* ⚠️ **النت رجع ≠ البند اتبعت.** قبل كده البانر كان بيختفي وزرار «إعادة
+     المحاولة» بيختفي معاه، فالبند يفضل واقف في الفورم لحد ما المندوب يفتكر
+     يدوس «سجّل» تاني — وهو أصلاً واقف في الميناء وفاكر إنه خلص. دلوقتي
+     الشاشة بتفضل تقوله صراحةً إن فيه بند لسه ما اتبعتش، والزرار باقي. */
+  var pendingSend = false;
+  window.addEventListener('online', function () {
+    if (pendingSend) {
+      net.hidden = false; net.className = 'net-state weak';
+      netText.textContent = 'النت رجع — دوس «سجّل البند» عشان يروح للمكتب.';
+      retry.hidden = false;
+      return;
+    }
+    networkState(false);
+  });
   window.addEventListener('offline', function () { networkState(false); saveDraft(); });
   if (navigator.connection) { navigator.connection.addEventListener('change', function () { networkState(false); }); }
   retry.addEventListener('click', function () { form.requestSubmit(); });
@@ -428,7 +441,7 @@ $wdToday = $wd === $today;
     if (busy) { return; }
     var errors = clientErrors();
     if (Object.keys(errors).length) { showErrors(errors); return; }
-    if (!navigator.onLine) { saveDraft(); networkState(true); return; }
+    if (!navigator.onLine) { pendingSend = true; saveDraft(); networkState(true); return; }
 
     clearErrors(); saveDraft(); busy = true; save.disabled = true; save.textContent = 'بيتسجّل…'; retry.hidden = true;
     try {
@@ -448,9 +461,11 @@ $wdToday = $wd === $today;
         showErrors(result.errors || {_form: 'راجع البيانات وحاول تاني.'});
         busy = false; save.disabled = false; total(); return;
       }
+      pendingSend = false;
       try { localStorage.removeItem(result.clearDraft || draftKey); } catch (e) {}
       window.location.assign(result.redirect);
     } catch (e) {
+      pendingSend = true;
       busy = false; save.disabled = false; total(); saveDraft(); networkState(true);
     }
   });
@@ -468,7 +483,9 @@ $wdToday = $wd === $today;
 <dialog class="m-done" id="mDone" aria-labelledby="mDoneT">
   <div class="m-done-box">
     <span class="m-done-ic"><?= icon('check-circle', 30) ?></span>
-    <b id="mDoneT">اتسجّل ✓</b>
+    <?php /* ⚠️ العلامة اتشالت من النص: فوقها `check-circle` بحجم ٣٠ في نفس
+             الصندوق — فكانت **نفس الخبر مرتين** في سطر واحد. */ ?>
+    <b id="mDoneT">اتسجّل</b>
     <p>البند راح للمكتب للمراجعة. تسجّل بند تاني على نفس الإذن؟</p>
     <div class="m-done-acts">
       <button type="button" class="is-primary" id="mDoneMore">سجّل بند تاني</button>

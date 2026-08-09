@@ -2029,3 +2029,93 @@ dialog{
 .m-done-acts .is-primary{background:var(--hm-ink); border-color:var(--hm-ink); color:#fff}
 .m-done-acts .is-primary:active{background:var(--hm-ink-2)}
 .m-done-acts a:active{background:var(--hm-sheet)}
+
+/* ══════════════════════════════════════════════════════════════
+   شاشة «النظام بيتظبّط» — قفل بوابة المندوب للصيانة (v68).
+
+   ⚠️ الشاشة دي **مش جوّه `.hm-body`** فما بتشوفش توكنز `--hm-*` (المحصورة
+      هناك) — بتشتغل على توكنز `:root` بتاعة البوابة. أي لون هنا لازم يبقى
+      توكن، عشان المقطع الليلي في آخر الملف يقلبه لوحده.
+   ══════════════════════════════════════════════════════════════ */
+.mt-body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font);
+  -webkit-text-size-adjust:100%; min-height:100dvh; min-height:100vh; display:grid; place-items:center}
+.mt-wrap{width:min(440px,calc(100% - 36px)); background:var(--card);
+  border:1px solid var(--line); border-radius:20px; padding:30px 22px 22px;
+  text-align:center; display:flex; flex-direction:column; align-items:center; gap:12px;
+  margin:calc(env(safe-area-inset-top,0px) + 20px) 0 20px}
+.mt-ic{width:72px; height:72px; border-radius:50%; display:grid; place-items:center;
+  background:var(--gold-lt); color:var(--gold-dk); flex:none}
+.mt-wrap h1{margin:0; font-size:1.28rem; font-weight:700; color:var(--navy); line-height:1.45}
+.mt-lead{margin:0; color:var(--grey); font-size:.94rem; line-height:1.7}
+.mt-msg{margin:2px 0 0; padding:12px 14px; width:100%; border-radius:13px;
+  background:var(--bg); border:1px solid var(--line);
+  font-size:.94rem; font-weight:600; line-height:1.75; text-align:start}
+.mt-when{display:flex; align-items:center; justify-content:center; gap:8px; width:100%;
+  padding:11px 13px; border-radius:13px; background:var(--gold-lt);
+  color:var(--gold-dk); font-size:.92rem; font-weight:600}
+.mt-when b{font-weight:800}
+.mt-when .ic, .mt-keep .ic{display:inline-flex; flex:none}
+.mt-keep{display:flex; align-items:center; gap:9px; width:100%; text-align:start;
+  padding:11px 13px; border-radius:13px; background:var(--green-lt); color:var(--green);
+  font-size:.88rem; font-weight:600; line-height:1.6}
+.mt-live{display:flex; align-items:center; justify-content:center; gap:8px; margin-top:4px;
+  color:var(--grey); font-size:.83rem}
+.mt-dot{width:9px; height:9px; border-radius:50%; background:var(--gold); flex:none;
+  animation:mt-pulse 1.8s ease-in-out infinite}
+.mt-live.is-busy{color:var(--navy)}
+@keyframes mt-pulse{0%,100%{opacity:.25; transform:scale(.75)} 50%{opacity:1; transform:scale(1)}}
+@media (prefers-reduced-motion: reduce){.mt-dot{animation:none; opacity:.7}}
+.mt-acts{display:flex; flex-direction:column; gap:9px; width:100%; margin-top:6px}
+.mt-btn{min-height:var(--tap); border-radius:14px; cursor:pointer; text-decoration:none;
+  display:inline-flex; align-items:center; justify-content:center; padding:0 16px;
+  font:inherit; font-size:.95rem; font-weight:700;
+  border:1px solid var(--line); background:var(--card); color:var(--navy)}
+.mt-btn.is-primary{background:var(--navy); border-color:var(--navy); color:#fff}
+.mt-btn:active{background:var(--bg)}
+.mt-btn.is-primary:active{background:var(--navy-dk)}
+
+/* ══════════════════════════════════════════════════════════════
+   قواعد اتنقلت من بلوكات `<style>` محلية جوّه ملفات العرض.
+
+   ⚠️ **السبب مش ترتيب**: البلوك المحلي بيخرج من دايرة الفاحصات (مفيش فاحص
+      بيقرا CSS جوّه PHP)، فبيتفرّع عن نظام التصميم بالسكوت — وأول واحد
+      اتكتب بألوان بالإيد (`#4A5568` · `#F3EAD3`) فما كانش هياخد أي سمة
+      ولا وضع ليلي. القاعدة: **ولا بلوك `<style>` جديد في `app/Views/m/`**،
+      و`bin/verify_density.php` بقى بيقرا المجلد ده كمان.
+   ══════════════════════════════════════════════════════════════ */
+
+/* شاشة تاريخ العمل — كانت في m/workdate.php */
+.wd-quick{display:flex; gap:10px; margin-bottom:14px}
+.wd-quick .wd-preset{flex:1; line-height:1.5; padding:12px 8px}
+.wd-quick .wd-preset small{opacity:.7; font-weight:400}
+/* ⚠️ اللونين دول **على سطح غامق دايمًا** (رأس الشاشة) مش على الورقة البيضا،
+   فمكتوبين صراحةً عن قصد: التوكن الفاتح هنا كان هيدّي نصًّا غير مقروء. */
+.wd-warn{margin:-4px 0 14px; padding:9px 12px; border-radius:var(--radius-2,12px);
+  background:#3A2A12; color:#FFCF8A; font-size:var(--fs-2,.82rem); line-height:1.6}
+
+/* شاشة تصفية العهدة — كانت في m/settle.php */
+.ms-calc{display:flex; flex-direction:column; gap:2px; margin:4px 0 14px}
+.ms-calc > div{display:flex; justify-content:space-between; align-items:center;
+  padding:10px 12px; border-bottom:1px solid var(--line)}
+.ms-calc dt{font-weight:500; color:var(--grey); margin:0}
+.ms-calc dd{margin:0; font-weight:700; font-variant-numeric:tabular-nums}
+.ms-calc .ms-res{border:0; margin-top:6px; border-radius:var(--radius-2,12px); background:var(--gold-lt)}
+.ms-calc .ms-res dt{color:var(--ink)}
+.ms-calc .ms-res dd{font-size:var(--fs-6,1.35rem)}
+.ms-hint{margin:14px 2px; line-height:1.9; color:var(--grey)}
+
+/* نسخة «استنى» من لوح القفل — كانت ألوانًا مكتوبة جوّه `style=` في settle.php */
+.hm-locked.is-wait{background:var(--gold-lt); border-color:var(--gold-dk)}
+.hm-locked.is-wait b{color:var(--gold-dk)}
+.hm-locked.is-wait span{color:var(--sader)}
+
+/* فاصل قبل عنوان قسم — كان `style="margin-top:22px"` في settle.php و transfer.php */
+.hm-group.is-spaced{margin-top:22px}
+
+/* «نسيت الرقم السري؟» — كان `style=` في m/login.php */
+.login-help{text-align:center; font-size:var(--fs-2,.82rem); color:var(--grey); margin-top:18px}
+
+/* ⚠️ الأيقونات اللي حلّت محل الإيموجي في خانة القصاصة: الإيموجي كان بيجيب
+   لونه من نفسه، والـSVG بياخد `currentColor` — فمن غير السطر ده كان هياخد
+   لون النص الأسود ويبقى تقيلًا فوق اللازم. */
+.hm-slip-ic svg{color:var(--hm-muted,#66748A)}

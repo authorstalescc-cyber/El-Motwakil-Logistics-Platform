@@ -5417,6 +5417,19 @@ table.data tbody td.neg.dbt-tot,table.data tbody td.neg.mv-ref{background:transp
    ثلاث حالات: `auto` (يتبع الجهاز) · `light` · `dark`.
    ========================================================================== */
 
+/* ── شريط «بوابة المناديب مقفولة» (v68) ─────────────────────────────
+   ⚠️ **مكتوب بالتوكنز** فبيشتغل في الوضع الليلي بلا مُحدِّد إضافي — نفس
+      القاعدة اللي بيحرسها `verify_dark_mode`. أي لون بالإيد هنا كان هيسيب
+      الشريط فاتحًا وسط الغامق. */
+.maint-bar{display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+  margin:0 0 14px; padding:10px 14px; border-radius:12px; text-decoration:none;
+  background:var(--gold-light); border:1px solid var(--sader-dk);
+  color:var(--sader-dk); font-size:var(--fs-2); line-height:var(--lh-base)}
+.maint-bar svg{flex:none}
+.maint-bar b{font-weight:var(--fw-black)}
+.maint-bar span{opacity:.85}
+.maint-bar:hover{background:var(--sader-lt)}
+
 /* ① يتبع الجهاز — لما المستخدم ما اختارش حاجة */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {

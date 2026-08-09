@@ -103,7 +103,11 @@ chk(!str_contains($mPwa, 'assets/js/app.js'),
 sec('④ التغذية من نداءات الـping القايمة');
 chk(str_contains($notifC, "'build'  => \\App\\Core\\App::buildId()"),
     'ping المكتب بيرجّع `build`');
-chk(str_contains($repC, "['build' => \\App\\Core\\App::buildId()]"),
+/* ⚠️ **بمطابقة مرنة مش بالنص الحرفي**: الفحص كان مربوطًا بشكل المصفوفة
+   بالظبط (`['build' => …]`)، فأول ما `ping` ضاف مفاتيح تانية (حالة الصيانة
+   وعدّاد الجرس — v68) فشل بإنذار كاذب رغم إن `build` لسه بترجع. المطلوب
+   إثباته إن النداء بيحمل `build`، مش إزاي المصفوفة متكتبة. */
+chk((bool) preg_match('~[\'"]build[\'"]\s*=>\s*\\\\App\\\\Core\\\\App::buildId\(\)~', $repC),
     'وping المندوب كمان');
 chk(str_contains($appJs, 'window.AppUpdate.seen(d.build)'),
     'و`app.js` بيمرّرها للوحدة');

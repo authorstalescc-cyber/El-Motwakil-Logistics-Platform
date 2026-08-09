@@ -107,7 +107,7 @@ $permitCard = function (array $p) use ($num, $portMark, $isReefer) {
              data-pinned="<?= !empty($p['pinned']) ? '1' : '0' ?>"
              data-worked="<?= !empty($p['worked']) ? '1' : '0' ?>"
              data-search="<?= e(mb_strtolower($p['no'] . ' ' . $p['company'] . ' ' . $p['client'] . ' ' . $p['destination'] . ' ' . implode(' ', $drivers))) ?>">
-      <span class="hm-new-tag" hidden>🆕 جديد</span>
+      <span class="hm-new-tag" hidden><?= icon('sparkles', 12) ?> جديد</span>
       <?php /* ختم الركن — زخرفي بحت فـ`aria-hidden`، وبيتحط **قبل** الجسم
                عشان يفضل وراه في ترتيب الطبقات. */ ?>
       <?php if ($stamp !== ''): ?>
@@ -254,8 +254,9 @@ $permitCard = function (array $p) use ($num, $portMark, $isReefer) {
       <small>أهلاً</small>
       <b><?= e($repName) ?></b>
     </span>
-    <?php /* جرس المندوب (المرحلة ٦ من docs/15) — العدّاد بيتملّى من نفس نداء
-             `/notifications/ping` بتاع المكتب، فمستحيل يقول رقمًا تانيًا. */ ?>
+    <?php /* جرس المندوب (المرحلة ٦ من docs/15) — العدّاد بيتملّى من `/m/ping`
+             اللي بيقراه من `Notify::unreadCount` نفسها اللي بيقرا منها جرس
+             المكتب، فمستحيل الرقمين يختلفوا. */ ?>
     <a class="nt-bell" href="<?= url('m/notifications') ?>" id="repBell" aria-label="الإشعارات">
       <?= icon('bell', 14) ?><span class="nt-dot" id="repBellDot" hidden></span>
     </a>
@@ -267,7 +268,7 @@ $permitCard = function (array $p) use ($num, $portMark, $isReefer) {
 
   <!-- زرار تثبيت التطبيق (بيظهر بالـJS لما المتصفح يسمح) -->
   <button type="button" class="hm-install" id="installBtn" hidden>
-    <span class="ic">⬇️</span>
+    <span class="ic"><?= icon('download', 15) ?></span>
     <span>ثبّت التطبيق على شاشتك — يفتح أسرع وزي أبليكيشن</span>
     <span class="x" id="installDismiss" role="button" aria-label="إخفاء"><?= icon('x', 14) ?></span>
   </button>
@@ -325,7 +326,7 @@ $permitCard = function (array $p) use ($num, $portMark, $isReefer) {
 
   <?php /* عهدة يوم — اليوم اللي كل البنود بتتسجّل عليه وبتتخصم من عهدته */ ?>
   <a class="hm-wd <?= $wdLocked ? 'is-locked' : ($wdToday ? '' : 'is-past') ?>" href="<?= url('m/work-date') ?>">
-    <span class="hm-wd-ic"><?= $wdLocked ? '🔒' : '📅' ?></span>
+    <span class="hm-wd-ic"><?= $wdLocked ? icon('lock', 16) : icon('calendar', 16) ?></span>
     <span class="hm-wd-txt">
       <small><?= $wdLocked ? 'اليوم ده اتقفل في المكتب' : 'بتسجّل على عهدة يوم' ?></small>
       <b><?= e(dfmt($workDate)) ?><?= $wdToday ? '' : ' — مش النهاردة' ?></b>
@@ -381,7 +382,7 @@ $permitCard = function (array $p) use ($num, $portMark, $isReefer) {
       <a href="<?= url('m/transfer') ?>"><span class="ic"><?= icon('shuffle', 14) ?></span>حوّل لمندوب</a>
     <?php endif; ?>
     <?php /* تصفية العهدة مع المكتب — بتقفل الحساب كله ويرجع صفر */ ?>
-    <a href="<?= url('m/settle') ?>"><span class="ic">🤝</span>صفّي العهدة</a>
+    <a href="<?= url('m/settle') ?>"><span class="ic"><?= icon('handshake', 15) ?></span>صفّي العهدة</a>
     <?php if (!empty($canAddPermit)): ?>
       <a href="<?= url('m/permit/new') ?>"><span class="ic"><?= icon('file-text', 14) ?></span>إذن جديد</a>
     <?php endif; ?>
@@ -499,7 +500,7 @@ $permitCard = function (array $p) use ($num, $portMark, $isReefer) {
     <?php else: foreach ($submissions as $s): ?>
       <?php $isMisc = \App\Models\RepPortal::isMisc((string) $s['kind']); ?>
       <article class="hm-slip is-<?= e($s['status']) ?>">
-        <span class="hm-slip-ic" aria-hidden="true"><?= $isMisc ? '🧷' : ($s['kind'] === 'receipt' ? '🧾' : '💸') ?></span>
+        <span class="hm-slip-ic" aria-hidden="true"><?= $isMisc ? icon('tag', 18) : ($s['kind'] === 'receipt' ? icon('receipt', 18) : icon('banknote', 18)) ?></span>
         <div class="hm-slip-mid">
           <b><?= e($s['note']) ?></b>
           <div class="hm-slip-meta">
@@ -840,48 +841,46 @@ foreach (array_keys($boxesUsed) as $bk) {
     vibe(10);
   });
 
-  // بوول خفيف كل 60ث والتطبيق مفتوح
+  /* ── نداء واحد كل ٦٠ث بيغذّي كل حاجة ────────────────────────────────
+     ⚠️ **كان نداءين** (`/m/ping` + `/notifications/ping`) كل واحد كل ٦٠ث =
+        ٢٬٨٨٠ طلب في اليوم لكل مندوب على نت موبايله وبطاريته، والاتنين
+        بيرجّعوا من نفس الجلسة. دلوقتي `/m/ping` بيرجّع العهدة **وعدّاد
+        الجرس** (من `Notify::unreadCount` نفسها) **وحالة الصيانة** مع بعض.
+        لو ضفت أي حالة حيّة جديدة للشاشة، ركّبها هنا — ما تفتحش نداءً تالتًا. */
+  var bellDot = document.getElementById('repBellDot');
+
   function poll() {
     if (document.hidden) { return; }
     fetch('<?= url('m/ping') ?>', { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d) { return; }
+
+        /* ⚠️ الصيانة بدأت والتطبيق مفتوح في إيده → نوديه على شاشة الصيانة
+           **فورًا**. من غير ده كان هيفضل يدوس «سجّل بند» ويترفض من غير ما
+           يفهم إن النظام واقف عن قصد. */
+        if (d.maintenance) { location.reload(); return; }
+
         // التحديث الإجباري بيركب على نفس النداء ده — صفر طلب زيادة
         if (window.AppUpdate && d.build) { window.AppUpdate.seen(d.build); }
+
+        if (bellDot && typeof d.unread !== 'undefined') {
+          var n = d.unread || 0;
+          bellDot.hidden = n < 1;
+          bellDot.textContent = n > 9 ? '+9' : String(n);
+        }
+
         var cAt = ms(d.deposit_at);
         if (cAt > seenC) {
           DEPOSITS.push({ at: d.deposit_at, amount: 0 });
           maxDepTime = Math.max(maxDepTime, cAt);
           computeFresh();
         }
-      }).catch(function () {});
+      }).catch(function () { /* الشبكة وقعت — الشاشة تفضل بآخر حالة معروفة */ });
   }
+  poll();
   setInterval(poll, 60000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) { poll(); } });
-
-  /* ── عدّاد جرس المندوب (المرحلة ٦ من docs/15) ─────────────────────────
-     ⚠ بيقرا من **نفس** `/notifications/ping` بتاع المكتب — مصدر واحد فمستحيل
-        الرقم هنا يخالف اللي في الشاشة. الحارس `requireAnySession` بيقبل
-        جلسة المندوب، و`Notify::me()` بترجّع هويته فبيشوف بتاعه هو بس. */
-  (function repBell() {
-    var dot = document.getElementById('repBellDot');
-    if (!dot) { return; }
-    function refresh() {
-      if (document.hidden) { return; }
-      fetch('<?= url('notifications/ping') ?>', {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin'
-      }).then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
-          var n = (d && d.events && d.events.unread) ? d.events.unread : 0;
-          dot.hidden = n < 1;
-          dot.textContent = n > 9 ? '+9' : String(n);
-        }).catch(function () { /* الشبكة وقعت — الجرس يفضل بآخر حالة معروفة */ });
-    }
-    refresh();
-    setInterval(refresh, 60000);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); } });
-  })();
 
   // ── سحب للتحديث ──────────────────────────────────────
   var ptr = document.getElementById('ptr'), startY = 0, pulling = false, THRESH = 80;

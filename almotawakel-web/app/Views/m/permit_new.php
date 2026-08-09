@@ -112,13 +112,16 @@ $dl = function (string $id, string $lookupType) use ($lookups) {
        ⚠️ والحقول دي **قوائم مقفولة** (v58): كانت `<input list=…>` فالمندوب يكتب
        قيمة والخادم يرفضها بعد ما يبعت. بقت `lookup_select` زي المكتب — بيختار
        من الموجود وخلاص. */
+    /* ⚠️ الأيقونة **اسم منفصل عن النص** لا إيموجي جوّه السطر: العنوان بيمرّ
+       على `e()` فأي وسم SVG جوّاه كان هيتطبع حروفًا. ونفس أسماء `icon()`
+       المستعملة في كارت الإذن على الشاشة الرئيسية — الشكل واحد في الشاشتين. */
     foreach ([
-      ['shipping_co', '🚢 شركة الشحن',  'اختياري — غالبًا نفس العميل'],
-      ['agency',      '⚓ التوكيل الملاحي', 'اختياري'],
-      ['port',        '🏗 الميناء',        'اختياري'],
-    ] as [$name, $label, $sub]): ?>
+      ['shipping_co', 'ship',  'شركة الشحن',      'اختياري — غالبًا نفس العميل'],
+      ['agency',      'anchor', 'التوكيل الملاحي', 'اختياري'],
+      ['port',        'crane',  'الميناء',         'اختياري'],
+    ] as [$name, $labelIc, $label, $sub]): ?>
     <div class="field" id="field-<?= $name ?>" <?= $err($name) ? 'data-error="1"' : '' ?>>
-      <label for="f_<?= $name ?>"><?= e($label) ?> <span class="optional"><?= e($sub) ?></span></label>
+      <label for="f_<?= $name ?>"><?= icon($labelIc, 14) ?> <?= e($label) ?> <span class="optional"><?= e($sub) ?></span></label>
       <?php partial('lookup_select', [
         'name'  => $name,
         'type'  => $name,

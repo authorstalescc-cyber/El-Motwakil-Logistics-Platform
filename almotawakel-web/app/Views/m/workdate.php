@@ -59,11 +59,5 @@ $current   = $current ?? $today;
   sync();
 })();
 </script>
-<style>
-.wd-quick{display:flex;gap:10px;margin-bottom:14px}
-.wd-quick .wd-preset{flex:1;line-height:1.5;padding:12px 8px}
-.wd-quick .wd-preset small{opacity:.7;font-weight:400}
-.wd-warn{margin:-4px 0 14px;padding:9px 12px;border-radius:var(--radius-2);background:#3a2a12;color:#ffcf8a;font-size:var(--fs-2);line-height:1.6}
-</style>
 </body>
 </html>

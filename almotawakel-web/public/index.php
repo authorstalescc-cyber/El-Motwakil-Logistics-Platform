@@ -439,6 +439,7 @@ $r->post('/settings/permits',           'SettingsController@savePermits');
 $r->post('/settings/lookup',            'SettingsController@addLookup');
 $r->post('/settings/lookup/{id}/delete','SettingsController@deleteLookup');
 $r->post('/settings/normalize',         'SettingsController@normalizeNames');
+$r->post('/settings/rep-maintenance',   'SettingsController@repMaintenance');   // قفل بوابة المناديب (v68)
 $r->post('/settings/ai',                'SettingsController@saveAi');
 $r->post('/settings/ai/test',           'SettingsController@testAi');
 $r->post('/settings/users',             'SettingsController@addUser');
