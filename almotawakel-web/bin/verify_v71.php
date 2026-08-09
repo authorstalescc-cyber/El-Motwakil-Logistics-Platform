@@ -25,6 +25,7 @@ use App\Core\Database;
 use App\Models\Closing;
 use App\Models\RepCustody;
 use App\Models\RepInbox;
+use App\Models\RepMaintenance;
 use App\Models\RepMiscExpense;
 use App\Models\RepMiscKind;
 use App\Models\RepPortal;
@@ -39,6 +40,9 @@ function near(string $l, $a, $e): void {
     abs((float) $a - (float) $e) <= 0.005 ? ok($l)
         : bad("{$l} — متوقع " . number_format((float) $e, 2) . " / فعلي " . number_format((float) $a, 2));
 }
+/** إشارة داخلية: «اتخطّى قسم السلوك» — مش خطأ ومش فشل. */
+class SkipBehaviour extends \RuntimeException {}
+
 function src71(string $file): string {
     $p = dirname(__DIR__) . '/' . $file;
     return is_file($p) ? (string) file_get_contents($p) : '';
@@ -150,19 +154,31 @@ chk(!str_contains(code71('app/Models/RepMiscKind.php'), 'Database'),
     'والكتالوج ثابت في الكود — مش بيقرا من القاعدة');
 
 // ═══════════════════════════════ ② السلوك (جوّه transaction)
+/* ⚠️⚠️ **حارسان لازم يتسألوا قبل أي كتابة، وإلا الفحص بيموت بلا رسالة.**
+   ① `RepMaintenance` (v68): قفل بوابة المندوب بيخلّي `RepPortal::submit` ترمي.
+   ② اليوم المتقفل: `dayLockReason` بترفض الكتابة عليه.
+   الاتنين **حالة بيئة مش عيب في الكود** — الفحص بيقولها بصوت عالي وبيتخطّى
+   قسم السلوك بدل ما يفشل كذبًا (اتصادفوا على الإنتاج فعليًّا). */
+$writeBlock = null;
+if (RepMaintenance::isOn()) {
+    $writeBlock = 'بوابة المندوب مقفولة للصيانة — افتحها من /settings#rep-maint وأعد الفحص.';
+} elseif (RepCustody::dayLockReason(date('Y-m-d')) !== null) {
+    $writeBlock = 'يوم ' . date('Y-m-d') . ' متقفل — الفحص محتاج يومًا مفتوحًا.';
+}
+
 $pdo = Database::conn();
 $pdo->beginTransaction();
 
 try {
+    if ($writeBlock !== null) {
+        echo "\n⚠️ قسم السلوك اتخطّى: {$writeBlock}\n";
+        throw new SkipBehaviour();
+    }
+
     $rep = (int) Database::scalar("SELECT id FROM reps WHERE status = 'active' ORDER BY id LIMIT 1");
     if (!$rep) { throw new RuntimeException('مفيش مندوب نشط في القاعدة دي — الفحص محتاج واحد.'); }
 
-    /* يوم مفتوح مش متقفل ومش قبل خط فصل العهد — وإلا الرفض يجي من حارس تاني
-       والفحص ينجح/يفشل لسبب غلط. */
     $day = date('Y-m-d');
-    if (RepCustody::dayLockReason($day) !== null) {
-        throw new RuntimeException("يوم $day متقفل — الفحص محتاج يومًا مفتوحًا.");
-    }
     $tag = '__v71_';
 
     sec('② الوسم بيوصل من الفورم لجدول النثريات ومعاه تصنيفه');
@@ -319,8 +335,15 @@ try {
             basename($f) . ' عمره ما سمع عن الوسم');
     }
 
+} catch (SkipBehaviour $e) {
+    // متخطّي بالتصميم — مش فشل.
+} catch (\Throwable $e) {
+    /* ⚠️ **إمساك كل شيء إجباري**: `ErrorHandler` بتاعة `bootstrap` بتبلع أي
+       استثناء غير ملتقَط في CLI، فالفاحص كان **بيموت في نص الشاشة بلا ولا
+       رسالة** وانت فاكر إنه اتقطع. اتصادفت على الإنتاج. */
+    bad('انقطع قسم السلوك: ' . get_class($e) . ' — ' . $e->getMessage());
 } finally {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) { $pdo->rollBack(); }
 }
 
 // ═══════════════════════════════ ⑨ الواجهة
