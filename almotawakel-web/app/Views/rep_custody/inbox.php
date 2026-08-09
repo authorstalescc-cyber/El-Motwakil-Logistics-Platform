@@ -710,7 +710,7 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
             <?php endif; ?>
           </tr>
           <?php if ($r['status'] === 'rejected' && $r['review_note']): ?>
-            <tr><td colspan="<?= $cols ?>" style="text-align:right;font-size:var(--fs-2);color:var(--red);background:var(--red-lt)">
+            <tr><td colspan="<?= $cols ?>" style="text-align:right;font-size:var(--fs-2);color:var(--red-fg);background:var(--red-lt)">
               سبب الرفض: <?= e($r['review_note']) ?>
             </td></tr>
           <?php endif; ?>
@@ -742,20 +742,20 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
 .ib-note{font-size:var(--fs-2)}
 .kpi-grid.four{grid-template-columns:repeat(4,1fr)}
 @media (max-width:900px){ .kpi-grid.four{grid-template-columns:repeat(2,1fr)} }
-.kpi.danger{border-color:#F3C4C4;background:#FFF6F6}
+.kpi.danger{border-color:var(--red-line);background:var(--red-lt)}
 
 /* شرايح عدسة المندوب — فلترة خادمية بضغطة */
 .ib-lens{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 var(--space-3)}
 .ib-lens-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;
   border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--card);
-  color:var(--ink);font-size:var(--fs-2);font-weight:var(--fw-med);text-decoration:none;min-height:38px}
+  color:var(--ink);font-size:var(--fs-2);font-weight:var(--fw-medium);text-decoration:none;min-height:38px}
 .ib-lens-chip:hover{border-color:var(--navy);background:var(--zebra)}
 .ib-lens-chip b{font-weight:var(--fw-bold);color:var(--grey);font-size:var(--fs-1)}
 .ib-lens-chip.on{background:var(--navy);border-color:var(--navy);color:var(--white)}
 .ib-lens-chip.on b{color:var(--white);opacity:.85}
 .ib-lens-card{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;min-height:38px;
   font-size:var(--fs-1);color:var(--grey);text-decoration:none;margin-inline-start:auto}
-.ib-lens-card:hover{color:var(--navy);text-decoration:underline}
+.ib-lens-card:hover{color:var(--accent);text-decoration:underline}
 @media (max-width:640px){ .ib-lens-card{margin-inline-start:0} }
 
 /* الفلاتر */
@@ -763,7 +763,7 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
 .ib-filters label{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-1);font-weight:600;color:var(--ink-mut)}
 .ib-filters input[type=search],.ib-filters select{
   min-height:38px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--radius-2);
-  font-family:inherit;font-size:var(--fs-2);background:#fff}
+  font-family:inherit;font-size:var(--fs-2);background:var(--card)}
 .ib-f-search{flex:1;min-width:220px}
 .ib-f-chk{flex-direction:row!important;align-items:center;gap:7px;min-height:38px}
 .ib-f-chk input{width:17px;height:17px;margin:0}
@@ -772,7 +772,7 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
 /* كارت المندوب */
 .ib-rep-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
 .ib-rep-id{flex:1;min-width:0;display:flex;flex-direction:column}
-.ib-rep-name{font-size:var(--fs-5);font-weight:700;color:var(--navy)}
+.ib-rep-name{font-size:var(--fs-5);font-weight:700;color:var(--accent)}
 .ib-rep-sub{font-size:var(--fs-2);color:var(--grey);font-weight:500}
 .ib-pick-all,.ib-pick{flex:none;display:flex;align-items:center;cursor:pointer}
 .ib-pick-all input,.ib-pick input{width:18px;height:18px;margin:0;cursor:pointer}
@@ -782,13 +782,13 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
 .ib-day{border-bottom:1px solid var(--line)}
 .ib-day:last-child{border-bottom:0}
 .ib-day-head{display:flex;align-items:center;gap:11px;padding:10px 18px;background:var(--zebra);flex-wrap:wrap}
-.ib-day.is-locked .ib-day-head{background:#FFF3F3}
+.ib-day.is-locked .ib-day-head{background:var(--red-lt)}
 .ib-day-date{font-weight:600;font-size:var(--fs-3);display:flex;align-items:center;gap:6px}
 .ib-day-tot{font-size:var(--fs-2);color:var(--grey);font-weight:500;margin-inline-start:auto}
 
 /* البند */
 .ib-item{border-top:1px solid var(--line)}
-.ib-item.in-review{background:#FFFDF5}
+.ib-item.in-review{background:var(--gold-light)}
 .ib-item.row-locked{box-shadow:inset 3px 0 0 var(--red)}
 .ib-item.is-hidden{display:none}
 .ib-row{display:flex;align-items:center;gap:12px;padding:12px 18px}
@@ -796,44 +796,44 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
 .ib-title{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .ib-note{font-weight:600;font-size:var(--fs-4)}
 .ib-meta{font-size:var(--fs-1);color:var(--grey);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap}
-.ib-meta a{font-weight:500;color:var(--navy)}
-.ib-meta .ib-co{font-weight:600;color:var(--navy)}
+.ib-meta a{font-weight:500;color:var(--accent)}
+.ib-meta .ib-co{font-weight:600;color:var(--accent)}
 .ib-submitted{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;
   border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--zebra);
-  color:var(--ink-mut);font-weight:var(--fw-med);white-space:nowrap}
-.ib-submitted svg{color:var(--teal);flex:none}
+  color:var(--ink-mut);font-weight:var(--fw-medium);white-space:nowrap}
+.ib-submitted svg{color:var(--teal-fg);flex:none}
 .ib-submitted bdi{color:var(--ink);font-weight:var(--fw-bold);font-variant-numeric:tabular-nums}
 .ib-table-time{display:inline-grid;grid-template-columns:auto auto;align-items:center;column-gap:6px;
-  color:var(--ink);font-weight:var(--fw-med);white-space:nowrap}
-.ib-table-time svg{grid-row:1/3;color:var(--teal)}
-.ib-table-time small{color:var(--grey);font-size:var(--fs-1);font-weight:var(--fw-med);
+  color:var(--ink);font-weight:var(--fw-medium);white-space:nowrap}
+.ib-table-time svg{grid-row:1/3;color:var(--teal-fg)}
+.ib-table-time small{color:var(--grey);font-size:var(--fs-1);font-weight:var(--fw-medium);
   font-variant-numeric:tabular-nums;text-align:start}
-.ib-warn{margin:6px 0 0;font-size:var(--fs-1);font-weight:500;color:#8E1F1F;line-height:1.6}
-.ib-link{background:0;border:0;padding:0;font:inherit;font-weight:700;color:#8E1F1F;text-decoration:underline;cursor:pointer}
-.pill.ib-misc{background:#FBF3D9;color:#6B540A;border:1px solid #E6D49B}
+.ib-warn{margin:6px 0 0;font-size:var(--fs-1);font-weight:500;color:var(--red-fg);line-height:1.6}
+.ib-link{background:0;border:0;padding:0;font:inherit;font-weight:700;color:var(--red-fg);text-decoration:underline;cursor:pointer}
+.pill.ib-misc{background:var(--gold-light);color:var(--gold-fg);border:1px solid var(--gold-line)}
 
 .ib-money{flex:none;text-align:center;min-width:112px;display:flex;flex-direction:column}
-.ib-paid{font-size:var(--fs-4);font-weight:700;color:var(--red);font-variant-numeric:tabular-nums}
+.ib-paid{font-size:var(--fs-4);font-weight:700;color:var(--red-fg);font-variant-numeric:tabular-nums}
 .ib-actual{font-size:var(--fs-1);font-weight:500;color:var(--sader)}
-.ib-actual.has{color:var(--green)}
+.ib-actual.has{color:var(--green-fg)}
 
 .ib-photo{flex:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;
-  border-radius:var(--radius-1);overflow:hidden;border:1px solid var(--line2);background:#fff}
+  border-radius:var(--radius-1);overflow:hidden;border:1px solid var(--line2);background:var(--card)}
 .ib-photo img{width:100%;height:100%;object-fit:cover;display:block}
 .ib-photo.none{border-style:dashed;border-color:var(--line);background:var(--zebra);opacity:.45}
 
 .ib-acts{flex:none;display:flex;gap:6px}
 .ib-btn{min-width:38px;min-height:38px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--radius-1);
-  background:#fff;font-family:inherit;font-weight:600;font-size:var(--fs-3);cursor:pointer;color:var(--navy)}
+  background:var(--card);font-family:inherit;font-weight:600;font-size:var(--fs-3);cursor:pointer;color:var(--accent)}
 .ib-btn:hover{border-color:var(--navy)}
-.ib-btn.ok{background:var(--green-lt);border-color:#B9DCC6;color:var(--green)}
+.ib-btn.ok{background:var(--green-lt);border-color:var(--green-line);color:var(--green-fg)}
 .ib-btn.ok:hover{background:var(--green);color:#fff}
-.ib-btn.no{color:var(--red)}
+.ib-btn.no{color:var(--red-fg)}
 .ib-btn.no:hover{background:var(--red-lt);border-color:var(--red)}
 /* الحذف النهائي: باهت لحد ما تقرب منه — إجراء نادر مش خطوة يومية */
 .ib-btn.del{color:var(--grey);opacity:.7}
-.ib-btn.del:hover{opacity:1;color:var(--red);background:var(--red-lt);border-color:var(--red)}
-.ib-bar-del:hover{border-color:#F3C4C4;color:#FFD7D7}
+.ib-btn.del:hover{opacity:1;color:var(--red-fg);background:var(--red-lt);border-color:var(--red)}
+.ib-bar-del:hover{border-color:var(--red-line);color:#FFD7D7}
 .ib-del-na{color:var(--grey);opacity:.5}
 
 .ib-row-error{padding:10px 18px 0}
@@ -848,16 +848,16 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
 .ib-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .ib-grid label{display:block;font-size:var(--fs-1);font-weight:600;color:var(--grey)}
 .ib-grid label.wide{grid-column:1/-1}
-.ib-grid label.hi{color:var(--green)}
+.ib-grid label.hi{color:var(--green-fg)}
 .ib-grid input,.ib-grid select{width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--line2);
-  border-radius:var(--radius-1);font-size:var(--fs-3);background:#fff;font-family:inherit}
-.ib-grid label.hi input{border-color:#B9DCC6;background:#F6FCF8}
+  border-radius:var(--radius-1);font-size:var(--fs-3);background:var(--card);font-family:inherit}
+.ib-grid label.hi input{border-color:var(--green-line);background:var(--green-lt)}
 .ib-visa-row{display:flex;align-items:center;gap:8px;margin-top:4px}
 .ib-visa-row input[type=checkbox]{width:17px;height:17px;margin:0;flex:none}
 .ib-date-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ib-date-row input[type=date]{min-height:38px;padding:0 10px;border:1px solid var(--line2);
-  border-radius:var(--radius-1);font-family:inherit;font-size:var(--fs-3);background:#fff}
-.ib-date-note{font-size:var(--fs-1);font-weight:600;color:#8E1F1F}
+  border-radius:var(--radius-1);font-family:inherit;font-size:var(--fs-3);background:var(--card)}
+.ib-date-note{font-size:var(--fs-1);font-weight:600;color:var(--red-fg)}
 .ib-edit-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .ib-edit-acts .btn{min-height:38px;padding:0 16px;font-size:var(--fs-3)}
 
@@ -879,15 +879,15 @@ body.ib-has-bar{padding-bottom:78px}
    اللوحة، وفوق شريط الإجراءات (900) عشان اللوحة تغطّيه. */
 .ib-panel{position:fixed;inset:0;z-index:990;background:rgba(10,18,30,.5);
   display:flex;align-items:center;justify-content:center;padding:18px}
-.ib-panel-box{background:#fff;border-radius:var(--radius-3);padding:20px;width:min(420px,100%);
+.ib-panel-box{background:var(--card);border-radius:var(--radius-3);padding:20px;width:min(420px,100%);
   box-shadow:0 18px 50px rgba(0,0,0,.3)}
 .ib-panel-box h3{margin:0 0 4px;font-size:var(--fs-4)}
 .ib-panel-sub{margin:0 0 14px;font-size:var(--fs-2);color:var(--grey);line-height:1.6}
 .ib-panel-box input[type=date]{width:100%;min-height:44px;padding:0 12px;border:1px solid var(--line2);
   border-radius:var(--radius-2);font-family:inherit;font-size:var(--fs-4)}
 .ib-panel-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
-.ib-panel-warn{margin:12px 0 0;padding:9px 11px;border-radius:var(--radius-1);background:#FFF1F1;
-  border:1px solid #F3C4C4;color:#8E1F1F;font-size:var(--fs-2);font-weight:500;line-height:1.6}
+.ib-panel-warn{margin:12px 0 0;padding:9px 11px;border-radius:var(--radius-1);background:var(--red-lt);
+  border:1px solid var(--red-line);color:var(--red-fg);font-size:var(--fs-2);font-weight:500;line-height:1.6}
 .ib-panel-acts{display:flex;gap:8px;margin-top:16px}
 
 @media (max-width:860px){

@@ -170,28 +170,28 @@ if ($onMap):
 .trk-who{display:flex;gap:10px;align-items:center}
 .trk-av{width:40px;height:40px;border-radius:var(--radius-2);background:var(--navy);color:var(--gold);display:flex;
   align-items:center;justify-content:center;font-weight:700;font-size:var(--fs-3);flex-shrink:0}
-.trk-name{font-weight:700;color:var(--navy);text-decoration:none;font-size:var(--fs-4)}
+.trk-name{font-weight:700;color:var(--accent);text-decoration:none;font-size:var(--fs-4)}
 .trk-name:hover{text-decoration:underline}
 .trk-car{font-size:var(--fs-1);color:var(--grey);display:flex;align-items:center;gap:4px;margin-top:2px}
 .trk-pulse{font-size:var(--fs-1);font-weight:600;padding:4px 9px;border-radius:99px;white-space:nowrap;flex-shrink:0}
-.trk-pulse.live{background:#e8f8ee;color:#0f7a42}
-.trk-pulse.ok{background:#eef4fd;color:#1f5fa8}
-.trk-pulse.warn{background:#fff6e5;color:#8a6100}
-.trk-pulse.cold{background:#f1f3f6;color:#75808f}
+.trk-pulse.live{background:var(--green-lt);color:var(--green-fg)}
+.trk-pulse.ok{background:var(--tint-navy);color:var(--accent)}
+.trk-pulse.warn{background:var(--gold-light);color:var(--gold-fg)}
+.trk-pulse.cold{background:var(--zebra);color:var(--grey)}
 .trk-meta{display:flex;flex-wrap:wrap;gap:6px}
 .trk-meta span{font-size:var(--fs-1);color:var(--grey);background:var(--bg);border:1px solid var(--line);
   border-radius:var(--radius-1);padding:3px 8px;display:flex;align-items:center;gap:4px}
 .trk-meta b{color:var(--ink);font-weight:600}
-.trk-loc{display:flex;gap:8px;align-items:flex-start;background:#f4f9f5;border:1px solid #cfe8d8;
+.trk-loc{display:flex;gap:8px;align-items:flex-start;background:var(--green-lt);border:1px solid var(--green-line);
   border-radius:var(--radius-2);padding:9px 11px}
 .trk-loc.none{background:var(--bg);border-color:var(--line);align-items:center}
 .trk-loc b{font-size:var(--fs-2);font-weight:600;display:block;line-height:1.5}
 .trk-loc small{font-size:var(--fs-1);color:var(--grey);display:block;margin-top:2px}
-.trk-stale{font-size:var(--fs-1);font-weight:500;color:#8a6100;background:#fff6e5;border:1px solid #f2dfa8;
+.trk-stale{font-size:var(--fs-1);font-weight:500;color:var(--gold-fg);background:var(--gold-light);border:1px solid var(--gold-line);
   border-radius:var(--radius-1);padding:6px 9px;display:flex;align-items:center;gap:5px}
-.trk-eta{display:flex;gap:8px;align-items:flex-start;background:#eef4fd;border:1px solid #cddff5;
-  border-radius:var(--radius-2);padding:8px 11px;color:#1f5fa8}
-.trk-eta.done{background:#e8f8ee;border-color:#bfe6cf;color:#0f7a42}
+.trk-eta{display:flex;gap:8px;align-items:flex-start;background:var(--tint-navy);border:1px solid var(--navy-line);
+  border-radius:var(--radius-2);padding:8px 11px;color:var(--accent)}
+.trk-eta.done{background:var(--green-lt);border-color:var(--green-line);color:var(--green-fg)}
 .trk-eta.none{background:var(--bg);border-color:var(--line);color:var(--grey);align-items:center}
 .trk-eta b{font-size:var(--fs-2);font-weight:600;display:block;line-height:1.5}
 .trk-eta small{font-size:var(--fs-1);display:block;margin-top:2px;opacity:.85}
@@ -199,17 +199,17 @@ if ($onMap):
 .trk-est{background:rgba(0,0,0,.07);border-radius:99px;padding:1px 6px;font-size:var(--fs-1);font-weight:600;
   margin-inline-start:4px}
 .trk-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:4px}
-.btn.wa{background:#25D366;color:#fff;border-color:#25D366;font-weight:600}
+.btn.wa{background:#25D366;color:#08331A;border-color:#25D366;font-weight:600}
 .btn.wa:hover{background:#1eb356;border-color:#1eb356}
 .empty-state{text-align:center;padding:42px 20px}
 .empty-ic{color:var(--grey);opacity:.45;margin-bottom:10px}
-.empty-state h3{color:var(--navy);margin-bottom:6px}
+.empty-state h3{color:var(--accent);margin-bottom:6px}
 .empty-state p{color:var(--grey);font-size:var(--fs-3);margin-bottom:16px}
 .leaflet-container{font-family:inherit}
 .trk-pop{font-family:inherit;min-width:170px;line-height:1.7}
-.trk-pop b{color:#15355B;font-size:var(--fs-3)}
-.trk-pop small{color:#6b7a90;display:block}
-.trk-pop a{color:#1f5fa8;font-weight:600;font-size:var(--fs-2)}
+.trk-pop b{color:var(--accent);font-size:var(--fs-3)}
+.trk-pop small{color:var(--grey);display:block}
+.trk-pop a{color:var(--accent);font-weight:600;font-size:var(--fs-2)}
 @media(max-width:640px){.trk-search{margin-inline-start:0;width:100%}.trk-search input{flex:1;min-width:0}}
 </style>
 

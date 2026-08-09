@@ -950,7 +950,7 @@ $percent = (int) ($t['percent'] ?? 0);
   padding:var(--space-4) var(--space-5);border-radius:var(--radius-3);
   background:linear-gradient(120deg,var(--navy-dark),var(--navy-mid));color:var(--white);box-shadow:var(--shadow-2)}
 .cl-top-id{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2) var(--space-3);min-width:0}
-.cl-kicker{font-size:var(--fs-1);font-weight:var(--fw-black);color:var(--gold-light);opacity:.85;width:100%}
+.cl-kicker{font-size:var(--fs-1);font-weight:var(--fw-black);color:var(--gold-pale);opacity:.85;width:100%}
 .cl-top h1{margin:0;font-size:var(--fs-6);line-height:var(--lh-tight)}
 .cl-chip{padding:4px 10px;border-radius:var(--radius-pill);font-size:var(--fs-1);font-weight:var(--fw-black)}
 .cl-chip.open{background:rgba(62,210,139,.16);color:#8aefbd}
@@ -984,7 +984,7 @@ $percent = (int) ($t['percent'] ?? 0);
   width:5px;height:5px;border-radius:50%;background:var(--ink-mut);opacity:.35}
 .cl-cell:hover::after{opacity:.9;background:var(--navy)}
 .cl-cell.total{background:var(--card);border-color:var(--navy)}
-.cl-cell.total b{color:var(--navy);font-size:var(--fs-4)}
+.cl-cell.total b{color:var(--accent);font-size:var(--fs-4)}
 /* ═══ «الكاش فين دلوقتي» — الدرج والمناديب (طلب المالك 2026-07-31) ═══
    نفس ماركب المعادلة عشان الشاشة تفضل بلغة واحدة، بشريط علوي مميّز يوضّح
    إنه سطر تاني بيجاوب على سؤال تاني («الكاش فين» مش «اليوم عمل إيه»). */
@@ -992,26 +992,26 @@ $percent = (int) ($t['percent'] ?? 0);
   margin-block-start:var(--space-3);padding:var(--space-4);
   border:1px solid var(--line);border-radius:var(--radius-3);background:var(--card);
   box-shadow:var(--shadow-1);border-block-start:3px solid var(--gold)}
-.cl-split .cl-cell.drawer b{color:var(--gold-dark)}
-.cl-split .cl-cell.reps b{color:var(--navy)}
-.cl-split .cl-cell.reps.neg b{color:var(--red)}
+.cl-split .cl-cell.drawer b{color:var(--gold-fg)}
+.cl-split .cl-cell.reps b{color:var(--accent)}
+.cl-split .cl-cell.reps.neg b{color:var(--red-fg)}
 /* ⚠️ المجموع `<div>` مش `<button>` — مالوش تفاصيل تانية غير اللي في الكارتين،
    وزرار بيفتح نفس المعلومة تاني بيبقى تكرار. */
 .cl-split .cl-cell.sum{background:var(--zebra);border-color:var(--navy);cursor:default}
 .cl-split .cl-cell.sum::after{display:none}
 .cl-split .cl-cell.sum b{color:var(--ink);font-size:var(--fs-4)}
 .cl-cell span{font-size:var(--fs-1);color:var(--grey);font-weight:var(--fw-bold)}
-.cl-cell b{font-size:var(--fs-3);color:var(--navy);font-variant-numeric:tabular-nums}
+.cl-cell b{font-size:var(--fs-3);color:var(--accent);font-variant-numeric:tabular-nums}
 .cl-cell small{font-size:var(--fs-1);color:var(--grey);opacity:.85}
-.cl-cell.in b{color:var(--green)}
-.cl-cell.out b{color:var(--red)}
-.cl-cell.result{flex:1 1 180px;background:linear-gradient(135deg,var(--gold-light),var(--white));border-color:var(--gold)}
-.cl-cell.result b{font-size:var(--fs-5);color:var(--gold-dark)}
+.cl-cell.in b{color:var(--green-fg)}
+.cl-cell.out b{color:var(--red-fg)}
+.cl-cell.result{flex:1 1 180px;background:linear-gradient(135deg,var(--gold-light),var(--card));border-color:var(--gold)}
+.cl-cell.result b{font-size:var(--fs-5);color:var(--gold-fg)}
 .cl-cell.result.negative{background:var(--red-lt);border-color:var(--red)}
-.cl-cell.result.negative b{color:var(--red)}
+.cl-cell.result.negative b{color:var(--red-fg)}
 .cl-flow .op{align-self:center;font-style:normal;font-weight:var(--fw-black);font-size:var(--fs-4);color:var(--ink-mut)}
-.cl-flow .op.minus{color:var(--red)}
-.cl-flow .op.plus{color:var(--green)}
+.cl-flow .op.minus{color:var(--red-fg)}
+.cl-flow .op.plus{color:var(--green-fg)}
 /* ⚠️ **علامة تحويل داخلي — محايدة عن قصد.** الكاش بينتقل من الدرج لجيب مندوب
    والاتنين جوّه الرقم، فالإجمالي ما بيتغيّرش. لون أحمر (خروج) أو أخضر (دخول)
    كان هيقول إن فيه فلوس راحت أو جت وهو مش بيحصل. */
@@ -1024,15 +1024,15 @@ $percent = (int) ($t['percent'] ?? 0);
 .cl-review{padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-3);
   background:var(--card);box-shadow:var(--shadow-1)}
 .rv-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-4)}
-.rv-head-txt h2{margin:0;font-size:var(--fs-5);color:var(--navy)}
+.rv-head-txt h2{margin:0;font-size:var(--fs-5);color:var(--accent)}
 .rv-head-txt p{margin:2px 0 0;font-size:var(--fs-2);color:var(--grey)}
 .rv-gauge{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:2px var(--space-3);
   min-width:250px;padding:var(--space-3);border:1px solid var(--line);border-radius:var(--radius-2);background:var(--zebra)}
 .rv-gauge.done{border-color:var(--green);background:var(--green-lt)}
 .rv-gauge-num{display:flex;align-items:baseline;gap:1px;grid-row:span 2}
-.rv-gauge-num b{font-size:var(--fs-7);line-height:1;color:var(--navy);font-variant-numeric:tabular-nums}
+.rv-gauge-num b{font-size:var(--fs-7);line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
 .rv-gauge-num i{font-style:normal;font-size:var(--fs-2);color:var(--grey);font-weight:var(--fw-black)}
-.rv-gauge.done .rv-gauge-num b{color:var(--green)}
+.rv-gauge.done .rv-gauge-num b{color:var(--green-fg)}
 .rv-gauge-txt b{display:block;font-size:var(--fs-2);color:var(--ink)}
 .rv-gauge-txt small{font-size:var(--fs-1);color:var(--grey)}
 .rv-gauge-bar{grid-column:2;height:7px;border-radius:var(--radius-pill);background:var(--line);overflow:hidden}
@@ -1044,25 +1044,25 @@ $percent = (int) ($t['percent'] ?? 0);
   font-size:var(--fs-2);font-weight:var(--fw-bold)}
 .rv-locked{background:var(--zebra);border:1px solid var(--line2);color:var(--grey)}
 .rv-error{margin-top:var(--space-3);padding:var(--space-3);border-radius:var(--radius-2);
-  background:var(--red-lt);border:1px solid var(--red);color:var(--red);
+  background:var(--red-lt);border:1px solid var(--red);color:var(--red-fg);
   font-size:var(--fs-2);font-weight:var(--fw-black)}
 .rv-error[hidden]{display:none}
-.rv-stale-note{background:var(--gold-light);border:1px solid var(--gold);color:var(--gold-dark)}
+.rv-stale-note{background:var(--gold-light);border:1px solid var(--gold);color:var(--gold-fg)}
 
 /* أدوات البحث والفلترة */
 .rv-tools{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:var(--space-4) 0 var(--space-3)}
 .rv-search{flex:1 1 240px;display:flex;align-items:center;gap:var(--space-2);padding:0 var(--space-3);
-  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--white)}
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--card)}
 .rv-search input{flex:1;min-height:42px;border:0;background:transparent;font-family:inherit;font-size:var(--fs-2)}
 .rv-search input:focus{outline:0}
 .rv-filters{display:flex;gap:var(--space-1);flex-wrap:wrap}
 .rv-sort{display:flex;align-items:center;gap:var(--space-2);padding:0 var(--space-3);
-  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--white);color:var(--grey)}
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--card);color:var(--grey)}
 .rv-sort select{min-height:42px;border:0;background:transparent;font-family:inherit;
   font-size:var(--fs-2);color:var(--ink);cursor:pointer}
 .rv-sort select:focus{outline:0}
 .rv-fbtn{display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:0 var(--space-3);
-  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--white);
+  border:1px solid var(--line);border-radius:var(--radius-2);background:var(--card);
   color:var(--grey);font-family:inherit;font-size:var(--fs-2);font-weight:var(--fw-bold);cursor:pointer}
 .rv-fbtn b{padding:1px 7px;border-radius:var(--radius-pill);background:var(--zebra);
   font-size:var(--fs-1);color:var(--ink)}
@@ -1071,27 +1071,27 @@ $percent = (int) ($t['percent'] ?? 0);
 
 /* الأقسام */
 .rv-group{margin-bottom:var(--space-3);border:1px solid var(--line);border-radius:var(--radius-2);
-  background:var(--white);overflow:hidden}
-.rv-group.is-done{border-color:#bfe0cb}
+  background:var(--card);overflow:hidden}
+.rv-group.is-done{border-color:var(--green-line)}
 .rv-group.is-info{background:var(--zebra)}
 .rv-gh{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:var(--space-3);
   padding:var(--space-3);background:var(--zebra);border-bottom:1px solid var(--line)}
 .rv-group.is-done .rv-gh{background:var(--green-lt)}
 .rv-gicon{display:grid;place-items:center;width:38px;height:38px;border-radius:var(--radius-1);
-  background:var(--white);border:1px solid var(--line);font-size:var(--fs-4)}
+  background:var(--card);border:1px solid var(--line);font-size:var(--fs-4)}
 .rv-gtitle{min-width:0}
-.rv-gtitle b{display:block;font-size:var(--fs-3);color:var(--navy)}
+.rv-gtitle b{display:block;font-size:var(--fs-3);color:var(--accent)}
 .rv-gtitle small{font-size:var(--fs-1);color:var(--grey)}
 .rv-gstat{display:grid;justify-items:end;gap:2px}
 .rv-gcount{font-size:var(--fs-1);color:var(--grey);font-weight:var(--fw-black);font-variant-numeric:tabular-nums}
 .rv-gsum{font-size:var(--fs-3);font-variant-numeric:tabular-nums}
-.rv-gsum.out{color:var(--red)}
-.rv-gsum.in{color:var(--green)}
+.rv-gsum.out{color:var(--red-fg)}
+.rv-gsum.in{color:var(--green-fg)}
 .rv-gall{min-height:38px;padding:0 var(--space-3);border:1px solid var(--line2);border-radius:var(--radius-1);
-  background:var(--white);color:var(--navy);font-family:inherit;font-size:var(--fs-1);
+  background:var(--card);color:var(--accent);font-family:inherit;font-size:var(--fs-1);
   font-weight:var(--fw-black);cursor:pointer;white-space:nowrap}
 .rv-gall:hover{background:var(--navy);color:var(--white);border-color:var(--navy)}
-.rv-ginfo{padding:var(--space-2) var(--space-3);background:#f3eefa;color:#5d4180;font-size:var(--fs-1)}
+.rv-ginfo{padding:var(--space-2) var(--space-3);background:var(--tint-purple);color:var(--purple-fg);font-size:var(--fs-1)}
 
 /* البند — قلب الشاشة */
 .rv-list{display:grid}
@@ -1099,13 +1099,13 @@ $percent = (int) ($t['percent'] ?? 0);
   padding:var(--space-3);border-bottom:1px solid var(--line);
   transition:background var(--dur-fast) var(--ease)}
 .rv-item:last-child{border-bottom:0}
-.rv-item.is-done{background:#f4faf6}
-.rv-item.is-stale{background:#fffaf0;box-shadow:inset 3px 0 0 var(--gold)}
+.rv-item.is-done{background:var(--green-lt)}
+.rv-item.is-stale{background:var(--gold-light);box-shadow:inset 3px 0 0 var(--gold)}
 .rv-item[hidden]{display:none}
 .rv-pick{display:grid;place-items:center;width:44px;height:44px;cursor:pointer;margin:0}
 .rv-check{position:absolute;opacity:0;width:1px;height:1px}
 .rv-box{display:grid;place-items:center;width:26px;height:26px;border:2px solid var(--line2);
-  border-radius:var(--radius-1);background:var(--white);transition:all var(--dur-fast) var(--ease)}
+  border-radius:var(--radius-1);background:var(--card);transition:all var(--dur-fast) var(--ease)}
 .rv-box:after{content:"✓";font-size:var(--fs-2);font-weight:var(--fw-black);color:var(--white);
   transform:scale(.4);opacity:0;transition:all var(--dur-fast) var(--ease)}
 .rv-check:checked + .rv-box{background:var(--green);border-color:var(--green)}
@@ -1120,7 +1120,7 @@ $percent = (int) ($t['percent'] ?? 0);
    ممنوع أي نص هنا ينزل تحت fs-2 غير الختم والتحذير. */
 .rv-info{min-width:0;display:grid;gap:5px}
 .rv-title{margin:0;font-size:var(--fs-4);line-height:var(--lh-tight);
-  color:var(--navy);font-weight:var(--fw-black)}
+  color:var(--accent);font-weight:var(--fw-black)}
 .rv-title-sub{margin-inline-start:var(--space-2);font-size:var(--fs-2);
   color:var(--grey);font-weight:var(--fw-bold)}
 .rv-l1{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
@@ -1128,37 +1128,37 @@ $percent = (int) ($t['percent'] ?? 0);
   font-size:var(--fs-2);font-weight:var(--fw-black);letter-spacing:.2px}
 .rv-tag{padding:2px 9px;border-radius:var(--radius-pill);background:var(--zebra);border:1px solid var(--line);
   font-size:var(--fs-2);color:var(--grey);font-weight:var(--fw-bold)}
-.rv-tag.visa{background:#f3eefa;border-color:#ddd0ee;color:#5d4180}
+.rv-tag.visa{background:var(--tint-purple);border-color:var(--purple-line);color:var(--purple-fg)}
 /* v57 — «غير مدفوع»: اتحاسب من برّه الخزنة والعهدة، فمعلوماتي زي الفيزا */
-.rv-tag.unpaid{background:var(--gold-light);border-color:var(--gold);color:var(--gold-dark)}
-.rv-tag.box{background:#eef4fa;border-color:#cddeee;color:var(--navy)}
-.rv-tag.type{background:var(--gold-light);border-color:#e0cf8f;color:var(--gold-dark)}
-.rv-tag.rep{background:#eaf6ef;border-color:#c3e2ce;color:var(--green)}
+.rv-tag.unpaid{background:var(--gold-light);border-color:var(--gold);color:var(--gold-fg)}
+.rv-tag.box{background:var(--tint-navy);border-color:var(--navy-line);color:var(--accent)}
+.rv-tag.type{background:var(--gold-light);border-color:var(--gold-line);color:var(--gold-fg)}
+.rv-tag.rep{background:var(--green-lt);border-color:var(--green-line);color:var(--green-fg)}
 /* سطر الحقائق: العميل/الشركة/التوكيل/الجهة/العربية… ظاهرة بلا فتح أي شيء */
 .rv-facts{display:flex;flex-wrap:wrap;gap:4px var(--space-4);margin:0}
 .rv-facts>div{display:flex;align-items:baseline;gap:5px;min-width:0}
 .rv-facts dt{font-size:var(--fs-2);color:var(--grey);white-space:nowrap}
 .rv-facts dt:after{content:":"}
 .rv-facts dd{margin:0;font-size:var(--fs-2);color:var(--ink);font-weight:var(--fw-bold)}
-.rv-stamp{font-size:var(--fs-1);color:var(--green);font-weight:var(--fw-bold)}
-.rv-warn{font-size:var(--fs-2);color:var(--gold-dark);font-weight:var(--fw-black)}
+.rv-stamp{font-size:var(--fs-1);color:var(--green-fg);font-weight:var(--fw-bold)}
+.rv-warn{font-size:var(--fs-2);color:var(--gold-fg);font-weight:var(--fw-black)}
 .rv-money{display:grid;justify-items:end;gap:3px;white-space:nowrap}
 .rv-amt{font-size:var(--fs-5);font-weight:var(--fw-black);font-variant-numeric:tabular-nums;white-space:nowrap}
-.rv-amt.out{color:var(--red)}
-.rv-amt.in{color:var(--green)}
+.rv-amt.out{color:var(--red-fg)}
+.rv-amt.in{color:var(--green-fg)}
 .rv-calc{font-size:var(--fs-2);color:var(--grey);font-variant-numeric:tabular-nums}
-.rv-actual{font-size:var(--fs-2);color:var(--green);font-weight:var(--fw-black);font-variant-numeric:tabular-nums}
+.rv-actual{font-size:var(--fs-2);color:var(--green-fg);font-weight:var(--fw-black);font-variant-numeric:tabular-nums}
 .rv-actual.missing{color:var(--grey);font-weight:var(--fw-bold)}
 .rv-open{display:grid;place-items:center;width:36px;height:36px;border-radius:var(--radius-1);
-  background:var(--zebra);color:var(--navy);text-decoration:none;font-weight:var(--fw-black)}
+  background:var(--zebra);color:var(--accent);text-decoration:none;font-weight:var(--fw-black)}
 .rv-open:hover{background:var(--navy);color:var(--white)}
 .rv-open.placeholder{background:transparent}
 
 .rv-empty{display:grid;justify-items:center;gap:var(--space-1);padding:var(--space-6);
   border:1px dashed var(--line2);border-radius:var(--radius-2);background:var(--zebra);text-align:center}
 .rv-empty>span{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;
-  background:var(--green-lt);color:var(--green);font-weight:var(--fw-black)}
-.rv-empty b{font-size:var(--fs-3);color:var(--navy)}
+  background:var(--green-lt);color:var(--green-fg);font-weight:var(--fw-black)}
+.rv-empty b{font-size:var(--fs-3);color:var(--accent)}
 .rv-empty small{font-size:var(--fs-2);color:var(--grey)}
 .rv-nores{padding:var(--space-5);text-align:center;color:var(--grey);font-size:var(--fs-2)}
 .rv-manual{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);margin-top:var(--space-3)}
@@ -1171,16 +1171,16 @@ $percent = (int) ($t['percent'] ?? 0);
 /* الإقفال */
 .cl-close{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:var(--space-4);
   padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-3);background:var(--card)}
-.cl-close.is-ready{border-color:var(--gold);background:linear-gradient(135deg,var(--gold-light),var(--white))}
-.cl-close.is-closed{border-color:#bfe0cb;background:var(--green-lt)}
+.cl-close.is-ready{border-color:var(--gold);background:linear-gradient(135deg,var(--gold-light),var(--card))}
+.cl-close.is-closed{border-color:var(--green-line);background:var(--green-lt)}
 .cl-close-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:var(--radius-2);
   background:var(--zebra);font-size:var(--fs-5)}
 .cl-close.is-ready .cl-close-icon{background:var(--gold);color:var(--white)}
-.cl-close.is-closed .cl-close-icon{background:#cfe9d8}
+.cl-close.is-closed .cl-close-icon{background:var(--green-lt)}
 .cl-close-txt{display:grid;gap:2px;min-width:0}
-.cl-close-txt b{font-size:var(--fs-3);color:var(--navy)}
+.cl-close-txt b{font-size:var(--fs-3);color:var(--accent)}
 .cl-close-txt span{font-size:var(--fs-2);color:var(--grey)}
-.cl-close-txt strong{color:var(--navy)}
+.cl-close-txt strong{color:var(--accent)}
 .cl-close-meta{font-size:var(--fs-1);color:var(--grey)}
 .cl-close-act small{display:block;max-width:280px;text-align:end;font-size:var(--fs-1);color:var(--grey)}
 .cl-close-act .btn{min-height:46px}
@@ -1204,38 +1204,38 @@ button.rv-gsum:hover svg{opacity:1}
   padding:var(--space-2) 0;border-bottom:1px solid var(--line)}
 .cl-wal-row:last-child{border-bottom:0}
 .cl-wal-ic{display:grid;place-items:center;inline-size:30px;block-size:30px;flex:none;
-  border-radius:var(--radius-2);background:var(--bg-soft,#F2F6FC);color:var(--grey)}
-.cl-wal-row.is-drawer .cl-wal-ic{background:var(--gold-lt,#FBF3DE);color:var(--gold-dark)}
+  border-radius:var(--radius-2);background:var(--bg-soft,var(--tint-navy));color:var(--grey)}
+.cl-wal-row.is-drawer .cl-wal-ic{background:var(--gold-lt,var(--gold-light));color:var(--gold-fg)}
 .cl-wal-name{flex:1;min-width:0;font-weight:500;color:var(--ink);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-a.cl-wal-name:hover{color:var(--navy);text-decoration:underline}
+a.cl-wal-name:hover{color:var(--accent);text-decoration:underline}
 .cl-wal-amt{flex:none;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
-.cl-wal-row.is-neg .cl-wal-amt{color:var(--red)}
+.cl-wal-row.is-neg .cl-wal-amt{color:var(--red-fg)}
 .cl-wal-row.is-drawer .cl-wal-amt{font-size:var(--fs-4)}
 .cl-wal-note{margin:var(--space-3) 0 0;font-size:var(--fs-2);line-height:1.8;color:var(--grey)}
 .cl-wal-note b{color:var(--ink);font-variant-numeric:tabular-nums}
 /* ═══ استلام من المناديب (2026-07-31) — بيشارك ماركب `.cl-wal-*` ═══ */
-.cl-recv .cl-wal-sum{font-weight:700;font-size:var(--fs-5);color:var(--green);
+.cl-recv .cl-wal-sum{font-weight:700;font-size:var(--fs-5);color:var(--green-fg);
   font-variant-numeric:tabular-nums}
-.cl-recv .cl-wal-sum.is-neg{color:var(--red)}
+.cl-recv .cl-wal-sum.is-neg{color:var(--red-fg)}
 .cl-recv .cl-wal-sum small{font-weight:500;font-size:var(--fs-2);color:var(--grey)}
 .cl-recv-row form{margin:0;flex:none}
 /* الصف المتسوّى بيفضل ظاهر كـ«خلاص اتعمل» بدل ما يختفي بالسكوت */
 .cl-recv-done,.cl-recv-prev{margin-block-start:var(--space-3);padding-block-start:var(--space-2);
   border-block-start:1px dashed var(--line)}
-.cl-wal-row.is-prev .cl-wal-ic{background:var(--gold-lt,#FBF3DE);color:var(--gold-dark)}
+.cl-wal-row.is-prev .cl-wal-ic{background:var(--gold-lt,var(--gold-light));color:var(--gold-fg)}
 .cl-recv-tag{flex:none;font-size:var(--fs-1);color:var(--grey);
   padding:2px var(--space-2);border:1px solid var(--line);border-radius:var(--radius-pill)}
-.cl-wal-row.is-done .cl-wal-ic{background:var(--green-lt,#E3F1E7);color:var(--green)}
-.cl-wal-row.is-done .cl-wal-amt{color:var(--green)}
-.cl-wal-row.is-done.is-neg .cl-wal-amt{color:var(--red)}
+.cl-wal-row.is-done .cl-wal-ic{background:var(--green-lt,var(--green-lt));color:var(--green-fg)}
+.cl-wal-row.is-done .cl-wal-amt{color:var(--green-fg)}
+.cl-wal-row.is-done.is-neg .cl-wal-amt{color:var(--red-fg)}
 .cl-bar{position:sticky;bottom:0;z-index:var(--z-sticky);display:grid;
   grid-template-columns:auto 1fr auto;align-items:center;gap:var(--space-3);
   padding:var(--space-2) var(--space-3);border:1px solid var(--line);border-radius:var(--radius-2);
   background:rgba(255,255,255,.96);backdrop-filter:blur(6px);box-shadow:var(--shadow-3)}
 .cl-bar[data-ready="1"]{border-color:var(--green);background:rgba(227,241,231,.97)}
 .cl-bar-txt{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
-.cl-bar-txt b{font-size:var(--fs-3);color:var(--navy);font-variant-numeric:tabular-nums}
+.cl-bar-txt b{font-size:var(--fs-3);color:var(--accent);font-variant-numeric:tabular-nums}
 .cl-bar-txt span{font-size:var(--fs-1);color:var(--grey)}
 .cl-bar-line{height:8px;border-radius:var(--radius-pill);background:var(--line);overflow:hidden}
 .cl-bar-line i{display:block;height:100%;background:var(--gold);transition:width var(--dur-base) var(--ease)}

@@ -21,17 +21,17 @@ $kindColor = function(string $k) use ($creditKinds): string {
 .rep-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}
 .rep-hero .av{width:60px;height:60px;border-radius:50%;background:var(--navy);color:var(--gold);
   display:flex;align-items:center;justify-content:center;font-weight:600;font-size:var(--fs-6)}
-.rep-hero h2{margin:0;color:var(--navy)}
+.rep-hero h2{margin:0;color:var(--accent)}
 .rep-hero .meta{color:var(--grey);font-size:var(--fs-3)}
 .rep-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}
 .rep-sum .sc{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);padding:13px 12px;text-align:center}
 .rep-sum .sc .l{font-size:var(--fs-1);color:var(--grey);font-weight:500}
-.rep-sum .sc .v{font-size:var(--fs-6);font-weight:600;margin-top:4px;color:var(--navy)}
+.rep-sum .sc .v{font-size:var(--fs-6);font-weight:600;margin-top:4px;color:var(--accent)}
 .rep-sum .sc.bal{background:var(--navy)} .rep-sum .sc.bal .l{color:#dfe8f2} .rep-sum .sc.bal .v{color:var(--gold)}
-.rep-sum .sc .v.pos{color:var(--green)} .rep-sum .sc .v.neg{color:var(--red)}
+.rep-sum .sc .v.pos{color:var(--green-fg)} .rep-sum .sc .v.neg{color:var(--red-fg)}
 .entry-form{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
 .entry-form .field{margin:0}
-.st-settled{font-size:var(--fs-1);background:#eef2f7;color:var(--navy);padding:1px 8px;border-radius:var(--radius-2);font-weight:500}
+.st-settled{font-size:var(--fs-1);background:var(--zebra);color:var(--accent);padding:1px 8px;border-radius:var(--radius-2);font-weight:500}
 </style>
 
 <div class="page-actions p5-row tight">
@@ -48,7 +48,7 @@ $kindColor = function(string $k) use ($creditKinds): string {
   <span class="av"><?= e(initials($rep['name'])) ?></span>
   <div>
     <h2><?= e($rep['name']) ?>
-      <span class="rc-status <?= $rep['status']==='active'?'active':'inactive' ?>" style="font-size:.6em;vertical-align:middle;padding:2px 10px;border-radius:var(--radius-4);<?= $rep['status']==='active'?'background:#e6f4ec;color:var(--green)':'background:#f1f1f4;color:var(--grey)' ?>"><?= $rep['status']==='active'?'شغّال':'موقوف' ?></span>
+      <span class="rc-status <?= $rep['status']==='active'?'active':'inactive' ?>" style="font-size:.6em;vertical-align:middle;padding:2px 10px;border-radius:var(--radius-4);<?= $rep['status']==='active'?'background:var(--green-lt);color:var(--green-fg)':'background:#f1f1f4;color:var(--grey)' ?>"><?= $rep['status']==='active'?'شغّال':'موقوف' ?></span>
     </h2>
     <div class="meta">
       <?php if($rep['phone']): ?><bdi dir="ltr"><?= e($rep['phone']) ?></bdi> • <?php endif; ?>

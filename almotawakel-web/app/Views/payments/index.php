@@ -192,10 +192,10 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
 </div>
 
 <style>
-.cp-form-box{padding:14px 20px 18px;background:linear-gradient(180deg,#fafbfd,#fff)}
+.cp-form-box{padding:14px 20px 18px;background:linear-gradient(180deg,var(--zebra),var(--card))}
 .cp-form-grid{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:12px}
 .cp-route{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:12px}
-.cp-route-lbl{font-weight:600;color:var(--navy);font-size:var(--fs-3)}
+.cp-route-lbl{font-weight:600;color:var(--accent);font-size:var(--fs-3)}
 .cp-route-opt{display:flex;align-items:center;gap:6px;font-size:var(--fs-2);font-weight:400;cursor:pointer}
 .cp-visa-box{display:flex;align-items:center}
 .cp-visa-box select{padding:7px 10px;border:1px solid var(--line2);border-radius:var(--radius-1);font-family:inherit}

@@ -106,9 +106,9 @@ $label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
 .dir-bal{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:0 0 2px;
   background:var(--bg);border-radius:var(--radius-1);border:1px solid var(--line2)}
 .dir-bal-lbl{font-size:var(--fs-1);color:var(--grey);font-weight:500}
-.dir-bal-val{font-size:var(--fs-4);font-weight:600;color:var(--navy)}
-.dir-bal-val.due{color:var(--red)}.dir-bal-val.credit{color:var(--green)}
-.master-edit{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}.master-edit summary{cursor:pointer;font-weight:500;color:var(--navy)}
+.dir-bal-val{font-size:var(--fs-4);font-weight:600;color:var(--accent)}
+.dir-bal-val.due{color:var(--red-fg)}.dir-bal-val.credit{color:var(--green-fg)}
+.master-edit{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}.master-edit summary{cursor:pointer;font-weight:500;color:var(--accent)}
 .master-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.master-grid input,.master-line input,.master-line select{padding:7px;border:1px solid var(--line);border-radius:var(--radius-1);min-width:0}
 .master-line{display:flex;gap:7px;margin-top:8px}.master-line input,.master-line select{flex:1}
 .dir-card-profile{display:flex;flex-direction:column;gap:13px;color:inherit;text-decoration:none;border-radius:var(--radius-2);outline:none}

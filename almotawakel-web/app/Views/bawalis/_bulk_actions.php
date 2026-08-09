@@ -53,15 +53,15 @@ $bulkAllowOwner   = $bulkAllowOwner ?? true;
 <?php endif; ?>
 
 <style>
-.bill-bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border:1px solid #dfd4a8;border-radius:var(--radius-2);background:#fff9e8;position:sticky;top:8px;z-index:12;box-shadow:0 4px 14px rgba(21,53,91,.07)}
-.bill-bulk-bar span{font-weight:600;color:var(--navy)}.bill-bulk-bar button[disabled]{opacity:.45;cursor:not-allowed}
+.bill-bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border:1px solid var(--gold-line);border-radius:var(--radius-2);background:var(--gold-light);position:sticky;top:8px;z-index:12;box-shadow:0 4px 14px rgba(21,53,91,.07)}
+.bill-bulk-bar span{font-weight:600;color:var(--accent)}.bill-bulk-bar button[disabled]{opacity:.45;cursor:not-allowed}
 .bulk-modal[hidden]{display:none}.bulk-modal{position:fixed;inset:0;z-index:1000;background:rgba(13,29,49,.58);display:flex;align-items:center;justify-content:center;padding:20px}
-.bulk-modal-card{width:min(820px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:var(--radius-3);box-shadow:0 24px 70px rgba(0,0,0,.28)}.bulk-modal-card.small{width:min(560px,96vw)}
+.bulk-modal-card{width:min(820px,96vw);max-height:88vh;overflow:auto;background:var(--card);border-radius:var(--radius-3);box-shadow:0 24px 70px rgba(0,0,0,.28)}.bulk-modal-card.small{width:min(560px,96vw)}
 .bulk-modal-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:15px 18px;background:var(--navy);color:#fff}.bulk-modal-head b{font-size:var(--fs-4)}.bulk-close{border:0;background:transparent;color:inherit;font-size:var(--fs-7);cursor:pointer;line-height:1}
-.bulk-modal form{padding:18px}.bulk-unified{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.bulk-unified label,.bulk-owner-label{display:block;font-weight:600;color:var(--navy);font-size:var(--fs-2)}.bulk-unified input,.bulk-modal input[type=text],.bulk-modal input[type=number]{border:1px solid var(--line2);border-radius:var(--radius-1);padding:9px 11px;font-family:inherit}.bulk-modal input[type=text]{display:block;width:100%;margin-top:6px}
-.bulk-hint{font-size:var(--fs-1);color:var(--grey);line-height:1.7;margin:11px 0}.bulk-lines{border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden}.bulk-line{display:grid;grid-template-columns:1.4fr .8fr .9fr;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);font-size:var(--fs-2)}.bulk-line:last-child{border-bottom:0}.bulk-line:nth-child(even){background:#f8fafc}.bulk-line .ref{font-weight:600;color:var(--navy)}.bulk-line small{color:var(--grey)}.bulk-line input{width:100%;text-align:center}
+.bulk-modal form{padding:18px}.bulk-unified{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.bulk-unified label,.bulk-owner-label{display:block;font-weight:600;color:var(--accent);font-size:var(--fs-2)}.bulk-unified input,.bulk-modal input[type=text],.bulk-modal input[type=number]{border:1px solid var(--line2);border-radius:var(--radius-1);padding:9px 11px;font-family:inherit}.bulk-modal input[type=text]{display:block;width:100%;margin-top:6px}
+.bulk-hint{font-size:var(--fs-1);color:var(--grey);line-height:1.7;margin:11px 0}.bulk-lines{border:1px solid var(--line);border-radius:var(--radius-2);overflow:hidden}.bulk-line{display:grid;grid-template-columns:1.4fr .8fr .9fr;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);font-size:var(--fs-2)}.bulk-line:last-child{border-bottom:0}.bulk-line:nth-child(even){background:var(--zebra)}.bulk-line .ref{font-weight:600;color:var(--accent)}.bulk-line small{color:var(--grey)}.bulk-line input{width:100%;text-align:center}
 .bulk-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
-.bill-pick{width:18px;height:18px;accent-color:var(--gold,#C9A227);cursor:pointer}
+.bill-pick{width:18px;height:18px;accent-color:var(--gold,var(--gold));cursor:pointer}
 @media(max-width:700px){.bulk-line{grid-template-columns:1fr}.paid-summary-pick{grid-template-columns:auto 1fr}.bill-bulk-bar{position:static}}
 </style>
 

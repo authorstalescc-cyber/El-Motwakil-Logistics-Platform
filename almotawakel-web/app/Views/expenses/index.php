@@ -27,12 +27,12 @@ $srcClass = ['manual'=>'manual','permits'=>'permits','bawalis'=>'bawalis','takhl
 .exp-src .val{font-size:var(--fs-5);font-weight:500;margin-top:4px}
 .exp-src .cnt{font-size:var(--fs-1);color:var(--grey)}
 .src-pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:var(--fs-2);font-weight:400;white-space:nowrap}
-.src-manual{background:#e7f0fb;color:#15355B}
-.src-permits{background:#efe7fb;color:#5b2f8f}
-.src-bawalis{background:#fbe7ec;color:#8f2f45}
-.src-takhlis{background:#e7f6ef;color:#1f7a52}
-.src-shamil{background:#fdf3e0;color:#8a6d1a}
-.src-debt{background:#eae7f6;color:#4b3b8f}
+.src-manual{background:var(--tint-navy);color:var(--accent)}
+.src-permits{background:var(--tint-purple);color:var(--purple-fg)}
+.src-bawalis{background:var(--red-lt);color:var(--red-fg)}
+.src-takhlis{background:var(--green-lt);color:var(--green-fg)}
+.src-shamil{background:var(--gold-light);color:var(--gold-fg)}
+.src-debt{background:var(--tint-purple);color:var(--purple-fg)}
 .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
 tr.norec:hover{background:transparent!important}
 </style>

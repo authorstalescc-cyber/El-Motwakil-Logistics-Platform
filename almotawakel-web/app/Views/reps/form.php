@@ -14,7 +14,7 @@ $val = fn($k) => $row[$k] ?? '';
   <div class="form-group-title">بيانات المندوب</div>
   <div class="form-grid">
     <div class="field">
-      <label>الاسم <span style="color:var(--red)">*</span></label>
+      <label>الاسم <span style="color:var(--red-fg)">*</span></label>
       <input type="text" name="name" value="<?= e($val('name')) ?>" required autofocus placeholder="اسم المندوب">
     </div>
     <div class="field">

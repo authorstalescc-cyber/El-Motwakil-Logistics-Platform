@@ -347,7 +347,7 @@ $nav = $clean;
   </div>
 </div>
 <style>
-.free-edit-banner{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;border:1px solid #df9b76;border-radius:var(--radius-2);background:#fff0e8;color:#873b25}
+.free-edit-banner{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;border:1px solid #df9b76;border-radius:var(--radius-2);background:var(--gold-light);color:var(--red-fg)}
 .free-edit-banner b{font-weight:700}.free-edit-banner span{font-size:var(--fs-2);font-weight:500}
 </style>
 

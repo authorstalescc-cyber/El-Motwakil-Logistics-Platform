@@ -198,13 +198,26 @@ foreach ([':root\[data-theme="dark"\]', ':root:not\(\[data-theme="light"\]\)'] a
     if (preg_match('~' . $sel . '\s*\{(.*?)\}~s', $darkCode, $dm)) { $blk = $dm[1]; }
     $dt = $tokOf($blk);
     $dkCard = $dt['--card'] ?? null;
-    foreach (['--red', '--green', '--gold-dark'] as $tok) {
+    /* ⚠️⚠️ **الفحص ده اتغيّر 2026-08-09 مع إعادة بناء الوضع الليلي — وده مقصود.**
+       كان بيطلب إن `--red`/`--green`/`--gold-dark` **نفسها** تتكيّف، وده كان
+       بيصلّح دورًا ويكسر التاني: نفس التوكن مستعمل **تعبئة** كمان
+       (`background:var(--red)` في ٢٥ قاعدة) والنص فوقه أبيض — فالأحمر الفاتح
+       خلّى «أبيض على أحمر» **2.99:1** (اتقاست على شارة الداشبورد).
+       دلوقتي الدورين متفصولين: التوكن الأصلي = **تعبئة ثابتة**، و`‑fg` =
+       **نص بيتكيّف**. فالفحص بقى على `‑fg` — ومعاه حارس عكسي إن التعبئة
+       **ما اتكيّفتش** (لأن رجوعها بيكسر كل نص أبيض فوقها من تاني). */
+    foreach (['--accent', '--red-fg', '--green-fg', '--gold-fg',
+              '--teal-fg', '--purple-fg', '--sader-fg', '--warid-fg'] as $tok) {
         $v = $dt[$tok] ?? null;
-        chk($v !== null, "الليلي ($sel) بيعدّل `$tok` — لون دلالي/نصي بيتكيّف");
+        chk($v !== null, "الليلي ($sel) بيعدّل `$tok` — لون **نص** بيتكيّف");
         if ($v !== null && $dkCard !== null) {
             $ratio = $contrast($v, $dkCard);
             chk($ratio >= 4.5, sprintf('تباين `%s` على `--card` الليلي = %.2f:1 (≥ AA)', $tok, $ratio));
         }
+    }
+    foreach (['--red', '--green', '--gold-dark', '--navy', '--teal', '--purple'] as $tok) {
+        chk(!isset($dt[$tok]),
+            "⚠️ و`$tok` **تعبئة** فما بتتكيّفش — النص الأبيض فوقها بيعتمد على ثباتها");
     }
 }
 

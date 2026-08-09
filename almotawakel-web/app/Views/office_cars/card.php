@@ -409,8 +409,8 @@ $expAction = $editExp ? url('cars/expense/' . (int) $editExp['id'] . '/update')
 .car-eq-i{display:flex;flex-direction:column;gap:1px}
 .car-eq-i em{font-style:normal;font-size:var(--fs-1);color:var(--grey)}
 .car-eq-i b{font-size:var(--fs-3);color:var(--ink)}
-.car-eq-i.res b{color:var(--green)}
-.car-eq-i.res.neg b{color:var(--red)}
+.car-eq-i.res b{color:var(--green-fg)}
+.car-eq-i.res.neg b{color:var(--red-fg)}
 .car-eq-op{font-size:var(--fs-4);color:var(--grey);font-weight:700}
 
 .car-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:16px}

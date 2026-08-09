@@ -166,23 +166,23 @@ $e = $edit ?: null;
 <style>
 .pl-cols{display:grid;grid-template-columns:340px 1fr;gap:12px;margin-bottom:16px;align-items:start}
 .fld{display:block;margin-bottom:9px}
-.fld > span{display:block;font-size:var(--fs-1);font-weight:600;color:var(--navy);margin-bottom:4px}
+.fld > span{display:block;font-size:var(--fs-1);font-weight:600;color:var(--accent);margin-bottom:4px}
 .fld > span small{font-weight:400;color:var(--grey);font-size:var(--fs-1)}
 .fld input{width:100%}
 .fld-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pl-hint{font-size:var(--fs-1);color:var(--grey);background:var(--bg);border:1px dashed var(--line);
   border-radius:var(--radius-1);padding:7px 9px;margin-top:4px;line-height:1.6}
-.pl-h{color:var(--navy);font-size:var(--fs-4);margin:0 0 3px}
+.pl-h{color:var(--accent);font-size:var(--fs-4);margin:0 0 3px}
 .pl-sub{font-size:var(--fs-2);color:var(--grey);margin-bottom:8px}
-.pl-ok{color:#0f7a42;font-weight:600;font-size:var(--fs-2)}
-.pl-no{color:#8a6100;font-weight:600;font-size:var(--fs-2)}
-.pl-missing{background:#fffbf0}
+.pl-ok{color:var(--green-fg);font-weight:600;font-size:var(--fs-2)}
+.pl-no{color:var(--gold-fg);font-weight:600;font-size:var(--fs-2)}
+.pl-missing{background:var(--gold-light)}
 .pl-m{font-size:var(--fs-1);font-weight:600;padding:2px 8px;border-radius:99px}
-.pl-m.exact{background:#e8f8ee;color:#0f7a42}
-.pl-m.alias{background:#eef4fd;color:#1f5fa8}
-.pl-m.partial{background:#fff6e5;color:#8a6100}
-.pl-m.fuzzy{background:#fdeeee;color:#a12525}
-.pl-auto{background:#eef4fd;color:#1f5fa8;font-size:var(--fs-1);font-weight:600;padding:2px 7px;
+.pl-m.exact{background:var(--green-lt);color:var(--green-fg)}
+.pl-m.alias{background:var(--tint-navy);color:var(--accent)}
+.pl-m.partial{background:var(--gold-light);color:var(--gold-fg)}
+.pl-m.fuzzy{background:var(--red-lt);color:var(--red-fg)}
+.pl-auto{background:var(--tint-navy);color:var(--accent);font-size:var(--fs-1);font-weight:600;padding:2px 7px;
   border-radius:99px;margin-inline-start:5px;white-space:nowrap;cursor:help}
 .leaflet-container{font-family:inherit}
 @media(max-width:900px){.pl-cols{grid-template-columns:1fr}}

@@ -16,16 +16,16 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 .settings-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;border-bottom:2px solid var(--line);padding-bottom:2px}
 .settings-tabs .tab-btn{background:transparent;border:0;padding:10px 18px;border-radius:10px 10px 0 0;
   font-family:inherit;font-size:var(--fs-3);font-weight:500;color:var(--grey);cursor:pointer;position:relative;top:2px}
-.settings-tabs .tab-btn.active{color:var(--navy);background:var(--card);border:2px solid var(--line);border-bottom:2px solid var(--card)}
+.settings-tabs .tab-btn.active{color:var(--accent);background:var(--card);border:2px solid var(--line);border-bottom:2px solid var(--card)}
 .tab-panel{display:none;animation:tp .18s ease}
 .tab-panel.active{display:block}
 @keyframes tp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .set-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 @media(max-width:820px){.set-grid{grid-template-columns:1fr}}
 .lk-card{border:1px solid var(--line);border-radius:var(--radius-2);padding:16px;background:var(--card)}
-.lk-card h4{margin:0 0 4px;color:var(--navy);font-size:var(--fs-4)}
+.lk-card h4{margin:0 0 4px;color:var(--accent);font-size:var(--fs-4)}
 .lk-card .cnt{color:var(--grey);font-weight:400;font-size:var(--fs-2)}
-.maint-note{background:#f6f8ff;border:1px dashed #c5cbf0;border-radius:var(--radius-2);padding:14px 16px;color:var(--navy);line-height:1.8;margin-bottom:14px}
+.maint-note{background:var(--zebra);border:1px dashed var(--navy-line);border-radius:var(--radius-2);padding:14px 16px;color:var(--accent);line-height:1.8;margin-bottom:14px}
 /* تأكيد «مفردة جديدة فعلاً» — يتجاوز حارس الأسماء بقرار المالك.
    محلي عن قصد: مستعمل في الشاشة دي بس (قاعدة المشروع بتمنع الـ<style> المحلي
    للكلاسات **المشتركة** بين شاشتين، زي درس `.cars-period`). */
@@ -177,19 +177,19 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
 <!-- ============ تبويب: المساعد الذكي ============ -->
 <?php if ($canManageSecrets): ?>
 <style>
-.ai-onoff{display:flex;align-items:center;gap:8px;font-weight:500;color:var(--navy);font-size:var(--fs-4)}
+.ai-onoff{display:flex;align-items:center;gap:8px;font-weight:500;color:var(--accent);font-size:var(--fs-4)}
 .ai-onoff input{width:18px;height:18px}
 .ai-hint{display:block;color:var(--grey);font-size:var(--fs-1);margin-top:4px}
 .ai-key{border:1px solid var(--line);border-radius:var(--radius-2);padding:14px;margin-top:14px;background:var(--zebra)}
 .ai-key-top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-.ai-active{display:flex;align-items:center;gap:6px;color:var(--navy);white-space:nowrap}
+.ai-active{display:flex;align-items:center;gap:6px;color:var(--accent);white-space:nowrap}
 .ai-active input{width:16px;height:16px}
-.ai-name{flex:1;min-width:140px;padding:6px 10px;border:1px solid var(--line2);border-radius:var(--radius-1);font-family:inherit;background:#fff}
+.ai-name{flex:1;min-width:140px;padding:6px 10px;border:1px solid var(--line2);border-radius:var(--radius-1);font-family:inherit;background:var(--card)}
 .ai-key-in{display:flex;gap:8px}
 .ai-token{flex:1;padding:9px 12px;border:1px solid var(--line2);border-radius:var(--radius-1);font-family:var(--mono,monospace);background:var(--input);direction:ltr}
 .ai-res{margin-top:8px;font-size:var(--fs-2);font-weight:400;display:none}
 .ai-res.show{display:block}
-.ai-res.ok{color:var(--green)} .ai-res.err{color:var(--red)} .ai-res.muted{color:var(--grey)}
+.ai-res.ok{color:var(--green-fg)} .ai-res.err{color:var(--red-fg)} .ai-res.muted{color:var(--grey)}
 </style>
 <div class="tab-panel" id="tab-ai">
   <div class="card set-pad narrow">

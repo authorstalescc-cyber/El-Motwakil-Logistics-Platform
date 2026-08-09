@@ -59,15 +59,15 @@ $fmt = static function (array $field, string $side): string {
 </form>
 
 <style>
-.eyebrow{font-size:var(--fs-1);color:var(--muted)}.flash.warning{background:var(--gold-light);color:var(--gold-dark);border:1px solid var(--gold)}
+.eyebrow{font-size:var(--fs-1);color:var(--grey)}.flash.warning{background:var(--gold-light);color:var(--gold-fg);border:1px solid var(--gold)}
 .excel-confirm-list{padding:0;overflow:hidden}.excel-confirm-head,.excel-confirm-row{display:grid;grid-template-columns:minmax(150px,.8fr) minmax(150px,1fr) minmax(150px,1fr);gap:12px;align-items:center}
-.excel-confirm-head{padding:9px 15px;background:var(--zebra);color:var(--muted);font-size:var(--fs-1);font-weight:700}
-.excel-confirm-row{padding:13px 15px;border-top:1px solid var(--line)}.excel-confirm-row span{color:var(--muted)}
-.excel-confirm-row strong{color:var(--green);background:#f1fbf6;border:1px solid #b9dfc7;border-radius:8px;padding:8px}
-.excel-confirm-row small{grid-column:2/-1;color:var(--gold-dark)}
+.excel-confirm-head{padding:9px 15px;background:var(--zebra);color:var(--grey);font-size:var(--fs-1);font-weight:700}
+.excel-confirm-row{padding:13px 15px;border-top:1px solid var(--line)}.excel-confirm-row span{color:var(--grey)}
+.excel-confirm-row strong{color:var(--green-fg);background:var(--green-lt);border:1px solid var(--green-line);border-radius:8px;padding:8px}
+.excel-confirm-row small{grid-column:2/-1;color:var(--gold-fg)}
 .excel-result-card{margin-top:14px}.excel-result-card h2{margin-top:0;font-size:var(--fs-4)}
 .excel-results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.excel-results>div{background:var(--zebra);border:1px solid var(--line);border-radius:9px;padding:11px}
-.excel-results small{display:block;color:var(--muted);margin-bottom:5px}.excel-results b{font-size:var(--fs-5)}
+.excel-results small{display:block;color:var(--grey);margin-bottom:5px}.excel-results b{font-size:var(--fs-5)}
 .excel-final-form{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-top:14px;border:2px solid var(--navy)}
 .excel-final-form label{display:flex;align-items:center;gap:9px}.excel-final-form input[type=checkbox]{width:19px;height:19px;accent-color:var(--green)}
 @media(max-width:750px){.excel-confirm-head{display:none}.excel-confirm-row{grid-template-columns:1fr 1fr}.excel-confirm-row>b{grid-column:1/-1}.excel-confirm-row small{grid-column:1/-1}.excel-results{grid-template-columns:1fr 1fr}.excel-final-form{align-items:stretch;flex-direction:column}}

@@ -380,18 +380,44 @@ try {
     };
     $errPat = '/Fatal error|Warning:|Undefined variable|Undefined array key/';
 
-    $html = $render('index');
-    (!str_starts_with($html, '__ERR__') && !preg_match($errPat, $html) && str_contains($html, 'cs-hero'))
-        ? ok('الشاشة الرئيسية بترندر بلا أخطاء')
-        : bad('الشاشة الرئيسية: ' . substr(strip_tags($html), 0, 160));
-    str_contains($html, 'cs-budget-form') ? ok('لوح الميزانية موجود') : bad('لوح الميزانية ناقص');
-    str_contains($html, 'data-cs-for="expense"') ? ok('حقل فئة المصروف المشروط موجود')
-        : bad('حقل فئة المصروف ناقص');
-    str_contains($html, 'name="receipt"') ? ok('خانة إيصال المرفق موجودة') : bad('خانة الإيصال ناقصة');
-    substr_count($html, 'class="cs-kind"') === count(CompanySafe::MANUAL_KINDS)
-        ? ok('كل الأنواع اليدوية معروضة (' . count(CompanySafe::MANUAL_KINDS) . ')')
-        : bad('عدد أزرار النوع ' . substr_count($html, 'class="cs-kind"')
-              . ' مقابل ' . count(CompanySafe::MANUAL_KINDS));
+    /* ⚠️ **كل تبويب يترندر لوحده** — التبويبات بتحمّل بيانات مختلفة (`match`
+       في الكنترولر) فمتغيّر ناقص في واحد منهم ما يظهرش في اختبار الافتراضي. */
+    $tabs = \App\Controllers\CompanySafeController::TABS;
+    (count($tabs) === 4) ? ok('٤ تبويبات معرَّفة') : bad('عدد التبويبات ' . count($tabs));
+    $home = '';
+    foreach ($tabs as $t) {
+        $h = $render('index', ['tab' => $t]);
+        $good = !str_starts_with($h, '__ERR__') && !preg_match($errPat, $h) && str_contains($h, 'cs-drawer');
+        $good ? ok("تبويب «{$t}» بيرندر") : bad("تبويب «{$t}»: " . substr(strip_tags($h), 0, 150));
+        if ($t === 'overview') { $home = $h; }
+        // التبويب لازم يكون **رابط حقيقي** — التبديل بالجافاسكريبت بيكسر الرجوع والمشاركة.
+        str_contains($h, 'href="' . url('company-safe') . '?tab=' . $t . '"')
+            ? ok("رابط تبويب «{$t}» حقيقي") : bad("تبويب «{$t}» مش رابط");
+    }
+    // قيمة `tab` مجهولة من الرابط بترجع للافتراضي بدل ما تحاول تحمّل ملف مش موجود.
+    $h = $render('index', ['tab' => '../../etc/passwd']);
+    (!str_starts_with($h, '__ERR__') && str_contains($h, 'cs-card hero'))
+        ? ok('تبويب مجهول بيرجع للنظرة العامة (بلا include متغيّر)')
+        : bad('تبويب مجهول عدّى — خطر include من الرابط');
+
+    /* الدرج: **مقفول افتراضيًّا ومفتوح بـ`?new=1`** — الحالة في الرابط. */
+    (str_contains($home, 'id="csDrawer"') && preg_match('/id="csDrawer"[^>]*\shidden/', $home))
+        ? ok('الدرج مقفول افتراضيًّا') : bad('الدرج مفتوح بلا طلب');
+    $open = $render('index', ['tab' => 'overview', 'new' => '1']);
+    (str_contains($open, 'cs-drawer open') && !preg_match('/id="csDrawer"[^>]*\shidden/', $open))
+        ? ok('`?new=1` بيفتح الدرج من الخادم (شغّال بلا جافاسكريبت)')
+        : bad('`?new=1` ما بيفتحش الدرج — الإدخال بيعتمد على الجافاسكريبت');
+    str_contains($open, 'name="receipt"') ? ok('خانة إيصال المرفق موجودة') : bad('خانة الإيصال ناقصة');
+    str_contains($open, 'data-cs-for="expense"') ? ok('خانة فئة المصروف المشروطة موجودة')
+        : bad('خانة فئة المصروف ناقصة');
+    str_contains($open, 'data-cs-preview') ? ok('معاينة أثر الحركة موجودة') : bad('المعاينة ناقصة');
+    substr_count($open, 'class="cs-type in"') + substr_count($open, 'class="cs-type out"')
+        === count(CompanySafe::MANUAL_KINDS)
+        ? ok('كل الأنواع اليدوية ككروت (' . count(CompanySafe::MANUAL_KINDS) . ')')
+        : bad('عدد كروت النوع مش ' . count(CompanySafe::MANUAL_KINDS));
+    // الميزانية عاشت في تبويب المصروفات بعد إعادة التنظيم.
+    str_contains($render('index', ['tab' => 'expenses']), 'cs-budget-set')
+        ? ok('ضبط سقف الميزانية في تبويب المصروفات') : bad('ضبط الميزانية ناقص');
 
     foreach (['balance','in','out','to_office','expense','day','wallets','cats','parties','budget'] as $w) {
         $h = $render('drill', ['__args' => [$w]]);
@@ -423,10 +449,15 @@ try {
     // وضع التعديل بيرندر معبّى
     /* ⚠️ المبلغ بيرجع من القاعدة كنص `DECIMAL` (`3500.00`) — مقارنة بـ`3500`
        حرفيًّا بتفشل بإنذار كاذب. */
-    $h = $render('index', ['edit' => (string) $eId]);
-    (str_contains($h, 'cs-editing') && preg_match('/name="amount"[^>]*value="3500(\.00)?"/', $h))
-        ? ok('وضع التعديل بيرندر معبّى بالبيانات')
+    $h = $render('index', ['tab' => 'moves', 'edit' => (string) $eId]);
+    (str_contains($h, 'cs-drawer open') && preg_match('/name="amount"[^>]*value="3500(\.00)?"/', $h))
+        ? ok('`?edit=` بيفتح الدرج معبّى بالبيانات')
         : bad('وضع التعديل مش بيتعبّى');
+    /* ⚠️ النوع **مقفول** في التعديل — الدرج بيعرض `cs-picked` وحقل مخفي بدل
+       الكروت، لأن تغيير النوع نقل فلوس من محفظة لمحفظة (الموديل بيرفضه). */
+    (str_contains($h, 'cs-picked') && !str_contains($h, 'class="cs-type'))
+        ? ok('النوع مقفول في التعديل (كروت النوع مخفية)')
+        : bad('كروت النوع ظاهرة في التعديل — تغييره بيترفض من الموديل فالخيار كذب');
 
     $pdo->rollBack();
     near('الرولباك رجّع خزنة المكتب', Custody::balance(), $safe0);
@@ -476,8 +507,13 @@ $js  = '';
 foreach (glob(dirname(__DIR__) . '/public/assets/js/*.js') ?: [] as $j) { $js .= (string) file_get_contents($j); }
 /* ⚠️ `code_only` — الدوك بلوك فوق الشاشة بيوثّق قاعدة «صفر style محلي»
    وبيذكر الوسم نفسه، فالبحث الخام بيفشل بإنذار كاذب. */
-$viewSrc = code_only('app/Views/company_safe/index.php')
-         . code_only('app/Views/company_safe/_drill.php');
+// ⚠️ **كل ملفات الوحدة** — التبويبات والدرج اتقسموا لملفات في v68، وفحص
+//    ملفين بس كان هيسيب كلاسات الدرج بلا حارس.
+$viewSrc = '';
+foreach (glob(dirname(__DIR__) . '/app/Views/company_safe/*.php') ?: [] as $vf) {
+    if (basename($vf) === 'statement.php') { continue; }   // مستند A4 مستقل بستايله
+    $viewSrc .= code_only('app/Views/company_safe/' . basename($vf));
+}
 preg_match_all('/class="([^"<?]+)"/', $viewSrc, $m);
 $orphan = [];
 foreach ($m[1] as $blob) {
@@ -493,6 +529,14 @@ $orphan ? bad('كلاسات بلا شكل ولا سلوك: ' . implode(', ', arr
     ? ok('صفر `<style>` محلي في شاشة خزنة الشركة') : bad('فيه `<style>` محلي — هيفشل في النافذة');
 str_contains($js, 'data-cs-for') ? ok('خطّاف الحقول المشروطة موجود في app.js')
     : bad('data-cs-for بلا معالج — الحقول هتفضل كلها ظاهرة');
+str_contains($js, 'data-cs-preview') ? ok('خطّاف معاينة الأثر موجود في app.js')
+    : bad('data-cs-preview بلا معالج — المعاينة مش هتتحدّث');
+/* ⚠️ الدرج لازم يفضل شغّالًا **بلا جافاسكريبت**: الخلفية وزرار الإغلاق روابط
+   حقيقية، فلو السكربت وقع المالك لسه يقدر يقفل ويسجّل. */
+$drawerSrc = src('app/Views/company_safe/_drawer.php');
+(substr_count($drawerSrc, 'cs-drawer-scrim') >= 1 && str_contains($drawerSrc, '<a class="cs-drawer-scrim"'))
+    ? ok('خلفية الدرج رابط حقيقي (بتقفل بلا جافاسكريبت)')
+    : bad('خلفية الدرج مش رابط — القفل بيعتمد على الجافاسكريبت');
 
 echo "\n" . str_repeat('=', 62) . "\n";
 echo ($fail === 0 ? "✅ كل الفحوصات نجحت" : "❌ فيه فحوصات فشلت") . " — نجح {$pass} · فشل {$fail}\n";

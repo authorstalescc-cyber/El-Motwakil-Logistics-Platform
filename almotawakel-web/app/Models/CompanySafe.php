@@ -382,6 +382,13 @@ class CompanySafe
             $r['icon']      = self::icon($k);
             $r['is_in']     = self::isIn($k);
             $r['cat_label'] = !empty($r['category']) ? self::catLabel((string) $r['category']) : null;
+            /* ⚠️ **الجهة هي العنوان لما تكون موجودة** (قانون التصميم: الأيقونة
+               بدل الكلمة المتكررة). قايمة فيها «مصروف من خزنة الشركة» مكتوبة
+               ٨ مرات بتخفي المعلومة الوحيدة اللي بتفرّق الصفوف — اسم الجهة.
+               والنوع بيفضل ظاهرًا في الأيقونة وفي سطر الميتا. */
+            $r['title']     = trim((string) ($r['source'] ?? '')) !== ''
+                ? (string) $r['source'] : self::label($k);
+            $r['subtitle']  = $r['title'] === self::label($k) ? null : self::label($k);
             // ⚠️ الحركة المولَّدة من وحدة تانية ممنوع تتعدّل/تتمسح من هنا.
             $r['editable']  = $k !== 'from_client';
         }

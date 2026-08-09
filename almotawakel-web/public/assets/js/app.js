@@ -2749,69 +2749,118 @@
 })();
 
 /* ══════════════════════════════════════════════════════════════════════
-   خزنة الشركة `/company-safe` (v66) — اختصارات الفورم.
+   خزنة الشركة `/company-safe` — درج تسجيل الحركة (v68).
 
-   ⚠️ **تحسين تدريجي بحت**: نوع الحركة `radio` حقيقي والمبلغ خانة عادية، فلو
-      السكربت ده وقع الفورم لسه بيشتغل بالكامل. اللي بيضيفه هنا اختصارَين:
-        • زرار من الهيرو أو من شريط التصرّف بيختار النوع وينطّ للفورم.
-        • شريحة مبلغ بتملا خانة المبلغ.
+   ⚠️⚠️ **تحسين تدريجي بحت — الدرج شغّال بلا سطر جافاسكريبت واحد.**
+      حالته في الرابط (`?new=1` / `?edit={id}`) والخادم بيرندره مفتوحًا،
+      والخلفية وزرار الإغلاق `<a>` حقيقيان بيقفلوه بالتنقّل. اللي السكربت ده
+      بيضيفه: الفتح الفوري بلا رحلة سيرفر · القفل بـEsc · إخفاء الخانات
+      المشروطة · معاينة الأثر · شرايح المبالغ.
+   ⚠️ **المعاينة عرض لا حساب**: الرقم المعتمد بيتحسب في
+      `CompanySafe::create()` على الخادم. من غير السكربت التذييل بيفضل مكتوبًا
+      فيه الرصيد الحالي وبس — **مايكدبش أبدًا**.
    ⚠️ **بالتفويض على `document`** زي باقي خطّافات الملف — ومحصورة بالصفحة
-      اللي فيها `#csForm` فما بتلمسش أي شاشة تانية.
+      اللي فيها `#csDrawer` فما بتلمسش أي شاشة تانية.
    ══════════════════════════════════════════════════════════════════════ */
-(function companySafeForm() {
-  var form = document.getElementById('csForm');
-  if (!form) return;
+(function companySafeDrawer() {
+  var drawer = document.getElementById('csDrawer');
+  var form   = document.getElementById('csForm');
+  if (!drawer || !form) return;
 
-  /* v67 — الحقول المشروطة بالنوع (فئة المصروف · كارت الفيزا · المندوب).
-     ⚠️ **الإخفاء من الجافاسكريبت لا من الخادم** (نفس قاعدة خانات سيارات المكتب):
-        لو السكربت وقع، المدير لسه شايف كل الخانات ويقدر يسجّل، والخادم هو
-        اللي بيفرض القواعد في `CompanySafe::normalise`.
-     ⚠️ **الإخفاء ما بيمسحش أي قيمة متكتبة** (بعكس `data-dep`) — تبديل النوع
-        بالغلط كان هيضيّع اللي اتكتب. الخادم بيتجاهل الحقل اللي مش بتاع النوع. */
-  function syncKindFields() {
-    var picked = form.querySelector('input[name="kind"]:checked');
-    var kind = picked ? picked.value : '';
+  /* الأنواع اللي **بتنقّص** رصيد خزنة الشركة — لازم تفضل مطابقة لـ
+     `CompanySafe::IN_KINDS` بالعكس. لو اختلفت، المعاينة بتوري اتجاهًا غلطًا
+     (والرقم المحفوظ يفضل صح لأن الخادم هو الحكم). */
+  var OUT_KINDS = ['to_office', 'expense', 'to_visa', 'to_rep'];
+
+  var amountBox = form.querySelector('[data-cs-amount-input]');
+  var effect    = form.querySelector('[data-cs-preview]');
+
+  function currentKind() {
+    var picked = form.querySelector('input[name="kind"]:checked')
+              || form.querySelector('input[name="kind"][type="hidden"]');
+    return picked ? picked.value : '';
+  }
+
+  /* الخانات المشروطة.
+     ⚠️ الإخفاء **ما بيمسحش** أي قيمة متكتبة (بعكس `data-dep`) — تبديل النوع
+        بالغلط كان هيضيّع اللي اتكتب. الخادم بيتجاهل خانة مش بتاعة النوع. */
+  function syncFields() {
+    var kind = currentKind();
     form.querySelectorAll('[data-cs-for]').forEach(function (el) {
-      var want = el.getAttribute('data-cs-for').split(' ');
-      el.hidden = want.indexOf(kind) === -1;
+      el.hidden = el.getAttribute('data-cs-for').split(' ').indexOf(kind) === -1;
     });
   }
 
-  function pickKind(kind) {
-    var input = form.querySelector('input[name="kind"][value="' + kind + '"]');
-    if (!input) return false;
-    input.checked = true;
-    // ⚠️ `change` لازم يتبعت يدويًّا — التعيين البرمجي ما بيطلقش الحدث،
-    //    وفيه معالج «الفورم اتغيّر» (js-dirty-form) بيسمع عليه.
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    syncKindFields();
-    return true;
-  }
+  /* معاينة «الرصيد قبل ← بعد». بتختفي لو مفيش مبلغ — سهم لرقم زي الأول ضوضاء. */
+  function syncEffect() {
+    if (!effect || !amountBox) return;
+    var arw = effect.querySelector('.arw');
+    var out = effect.querySelector('.after');
+    if (!arw || !out) return;
 
-  form.addEventListener('change', function (e) {
-    if (e.target && e.target.name === 'kind') { syncKindFields(); }
-  });
-  syncKindFields();
-
-  document.addEventListener('click', function (e) {
-    var kindBtn = e.target.closest('[data-cs-kind]');
-    if (kindBtn) {
-      e.preventDefault();
-      if (!pickKind(kindBtn.getAttribute('data-cs-kind'))) return;
-      var card = document.getElementById('entry');
-      if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-      var amount = document.getElementById('csAmount');
-      if (amount) { setTimeout(function () { amount.focus(); }, 260); }
+    var amt  = parseFloat(amountBox.value);
+    var base = parseFloat(effect.getAttribute('data-cs-balance'));
+    if (!isFinite(amt) || amt <= 0 || !isFinite(base)) {
+      arw.hidden = true; out.hidden = true;
       return;
     }
+    var sign  = OUT_KINDS.indexOf(currentKind()) === -1 ? 1 : -1;
+    var after = base + sign * amt;
+    // نفس تنسيق `money0()`: بلا كسور وبفواصل الآلاف.
+    out.textContent = Math.round(after).toLocaleString('en-US');
+    out.classList.toggle('neg', after < 0);
+    arw.hidden = false; out.hidden = false;
+  }
+
+  function sync() { syncFields(); syncEffect(); }
+
+  form.addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'kind') { sync(); }
+  });
+  if (amountBox) { amountBox.addEventListener('input', syncEffect); }
+  sync();
+
+  /* شرايح المبالغ السريعة. */
+  form.addEventListener('click', function (e) {
     var chip = e.target.closest('[data-cs-amount]');
-    if (chip) {
-      e.preventDefault();
-      var box = document.getElementById('csAmount');
-      if (!box) return;
-      box.value = chip.getAttribute('data-cs-amount');
-      box.dispatchEvent(new Event('input', { bubbles: true }));
-      box.focus();
+    if (!chip || !amountBox) return;
+    e.preventDefault();
+    amountBox.value = chip.getAttribute('data-cs-amount');
+    amountBox.dispatchEvent(new Event('input', { bubbles: true }));
+    amountBox.focus();
+  });
+
+  /* الفتح الفوري: الروابط اللي بتودّي لـ`?new=1` بتفتح الدرج على طول بدل رحلة
+     سيرفر. ⚠️ الرابط بيفضل رابطًا حقيقيًّا — `Ctrl+click` والفتح في تبويب
+     جديد شغّالين لأننا بنتجاهل النقرات المعدَّلة. */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[href*="new=1"]');
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    if (!drawer.hidden) return;
+    e.preventDefault();
+
+    // النوع المطلوب من الرابط (`&kind=to_office`) لو موجود.
+    var m = /[?&]kind=([a-z_]+)/.exec(a.getAttribute('href') || '');
+    if (m) {
+      var radio = form.querySelector('input[name="kind"][value="' + m[1] + '"]');
+      if (radio) {
+        radio.checked = true;
+        // ⚠️ `change` لازم يتبعت يدويًّا — التعيين البرمجي ما بيطلقش الحدث،
+        //    وفيه معالج «الفورم اتغيّر» (js-dirty-form) بيسمع عليه.
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     }
+    drawer.hidden = false;
+    sync();
+    // العنوان يتحدّث عشان التحديث والمشاركة يفتحوا نفس الحالة.
+    try { history.replaceState(null, '', a.getAttribute('href')); } catch (err) {}
+    if (amountBox) { setTimeout(function () { amountBox.focus(); }, 120); }
+  });
+
+  /* Esc بيقفل — ومعاه العنوان بيرجع للتبويب عشان التحديث ما يفتحش الدرج تاني. */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || drawer.hidden) return;
+    var close = drawer.querySelector('.cs-drawer-scrim');
+    if (close) { window.location.href = close.getAttribute('href'); }
   });
 })();

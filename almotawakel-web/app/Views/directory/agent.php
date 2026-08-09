@@ -269,16 +269,16 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 .cp-stmt-cell{flex:1;min-width:170px;background:var(--bg);border:1px solid var(--line2);border-radius:var(--radius-2);
   padding:14px 16px;display:flex;flex-direction:column;gap:3px}
 .cp-stmt-cell span{font-size:var(--fs-2);color:var(--grey);font-weight:500}
-.cp-stmt-cell b{font-size:var(--fs-6);font-weight:600;color:var(--navy)}
+.cp-stmt-cell b{font-size:var(--fs-6);font-weight:600;color:var(--accent)}
 .cp-stmt-cell small{font-size:var(--fs-1);color:var(--grey)}
 .cp-op{display:flex;align-items:center;font-size:var(--fs-6);font-weight:600;color:var(--grey)}
-.cp-result.is-due{background:var(--red-lt);border-color:#e6b8b8}.cp-result.is-due b{color:var(--red)}
-.cp-result.is-credit{background:var(--green-lt);border-color:#bfe0c9}.cp-result.is-credit b{color:var(--green)}
-.cp-result.is-zero{background:var(--gold-light);border-color:#e6d9a8}
-.cp-form-box{padding:14px 20px 18px;border-bottom:1px solid var(--line2);background:linear-gradient(180deg,#fafbfd,#fff)}
+.cp-result.is-due{background:var(--red-lt);border-color:var(--red-line)}.cp-result.is-due b{color:var(--red-fg)}
+.cp-result.is-credit{background:var(--green-lt);border-color:var(--green-line)}.cp-result.is-credit b{color:var(--green-fg)}
+.cp-result.is-zero{background:var(--gold-light);border-color:var(--gold-line)}
+.cp-form-box{padding:14px 20px 18px;border-bottom:1px solid var(--line2);background:linear-gradient(180deg,var(--zebra),var(--card))}
 .cp-form-grid{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:12px}
 .cp-route{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:12px}
-.cp-route-lbl{font-weight:600;color:var(--navy);font-size:var(--fs-3)}
+.cp-route-lbl{font-weight:600;color:var(--accent);font-size:var(--fs-3)}
 .cp-route-opt{display:flex;align-items:center;gap:6px;font-size:var(--fs-2);font-weight:400;cursor:pointer}
 .cp-visa-box{display:flex;align-items:center}
 .cp-visa-box select{padding:7px 10px;border:1px solid var(--line2);border-radius:var(--radius-1);font-family:inherit}
@@ -286,10 +286,10 @@ foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owne
 .cp-hint{font-size:var(--fs-1);color:var(--grey)}
 /* إذن صُدِرت له فاتورة — تمييز بلون */
 tr.perm-invoiced td{background:var(--green-lt)!important}
-tr.perm-invoiced:hover td{background:#d5ecdd!important}
+tr.perm-invoiced:hover td{background:var(--green-lt)!important}
 tr.perm-invoiced td:first-child{box-shadow:inset 3px 0 0 var(--green)}
 .perm-inv-badge{display:inline-block;margin-inline-start:6px;font-size:var(--fs-1);font-weight:600;
-  color:var(--green);background:#fff;border:1px solid #bfe0c9;border-radius:var(--radius-4);padding:1px 8px;vertical-align:middle}
+  color:var(--green-fg);background:var(--card);border:1px solid var(--green-line);border-radius:var(--radius-4);padding:1px 8px;vertical-align:middle}
 @media(max-width:640px){.cp-op{display:none}}
 </style>
 <script>

@@ -52,6 +52,11 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
   .tt .l{color:var(--muted);font-size:var(--fs-2)}
   .tt .v{font-weight:700;font-size:var(--fs-5);margin-top:2px}
   .tt.bal{background:var(--navy);color:#fff;border-color:var(--navy)}
+  /* ⚠️ العنوان جوّه الكارت الكحلي كان بيرث `.tt .l{color:var(--muted)}` —
+     رمادي غامق على كحلي = **2.07:1**، يعني سطر «الرصيد المتاح» كان شبه
+     مختفي على ورقة بتروح للعميل. `.p5-on-navy` كانت معرَّفة في `app.css`
+     بس، والمستند ده **مستقل وما بيحمّلهاش**. */
+  .tt.bal .l,.p5-on-navy{color:#cfe0f5}
   table{width:100%;border-collapse:collapse;margin-top:8px;font-size:var(--fs-2)}
   th,td{border:1px solid var(--line);padding:7px 8px;text-align:center}
   th{background:var(--navy);color:#fff;font-weight:500}

@@ -72,6 +72,7 @@ $catalog = [
     'verify_permits_ui.php'       => ['impact' => 'read',       'self_guard' => false, 'note' => 'شاشة الإذن الواحدة بوضعين — رندر الوضعين بلا كتابة'],
     'verify_money_ui.php'         => ['impact' => 'read',       'self_guard' => false, 'note' => 'شاشات الفلوس باللغة الجديدة — رندر الشاشات ونوافذها بلا كتابة'],
     'verify_dark_print.php'       => ['impact' => 'none',       'self_guard' => false, 'note' => 'الوضع الليلي وتوحيد هوية الطباعة — فحص ملفات بلا قاعدة'],
+    'verify_dark_mode.php'        => ['impact' => 'none',       'self_guard' => false, 'note' => 'فصل دور اللون (تعبئة ≠ نص) وتطابق البلوكين الليليين و`var()` لتوكن معرَّف — فحص ملفات بلا قاعدة'],
     'verify_typography.php'       => ['impact' => 'none',       'self_guard' => false, 'note' => 'الخط والأوزان وسلالم المقاس/الاستدارة وشرايط الترويسة — فحص ملفات بلا قاعدة'],
     'verify_v56.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'مستندات الأطراف — fixtures ورندر داخل transaction ثم rollback'],
     'verify_kpi_context.php'      => ['impact' => 'read',       'self_guard' => false, 'note' => 'سياق كروت الأرقام — بيقارن آخر نقطة في الرسم برقم اليوم بالمليم بلا كتابة'],

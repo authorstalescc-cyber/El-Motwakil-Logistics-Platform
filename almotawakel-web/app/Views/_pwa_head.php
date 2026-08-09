@@ -114,7 +114,7 @@ $__updJs = \App\Core\App::basePath('public/assets/js/app-update.js');
 }
 #pwaSplash .pwa-card{
   position:relative; width:min(66vmin,330px); padding:min(4.4vmin,22px) min(5vmin,26px);
-  border-radius:min(9vmin,44px); background:linear-gradient(180deg,#fff 0%,#EEF3F9 100%);
+  border-radius:min(9vmin,44px); background:linear-gradient(180deg,var(--card) 0%,var(--tint-navy) 100%);
   box-shadow:0 18px 46px rgba(0,0,0,.42), 0 2px 0 rgba(255,255,255,.5) inset;
   display:flex; align-items:center; justify-content:center; overflow:hidden;
   animation:pwaPop .68s cubic-bezier(.22,.9,.28,1.2) both,
@@ -191,7 +191,7 @@ $__updJs = \App\Core\App::basePath('public/assets/js/app-update.js');
 @keyframes pwaBump{from{transform:scaleX(-1) translateY(0)} to{transform:scaleX(-1) translateY(-1.5px)}}
 @keyframes pwaSpeed{0%{opacity:0; transform:translateX(0)} 40%{opacity:.9} 100%{opacity:0; transform:translateX(9px)}}
 /* «تقليل الحركة»: تظهر بتلاشي بسيط والعربية واقفة — بلا أي حركة ولا لمعة */
-@media (prefers-reduced-motion: reduce){
+@media (prefers-reduced-motion:reduce){
   #pwaSplash::before,
   #pwaSplash .pwa-stage::before,
   #pwaSplash .pwa-card,

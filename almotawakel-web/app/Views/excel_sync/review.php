@@ -82,25 +82,25 @@ $selectableCount = count(array_filter($fields, static fn($f) => !empty($f['selec
 </form>
 
 <style>
-.eyebrow{font-size:var(--fs-1);color:var(--muted)}.flash.warning{background:var(--gold-light);color:var(--gold-dark);border:1px solid var(--gold)}
+.eyebrow{font-size:var(--fs-1);color:var(--grey)}.flash.warning{background:var(--gold-light);color:var(--gold-fg);border:1px solid var(--gold)}
 .excel-compare-head{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
 .excel-compare-head>div{display:grid;gap:3px;padding:5px 10px}.excel-compare-head>div+div{border-inline-start:1px solid var(--line)}
-.excel-compare-head small{color:var(--muted)}.excel-compare-head b{font-size:var(--fs-5)}.excel-compare-head span{color:var(--muted)}
+.excel-compare-head small{color:var(--grey)}.excel-compare-head b{font-size:var(--fs-5)}.excel-compare-head span{color:var(--grey)}
 .excel-pick-form{display:grid;gap:13px}.excel-field-group{padding:0;overflow:hidden}
 .excel-group-title{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
-.excel-group-title h2{font-size:var(--fs-4);margin:0}.excel-group-title span{color:var(--muted);font-size:var(--fs-2)}
+.excel-group-title h2{font-size:var(--fs-4);margin:0}.excel-group-title span{color:var(--grey);font-size:var(--fs-2)}
 .excel-field-head,.excel-field-row{display:grid;grid-template-columns:55px minmax(135px,.8fr) minmax(150px,1fr) minmax(150px,1fr) minmax(190px,1.2fr);gap:10px;align-items:center}
-.excel-field-head{padding:8px 14px;background:var(--zebra);font-size:var(--fs-1);color:var(--muted);font-weight:700}
+.excel-field-head{padding:8px 14px;background:var(--zebra);font-size:var(--fs-1);color:var(--grey);font-weight:700}
 .excel-field-row{padding:11px 14px;border-top:1px solid var(--line);cursor:default}
 .excel-field-row.can-pick{cursor:pointer}.excel-field-row.can-pick:hover{background:var(--gold-light)}
 .excel-field-row.is-different{border-inline-start:4px solid var(--gold)}.excel-field-row.is-same{opacity:.78}
 .excel-field-check{display:flex;justify-content:center}.excel-field-check input{width:19px;height:19px;accent-color:var(--green)}
 .excel-lock{color:var(--grey)}.excel-value{padding:7px 9px;border-radius:8px;min-height:35px;overflow-wrap:anywhere}
-.excel-value.system{background:var(--zebra);border:1px solid var(--line)}.excel-value.excel{background:#f1fbf6;border:1px solid #b9dfc7}
-.excel-field-state{display:grid;gap:3px}.excel-field-state em{font-style:normal;color:var(--muted);font-size:var(--fs-2)}
-.excel-field-state em.same{color:var(--green)}.excel-field-state em.pick{color:var(--gold-dark);font-weight:700}
-.excel-field-state small{font-size:var(--fs-1);line-height:1.45;color:var(--muted)}
+.excel-value.system{background:var(--zebra);border:1px solid var(--line)}.excel-value.excel{background:var(--green-lt);border:1px solid var(--green-line)}
+.excel-field-state{display:grid;gap:3px}.excel-field-state em{font-style:normal;color:var(--grey);font-size:var(--fs-2)}
+.excel-field-state em.same{color:var(--green-fg)}.excel-field-state em.pick{color:var(--gold-fg);font-weight:700}
+.excel-field-state small{font-size:var(--fs-1);line-height:1.45;color:var(--grey)}
 .excel-pick-actions{position:sticky;bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:18px;border:1px solid var(--navy);box-shadow:0 8px 28px #13233a22}
-.excel-pick-actions p{margin:5px 0 0;color:var(--muted);font-size:var(--fs-2)}
+.excel-pick-actions p{margin:5px 0 0;color:var(--grey);font-size:var(--fs-2)}
 @media(max-width:850px){.excel-field-head{display:none}.excel-field-row{grid-template-columns:42px 1fr 1fr}.excel-field-row>b{grid-column:2/-1}.excel-field-state{grid-column:2/-1}.excel-pick-actions{position:static;align-items:stretch;flex-direction:column}.excel-compare-head{grid-template-columns:1fr}.excel-compare-head>div+div{border-inline-start:0;border-top:1px solid var(--line)}}
 </style>

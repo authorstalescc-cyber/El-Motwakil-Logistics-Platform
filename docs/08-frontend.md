@@ -107,10 +107,22 @@ Server-rendered PHP: كل الصفحات templates تُلَفّ في layout وا
 نظام تصميم يدوي واحد (بدون framework)، تعليقاته عربية.
 
 ### اللوحة اللونية (CSS custom properties)
-- **الهوية:** `--navy:#15355B`, `--navy-dark:#0E2440`, `--navy-mid:#1E4B7A`؛ `--gold:#C9A227`, `--gold-light:#F3E9C6`.
-- **دلالية:** `--green:#1E6E3C`, `--red:#9B2C2C`, `--teal:#14746F`, `--purple:#5B3E7A`.
+
+> ⚠️ **القاعدة الحاكمة (إعادة بناء الوضع الليلي 2026-08-09): لكل لون دورَان،
+> ولكل دور توكن.** التوكن الأصلي = **تعبئة** (ثابتة في الوضعين)، و`-fg` =
+> **نص** (بيتكيّف في الليلي). خلط الدورين هو اللي كان مكسّر الوضع الليلي:
+> `color:var(--navy)` على سطح غامق تباينه **1.3:1**. التفاصيل الكاملة والقياسات
+> في [CHANGELOG](CHANGELOG.md) — و`bin/verify_dark_mode.php` بيحرس القاعدة.
+
+- **الهوية (تعبئة — ثابتة):** `--navy:#15355B`, `--navy-dark:#0E2440`, `--navy-mid:#1E4B7A`؛ `--gold:#C9A227`, `--gold-light:#F3E9C6`.
+- **دلالية (تعبئة — ثابتة):** `--green:#1E6E3C`, `--red:#9B2C2C`, `--teal:#14746F`, `--purple:#5B3E7A`.
+- **نصّية (بتتكيّف ليلاً):** `--accent`/`--accent-2` (بديل navy/navy-mid نصًّا) · `--red-fg` · `--green-fg` · `--gold-fg` · `--teal-fg` · `--purple-fg` · `--sader-fg` · `--warid-fg`. كلها **≥6.6:1 على `--card` الليلي**.
+- **ثابت فوق الأسطح الكحلية الدائمة:** `--gold-pale:#F3E9C6` (الهيرو/الترويسة/القائمة — `--gold-light` بيغمق ليلاً فما ينفعش هناك).
 - **محايدة:** `--ink:#1A2433` (نص), `--grey:#5A6472`, `--line/--line2` (حدود), `--bg:#F4F6F9`, `--card:#FFFFFF`, `--zebra:#F7F9FB`, `--input:#FFFDF3` (تعبئة إدخال دافئة).
-- **أخرى:** `--shadow/--shadow-lg`, `--radius:14px`, `--sidebar-w:248px`. الخط: `'Segoe UI','Tahoma',system-ui,...`، جذر 15px.
+- **أسطح بالارتفاع:** `--bg` (صفحة) → `--card` (+1) → `--surface-3` (طبقة عايمة: مودال/منسدلة) · `--zebra` (سطح غاطس). في الغامق **الظل ما بيبانش**، فالفصل بين الطبقات بقى **فرق إضاءة** لا ظل.
+- **أسطح خافتة وحدودها:** `--tint-navy/-teal/-purple` + `--navy-line`/`--gold-line`/`--green-line`/`--red-line`/`--teal-line`/`--purple-line` (الحدّ يتبع عائلة سطحه).
+- **أخرى:** `--overlay` (حجاب المودال) · `--focus` · `--map-filter` (قلب بلاطات Leaflet ليلاً) · `--shadow/--shadow-lg`, `--radius:14px`, `--sidebar-w:248px`. الخط: Cairo، جذر 15px.
+- ⚠️ **`--white` نص أبيض على داكن — مش سطح.** `background:var(--white)` غلط؛ السطح `--card`.
 
 ### RTL
 `body{direction:rtl}` عالميًا؛ كل شيء بـ **logical properties** (`inset-inline-start/end`, `margin-inline-start`, `border-inline-start`) — لا حاجة لورقة LTR منفصلة.

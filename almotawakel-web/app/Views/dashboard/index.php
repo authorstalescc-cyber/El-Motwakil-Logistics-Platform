@@ -306,8 +306,8 @@ $drill = static fn (string $what): string => url('dashboard/drill/' . $what);
 <!-- ═══════════════ الإدخال السريع الجماعي ═══════════════ -->
 <style>
 .qe-restore{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
-  background:#fdf3e0;border:1px solid #f0dca6;color:#7a5e12;border-radius:var(--radius-2);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-3)}
-.qe-restore b{color:#5a4310}
+  background:var(--gold-light);border:1px solid var(--gold-line);color:var(--gold-fg);border-radius:var(--radius-2);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-3)}
+.qe-restore b{color:var(--gold-fg)}
 .qe-restore-btns{display:flex;gap:8px;flex-shrink:0}
 </style>
 <div class="qe-modal" id="quickEntryModal" hidden aria-hidden="true">

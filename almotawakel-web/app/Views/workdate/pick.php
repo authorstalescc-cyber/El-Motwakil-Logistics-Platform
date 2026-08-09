@@ -68,7 +68,7 @@ $current = $current ?? $today;
 })();
 </script>
 <style>
-.wd-free-note{margin-bottom:14px;padding:11px 13px;border:1px solid #df9b76;border-radius:var(--radius-2);background:#fff0e8;color:#873b25;font-size:var(--fs-2);line-height:1.7}
+.wd-free-note{margin-bottom:14px;padding:11px 13px;border:1px solid #df9b76;border-radius:var(--radius-2);background:var(--gold-light);color:var(--red-fg);font-size:var(--fs-2);line-height:1.7}
 </style>
 </body>
 </html>

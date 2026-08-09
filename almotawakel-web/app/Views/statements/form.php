@@ -259,31 +259,31 @@ $issuedStatements = array_values(array_filter(
 
 <style>
   .st-tiles{display:grid;grid-template-columns:repeat(3,1fr)}
-  .stile{padding:16px;text-align:center;border:0;border-inline-start:1px solid var(--line);background:#fff;font-family:inherit;cursor:pointer;transition:.16s}
+  .stile{padding:16px;text-align:center;border:0;border-inline-start:1px solid var(--line);background:var(--card);font-family:inherit;cursor:pointer;transition:.16s}
   .stile:first-child{border-inline-start:none}
-  .stile:hover{background:#f8fbff;box-shadow:inset 0 -3px var(--gold,#C9A227)}
-  .stile b{display:block;font-size:var(--fs-5);color:var(--navy)}.stile span{font-size:var(--fs-1);color:var(--grey)}
-  .stile small{display:block;margin-top:5px;color:#8a6d10;font-size:var(--fs-1);font-weight:500}
-  .stile b.pos{color:var(--green,#1f7a52)}.stile b.neg{color:var(--red,#B4383E)}
-  .st-range{display:block;width:100%;padding:10px 16px;border:0;border-top:1px solid var(--line);background:#fff;text-align:right;font-family:inherit;font-size:var(--fs-2);color:var(--grey);cursor:pointer}
-  .st-range:hover{background:#f8fbff}
-  .st-range b{color:var(--navy)}
-  .st-pending-note{display:block;width:100%;padding:10px 16px;border:0;border-top:1px solid var(--line);text-align:right;font-family:inherit;font-size:var(--fs-2);color:#5A6472;background:#f7f8fb;cursor:pointer}
-  .st-pending-note:hover{background:#fff8df}
-  .st-pending-note b{color:var(--navy)}
+  .stile:hover{background:var(--tint-navy);box-shadow:inset 0 -3px var(--gold,#C9A227)}
+  .stile b{display:block;font-size:var(--fs-5);color:var(--accent)}.stile span{font-size:var(--fs-1);color:var(--grey)}
+  .stile small{display:block;margin-top:5px;color:var(--gold-fg);font-size:var(--fs-1);font-weight:500}
+  .stile b.pos{color:var(--green,var(--green-fg))}.stile b.neg{color:var(--red,var(--red-fg))}
+  .st-range{display:block;width:100%;padding:10px 16px;border:0;border-top:1px solid var(--line);background:var(--card);text-align:right;font-family:inherit;font-size:var(--fs-2);color:var(--grey);cursor:pointer}
+  .st-range:hover{background:var(--tint-navy)}
+  .st-range b{color:var(--accent)}
+  .st-pending-note{display:block;width:100%;padding:10px 16px;border:0;border-top:1px solid var(--line);text-align:right;font-family:inherit;font-size:var(--fs-2);color:var(--grey);background:var(--card);cursor:pointer}
+  .st-pending-note:hover{background:var(--gold-light)}
+  .st-pending-note b{color:var(--accent)}
   .st-drill-card{width:min(1180px,96vw);max-height:90vh;overflow:hidden}
   .st-drill-card .d-modal-body{max-height:calc(90vh - 62px)}
   .st-drill-table th,.st-drill-table td{white-space:nowrap;vertical-align:middle}
   .st-quick-freight{display:flex;align-items:center;gap:7px;min-width:270px;margin:0}
   .st-quick-freight input{width:125px;padding:8px 9px;border:1px solid var(--line);border-radius:var(--radius-1);font-family:inherit}
   .sec-head{display:flex;justify-content:space-between;align-items:center}
-  .chk-all{font-size:var(--fs-2);font-weight:500;color:var(--navy);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .chk-all{font-size:var(--fs-2);font-weight:500;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
   .st-list td,.st-list th{white-space:nowrap}
-  .st-list .pick{width:17px;height:17px;accent-color:var(--gold,#C9A227);cursor:pointer}
-  .paid-summary-pick{display:grid;grid-template-columns:auto repeat(2,1fr) 1.5fr;gap:16px;align-items:center;padding:18px;cursor:pointer;background:#fffdf6}
-  .paid-summary-pick>input{width:19px;height:19px;accent-color:var(--gold,#C9A227)}
-  .paid-summary-pick span{text-align:center}.paid-summary-pick span b{display:block;color:var(--navy);font-size:var(--fs-4)}.paid-summary-pick span small{color:var(--grey);font-weight:500}
-  .paid-summary-pick em{font-style:normal;color:#7a5f0e;font-size:var(--fs-2);line-height:1.7}
+  .st-list .pick{width:17px;height:17px;accent-color:var(--gold,var(--gold));cursor:pointer}
+  .paid-summary-pick{display:grid;grid-template-columns:auto repeat(2,1fr) 1.5fr;gap:16px;align-items:center;padding:18px;cursor:pointer;background:var(--gold-light)}
+  .paid-summary-pick>input{width:19px;height:19px;accent-color:var(--gold,var(--gold))}
+  .paid-summary-pick span{text-align:center}.paid-summary-pick span b{display:block;color:var(--accent);font-size:var(--fs-4)}.paid-summary-pick span small{color:var(--grey);font-weight:500}
+  .paid-summary-pick em{font-style:normal;color:var(--gold-fg);font-size:var(--fs-2);line-height:1.7}
   /* ⚠️ `.ct-chip` **اتنقلت لـ`app.css`**: كانت مكرَّرة حرفيًّا هنا وفي
      `permits/invoice_form.php` بقيمتين مختلفتين (padding 1px مقابل 2px)،
      وألوانها مكتوبة بالإيد فما كانتش بتشتغل في الوضع الليلي.

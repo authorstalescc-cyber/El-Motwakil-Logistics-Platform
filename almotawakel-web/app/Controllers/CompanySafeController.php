@@ -11,10 +11,23 @@ use App\Models\RepCustody;
 use App\Models\VisaCard;
 
 /**
- * خزنة الشركة (v66 · موسّعة في v67) — الخزنة الأكبر اللي بتغذّي خزنة المكتب.
+ * خزنة الشركة (v66 · v67 · **أُعيد تنظيمها في v68**) — الخزنة الأكبر اللي
+ * بتغذّي خزنة المكتب.
  *
- * ⚠️ **الوحدة معزولة عن كل حسابات الخزنة بالبناء** (`company_safe_entries` جدول
- *    خاص). أي أثر برّه الجدول بيمرّ على **API الوحدة التانية**:
+ * ═══ تنظيم v68 (بلاغ المالك: «الشكل مش عاجبني — عايزها احترافية وعصرية») ═══
+ * الشاشة كانت **صفحة واحدة طويلة** فيها ٧ أقسام تحت بعض ونموذج إدخال مزروع في
+ * نُصّها. بقت:
+ *   • **ترويسة + إجراء أساسي واحد** (`page_head`) — «حركة جديدة».
+ *   • **٤ تبويبات روابط حقيقية** (`?tab=`): نظرة عامة · الحركات · المصروفات ·
+ *     التقارير. الرجوع بالمتصفح والمشاركة والفتح في تبويب جديد شغّالين.
+ *   • **الإدخال في درج جانبي** بدل نموذج مضمَّن.
+ *
+ * ⚠️⚠️ **كل تبويب بيحمّل بياناته هو بس** — الاستعلامات مقسومة على `match`
+ *    فمفيش شاشة بتحسب سجل ٢٠٠ صف عشان تعرض كارت رصيد. الصفحة القديمة كانت
+ *    بتعمل كل استعلامات الأربع تبويبات في كل فتحة.
+ *
+ * ⚠️ **الوحدة معزولة عن كل حسابات الخزنة بالبناء** (`company_safe_entries`
+ *    جدول خاص). أي أثر برّه الجدول بيمرّ على **API الوحدة التانية**:
  *    `Custody::createTopup` · `VisaCard::createDeposit` · `RepCustody::createDeposit`
  *    — فمفيش سطر واحد في `Closing`/`DailyReview`/`Expense`/`Metrics` اتغيّر.
  *
@@ -27,9 +40,23 @@ class CompanySafeController extends Controller
     /** أقصى حجم إيصال — نفس حد مستندات الأطراف (v56). */
     private const MAX_UPLOAD = 12 * 1024 * 1024;
 
+    /** ⚠️ التبويبات قايمة بيضا — أي قيمة تانية من الرابط بترجع للافتراضي. */
+    public const TABS = ['overview', 'moves', 'expenses', 'reports'];
+
+    private static function tab(): string
+    {
+        $t = (string) ($_GET['tab'] ?? '');
+        return in_array($t, self::TABS, true) ? $t : 'overview';
+    }
+
     public function index(): void
     {
         $this->requireAuth();
+
+        $tab    = self::tab();
+        $day    = work_date();
+        $mStart = date('Y-m-01', strtotime($day));
+        $mEnd   = date('Y-m-t', strtotime($day));
 
         $f = [
             'kind' => (string) ($_GET['kind'] ?? ''),
@@ -39,73 +66,99 @@ class CompanySafeController extends Controller
             'q'    => (string) ($_GET['q'] ?? ''),
         ];
         $limit     = 200;
-        $day       = work_date();
         $officeBal = Custody::balance();
 
-        /* اتجاه آخر ١٤ يوم — استعلام واحد. كل عمود بيفلتر الشاشة على يومه،
-           فالرسم نقطة دخول مش صورة (قاعدة `mini_bars`). */
-        $trend = [];
+        /* وضع الدرج: `?new=1` أو `?edit={id}` — **حالة في الرابط لا في
+           الجافاسكريبت**، فالدرج بيفضل مفتوحًا لو الحفظ فشل، والرجوع بالمتصفح
+           بيقفله. ⚠️ الرابط مش مصدر ثقة: الصف لازم يكون موجود وقابل للتعديل. */
+        $editId  = (int) ($_GET['edit'] ?? 0);
+        $editRow = $editId > 0 ? CompanySafe::find($editId) : null;
+        if ($editRow && (string) $editRow['kind'] === 'from_client') { $editRow = null; }
+        $drawer  = $editRow !== null || ($_GET['new'] ?? '') !== '';
+
+        $data = [
+            'title'      => 'خزنة الشركة',
+            'tab'        => $tab,
+            'day'        => $day,
+            'mStart'     => $mStart,
+            'mEnd'       => $mEnd,
+            'ready'      => CompanySafe::ready(),
+            'balance'    => CompanySafe::balance(),
+            'officeBal'  => $officeBal,
+            // ⚠️ نفس دالة شاشة التقفيل — مفيش تعريف تاني لأي رصيد محفظة.
+            'wallets'    => Closing::walletSplit(),
+            'budget'     => CompanySafe::budgetProgress($day),
+            /* ⚠️ **تحذير وظيفي مش شرح**: المدير مايعرفش إن الدرج قرب يخلص غير
+               لما يفتح شاشة تانية. الحدّ مشتقّ من سلوك الشركة نفسها. */
+            'lowOffice'  => $officeBal < CompanySafe::officeLowThreshold(),
+            'filters'    => $f,
+            'cats'       => CompanySafe::EXPENSE_CATS,
+            'drawer'     => $drawer,
+            'editRow'    => $editRow,
+            'sources'    => CompanySafe::recentSources(),
+            'reps'       => RepCustody::available() ? RepCustody::activeReps() : [],
+            'lastClosed' => Closing::lastClosedDate(),
+            'entryState' => FormState::consume(
+                $editRow ? 'company_safe.entry.' . (int) $editRow['id'] : 'company_safe.entry',
+                'company-safe'),
+        ];
+
+        /* ⚠️⚠️ **كل تبويب بياناته هو بس.** الحساب المشترك فوق رخيص (أرصدة
+           مجمّعة)، والغالي (السجل · الاتجاه · تقارير الفئات) بيتحمّل عند
+           الحاجة. جمعهم كلهم في كل فتحة كان معناه ٦ استعلامات زيادة على كل
+           ضغطة تبويب. */
+        $data += match ($tab) {
+            'moves' => [
+                'rows'  => CompanySafe::ledger($f, $limit),
+                'total' => CompanySafe::countLedger($f),
+                'limit' => $limit,
+            ],
+            'expenses' => [
+                'catRows'   => CompanySafe::byCategory($mStart, $mEnd),
+                'partyRows' => CompanySafe::byParty($mStart, $mEnd, 12),
+                'rows'      => CompanySafe::ledger(
+                    ['kind' => 'expense', 'cat' => $f['cat'], 'from' => $mStart, 'to' => $mEnd], 100),
+            ],
+            'reports' => [
+                'monthTotals' => CompanySafe::monthTotals($day),
+                'breakdown'   => CompanySafe::breakdown(),
+                'trend'       => $this->trendBars($day),
+                'statement'   => CompanySafe::statement($mStart, $mEnd),
+            ],
+            default => [   // overview
+                'breakdown' => CompanySafe::breakdown(),
+                'dayTotals' => CompanySafe::dayTotals($day),
+                'trend'     => $this->trendBars($day),
+                'recent'    => CompanySafe::ledger([], 8),
+            ],
+        };
+
+        $this->render('company_safe/index', $data);
+    }
+
+    /**
+     * أعمدة اتجاه آخر ١٤ يوم — استعلام واحد.
+     * كل عمود بيفلتر تبويب الحركات على يومه، فالرسم **نقطة دخول مش صورة**.
+     */
+    private function trendBars(string $day): array
+    {
+        $bars = [];
         foreach (CompanySafe::daily($day, 14) as $p) {
             $move = $p['in'] + $p['out'];
-            $trend[] = [
+            $bars[] = [
                 'label'   => (int) substr($p['d'], 8, 2),
                 'value'   => $move,
-                // ⚠️ يوم بلا حركة بيفضل عمودًا رماديًّا **بلا رقم** — «0» مكرّرة
-                //    ١٠ مرات ضوضاء بتخفي الأيام اللي فيها شغل فعلاً.
+                /* ⚠️ يوم بلا حركة بيفضل عمودًا رماديًّا **بلا رقم** — «0» مكرّرة
+                   ١٠ مرات ضوضاء بتخفي الأيام اللي فيها شغل فعلاً. */
                 'display' => $move > 0 ? money0($move, false) : '',
-                'url'     => url('company-safe') . '?from=' . $p['d'] . '&to=' . $p['d'],
+                'url'     => url('company-safe') . '?tab=moves&from=' . $p['d'] . '&to=' . $p['d'],
                 'title'   => dfmt($p['d']) . ' — داخل ' . money($p['in'], false)
                            . ' · خارج ' . money($p['out'], false),
                 'on'      => $p['d'] === $day,
             ];
         }
         // الرسم بيتخفي لو كل الأيام صفر — عمود فاضي × ١٤ مش معلومة.
-        if (!array_filter($trend, static fn ($b) => $b['value'] > 0)) { $trend = []; }
-
-        $month = CompanySafe::monthTotals($day);
-
-        /* وضع التعديل: رابط عادي `?edit={id}` بيقلب الفورم لتعديل معبّى — بلا
-           جافاسكريبت، فالرجوع بالمتصفح والفتح في تبويب جديد شغّالين (نمط تعديل
-           مصروف السيارة). ⚠️ الرابط مش مصدر ثقة: الصف لازم يكون موجود وقابل
-           للتعديل، وإلا بنرجع لوضع الإضافة بدل ما نعرض فورم هيترفض. */
-        $editId  = (int) ($_GET['edit'] ?? 0);
-        $editRow = $editId > 0 ? CompanySafe::find($editId) : null;
-        if ($editRow && (string) $editRow['kind'] === 'from_client') { $editRow = null; }
-
-        $this->render('company_safe/index', [
-            'title'      => 'خزنة الشركة',
-            'balance'    => CompanySafe::balance(),
-            'breakdown'  => CompanySafe::breakdown(),
-            'dayTotals'  => CompanySafe::dayTotals($day),
-            'monthIn'    => $month['in'],
-            'monthOut'   => $month['out'],
-            'trend'      => $trend,
-            'sources'    => CompanySafe::recentSources(),
-            'day'        => $day,
-            'officeBal'  => $officeBal,
-            /* ⚠️ **تحذير وظيفي مش شرح**: المدير مايعرفش إن الدرج قرب يخلص غير
-               لما يفتح شاشة تانية. الحدّ مشتقّ من سلوك الشركة نفسها
-               (`officeLowThreshold`) لا رقم مكتوب بالإيد. */
-            'lowOffice'  => $officeBal < CompanySafe::officeLowThreshold(),
-            // ⚠️ نفس دالة شاشة التقفيل — مفيش تعريف تاني لأي رصيد محفظة.
-            'wallets'    => Closing::walletSplit(),
-            'lastClosed' => Closing::lastClosedDate(),
-            'ready'      => CompanySafe::ready(),
-            'rows'       => CompanySafe::ledger($f, $limit),
-            'total'      => CompanySafe::countLedger($f),
-            'limit'      => $limit,
-            'filters'    => $f,
-            'cats'       => CompanySafe::EXPENSE_CATS,
-            'catRows'    => CompanySafe::byCategory(date('Y-m-01', strtotime($day)),
-                                                    date('Y-m-t', strtotime($day))),
-            'budget'     => CompanySafe::budgetProgress($day),
-            /* ⚠️ كارت الفيزا بيترسم بـ`visa_card_select()` المشتركة (المصدر
-               الوحيد في النظام)، فمفيش قايمة كروت بتتمرّر هنا. المناديب بس
-               اللي محتاجين تمرير — مالهمش helper عام لغرض التنزيل. */
-            'reps'       => RepCustody::available() ? RepCustody::activeReps() : [],
-            'editRow'    => $editRow,
-            'entryState' => FormState::consume('company_safe.entry', 'company-safe'),
-        ]);
+        return array_filter($bars, static fn ($b) => $b['value'] > 0) ? $bars : [];
     }
 
     /**
@@ -139,11 +192,11 @@ class CompanySafeController extends Controller
            (درس `/payments` في المرحلة ١٤). */
         $rows = match ($what) {
             'wallets', 'cats', 'parties' => [],
-            'day'      => CompanySafe::ledger(['from' => $day, 'to' => $day], 500),
-            'to_office'=> CompanySafe::ledger(['kind' => 'to_office'], 500),
+            'day'       => CompanySafe::ledger(['from' => $day, 'to' => $day], 500),
+            'to_office' => CompanySafe::ledger(['kind' => 'to_office'], 500),
             'expense', 'budget' => CompanySafe::ledger(
                 ['kind' => 'expense', 'from' => $mStart, 'to' => $mEnd], 500),
-            default    => CompanySafe::ledger([], 500),
+            default     => CompanySafe::ledger([], 500),
         };
 
         $this->render('company_safe/_drill', [
@@ -191,9 +244,11 @@ class CompanySafeController extends Controller
 
         /* ⚠️ حقيبة `FormState` بتفرّق بين الإضافة والتعديل: لو الاتنين بنفس
            المفتاح، فشل التعديل بيرجّع البيانات في فورم الإضافة فالمالك يضيف
-           نسخة تانية بدل ما يصلّح الأصلية. */
+           نسخة تانية بدل ما يصلّح الأصلية.
+           ⚠️ والرجوع بيفتح **الدرج** تاني (`?new=1`/`?edit=`) عشان المالك
+              يلاقي اللي كتبه قدامه لا صفحة فاضية. */
         $bag  = $editing ? 'company_safe.entry.' . $id : 'company_safe.entry';
-        $back = $editing ? 'company-safe?edit=' . $id . '#entry' : 'company-safe#entry';
+        $back = $editing ? 'company-safe?edit=' . $id : 'company-safe?new=1';
         $fail = fn (array $errors) => $this->formFailure($bag, $back, $_POST, $errors, 'company-safe');
 
         // ⚠️ في التعديل النوع بييجي من **الصف المحفوظ** لا من الفورم (ممنوع يتغيّر).
@@ -276,7 +331,8 @@ class CompanySafeController extends Controller
         if ($kind === 'expense' && $b['over']) {
             $msg .= ' ⚠️ عدّيت ميزانية الشهر بـ' . money(abs($b['left']), false) . '.';
         }
-        $this->done($msg, 'company-safe', 'entry');
+        // بعد الحفظ بنرجع لتبويب الحركات — المكان اللي الحركة الجديدة بتبان فيه.
+        $this->done($msg, 'company-safe?tab=moves');
     }
 
     private static function successMessage(string $kind, float $amount): string
@@ -303,7 +359,7 @@ class CompanySafeController extends Controller
         try {
             CompanySafe::delete((int) $id);
         } catch (\Throwable $e) {
-            $this->fail($e->getMessage(), 'company-safe');
+            $this->fail($e->getMessage(), 'company-safe?tab=moves');
         }
         $extra = match (true) {
             !empty($row['custody_id'])      => ' ومعاها أثرها على خزنة المكتب.',
@@ -311,7 +367,7 @@ class CompanySafeController extends Controller
             !empty($row['rep_deposit_id'])  => ' ومعاها تنزيل عهدة المندوب.',
             default                         => '.',
         };
-        $this->done('اتمسحت الحركة' . $extra, 'company-safe');
+        $this->done('اتمسحت الحركة' . $extra, 'company-safe?tab=moves');
     }
 
     /** سقف المصروف الشهري — إعداد واحد، فاضي = مفيش سقف. */
@@ -323,7 +379,7 @@ class CompanySafeController extends Controller
         CompanySafe::setBudget($_POST['budget'] ?? null);
         $b = CompanySafe::budget();
         $this->done($b > 0 ? 'اتظبط سقف المصروف الشهري على ' . money($b, false) . '.'
-                           : 'اتشال سقف المصروف الشهري.', 'company-safe', 'budget');
+                           : 'اتشال سقف المصروف الشهري.', 'company-safe?tab=expenses');
     }
 
     /**

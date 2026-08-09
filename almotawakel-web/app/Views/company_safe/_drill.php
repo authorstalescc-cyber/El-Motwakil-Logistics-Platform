@@ -19,14 +19,15 @@ $entryRow = static function (array $r) use ($labels): void {
     $kind = (string) $r['kind'];
     $isIn = CompanySafe::isIn($kind);
     $meta = [['icon' => 'calendar', 'text' => dfmt((string) $r['entry_date'])]];
+    // ⚠️ نفس قاعدة الشاشة: الجهة عنوان والنوع ميتا — النافذة والقايمة لازم يتطابقوا.
+    if (!empty($r['subtitle'])) { $meta[] = ['icon' => CompanySafe::icon($kind), 'text' => (string) $r['subtitle']]; }
     if (!empty($r['category'])) { $meta[] = ['icon' => 'tag', 'text' => CompanySafe::catLabel((string) $r['category'])]; }
-    if ($r['source']) { $meta[] = ['icon' => 'user', 'text' => (string) $r['source']]; }
     if ($r['note'])   { $meta[] = ['icon' => 'file-text', 'text' => (string) $r['note']]; }
     if (!empty($r['custody_id']))      { $meta[] = ['icon' => 'landmark', 'text' => 'أثّرت على خزنة المكتب']; }
     if (!empty($r['visa_deposit_id'])) { $meta[] = ['icon' => 'credit-card', 'text' => 'أثّرت على كارت الفيزا']; }
     if (!empty($r['rep_deposit_id']))  { $meta[] = ['icon' => 'truck', 'text' => 'نزلت لمندوب']; }
     partial('row_item', [
-        'title'  => $labels[$kind] ?? $kind,
+        'title'  => (string) ($r['title'] ?? ($labels[$kind] ?? $kind)),
         'icon'   => CompanySafe::icon($kind),
         'meta'   => $meta,
         'amount' => ($isIn ? '+ ' : '- ') . money((float) $r['amount'], false),

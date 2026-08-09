@@ -11,8 +11,8 @@
 .reps-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px}
 .reps-top .fig{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);padding:14px 12px;text-align:center}
 .reps-top .fig .lbl{font-size:var(--fs-2);color:var(--grey);font-weight:500}
-.reps-top .fig .val{font-size:var(--fs-6);font-weight:600;margin-top:4px;color:var(--navy)}
-.reps-top .fig .val.neg{color:var(--red)}
+.reps-top .fig .val{font-size:var(--fs-6);font-weight:600;margin-top:4px;color:var(--accent)}
+.reps-top .fig .val.neg{color:var(--red-fg)}
 .rep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
 .rep-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-3);padding:16px 18px;
   display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;transition:box-shadow .15s,transform .15s}
@@ -20,15 +20,15 @@
 .rep-card .rc-head{display:flex;align-items:center;gap:12px}
 .rep-card .rc-av{width:46px;height:46px;border-radius:50%;background:var(--navy);color:var(--gold);
   display:flex;align-items:center;justify-content:center;font-weight:600;font-size:var(--fs-5);flex:0 0 auto}
-.rep-card .rc-name{font-weight:600;font-size:var(--fs-4);color:var(--navy)}
+.rep-card .rc-name{font-weight:600;font-size:var(--fs-4);color:var(--accent)}
 .rep-card .rc-phone{font-size:var(--fs-2);color:var(--grey);direction:ltr;text-align:right}
 .rep-card .rc-row{display:flex;justify-content:space-between;font-size:var(--fs-3);padding:4px 0;border-top:1px dashed var(--line)}
 .rep-card .rc-row .k{color:var(--grey)}
 .rep-card .rc-row .v{font-weight:500}
 .rep-card .rc-bal{font-weight:600}
-.rep-card .rc-bal.pos{color:var(--green)} .rep-card .rc-bal.neg{color:var(--red)}
+.rep-card .rc-bal.pos{color:var(--green-fg)} .rep-card .rc-bal.neg{color:var(--red-fg)}
 .rep-card .rc-status{font-size:var(--fs-1);font-weight:600;padding:2px 10px;border-radius:var(--radius-4)}
-.rc-status.active{background:#e6f4ec;color:var(--green)} .rc-status.inactive{background:#f1f1f4;color:var(--grey)}
+.rc-status.active{background:var(--green-lt);color:var(--green-fg)} .rc-status.inactive{background:var(--zebra);color:var(--grey)}
 </style>
 
 <div class="toolbar">

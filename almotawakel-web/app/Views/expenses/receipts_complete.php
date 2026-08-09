@@ -10,13 +10,13 @@ $oldIds = array_map('intval', (array) ($formState['old']['id'] ?? []));
 .rc-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px}
 .rc-head .rc-day{background:var(--navy);color:#fff;border-radius:var(--radius-2);padding:10px 16px;font-weight:500}
 .rc-head .rc-day b{color:var(--gold)}
-.rc-note{background:#fdf3e0;border:1px solid #f0dca6;color:#7a5e12;border-radius:var(--radius-2);padding:10px 14px;font-size:var(--fs-3);flex:1 1 320px}
+.rc-note{background:var(--gold-light);border:1px solid var(--gold-line);color:var(--gold-fg);border-radius:var(--radius-2);padding:10px 14px;font-size:var(--fs-3);flex:1 1 320px}
 .rc-tbl input{width:100%;max-width:160px}
 .rc-tbl .permit-cell b{display:block}
 .rc-tbl .permit-cell small{color:var(--grey);display:block;font-size:var(--fs-1)}
 .rc-cash{font-weight:500;white-space:nowrap}
-.rc-visa{font-size:var(--fs-1);color:#5b2f8f;background:#efe7fb;border-radius:999px;padding:1px 7px;margin-inline-start:6px}
-.rc-actionbar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);
+.rc-visa{font-size:var(--fs-1);color:var(--purple-fg);background:var(--tint-purple);border-radius:999px;padding:1px 7px;margin-inline-start:6px}
+.rc-actionbar{position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--line);
   padding:12px 4px;display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:4px}
 .rc-empty{text-align:center;padding:48px 16px;color:var(--grey)}
 .rc-empty .em{font-size:var(--fs-8);display:block;margin-bottom:8px}

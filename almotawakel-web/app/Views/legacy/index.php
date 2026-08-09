@@ -132,15 +132,15 @@ $cols = [
 
 <style>
 tr.rowlink{cursor:pointer}tr.rowlink:hover{background:var(--gold-light)!important}
-.lg-sug{position:absolute;top:calc(100% + 4px);inset-inline:0;z-index:50;background:#fff;
+.lg-sug{position:absolute;top:calc(100% + 4px);inset-inline:0;z-index:50;background:var(--card);
   border:1px solid var(--line);border-radius:var(--radius-2);box-shadow:0 8px 24px rgba(21,53,91,.15);
   max-height:320px;overflow:auto}
 .lg-sug .it{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
 .lg-sug .it:last-child{border-bottom:none}
 .lg-sug .it:hover,.lg-sug .it.on{background:var(--gold-light)}
-.lg-sug .nm{font-weight:600;color:var(--navy);flex:1}
+.lg-sug .nm{font-weight:600;color:var(--accent);flex:1}
 .lg-sug .ct{font-size:var(--fs-1);color:var(--grey)}
-.lg-sug .sim{font-size:var(--fs-1);font-weight:600;color:#8a6d10;background:var(--gold-light);
+.lg-sug .sim{font-size:var(--fs-1);font-weight:600;color:var(--gold-fg);background:var(--gold-light);
   border:1px solid var(--gold);border-radius:var(--radius-1);padding:1px 7px}
 .lg-sug .none{padding:12px;color:var(--grey);text-align:center;font-size:var(--fs-2)}
 </style>
