@@ -414,6 +414,45 @@ class PushNotify
         ]);
     }
 
+    /**
+     * بوابة المندوب اتقفلت للصيانة أو رجعت — **للمناديب وحدهم** (v68).
+     *
+     * ⚠️ **الرسالة كلها لازم تكون في نصّ الرنّة نفسه.** الأحداث التانية بتكتفي
+     *    بسطر وبترمي التفاصيل على رابط — وهنا الرابط بيروح على `m` اللي هي
+     *    **شاشة الصيانة نفسها** طول ما القفل شغّال. فلو النص ناقص، المندوب
+     *    بيدوس الرنّة عشان يفهم فيلاقي نفس الخبر بلا تفصيل.
+     *
+     * ⚠️ `meta.rep_url` إلزامية: `Notify::urlFor` بتشيل أي رابط مكتب عن
+     *    المندوب، والحدث ده جمهوره مناديب بس فبلاها بيوصل خبر بلا وجهة.
+     */
+    public static function repMaintenance(bool $on, string $msg, int $minutes, string $by): void
+    {
+        $msg = trim($msg);
+        if ($on) {
+            $bits = [];
+            if ($msg !== '') { $bits[] = $msg; }
+            $bits[] = $minutes > 0
+                ? 'متوقع يرجع خلال ' . $minutes . ' دقيقة'
+                : 'هنبعتلك أول ما يرجع';
+            $title = '🛠️ النظام بيتظبّط دلوقتي';
+            $body  = implode(' · ', $bits);
+        } else {
+            $title = '✅ النظام رجع — تقدر تسجّل عادي';
+            $body  = 'لو كنت كاتب بند نص، هتلاقيه مستنّيك زي ما هو.';
+        }
+
+        Notify::emit($on ? 'rep.maintenance.on' : 'rep.maintenance.off', [
+            'title'      => $title,
+            'body'       => $body,
+            'url'        => 'm',
+            'audience'   => 'rep',
+            'severity'   => $on ? 'warn' : 'info',
+            'actor_name' => $by,
+            'actor_type' => 'user',
+            'meta'       => ['rep_url' => 'm', 'minutes' => $minutes],
+        ]);
+    }
+
     /** إشعار مكتوب باليد من شاشة `/push`. */
     public static function custom(string $title, string $body, string $audience, ?string $url, string $by): void
     {

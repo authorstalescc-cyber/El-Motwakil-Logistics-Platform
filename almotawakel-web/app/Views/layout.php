@@ -108,31 +108,71 @@ $nav = $clean;
 </head>
 <body>
 <a class="skip-link" href="#main-content">تخطَّ إلى المحتوى الرئيسي</a>
-<script>try{if(localStorage.getItem('nav-collapsed')==='1'&&window.innerWidth>820)document.documentElement.classList.add('nav-collapsed');}catch(e){}</script>
 <div class="app">
+  <?php
+  /* ═══ القائمة: شريط أيقونات دائم + لوحة قسم تفتح عند الضغط (2026-08-09)
+     ⚠️ **السبب مقيس مش ذوق** (بلاغ المالك «تصميمها كبير وسيئ»): القائمة كانت
+        **٢٨ رابط + ٧ عناوين = ٣٥ صف بطول ~١٦٦٦px** في عمود واحد — يعني على
+        شاشة كبيرة **١٣ بند مخفي** وعلى لابتوب **٢٠**. قائمة تنقّل بتتطلب
+        تمرير عشان تتنقّل بيها هي أسوأ حالة ممكنة. الشريط بيوري **٧ أقسام**
+        بس، والقسم بيفتح شاشاته في لوحة جنبه.
+     ⚠️ **ماركب واحد للشاشة والموبايل**: نفس الـDOM، والموبايل بيعرض اللوحات
+        مفتوحة جوّه الدرج (CSS بس). ماركبان = واحد بيتنسى مع أول تعديل.
+     ⚠️ **الإظهار بكلاس مش `hidden`**: `[hidden]{display:none!important}`
+        بتغلب أي `display` من الـCSS (مصيدة موثَّقة) فالموبايل مكانش هيقدر
+        يعرضها. */
+  $secIcon = ['الرئيسية' => 'home', 'الشغل اليومي' => 'truck',
+              'حسابات العملاء' => 'receipt', 'أصحاب البيان' => 'file-text',
+              'الخزنة والمصروفات' => 'briefcase', 'المناديب' => 'users',
+              'السجلات والإدارة' => 'layers'];
+  // تجميع القايمة المسطّحة لأقسام — نفس `$nav` بعد فلترة الصلاحيات بالظبط
+  $groups = [];
+  foreach ($nav as $item) {
+      if ($item[2] === null) { $groups[] = ['label' => $item[1], 'items' => []]; continue; }
+      if (!$groups) { $groups[] = ['label' => 'الرئيسية', 'items' => []]; }
+      $groups[count($groups) - 1]['items'][] = $item;
+  }
+  $groups = array_values(array_filter($groups, static fn (array $g): bool => $g['items'] !== []));
+  ?>
   <aside class="sidebar" id="primary-sidebar" aria-label="التنقل الرئيسي">
     <div class="brand">
       <a href="<?= url('') ?>" class="brand-logo" aria-label="<?= e(App::setting('company_name','شركة المتوكل')) ?>">
         <img src="<?= url('assets/img/logo.png') ?>" alt="<?= e(App::setting('company_name','شركة المتوكل')) ?>" class="logo-full">
         <span class="logo-mark">م</span>
       </a>
-      <button type="button" class="nav-toggle" aria-label="طي القائمة" aria-controls="primary-sidebar" aria-expanded="true" title="طي / فتح القائمة">‹</button>
     </div>
     <nav class="nav" id="primary-nav" aria-label="أقسام النظام">
-      <?php foreach ($nav as [$seg, $label, $ic, $handler, $badge]):
-        if ($ic === null): ?>
-          <div class="section"><?= e($label) ?></div>
-      <?php else: $act = $isActive($seg); ?>
-          <a href="<?= url($seg) ?>" class="<?= $act ?>"<?= $act ? ' aria-current="page"' : '' ?>
-             <?= $badge ? 'data-badge="' . e($badge) . '"' : '' ?>>
-            <span class="ic"><?= icon($ic, 20) ?></span>
-            <span class="lbl"><?= e($label) ?></span>
-            <?php /* الشارة بتتملّى من /notifications/ping — بتفضل مخفية لحد ما يجي رقم */ ?>
-            <?php if ($badge): ?><span class="nav-cnt" hidden aria-hidden="true"></span><?php endif; ?>
-            <?php /* بديل title= الأصلي: tooltip منسّق بيظهر في الوضع المطوي بس */ ?>
-            <span class="nav-tip" role="tooltip"><?= e($label) ?></span>
-          </a>
-      <?php endif; endforeach; ?>
+      <?php foreach ($groups as $gi => $g):
+        $flyId = 'nav-fly-' . $gi;
+        // القسم «نشط» لو الصفحة المفتوحة جوّاه — عشان الشريط يقول انت فين
+        $secActive = false;
+        foreach ($g['items'] as $it) { if ($isActive($it[0]) !== '') { $secActive = true; break; } }
+      ?>
+        <div class="nav-sec-wrap<?= $secActive ? ' on' : '' ?>">
+          <button type="button" class="nav-sec<?= $secActive ? ' active' : '' ?>"
+                  aria-expanded="false" aria-controls="<?= e($flyId) ?>"
+                  data-fly="<?= e($flyId) ?>">
+            <span class="ic"><?= icon($secIcon[$g['label']] ?? 'folder', 21) ?></span>
+            <span class="lbl"><?= e($g['label']) ?></span>
+            <?php /* نقطة تنبيه للقسم — بتبان لو أي رابط جوّاه عليه رقم.
+                     `:has()` بتقراها من الـDOM فمفيش أي منطق JS جديد. */ ?>
+            <span class="sec-dot" aria-hidden="true"></span>
+            <span class="nav-tip" role="tooltip"><?= e($g['label']) ?></span>
+          </button>
+          <div class="nav-fly" id="<?= e($flyId) ?>">
+            <div class="section"><?= e($g['label']) ?></div>
+            <?php foreach ($g['items'] as [$seg, $label, $ic, $handler, $badge]): $act = $isActive($seg); ?>
+              <a href="<?= url($seg) ?>" class="<?= $act ?>"<?= $act ? ' aria-current="page"' : '' ?>
+                 <?= $badge ? 'data-badge="' . e($badge) . '"' : '' ?>>
+                <span class="ic"><?= icon($ic, 18) ?></span>
+                <span class="lbl"><?= e($label) ?></span>
+                <?php /* الشارة بتتملّى من /notifications/ping — نفس آلية زي ما هي */ ?>
+                <?php if ($badge): ?><span class="nav-cnt" hidden aria-hidden="true"></span><?php endif; ?>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        </div>
+      <?php endforeach; ?>
     </nav>
     <div class="foot">
       <span class="foot-full">الإصدار 1.0 — <?= date('Y') ?></span>

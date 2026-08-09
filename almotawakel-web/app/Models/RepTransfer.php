@@ -51,6 +51,10 @@ class RepTransfer
      */
     public static function create(int $fromRepId, array $d): int
     {
+        /* ⚠️ قفل الصيانة (v68) — الحارس العميق. المسار ده بوابة المندوب وحدها
+           (المكتب بيحوّل من `/rep-custody`)، فالقفل هنا ما بيعطّلش المكتب. */
+        RepMaintenance::assertOpen();
+
         if (!self::available()) {
             throw new RuntimeException('شغّل php bin/migrate_v46.php الأول.');
         }

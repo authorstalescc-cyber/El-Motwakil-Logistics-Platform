@@ -620,6 +620,9 @@ class RepPortal
      */
     public static function submit(int $repId, array $d): int
     {
+        /* ⚠️ قفل الصيانة (v68) — الحارس العميق. `RepPortalController` بيحجب
+           الشاشة، لكن الفورم مش مصدر ثقة والنقطة دي هي آخر باب قبل الكتابة. */
+        RepMaintenance::assertOpen();
         $token = trim((string) ($d['client_token'] ?? ''));
         // الاستدعاءات الداخلية/اختبارات v35 القديمة لا تعرف الرمز؛ نولّد لها واحدًا.
         // الواجهة نفسها ترسل رمزًا ثابتًا محفوظًا في المسودة كي تصبح الإعادة idempotent.
@@ -669,6 +672,9 @@ class RepPortal
     /** تعديل بند معلّق قبل أن يبدأ المكتب مراجعته. */
     public static function updateMine(int $repId, int $subId, array $d): array
     {
+        /* ⚠️ قفل الصيانة (v68) — الحارس العميق. `RepPortalController` بيحجب
+           الشاشة، لكن الفورم مش مصدر ثقة والنقطة دي هي آخر باب قبل الكتابة. */
+        RepMaintenance::assertOpen();
         $old = self::assertEditable($repId, $subId);
         $d['permit_id'] = (int) $old['permit_id'];
 
@@ -717,6 +723,9 @@ class RepPortal
     /** المندوب بيمسح بند بتاعه — المستني بس (المعتمد بقى بند حقيقي). */
     public static function deleteMine(int $repId, int $subId): ?string
     {
+        /* ⚠️ قفل الصيانة (v68) — الحارس العميق. `RepPortalController` بيحجب
+           الشاشة، لكن الفورم مش مصدر ثقة والنقطة دي هي آخر باب قبل الكتابة. */
+        RepMaintenance::assertOpen();
         $row = self::assertEditable($repId, $subId);
         $affected = Database::exec(
             "DELETE FROM rep_submissions
@@ -868,6 +877,9 @@ class RepPortal
      */
     public static function createPermit(int $repId, array $d): array
     {
+        /* ⚠️ قفل الصيانة (v68) — الحارس العميق. `RepPortalController` بيحجب
+           الشاشة، لكن الفورم مش مصدر ثقة والنقطة دي هي آخر باب قبل الكتابة. */
+        RepMaintenance::assertOpen();
         // ⚠️ v44 — الحارس الحقيقي هنا، مش في الواجهة ولا في الكنترولر بس:
         // ده المسار الوحيد لإنشاء إذن من بوابة المندوب، فأي طريق تاني (فورم
         // مزوّر، استدعاء مباشر) بيعدّي عليه إجباريًّا. الرفض هو الافتراضي.
@@ -1084,6 +1096,9 @@ class RepPortal
      */
     public static function createBill(int $repId, array $d): array
     {
+        /* ⚠️ قفل الصيانة (v68) — الحارس العميق. `RepPortalController` بيحجب
+           الشاشة، لكن الفورم مش مصدر ثقة والنقطة دي هي آخر باب قبل الكتابة. */
+        RepMaintenance::assertOpen();
         $n = self::normaliseBill($repId, $d);
 
         $data = [
@@ -1353,6 +1368,9 @@ class RepPortal
      */
     public static function deleteMyBill(int $repId, int $billId, string $day): void
     {
+        /* ⚠️ قفل الصيانة (v68) — الحارس العميق. `RepPortalController` بيحجب
+           الشاشة، لكن الفورم مش مصدر ثقة والنقطة دي هي آخر باب قبل الكتابة. */
+        RepMaintenance::assertOpen();
         if (OfficeDriverStatement::billAllocationTotal($billId) > 0.005) {
             throw new RuntimeException('البوليصة مرتبطة ببيان سائق سيارة المكتب — كلّم المكتب.');
         }
@@ -1447,6 +1465,9 @@ class RepPortal
      */
     public static function claimBillCustody(int $repId, int $billId): array
     {
+        /* ⚠️ قفل الصيانة (v68) — الحارس العميق. `RepPortalController` بيحجب
+           الشاشة، لكن الفورم مش مصدر ثقة والنقطة دي هي آخر باب قبل الكتابة. */
+        RepMaintenance::assertOpen();
         if (!RepBillCustody::ready()) {
             throw new RuntimeException('الميزة دي مش متفعّلة على النظام — كلّم المكتب.');
         }
@@ -1512,6 +1533,9 @@ class RepPortal
     /** المندوب بيلغي وسم سجّله بالغلط — الحالة بترجع زي ما كانت بالحرف. */
     public static function unclaimBillCustody(int $repId, int $billId): array
     {
+        /* ⚠️ قفل الصيانة (v68) — الحارس العميق. `RepPortalController` بيحجب
+           الشاشة، لكن الفورم مش مصدر ثقة والنقطة دي هي آخر باب قبل الكتابة. */
+        RepMaintenance::assertOpen();
         $bill = RepBillCustody::findMine($repId, $billId);
         if (!$bill) {
             throw new RuntimeException('البوليصة دي مش مسجّلة على عهدتك — حدّث الصفحة.');

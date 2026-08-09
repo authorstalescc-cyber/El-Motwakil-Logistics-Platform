@@ -29,22 +29,67 @@ use App\Models\RepSubmissionValidationException;
  */
 class RepPortalController extends Controller
 {
-    /** حارس بوابة المندوب — بديل requireAuth لكل action هنا. */
-    private function requireRep(): void
+    /**
+     * حارس بوابة المندوب — بديل requireAuth لكل action هنا.
+     *
+     * ⚠️ **ودي كمان نقطة قفل الصيانة الوحيدة** (v68): كل action في الكنترولر
+     *    ده بينادّيها، فالقفل بيسري على البوابة كلها بلا ما نفتكر نضيفه في
+     *    ٢٥ مكان. `bin/verify_rep_maintenance.php` بيعدّ نقاط الاستدعاء
+     *    ويفشل لو action عام جديد ما ناداهاش.
+     *
+     * @param bool $allowInMaintenance استثناء معلَن — `ping` وبس (شوف `ping()`).
+     */
+    private function requireRep(bool $allowInMaintenance = false): void
     {
-        if (!RepAuth::check()) { redirect('m/login'); }
+        if (!RepAuth::check()) {
+            /* ⚠️ **الطرد الصامت كان بلاغًا حقيقيًّا**: الجلسة بتخلص بالخمول
+               (٨ ساعات) أو المكتب بيوقف الحساب، فالمندوب بيتقذف على شاشة
+               الدخول **بلا كلمة واحدة** فيفتكر التطبيق باظ. الرسالة دي محايدة
+               عن قصد — ما بتقولش «حسابك متوقف» ولا «الحساب موجود»، فمفيش
+               تسريب يفيد مهاجمًا (نفس منطق `RepAuth::attempt`). */
+            flash('error', 'الجلسة خلصت — ادخل تاني.');
+            redirect('m/login');
+        }
+        if (!$allowInMaintenance) { $this->guardMaintenance(); }
+    }
+
+    /**
+     * البوابة مقفولة للصيانة؟ اعرض الشاشة واقف — **بلا تسجيل خروج**.
+     *
+     * ⚠️ ولا سطر هنا بيلمس الجلسة عن قصد: مسودة البند اللي المندوب كاتبه نص
+     *    متخزّنة في `localStorage` بمفتاح جلسته، والطرد كان هيضيّعها.
+     *
+     * ⚠️ **503 مش 200**: الحالة مؤقتة، و`Retry-After` بتقول للمتصفح والـPWA
+     *    إن دي مش الصفحة الحقيقية فما يعاملهاش كصفحة النظام.
+     */
+    private function guardMaintenance(): void
+    {
+        if (!\App\Models\RepMaintenance::isOn()) { return; }
+        http_response_code(503);
+        header('Retry-After: 300');
+        $this->render('m/maintenance', [
+            'title' => 'النظام بيتظبّط',
+            'state' => \App\Models\RepMaintenance::state(),
+            'backAt'=> \App\Models\RepMaintenance::backAtLabel(),
+        ], false);
+        exit;
     }
 
     // ═══════════════════════════════════════════ الدخول
 
     public function showLogin(): void
     {
+        /* ⚠️ شاشة الدخول **مقفولة هي كمان** وقت الصيانة، وقبل فحص الجلسة:
+           المندوب اللي جلسته خلصت لازم يشوف «بنظبّط النظام» بدل ما يدخل
+           بيانات صح ويترمي على شاشة صيانة بعدها بثانية. */
+        $this->guardMaintenance();
         if (RepAuth::check()) { redirect('m'); }
         $this->render('m/login', ['title' => 'دخول المندوب'], false);
     }
 
     public function login(): void
     {
+        $this->guardMaintenance();
         $this->requireCsrf();
         $res = RepAuth::attempt(
             (string) ($_POST['username'] ?? ''),
@@ -242,11 +287,33 @@ class RepPortalController extends Controller
      */
     public function ping(): void
     {
-        $this->requireRep();
+        /* ⚠️⚠️ **الاستثناء الوحيد من قفل الصيانة** — ومقصود:
+           ده النداء اللي بيخلّي التطبيق المفتوح في إيد المندوب يعرف إن
+           الصيانة **بدأت** (فيقفل نفسه) وإنها **خلصت** (فيفتح لوحده).
+           لو قفلناه زي الباقي، اللي التطبيق مفتوح عنده هيفضل شايف شاشة قديمة
+           لحد ما يعمل تحديث بإيده — وده بالظبط اللي الميزة عاملة عشانه. */
+        $this->requireRep(true);
+
+        if (\App\Models\RepMaintenance::isOn()) {
+            // رد رخيص: استعلامات عهدة المندوب مالهاش لازمة والبوابة مقفولة
+            $this->json(['maintenance' => 1, 'build' => \App\Core\App::buildId()]);
+            exit;
+        }
+
+        /* ⚠️ عدّاد الجرس راكب على **نفس النداء** بدل نداء تاني مستقل.
+           قبل كده الشاشة الرئيسية كانت بتضرب `/m/ping` كل ٦٠ث **و**
+           `/notifications/ping` كل ٦٠ث = ٢٬٨٨٠ طلب في اليوم لكل مندوب على
+           نت موبايله وبطاريته. المصدر لسه هو هو (`Notify::unreadCount`)
+           فمستحيل الرقم يختلف عن جرس المكتب. */
+        [$pt, $pk] = \App\Models\Notify::me();
+
         // `build` بتغذّي التحديث الإجباري من **نفس النداء** — صفر طلب زيادة.
         // بتتحطّ في الكنترولر مش في `pingState` لأنها شأن عميل لا بيانات مندوب.
-        $this->json(RepPortal::pingState(RepAuth::repId(), RepAuth::workDate())
-            + ['build' => \App\Core\App::buildId()]);
+        $this->json(RepPortal::pingState(RepAuth::repId(), RepAuth::workDate()) + [
+            'maintenance' => 0,
+            'unread'      => \App\Models\Notify::unreadCount($pt, $pk),
+            'build'       => \App\Core\App::buildId(),
+        ]);
         exit;
     }
 

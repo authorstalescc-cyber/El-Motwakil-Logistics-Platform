@@ -79,6 +79,13 @@ class Notify
         'track.stage'           => ['both',   'PermitController@index'],   // رحلة الشحنة (v62)
         'rep.transfer'          => ['office', 'RepCustodyController@index'],
 
+        /* ── قفل بوابة المندوب للصيانة (v68) ───────────────────────────────
+           ⚠️ `rep` **بلا معالِج صلاحية**: المعالِج بيفلتر بصلاحية فتح صفحة
+              مكتب، والحدث ده جمهوره مناديب وبس ووجهته `m`. حطّ معالِجًا هنا
+              = الخبر يتفلتر عن اللي هو موجّه له أصلاً. */
+        'rep.maintenance.on'    => ['rep',    null],
+        'rep.maintenance.off'   => ['rep',    null],
+
         /* ── أنواع المرحلة ٧ (تلقائية — بيولّدها العامل مش المستخدم) ────────
            ⚠️ كلها بتعدّي على `Notify::emitOnce` فمستحيل تتكرّر كل ٥ دقايق. */
         'remind.submissions'    => ['office', 'RepCustodyController@inbox'],
@@ -114,6 +121,8 @@ class Notify
         'rep.transfer'        => ['label' => 'تحويل بين مناديب',    'icon' => 'shuffle'],
         'driver.handover'     => ['label' => 'تسليم عهدة لسائق',    'icon' => 'coins'],
         'track.stage'         => ['label' => 'حالة رحلة اتحدّثت',   'icon' => 'map-pin'],
+        'rep.maintenance.on'  => ['label' => 'بوابة المناديب اتقفلت', 'icon' => 'wrench'],
+        'rep.maintenance.off' => ['label' => 'بوابة المناديب رجعت',  'icon' => 'check-circle'],
         'custom'              => ['label' => 'إشعار مكتوب',         'icon' => 'send'],
         'test'                => ['label' => 'تجربة',               'icon' => 'bell'],
         // المرحلة ٧ — تلقائية

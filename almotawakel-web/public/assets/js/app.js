@@ -361,16 +361,56 @@
     }
   })();
 
-  // طي/فتح القائمة الجانبية (شريط أيقونات) — على الشاشات الكبيرة، مع حفظ الحالة
-  const navToggle = document.querySelector('.nav-toggle');
-  if (navToggle) {
-    navToggle.addEventListener('click', () => {
-      const on = document.documentElement.classList.toggle('nav-collapsed');
-      navToggle.setAttribute('aria-expanded', on ? 'false' : 'true');
-      navToggle.setAttribute('aria-label', on ? 'فتح القائمة' : 'طي القائمة');
-      try { localStorage.setItem('nav-collapsed', on ? '1' : '0'); } catch (e) {}
+  /* ===== لوحة القسم في القائمة الجانبية (شريط أيقونات دائم) =====
+     ⚠️ حلّ محل زرار «طي/فتح» القديم: الشريط بقى مطويًّا دايمًا والقسم بيفتح
+        شاشاته في لوحة جنبه. `.nav-collapsed` وlocalStorage اتشالوا — مبقاش
+        ليهم معنى ووجودهم كان هيبقى حالة تانية للقائمة بلا داعٍ.
+     ⚠️ **على الموبايل ما بيشتغلش**: اللوحات بتبقى مفتوحة جوّه الدرج (CSS)،
+        فأي فتح/قفل هنا كان هيخفي أقسامًا في الدرج. الحدّ ٨٢٠ زي الـCSS. */
+  (function () {
+    const nav = document.getElementById('primary-nav');
+    if (!nav) { return; }
+    const isRail = () => window.matchMedia('(min-width:821px)').matches;
+    let openBtn = null;
+
+    function closeFly() {
+      if (!openBtn) { return; }
+      const fly = document.getElementById(openBtn.getAttribute('data-fly'));
+      if (fly) { fly.classList.remove('open'); }
+      openBtn.setAttribute('aria-expanded', 'false');
+      openBtn = null;
+    }
+    function openFly(btn) {
+      closeFly();
+      const fly = document.getElementById(btn.getAttribute('data-fly'));
+      if (!fly) { return; }
+      fly.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+      openBtn = btn;
+      /* ⚠️ لو اللوحة طلعت برّه الشاشة من تحت، بنرفعها — الأقسام الأخيرة في
+         الشريط بتبقى قريبة من أسفل الصفحة واللوحة بتتقص من غير ده. */
+      fly.style.top = '';
+      const r = fly.getBoundingClientRect();
+      if (r.bottom > window.innerHeight - 8) {
+        fly.style.top = Math.min(0, window.innerHeight - 8 - r.bottom - 6) + 'px';
+      }
+    }
+
+    nav.addEventListener('click', (e) => {
+      const btn = e.target.closest && e.target.closest('.nav-sec');
+      if (!btn || !isRail()) { return; }
+      e.preventDefault();
+      if (openBtn === btn) { closeFly(); return; }
+      openFly(btn);
     });
-  }
+    document.addEventListener('click', (e) => {
+      if (openBtn && !e.target.closest('.nav-sec-wrap')) { closeFly(); }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && openBtn) { const b = openBtn; closeFly(); b.focus(); }
+    });
+    window.addEventListener('resize', closeFly);
+  })();
 
   // ===== مودال تأكيد أنيق (للحفظ والحذف في كل النماذج) =====
   const modal = (function () {
@@ -2322,7 +2362,9 @@
         // أيقونات أنواع المرحلة ٧ (التذكيرات والملخّص اليومي)
         clock:      '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
         hourglass:  '<path d="M5 22h14M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.41L12 12l-4.41 4.42A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.41L12 12l4.41-4.42A2 2 0 0 0 17 6.17V2"/>',
-        'bar-chart':'<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>'
+        'bar-chart':'<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>',
+        // قفل بوابة المندوب للصيانة (v68) — لازم مطابقة لـ`icon('wrench')` في helpers.php
+        wrench:     '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>'
       };
       s.innerHTML = paths[name] || paths.alert;
       return s;
