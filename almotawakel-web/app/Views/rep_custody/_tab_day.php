@@ -251,9 +251,16 @@ $eq = static function (string $label, $value, string $cls = '') {
   ]); ?>
 <?php endif; ?>
 
+<?php /* ═══ ⑤ تنزيل عهدة — **نافذة منبثقة مش لوح في آخر الصفحة** ═══
+   ⚠️ بلاغ المالك (2026-08-09): «إضافة العهدة بتاخد وقت كبير عقبال ما أدخل
+      الصفحة ثم أعمل سكرول لآخر حاجة». اللوح فضل **في مكانه ومخفي**، وزرار
+      «نزّل عهدة» في ترويسة الكارت بيفتحه في نافذة (`data-open-form`) —
+      فالإجراء بقى ضغطة واحدة من أول الشاشة.
+   ⚠️ **مخفي مش متشال**: لو الجافاسكريبت وقع، الفورم لسه موجود في الـDOM
+      و`#deposit-form` لسه مرساة صالحة — وكل روابط «نزّله عهدة» في النظام
+      بتشاور عليها. والخادم ما اتغيّرش خالص. */ ?>
 <div class="grid-2">
-  <?php /* ═══ ⑤ تنزيل عهدة لليوم ═══ */ ?>
-  <div class="d-card" id="deposit-form">
+  <div class="d-card" id="deposit-form" hidden>
     <div class="d-card-head"><h3><?= icon('wallet', 18) ?> <span>نزّله عهدة</span></h3></div>
     <?= formErrorSummary($depositErrors) ?>
     <form class="js-dirty-form" method="post" action="<?= url('rep-custody/' . $repId . '/deposit') ?>" style="padding:14px 18px">
@@ -291,18 +298,16 @@ $eq = static function (string $label, $value, string $cls = '') {
               <option value="<?= e($k) ?>" <?= $srcNow === $k ? 'selected' : '' ?>><?= e($lbl) ?></option>
             <?php endforeach; ?>
           </select>
-          <?php /* ⚠️ الشرح من `sourceNote()` — نص واحد للشاشتين (هنا وصفحة الخزنة)
-                   عشان ما يتفرّعش نصّان يقولوا كلامًا مختلفًا لنفس الإجراء. */ ?>
-          <div class="hint"><?= e(\App\Models\RepCustody::sourceNote()) ?></div></div>
+          <?php /* ⚠️ **شرح `sourceNote()` اتشال** (بلاغ المالك 2026-08-09): كان
+                   ٣ جمل بتشرح نموذج الخزنة كله جنب `<select>` خياراته بتقول
+                   «من البنك» و«من درج المكتب» بالعربي. الاختيار واضح من غيره. */ ?>
+          </div>
       <?php endif; ?>
       <div class="field"><label>ملاحظة (اختياري)</label>
         <input type="text" name="note" maxlength="255" placeholder="عهدة يوم…"
                value="<?= e($depositOld['note'] ?? '') ?>"></div>
       <button class="btn gold" type="submit" data-primary-submit><?= icon('plus', 15) ?> نزّل العهدة</button>
-      <?php /* الشرح فوق جنب خانة المصدر لو ظاهرة — مايتكررش هنا. */ ?>
-      <?php if (!\App\Models\RepCustody::sourceMatters()): ?>
-        <div class="hint"><?= e(\App\Models\RepCustody::sourceNote()) ?></div>
-      <?php endif; ?>
+
     </form>
   </div>
 

@@ -88,7 +88,7 @@ if (str_starts_with($what, 'inbox_')) {
         }
         uasort($byRep, static fn ($a, $b) => $b['sum'] <=> $a['sum']);
         partial('drill', [
-            'how'   => 'المناديب اللي عندهم بنود مستنية مراجعتك — على كل الأيام مش على يوم العمل بس.',
+            'how'   => 'على كل الأيام مش يوم العمل',
             'count' => count($byRep),
             'total' => ['label' => 'إجمالي المستنّي', 'value' => money(array_sum(array_column($byRep, 'sum')), false)],
             'more'  => ['label' => 'عهدة المناديب', 'url' => url('rep-custody')],
@@ -131,13 +131,11 @@ if (str_starts_with($what, 'rep_')) {
     $sum = static fn (array $rs): string => money(array_sum(array_column($rs, 'amount')), false);
 
     if ($what === 'rep_deposits') {
-        /* ⚠️ **الجملة القديمة «تنزيل العهدة ما بيخصمش من خزنة المكتب» بقت غلط**
-           من v61: التنزيل مصدره «درج المكتب» **بيخصم** فعلاً في قاعدة المرحلة ٢.
-           الشرح دلوقتي من `RepCustody::sourceNote()` — نفس النص اللي جنب خانة
-           الإدخال، فبيتغيّر مع النموذج ومستحيل يتفرّع. */
+        /* ⚠️ **`how` اتشال** (بلاغ المالك 2026-08-09): كان بيعيد عنوان النافذة
+           («العهدة اللي نزلت لـفلان في يوم كذا») وبعده محاضرة من `sourceNote()`
+           عن نموذج الخزنة. العنوان بيقول النطاق، والصفوف بتقول البنود، والمجموع
+           بيقول الرقم — والسطر ده كان بيشرح الشاشة لنفسها. */
         partial('drill', [
-            'how'   => 'العهدة اللي نزلت لـ' . $name . ' في يوم ' . $dayTxt . '. '
-                     . \App\Models\RepCustody::sourceNote(),
             'count' => count($rows),
             'total' => ['label' => 'نزل له اليوم', 'value' => $sum($rows)],
             'more'  => ['label' => 'كارت المندوب', 'url' => $repUrl],
@@ -162,7 +160,7 @@ if (str_starts_with($what, 'rep_')) {
 
     if ($what === 'rep_pending') {
         partial('drill', [
-            'how'   => 'البنود النقدية التي دفعها ' . $name . ' في ' . $dayTxt . ' ولسه مستنية اعتمادك؛ هي وحدها المطروحة مؤقتًا من «فاضل معاه».',
+            'how'   => 'مطروحة مؤقتًا من «فاضل معاه»',
             'count' => count($rows),
             'total' => ['label' => 'مستني مراجعتك', 'value' => $sum($rows)],
             'more'  => ['label' => 'صندوق المراجعة', 'url' => url('rep-custody/inbox')],
@@ -192,15 +190,16 @@ if (str_starts_with($what, 'rep_')) {
         return;
     }
 
+    /* ⚠️ **الشروح اتقصّت لحقائق وظيفية بس** (قانون التصميم بند ١): كانت جمل
+       بتعيد اسم المندوب والتاريخ (وهُمّ في عنوان النافذة أصلاً) وبتشرح الشاشة
+       لنفسها. اللي فضل هو اللي **لو اتشال المالك ياخد قرار غلط**: البند ده
+       خصم من أنهي محفظة. واللي عنوانه بيكفيه مالوش سطر خالص. */
     $howMap = [
-        'rep_spent'     => 'كل اللي صرفه ' . $name . ' من عهدته في ' . $dayTxt . '.',
-        'rep_receipts'  => 'إيصالات الأذونات اللي سجلها ' . $name . ' في ' . $dayTxt . '، مع توضيح ما خرج فعلًا من عهدته.',
-        'rep_expenses'  => 'مصروفات الأذونات اللي سجلها ' . $name . ' في ' . $dayTxt . '، مع توضيح ما خرج فعلًا من عهدته.',
-        'rep_misc'      => 'نثريات ' . $name . ' في ' . $dayTxt . ' — مصروف شركة بلا إذن، ما بيدخلش أي حساب عميل.',
-        'rep_handover'  => 'عهد سلّمها ' . $name . ' لسائقين في ' . $dayTxt . ' — بتنقص من عهدته وبس.',
-        'rep_transfer'  => 'كاش حوّله ' . $name . ' لزملاء في ' . $dayTxt . ' — بينتقل من محفظة لمحفظة والإجمالي ثابت.',
-        'rep_visa'      => 'بنود ' . $name . ' المدفوعة بكارت الفيزا في ' . $dayTxt . ' — اتخصمت من الكارت مش من عهدته.',
-        'rep_unpaid'    => 'بنود ' . $name . ' غير المدفوعة في ' . $dayTxt . ' — مسجلة للتوثيق والفوترة ولم تُخصم من أي محفظة.',
+        'rep_misc'      => 'مصروف شركة بلا إذن',
+        'rep_handover'  => 'بتنقص من عهدته وبس',
+        'rep_transfer'  => 'بينتقل من محفظة لمحفظة — الإجمالي ثابت',
+        'rep_visa'      => 'من الكارت مش من عهدته',
+        'rep_unpaid'    => 'ما اتخصمش من أي محفظة',
     ];
     partial('drill', [
         'how'   => $howMap[$what] ?? '',
@@ -218,11 +217,8 @@ if (str_starts_with($what, 'rep_')) {
 switch ($what) {
 
 case 'deposits':
-    /* ⚠️ الشرح من `sourceNote()` — الجملة القديمة كانت بتقول إن التنزيل عمره ما
-       بيخصم من الخزنة، وده بقى غلط من v61 («من درج المكتب» بتخصم). */
+    /* ⚠️ `how` اتشال — نفس سبب تنزيلات المندوب فوق (عنوان + محاضرة). */
     partial('drill', [
-        'how'   => 'مجموع كل عهدة نزلت للمناديب بتاريخ ' . $dayTxt . '. '
-                 . \App\Models\RepCustody::sourceNote(),
         'count' => count($rows),
         'total' => ['label' => 'نزل اليوم', 'value' => money(array_sum(array_column($rows, 'amount')), false)],
         'more'  => ['label' => 'كل المناديب', 'url' => url('rep-custody')],
@@ -247,7 +243,7 @@ case 'deposits':
 
 case 'spent':
     partial('drill', [
-        'how'   => 'الكاش الذي خرج فعلًا من عهدة المناديب بتاريخ ' . $dayTxt . ' — الفيزا و«غير مدفوع» مستبعدان من الرقم والتفاصيل.',
+        'how'   => 'الفيزا و«غير مدفوع» مستبعدان',
         'count' => count($rows),
         'total' => ['label' => 'صرفوا اليوم', 'value' => money(array_sum(array_column($rows, 'amount')), false)],
         'more'  => ['label' => 'سجل المصروفات', 'url' => url('expenses')],
@@ -260,7 +256,7 @@ case 'spent':
 
 case 'pending':
     partial('drill', [
-        'how'   => 'البنود النقدية التي دفعها المناديب بتاريخ ' . $dayTxt . ' ولسه مستنية اعتمادك؛ هي وحدها المطروحة مؤقتًا من «فاضل معاهم».',
+        'how'   => 'مطروحة مؤقتًا من «فاضل معاهم»',
         'count' => count($rows),
         'total' => ['label' => 'مستني مراجعتك', 'value' => money(array_sum(array_column($rows, 'amount')), false)],
         'more'  => ['label' => 'صندوق المراجعة', 'url' => url('rep-custody/inbox')],
@@ -291,7 +287,7 @@ case 'pending':
 
 default:   // balance — الفاضل من عهدة اليوم، مندوبًا مندوبًا
     partial('drill', [
-        'how'   => 'الفاضل من عهدة يوم ' . $dayTxt . ' = اللي نزل في اليوم ده − اللي اتصرف فيه − اللي دفعه ولسه مستني اعتماد (فلوسه خرجت من إيده فعلاً). كل يوم عهدة مستقلة: الفاضل من إمبارح ما بيترحّلش على النهاردة.',
+        'how'   => 'كل يوم عهدة مستقلة — بلا ترحيل',
         'count' => count($rows),
         'total' => ['label' => 'فاضل معاهم من عهدة اليوم', 'value' => money(array_sum(array_column($rows, 'pocket')), false)],
         'more'  => ['label' => 'كل المناديب', 'url' => url('rep-custody')],

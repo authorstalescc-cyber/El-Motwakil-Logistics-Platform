@@ -1003,6 +1003,22 @@
       if (body) body.hidden = !body.hidden;
       return;
     }
+    /* ⚠️ **مفتاح عام لفتح أي نموذج في نافذة** (2026-08-09) — بلاغ المالك:
+       «إضافة العهدة بتاخد وقت كبير: أدخل الصفحة وأعمل سكرول لآخر حاجة».
+       النموذج كان في آخر التبويب فكل تنزيل = تحميل + سكرول + رجوع.
+       الاستعمال: `<button data-open-form="#id" data-open-form-title="…">`
+       والنموذج نفسه `hidden` في مكانه — `formModal` بينقله للنافذة وبيرجّعه
+       لو اتقفلت. **مفتاح عام مش خاص بالشاشة دي** عشان أي فورم في النظام
+       يقدر يبقى نافذة بسطر واحد بدل نسخة سلوك جديدة كل مرة. */
+    const openFormBtn = e.target.closest && e.target.closest('[data-open-form]');
+    if (openFormBtn) {
+      const node = document.querySelector(openFormBtn.getAttribute('data-open-form') || '');
+      if (node) {
+        e.preventDefault();
+        formModal.open(node, openFormBtn.getAttribute('data-open-form-title') || '');
+        return;
+      }
+    }
     const step = e.target.closest && e.target.closest('.step-chip[data-scroll]');
     if (step) {
       const target = document.querySelector(step.getAttribute('href') || '');

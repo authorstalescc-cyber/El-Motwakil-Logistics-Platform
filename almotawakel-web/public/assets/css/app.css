@@ -2962,19 +2962,26 @@ button.d-hchip{cursor:pointer;font-family:inherit}
 .rc-hero-name em{font-style:normal;font-size:var(--fs-2);color:var(--grey)}
 .rc-hero-acts{display:flex;gap:8px;flex-wrap:wrap;margin-inline-start:auto}
 
-/* شبكة الترويسة — الرقم البطل بيمتد والباقي حواليه. الأرقام كلها `stat`
-   فالشكل بيتورّث من لغة النظام؛ اللي هنا **تخطيط بس** لا إعادة تعريف. */
-.rc-hero-grid{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);
-  grid-template-columns:repeat(2,minmax(0,1fr))}
-.rc-hero-grid .d-kpi.hero{grid-column:1 / -1}
-@media(min-width:900px){
-  .rc-hero-grid{grid-template-columns:1.4fr repeat(4,minmax(0,1fr))}
-  .rc-hero-grid .d-kpi.hero{grid-column:auto;grid-row:span 1}
+/* شبكة ترويسة كارت المندوب — **صف واحد** على الشاشة الكبيرة.
+   ⚠️ **بكلاسين (`.d-kpis.rc-hero-grid`) مش كلاس واحد** — المصيدة الموثَّقة تحت:
+      `.d-kpis.four/.five` كلاسان وبيغلبوا أي قاعدة بكلاس واحد حتى جوّه media
+      query، فالترويسة كانت بتتكسر لصفّين (بلاغ المالك 2026-08-09). أي تعديل
+      متجاوب هنا لازم يفضل بنفس عدد الكلاسات. */
+.d-kpis.rc-hero-grid{margin-top:14px;margin-bottom:0;padding-top:14px;
+  border-top:1px solid var(--line);gap:10px;
+  grid-template-columns:1.5fr repeat(4,minmax(0,1fr))}
+@media(max-width:1100px){
+  /* الرقم البطل بعرض الصف والباقي أربعة تحته — لسه صفّين مقصودين لا مكسورين */
+  .d-kpis.rc-hero-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .d-kpis.rc-hero-grid .d-kpi.hero{grid-column:1 / -1}
 }
+@media(max-width:700px){ .d-kpis.rc-hero-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
 /* نمط «الرقم البطل» في المكوّن نفسه — متاح لأي شاشة تانية */
-.d-kpi.hero{background:var(--gold-light);border-color:var(--gold)}
+.d-kpi.hero{background:linear-gradient(135deg,var(--gold-light),var(--card));border-color:var(--gold)}
 .d-kpi.hero .d-kpi-val{font-size:var(--fs-7);letter-spacing:-.5px}
 .d-kpi.hero .d-kpi-lbl{font-weight:600;color:var(--navy)}
+.d-kpi.hero .d-kpi-ic{color:var(--gold-dark)}
 .d-kpi.hero:hover{border-color:var(--gold-dark)}
 .rc-hero-src{margin-top:10px;font-size:var(--fs-1);font-weight:500;color:var(--grey)}
 @media(max-width:640px){
@@ -3152,6 +3159,32 @@ button.d-hchip{cursor:pointer;font-family:inherit}
 .rp-bal b{display:block;font-size:var(--fs-5);font-weight:600;color:var(--ink);letter-spacing:-.3px}
 .rp-bal b.pos{color:var(--green)} .rp-bal b.neg{color:var(--red)}
 .rp-bal span{font-size:var(--fs-1);color:var(--grey);font-weight:400}
+
+/* ═══ أعمدة الأرقام المتحاذية (`cols`) — بديل الشارات في قوايم المقارنة
+   ⚠️ **`grid` بعرض ثابت مش `flex`**: مع flex كل عمود بياخد عرض نصّه، فرقم
+      «نزل» في كارت بيقع تحت «صرف» في اللي تحته والمقارنة بالعين بتموت. العرض
+      الثابت (`110px`) هو اللي بيخلّي تسع كروت تُقرا كجدول بلا ما تبقى جدولاً. */
+.rp-card.has-cols{padding:11px 14px}
+.rp-cols{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(84px,110px);
+  gap:4px;flex-shrink:0;margin-inline-start:auto}
+.rp-col{display:flex;flex-direction:column;gap:1px;padding:0 10px;
+  border-inline-start:1px solid var(--line);text-align:start}
+.rp-col em{font-style:normal;font-size:var(--fs-1);font-weight:500;color:var(--grey)}
+.rp-col b{font-size:var(--fs-3);font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.rp-col b.ex{color:var(--red)} .rp-col b.wait{color:var(--sader-dk)} .rp-col b.mute{color:var(--line2)}
+/* البطل على الطرف بحدّ أوضح — هو الرقم اللي بتاخد بيه القرار */
+.rp-card.has-cols .rp-bal{min-width:118px;padding-inline-start:14px;
+  border-inline-start:2px solid var(--gold)}
+.rp-card.has-cols .rp-bal b{font-size:var(--fs-6)}
+/* ⚠️ **٨٢٠ نقطة كسر موجودة أصلاً** — `verify_mobile` بيرفض أي نقطة جديدة
+   (خط الأساس ١١ وما بيترفعش). استخدمت ٨٦٠ أول مرة فالفاحص فشل بحق. */
+@media(max-width:820px){
+  .rp-card-top{flex-wrap:wrap}
+  .rp-cols{margin-inline-start:0;order:3;width:100%;margin-top:10px;padding-top:9px;
+    border-top:1px solid var(--line);grid-auto-columns:minmax(0,1fr)}
+  .rp-col:first-child{border-inline-start:0;padding-inline-start:0}
+  .rp-card.has-cols .rp-bal{min-width:0;margin-inline-start:auto}
+}
 
 /* شريط استهلاك العهدة */
 .rp-bar{display:flex;height:6px;border-radius:var(--radius-4);overflow:hidden;background:#e8edf3;margin:10px 0 9px}

@@ -89,6 +89,16 @@ if (count($cardSrc) > 1) {
       <?php if (!empty($rep['phone'])): ?><em><?= e($rep['phone']) ?></em><?php endif; ?>
     </div>
     <div class="rc-hero-acts">
+      <?php /* ⚠️ **«نزّل عهدة» في الترويسة وبيفتح نافذة** — بلاغ المالك: الفورم
+               كان في آخر تبويب «اليوم» فكل تنزيل = دخول الصفحة + سكرول لآخرها.
+               بيظهر في تبويب اليوم بس (هو اللي فيه الفورم)، ومقفول لو اليوم
+               متقفل — الحارس الحقيقي في الموديل زي ما هو، ده إخفاء لا حماية. */ ?>
+      <?php if ($tab === 'day' && !$dayLocked): ?>
+        <button type="button" class="btn gold" data-open-form="#deposit-form"
+                data-open-form-title="<?= e('نزّل عهدة لـ' . $rep['name'] . ' — يوم ' . $dayLabel) ?>">
+          <?= icon('wallet', 15) ?> نزّل عهدة
+        </button>
+      <?php endif; ?>
       <?php /* ⚠️ الطريق لمراجعة بنوده **فضل** لكن كزرار بعدّاد بدل فقرة كاملة
                كانت بتكرر رقم «المستني». و`?rep=` إلزامية — من غيرها الرابط
                بيوَدّي على كل المناديب والمالك يدوّر وسطهم. */ ?>
@@ -108,7 +118,7 @@ if (count($cardSrc) > 1) {
            التوكنز، و`stat` هو اللي بيفرض «ممنوع رقم أصمّ» (بيرفض يترسم بلا
            مصدر تفاصيل). الحل كان **نمط `hero` جديد في المكوّن نفسه** عشان
            الشاشة يبقى ليها رقم مسيطر — مكسب للنظام كله مش ترقيع للشاشة دي. */ ?>
-  <?php partial('stat_grid', ['items' => 4, 'class' => 'rc-hero-grid',
+  <?php partial('stat_grid', ['items' => 5, 'class' => 'rc-hero-grid',
     'body' => function () use ($dayB, $pendingDaySum, $dayLeft, $rd, $dayLabel, $b, $tabUrl) { ?>
     <?php partial('stat', [
       'hero'  => true,

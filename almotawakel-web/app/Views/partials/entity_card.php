@@ -17,7 +17,15 @@
  *   meter   ?array   [['pct'=>float,'cls'=>'sp|pd|rt'], …] شريط استهلاك
  *   note    ?array   سطر بارز ['label'=>, 'value'=>, 'sub'=>?, 'tone'=>?]
  *   tags    ?array   [['icon'=>?,'text'=>,'tone'=>'ex|wait|low'], …]
+ *   cols    ?array   [['label'=>, 'value'=>, 'tone'=>?], …] **أعمدة أرقام
+ *                    متحاذية** — بديل `tags` لما الأرقام بتتقارن بين الكروت.
  *   alert   ?bool    الكارت بلون تنبيه (محتاج تنزيل…)
+ *
+ * ⚠️ **`cols` مقابل `tags` — الفرق مقصود** (بلاغ المالك 2026-08-09 «تصميمهم
+ *    مش عاجبني»): الشارات (`tags`) بتطفو على عرض النص فرقم «نزل» في كارت
+ *    بيقع تحت رقم «صرف» في الكارت اللي تحته، فمقارنة تسع مناديب ببصمة العين
+ *    مستحيلة. `cols` بتحطهم في **شبكة ثابتة** — كل عمود تحت زميله بالظبط،
+ *    وده اللي بيخلّي القايمة تُقرا بنظرة بدل ما تتقري كارت كارت.
  */
 $name  = (string) ($name ?? '');
 $url   = $url ?? null;
@@ -29,6 +37,7 @@ $valueTone  = $value_tone ?? '';
 $meter = $meter ?? [];
 $note  = $note ?? null;
 $tags  = $tags ?? [];
+$cols  = $cols ?? [];
 $alert = !empty($alert);
 
 $tag = $url ? 'a' : 'div';
@@ -38,13 +47,24 @@ if ($drill !== '') {
 }
 $initial = $name !== '' ? mb_substr(trim($name), 0, 1, 'UTF-8') : '؟';
 ?>
-<<?= $tag ?> class="rp-card<?= $alert ? ' low' : '' ?>"<?= $attrs ?>>
+<<?= $tag ?> class="rp-card<?= $alert ? ' low' : '' ?><?= $cols ? ' has-cols' : '' ?>"<?= $attrs ?>>
   <div class="rp-card-top">
     <span class="rp-av"><?= e($initial) ?></span>
     <div class="rp-id">
       <b><?= e($name) ?></b>
       <?php if ($sub !== null && $sub !== ''): ?><span><?= e((string) $sub) ?></span><?php endif; ?>
     </div>
+    <?php /* أعمدة الأرقام جوّه الصف نفسه — متحاذية بين كل الكروت */ ?>
+    <?php if ($cols): ?>
+      <div class="rp-cols">
+        <?php foreach ($cols as $c): ?>
+          <span class="rp-col">
+            <em><?= e((string) ($c['label'] ?? '')) ?></em>
+            <b class="<?= e((string) ($c['tone'] ?? '')) ?>"><?= e((string) ($c['value'] ?? '')) ?></b>
+          </span>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
     <?php if ($value !== null): ?>
       <div class="rp-bal">
         <b class="<?= e($valueTone) ?>"><?= e((string) $value) ?></b>

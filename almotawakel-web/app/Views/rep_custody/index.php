@@ -134,36 +134,28 @@ $quiet  = array_values(array_filter($cards, static fn ($c) => !$c['day_active'])
     }
     echo '<div class="rp-cards flat">';
     foreach ($active as $c) {
-      $dep = (float) $c['day_deposits'];
-      $tags = [
-        ['icon' => 'wallet', 'text' => 'نزل ' . money0($dep)],
-        ['icon' => 'trending-down', 'text' => 'صرف ' . money0($c['day_spent']), 'tone' => 'ex'],
-      ];
-      if ($c['day_pending'] > 0) {
-        $tags[] = ['icon' => 'hourglass', 'text' => 'مستني ' . money0($c['day_pending']), 'tone' => 'wait'];
-      }
-      if ($c['day_pocket'] < 0) {
-        $tags[] = ['icon' => 'alert', 'text' => 'صرف أكتر من عهدة اليوم', 'tone' => 'low'];
-      }
+      /* ⚠️ **الأرقام بقت أعمدة متحاذية مش شارات** (بلاغ المالك 2026-08-09
+         «تصميمهم مش عاجبني»): الشارات كانت بتطفو على عرض النص، فرقم «نزل» في
+         كارت بيقع تحت «صرف» في اللي تحته — ومقارنة تسع مناديب بالعين مستحيلة.
+         دلوقتي كل عمود تحت زميله بالظبط، و«فاضل معاه» فضل على الجنب كالبطل.
+         و**شريط الاستهلاك اتشال**: كان زخرفة بتاخد سطرًا كامل وما بتقولش رقمًا
+         — النسبة نفسها بقت مقروءة من الأعمدة جنب بعضها. */
       partial('entity_card', [
         'name'  => $c['name'],
         'url'   => $repUrl((int) $c['id']),
+        'sub'   => abs($c['carry']) > 0.005
+            ? ($c['carry'] < 0 ? 'مستحق له ' . money0($c['carry']) : 'مفتوح من أيام تانية ' . money0($c['carry']))
+            : null,
+        'cols'  => [
+          ['label' => 'نزل',   'value' => money0($c['day_deposits'])],
+          ['label' => 'صرف',   'value' => money0($c['day_spent']), 'tone' => 'ex'],
+          ['label' => 'مستني', 'value' => $c['day_pending'] > 0 ? money0($c['day_pending']) : '—',
+           'tone'  => $c['day_pending'] > 0 ? 'wait' : 'mute'],
+        ],
         'value' => money0($c['day_pocket']),
-        'value_label' => $c['day_pending'] > 0 ? 'فاضل معاه (بعد المستني)' : 'فاضل من عهدة اليوم',
+        'value_label' => $c['day_pending'] > 0 ? 'فاضل بعد المستني' : 'فاضل معاه',
         'value_tone'  => $c['day_pocket'] < 0 ? 'neg' : 'pos',
-        'alert'  => $c['day_pocket'] < 0,
-        // شريط الاستهلاك: نسبة المصروف والمستنّي من عهدة اليوم (عرض فقط)
-        'meter' => $dep > 0 ? [
-          ['cls' => 'sp', 'pct' => min(100, $c['day_spent'] / $dep * 100)],
-          ['cls' => 'pd', 'pct' => min(100, $c['day_pending'] / $dep * 100)],
-        ] : [],
-        'note'  => abs($c['carry']) > 0.005 ? [
-          'label' => 'مفتوح من أيام سابقة',
-          'value' => money0($c['carry']),
-          'tone'  => $c['carry'] < 0 ? 'neg' : 'warn',
-          'sub'   => $c['carry'] < 0 ? 'مستحق للمندوب' : 'محتاج تصفية',
-        ] : null,
-        'tags' => $tags,
+        'alert' => $c['day_pocket'] < 0,
       ]);
     }
     echo '</div>';
