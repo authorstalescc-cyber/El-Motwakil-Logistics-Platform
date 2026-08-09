@@ -359,19 +359,41 @@ class CompanySafe
     // ───────────────────────────────────────────── السجل
 
     /**
-     * سجل الحركات (الأحدث أولاً) مع **رصيد جارٍ** لكل صف.
-     * الرصيد الجاري بيتحسب من الأقدم للأحدث ثم بنعكس — زي `Custody::ledger`.
+     * سجل الحركات (**الأحدث أولاً**) مع **رصيد جارٍ** صحيح لكل صف.
      *
-     * @param array{kind?:string,from?:string,to?:string,q?:string} $f
+     * ⚠️⚠️ **باج اتصاد على الإنتاج 2026-08-09 — الشاشة كانت بتعرض أقدم N لا أحدث N.**
+     *    الصيغة القديمة كانت `ORDER BY entry_date, id LIMIT n` (تصاعدي) وبعدين
+     *    `array_reverse` — فالـ`LIMIT` بيتطبّق على **الأقدم** والعكس بيرتّبهم بس.
+     *    محليًّا كان فيه ١٥ صفًّا فالفرق ما بانش؛ على الإنتاج «آخر الحركات» كانت
+     *    بتعرض أول حركات النظام. الصح: **ناخد الأحدث تنازليًّا**، ونحسب الرصيد
+     *    الجاري من **رصيد ما قبل أقدم صف في الشريحة** (`$opening`) ونمشي لقدّام —
+     *    من غير الافتتاحي ده الرصيد الجاري بيبدأ من صفر ويكدب على كل صف.
+     *
+     * @param array{kind?:string,cat?:string,from?:string,to?:string,q?:string} $f
      */
     public static function ledger(array $f = [], int $limit = 300): array
     {
         if (!self::ready()) { return []; }
         [$where, $params] = self::filterWhere($f);
+        $limit = max(1, min(2000, $limit));
+
+        // الأحدث أولاً ثم بنعكسهم للأقدم عشان نحسب الرصيد الجاري لقدّام.
         $rows = Database::all(
             "SELECT * FROM company_safe_entries WHERE $where
-              ORDER BY entry_date, id LIMIT " . max(1, min(2000, $limit)), $params);
-        $run = 0.0;
+              ORDER BY entry_date DESC, id DESC LIMIT $limit", $params);
+        if (!$rows) { return []; }
+        $rows = array_reverse($rows);
+
+        /* ⚠️ رصيد **كل اللي قبل** أقدم صف في الشريحة — بيتحسب بنفس تعبير
+           `signedSql()` بتاع `balance()`، فآخر `running` في القايمة بيساوي
+           `balance()` بالمليم لما تكون الفلترة فاضية. */
+        $first   = $rows[0];
+        $opening = round((float) Database::scalar(
+            'SELECT COALESCE(SUM(' . self::signedSql() . '),0) FROM company_safe_entries
+              WHERE entry_date < ? OR (entry_date = ? AND id < ?)',
+            [$first['entry_date'], $first['entry_date'], (int) $first['id']]), 2);
+
+        $run = $opening;
         foreach ($rows as &$r) {
             $k = (string) $r['kind'];
             $signed = self::isIn($k) ? (float) $r['amount'] : -(float) $r['amount'];

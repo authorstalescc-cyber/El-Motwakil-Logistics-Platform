@@ -292,15 +292,19 @@ try {
     } else { note('مفيش مندوب نشط — قسم العهدة اتخطّى'); }
 
     // ── تحويل للمكتب (النوع الوحيد اللي بيمسّ الدرج)
+    $orphanBefore = (int) Database::scalar(
+        "SELECT COUNT(*) FROM manual_custody WHERE note LIKE '%خزنة الشركة%'");
     $t1 = CompanySafe::create(['entry_date' => $day, 'kind' => 'to_office', 'amount' => 6000]);
     near('التحويل للمكتب بيزوّد الدرج', Custody::balance(), $safe0 + 6000);
     CompanySafe::delete($t1);
     near('حذف التحويل بيرجّع الدرج', Custody::balance(), $safe0);
-    (int) Database::scalar(
-        "SELECT COUNT(*) FROM manual_custody
-          WHERE cust_date=? AND note LIKE '%خزنة الشركة%'", [$day]) === 0
+    /* ⚠️ **على الفرق لا على عدّاد مطلق**: الإنتاج فيه تحويلات حقيقية من خزنة
+       الشركة بنفس الوسم، فالعدّاد المطلق كان بيفشل على بيانات صحيحة تمامًا
+       (نفس درس «افحص السلوك مش رقم fixture»). */
+    ($orphanAfter = (int) Database::scalar(
+        "SELECT COUNT(*) FROM manual_custody WHERE note LIKE '%خزنة الشركة%'")) === $orphanBefore
         ? ok('مفيش صف manual_custody يتيم بعد الحذف')
-        : bad('فضل صف manual_custody يتيم — خزنة المكتب فيها فلوس مالهاش مصدر');
+        : bad("فضل {$orphanAfter} صف manual_custody مقابل {$orphanBefore} قبل الاختبار — فلوس مالهاش مصدر");
 
     // ── التعديل
     CompanySafe::update($eId, ['kind' => 'expense', 'entry_date' => $day, 'amount' => 3500,
@@ -352,6 +356,20 @@ try {
             CompanySafe::delete($x);
         } catch (\Throwable $e) { bad('المصروف اترفض على يوم متقفل: ' . $e->getMessage()); }
     } else { note('مفيش يوم متقفل — فحص القفل اتخطّى'); }
+
+    /* ⚠️⚠️ **حارس باج اتصاد على الإنتاج**: `ledger()` كانت `ORDER BY ... ASC
+       LIMIT n` فبترجّع **أقدم** n لا أحدث n — «آخر الحركات» كانت بتعرض أول
+       حركات النظام. محليًّا كان فيه صفوف قليلة فالفرق ما بانش. */
+    for ($i = 6; $i >= 0; $i--) {
+        CompanySafe::create(['entry_date' => date('Y-m-d', strtotime("-{$i} day")),
+                             'kind' => 'deposit', 'amount' => 100 + $i, 'source' => "حارس-{$i}"]);
+    }
+    $recent = CompanySafe::ledger([], 3);
+    (count($recent) === 3 && (string) $recent[0]['source'] === 'حارس-0')
+        ? ok('`ledger()` بترجّع **الأحدث** أولاً (مش الأقدم)')
+        : bad('`ledger()` بترجّع الأقدم — «آخر الحركات» بتعرض أول حركات النظام');
+    near('الرصيد الجاري لأحدث صف = الرصيد الكلي',
+         (float) $recent[0]['running'], CompanySafe::balance());
 
     // ═══ الأرقام متسقة
     sec('⑥ الأرقام متسقة — التفكيك والكشف');
