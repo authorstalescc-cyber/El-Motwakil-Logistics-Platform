@@ -65,20 +65,32 @@ $_SESSION = ['uid' => $uid, 'role' => 'owner', 'uname' => 'فحص',
              'last_activity' => time(), 'uid_checked' => time()];
 $_GET = [];
 
+/* ⚠️ **كل قسم بيترندر لوحده دلوقتي** (المرحلة ٣): الشاشة اتقسمت لصفحات
+   بمسارات، فالفحص لازم يعدّي على القايمة كلها — رندر `/settings` لوحده كان
+   هيفحص قسم واحد ويعدّي والباقي مكسور. */
+$sections = ['general', 'lists', 'permits', 'business', 'ops', 'notify',
+             'display', 'ai', 'users', 'maint'];
 $html = '';
-ob_start();
-try {
-    (new SettingsController())->index();
-    $html = (string) ob_get_clean();
-} catch (\Throwable $e) {
-    ob_end_clean();
-    bad('استثناء في /settings: ' . $e->getMessage());
+$broken = [];
+foreach ($sections as $sec) {
+    ob_start();
+    try {
+        (new SettingsController())->page($sec);
+        $part = (string) ob_get_clean();
+    } catch (\Throwable $e) {
+        ob_end_clean();
+        $broken[] = $sec . ': ' . $e->getMessage();
+        continue;
+    }
+    if (preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $part, $m)) {
+        $broken[] = $sec . ': ' . $m[0];
+    }
+    $html .= $part;
 }
-if ($html !== '') {
-    preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $html, $m)
-        ? bad('خطأ PHP في /settings: ' . ($m[0] ?? ''))
-        : ok('/settings بترندر بلا أخطاء PHP (' . number_format(mb_strlen($html)) . ' حرف)');
-}
+$broken
+    ? (function () use ($broken) { foreach ($broken as $b) { bad('قسم مكسور — ' . $b); } })()
+    : ok('الـ' . count($sections) . ' قسم كلهم بيرندروا بلا أخطاء PHP ('
+        . number_format(mb_strlen($html)) . ' حرف)');
 
 // ═══════════════════════════════════════════════════════════ ②
 sec('② كل مفتاح قابل للتعديل له خانة في الشاشة');
@@ -255,9 +267,16 @@ sec('⑥ قانون التصميم');
 /* ⚠️ **الحد ده ما يزيدش**: الشاشة فيها ٣ بلوكات `<style>` محلية من قبل المرحلة
    دي، وشيلهم شغل المرحلة ٣ (إعادة البناء). اللي ممنوع هو **زيادتهم** — أي
    قسم جديد لازم يستعمل كلاسات `app.css` القايمة. */
-const SETTINGS_STYLE_BASELINE = 3;
+const SETTINGS_STYLE_BASELINE = 0;
+/* ⚠️ الفحص على **الهيكل وكل أجزائه** — بلوك `<style>` في جزء بيتحمّل هو
+   مخالفة زي اللي في الهيكل بالظبط. */
 $viewSrc = (string) file_get_contents($root . '/app/Views/settings/index.php');
-$styleCount = preg_match_all('~<style~i', $viewSrc);
+foreach (glob($root . '/app/Views/settings/sections/*.php') ?: [] as $__p) {
+    $viewSrc .= "\n" . (string) file_get_contents($__p);
+}
+/* ⚠️ `code_only()` **إجبارية**: تعليق كل جزء بيوثّق القاعدة نفسها فبيذكر
+   `<style>` بالنص — العدّ من غيرها طلّع ٩ بلوكات وهمية والملفات نضيفة. */
+$styleCount = preg_match_all('~<style~i', code_only($viewSrc));
 $styleCount <= SETTINGS_STYLE_BASELINE
     ? ok("بلوكات `<style>` المحلية {$styleCount} ≤ الحد " . SETTINGS_STYLE_BASELINE)
     : bad("بلوكات `<style>` زادت لـ{$styleCount} — الحد " . SETTINGS_STYLE_BASELINE);
@@ -287,7 +306,10 @@ $badIcons ? bad('أيقونة مش في الكتالوج (بترسم دايرة 
 $css = (string) file_get_contents($root . '/public/assets/css/app.css');
 $localCss = '';
 if (preg_match_all('~<style[^>]*>(.*?)</style>~is', $viewSrc, $sm)) { $localCss = implode("\n", $sm[1]); }
-$usedClasses = ['set-grid', 'set-pad', 'field-full', 'maint-note', 'table-wrap', 'free-login-option'];
+/* الكلاسات الجديدة بتاعة المرحلة ٣ — كلها في `app.css` تحت «مركز التحكّم». */
+$usedClasses = ['st-shell', 'st-rail', 'st-head', 'st-search', 'st-results', 'st-grid',
+                'st-note', 'st-key', 'st-lk', 'st-confirm', 'st-badge', 'st-flash',
+                'set-pad', 'field-full', 'table-wrap', 'free-login-option'];
 $noCss = [];
 foreach ($usedClasses as $c) {
     if (!str_contains($css, '.' . $c) && !str_contains($localCss, '.' . $c)) { $noCss[] = $c; }

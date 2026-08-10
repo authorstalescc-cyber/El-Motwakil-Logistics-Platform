@@ -251,14 +251,25 @@ yes('add بتاخد $force للإضافة المتعمَّدة', str_contains($l
 yes('add بتنضّف كاش الأسماء بعد الإضافة', str_contains($lk, 'clearNamesCache'));
 yes('delete بتنضّف الكاش كمان', substr_count($lk, 'clearNamesCache') >= 2);
 
+/* ⚠️ **شاشة الإعدادات اتقسمت لأجزاء في v76** — قراءة `index.php` لوحده بقت
+   بتشوف الهيكل بس. الدالة دي بتجمع الهيكل وكل أجزائه فالفحص بيقيس **الشاشة**
+   زي ما المستخدم بيشوفها، مش ملفًا بعينه. */
+$settingsTree = static function () use ($root): string {
+    $out = readf("$root/app/Views/settings/index.php");
+    foreach (glob("$root/app/Views/settings/sections/*.php") ?: [] as $f) { $out .= "\n" . readf($f); }
+    return $out;
+};
 $set = php_code("$root/app/Controllers/SettingsController.php");
 yes('شاشة الإعدادات بتوقف وتخيّر قبل ما تفرض', str_contains($set, 'confirm_new'));
 yes('وبتضيف بـforce بعد التأكيد', str_contains($set, "Lookup::add(\$type, \$value, true)"));
-yes('خانة التأكيد موجودة في الشاشة', str_contains(readf("$root/app/Views/settings/index.php"), 'confirm_new'));
-// الكلاس مستعمل في شاشة الإعدادات بس، فتعريفه المحلي صحيح — المهم إنه **متعرَّف**
-// (خطّاف بيتطبع بلا شكل بيفشل بالسكوت — درس `.table-mobile-scroll`)
+yes('خانة التأكيد موجودة في الشاشة', str_contains($settingsTree(), 'confirm_new'));
+/* الكلاس لازم يكون **متعرَّف** — الخطّاف اللي بيتطبع بلا شكل بيفشل بالسكوت
+   (درس `.table-mobile-scroll`). ⚠️ اتنقل من `<style>` محلي لـ`app.css` في v76
+   لما الشاشة اتقسمت، والاسم بقى `.st-confirm` — الفحص على **وجود تعريف**
+   للكلاس اللي الماركب بيطبعه فعلاً، مش على اسم بعينه في ملف بعينه. */
+$confirmClass = preg_match('~class="([a-z-]*st-confirm[a-z- ]*)"~', $settingsTree()) ? 'st-confirm' : '';
 yes('كلاس خانة التأكيد متعرَّف (مش خطّاف بلا شكل)',
-    substr_count(readf("$root/app/Views/settings/index.php"), '.lk-confirm') >= 1);
+    $confirmClass !== '' && str_contains(readf("$root/public/assets/css/app.css"), '.' . $confirmClass));
 
 // ═════════════════════════════════════ ٦) مفيش شاشة إدخال بلا حارس
 sec('٦) الحارس مركَّب على كل شاشات الإدخال');
@@ -517,8 +528,8 @@ $idx = readf("$root/public/index.php");
 yes('المسارات الحرفية قبل الجشع /quality/{key}',
     strpos($idx, "/quality/{key}/merge") < strpos($idx, "\$r->get('/quality/{key}'"));
 yes('زرار «توحيد المسميات» الأعمى اتشال من الإعدادات',
-    !str_contains(readf("$root/app/Views/settings/index.php"), "settings/normalize"));
-yes('وبقى رابط لشاشة التنظيف', str_contains(readf("$root/app/Views/settings/index.php"), "url('quality')"));
+    !str_contains($settingsTree(), "settings/normalize"));
+yes('وبقى رابط لشاشة التنظيف', str_contains($settingsTree(), "url('quality')"));
 yes('بند القائمة الجانبية موجود', str_contains(readf("$root/app/Views/layout.php"), "'QualityController@index'"));
 
 // ═════════════════════════════════════ ٧د) السجل المرجعي للجهات

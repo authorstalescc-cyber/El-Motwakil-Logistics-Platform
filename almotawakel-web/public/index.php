@@ -438,6 +438,9 @@ $r->post('/quality/{key}/drop',         'QualityController@drop');
 $r->get('/quality/{key}',               'QualityController@field');
 
 $r->get('/settings',                    'SettingsController@index');
+/* صفحة كل قسم (docs/19 · المرحلة ٣) — **الجشع ده آخر مسار GET تحت `/settings`**
+   فأي مسار حرفي جديد لازم يتحط فوقه (تحذير ٤: first-match-wins). */
+$r->get('/settings/{section}',          'SettingsController@page');
 $r->post('/settings/general',           'SettingsController@saveGeneral');
 // حفظ أي قسم من السجل المعرَّف (docs/19 · المرحلة ١) — المسار الحرفي قبل الجشع
 $r->post('/settings/section/{section}', 'SettingsController@saveSection');

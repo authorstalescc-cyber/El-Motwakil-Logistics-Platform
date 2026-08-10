@@ -620,7 +620,7 @@ sec('١٣) كل الوحدات بتحافظ على المُدخَل (المرح�
 $preserve = [
     'كشف صاحب البيان' => ['OwnerStatementController.php', 'statements.form.',  'statements/form.php',        '$fsOld'],
     'توزيع أصحاب البيان' => ['SettlementController.php',  'settlements.assign', 'settlements/unassigned.php', '$assignState'],
-    'مستخدمو الإعدادات' => ['SettingsController.php',     'settings.user.add',  'settings/index.php',        '$userState'],
+    'مستخدمو الإعدادات' => ['SettingsController.php',     'settings.user.add',  'settings/sections/users.php', '$userState'],
     'كارت المندوب'     => ['RepController.php',           'reps.create',        'reps/form.php',             '$formErr'],
     'بنود المندوب'     => ['RepController.php',           'reps.entry.',        'reps/show.php',             '$eOld'],
     'تسوية المندوب'    => ['RepController.php',           'reps.settle.',       'reps/show.php',             '$sOld'],

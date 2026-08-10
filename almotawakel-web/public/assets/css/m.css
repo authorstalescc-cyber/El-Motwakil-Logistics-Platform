@@ -2141,14 +2141,111 @@ dialog{
       و`bin/verify_density.php` بقى بيقرا المجلد ده كمان.
    ══════════════════════════════════════════════════════════════ */
 
-/* شاشة تاريخ العمل — كانت في m/workdate.php */
-.wd-quick{display:flex; gap:10px; margin-bottom:14px}
-.wd-quick .wd-preset{flex:1; line-height:1.5; padding:12px 8px}
-.wd-quick .wd-preset small{opacity:.7; font-weight:400}
-/* ⚠️ اللونين دول **على سطح غامق دايمًا** (رأس الشاشة) مش على الورقة البيضا،
-   فمكتوبين صراحةً عن قصد: التوكن الفاتح هنا كان هيدّي نصًّا غير مقروء. */
-.wd-warn{margin:-4px 0 14px; padding:9px 12px; border-radius:var(--radius-2,12px);
-  background:#3A2A12; color:#FFCF8A; font-size:var(--fs-2,.82rem); line-height:1.6}
+/* ══════════════════════════════════════════════════════════════════════════
+   شاشة «بتشتغل بتاريخ إمتى؟» — بوابة المندوب (m/workdate.php).
+
+   ⚠️ **البادئة `wdp-` مش `wd-` عن قصد**: نظيرة الشاشة في المكتب
+      (`workdate/pick.php`) لسه على `.wd-quick`/`.wd-preset`/`.wd-warn` جوّه
+      `app.css`. الاسم المتطابق على ملفَي CSS مختلفين كان بيخلّي أي تعديل هنا
+      يبان كأنه اتعمل هناك — وهو ما اتعملش.
+
+   • **اللون هو الإنذار**: الرأس كحلي = النهاردة، برونزي = يوم سابق. المندوب
+     في شمس الميناء بيقرا اللون قبل ما يقرا الكلام، والسطر التحذيري بيأكّد بس.
+   • **اليوم هو البطل** (قاعدة ⑤): التاريخ الطويل أكبر عنصر في الشاشة، وكل
+     زرار تحته بيغيّره فورًا — فمفيش «دست وما اتأكدتش إنه اتحدّد».
+   ══════════════════════════════════════════════════════════════════════════ */
+.wdp .logo{margin-bottom:19px}
+.wdp .logo img{width:62px}
+.wdp .logo h1{font-size:1.22rem; margin-top:9px}
+.wdp-box{padding:14px}
+
+/* ── الرأس: اليوم المختار ────────────────────────────────────────────────── */
+.wdp-hero{
+  position:relative; overflow:hidden; text-align:center;
+  padding:17px 16px 15px; border-radius:17px;
+  background:linear-gradient(160deg,var(--navy-dk),var(--navy)); color:#fff;
+  transition:background .2s;
+}
+/* ⚠️ الدرجتين دول **على سطح غامق دايمًا** مش على الورقة البيضا، فمكتوبين
+   صراحةً: التوكن الفاتح هنا كان هيدّي نصًّا غير مقروء. وهُمّ من عيلة
+   `--sader` البرونزية عن قصد — نفس اللي بيقول «صادر» في نظام المكتب. */
+.wdp-hero.is-past{background:linear-gradient(160deg,#54330A,#9E5F10)}
+/* لمعة خفيفة بتكسر السطح المصمت — زخرفة بحتة فمخفية عن اللمس */
+.wdp-hero::after{
+  content:''; position:absolute; inset-inline-start:-40px; top:-52px;
+  width:160px; height:160px; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,rgba(255,255,255,.10),transparent 70%);
+}
+.wdp-tag{
+  position:relative; display:inline-block; padding:3px 12px; border-radius:99px;
+  background:rgba(201,162,39,.22); color:var(--gold);
+  font-size:.74rem; font-weight:700;
+}
+/* الدهبي على البرونزي بيدّي ١٫٩:١ — الشارة بتقلب فاتحة على الرأس البرونزي */
+.wdp-hero.is-past .wdp-tag{background:rgba(255,255,255,.20); color:#FFEBC2}
+.wdp-week{position:relative; display:block; margin-top:10px; font-size:.85rem; font-weight:500; color:rgba(255,255,255,.74)}
+.wdp-date{
+  position:relative; display:block; margin-top:1px;
+  font-size:1.62rem; font-weight:800; line-height:1.3; font-variant-numeric:tabular-nums;
+}
+/* التحذير **جوّه الرأس** مش شريطًا تالتًا تحته: تلات مستطيلات صفرا فوق بعض
+   (رأس + شريط + زرار) كانت بتخلّي الشاشة تقيلة، والرأس أصلاً هو الإنذار. */
+.wdp-warn{
+  position:relative; display:flex; align-items:center; justify-content:center; gap:7px;
+  margin-top:11px; padding:7px 10px; border-radius:11px;
+  background:rgba(0,0,0,.24); color:#FFE3AE; font-size:var(--fs-2,.82rem); font-weight:600;
+}
+.wdp-note{
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  margin:10px 0 13px; font-size:.79rem; font-weight:500; color:var(--grey);
+}
+
+/* ── الاختيار: تلات كروت ─────────────────────────────────────────────────── */
+.wdp-opts{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+.wdp-opt{
+  position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  min-height:var(--tap); padding:11px 4px; margin:0;
+  border:1.5px solid var(--line); border-radius:14px; background:#fff;
+  font:inherit; color:var(--navy); text-align:center; cursor:pointer;
+  transition:background .15s, border-color .15s, transform .1s;
+}
+.wdp-opt-t{font-size:.85rem; font-weight:700; line-height:1.3}
+.wdp-opt-d{
+  display:flex; align-items:center; justify-content:center; min-height:17px;
+  font-size:.73rem; font-weight:600; color:var(--grey); font-variant-numeric:tabular-nums;
+}
+/* شارة الصح على ركن الكارت المختار — إشارة تانية جنب اللون (مش اللون لوحده).
+   ⚠️ برّه الكارت عن قصد: جوّاه كانت بتركب على «يوم تاني» في الشاشات الضيقة. */
+.wdp-ck{
+  position:absolute; top:-7px; inset-inline-start:-7px;
+  width:22px; height:22px; border-radius:50%; display:grid; place-items:center;
+  background:var(--gold); color:var(--navy-dk);
+  opacity:0; transform:scale(.4); transition:opacity .15s, transform .15s;
+}
+.wdp-opt.is-on{
+  background:var(--navy); border-color:var(--navy); color:#fff;
+  box-shadow:0 6px 16px rgba(21,53,91,.24);
+}
+.wdp-opt.is-on .wdp-opt-d{color:rgba(255,255,255,.74)}
+.wdp-opt.is-on .wdp-ck{opacity:1; transform:scale(1)}
+.wdp-opt:active{transform:translateY(1px)}
+
+/* خانة التاريخ الأصلية بتغطي الكارت كله بشفافية كاملة: الدوسة بتفتح منتقي
+   النظام، والحقل هو المرسَل فعلاً — فلو الجافاسكريبت وقع الفورم لسه شغّال.
+   ⚠️ لازم تغلب القاعدة العامة لـ`input` (عرض/حشو/حافة) — ومن غير `appearance`
+      سفاري بيرسم نصًّا جوّاها بيدفع الكارت. */
+.wdp-other input[type=date]{
+  position:absolute; inset:0; width:100%; height:100%; min-height:0;
+  margin:0; padding:0; border:0; background:transparent; color:transparent;
+  -webkit-appearance:none; appearance:none; cursor:pointer;
+}
+.wdp-other input[type=date]::-webkit-date-and-time-value{display:none}
+.wdp-other input[type=date]::-webkit-calendar-picker-indicator{opacity:0}
+/* الخانة شفافة فحلقة التركيز بتاعتها مش بتبان — الكارت بيلبسها بدالها */
+.wdp-other:focus-within{outline:3px solid var(--gold); outline-offset:2px}
+.wdp-other input[type=date]:focus{box-shadow:none}
+
+.wdp-go{margin-top:14px}
 
 /* شاشة تصفية العهدة — كانت في m/settle.php */
 .ms-calc{display:flex; flex-direction:column; gap:2px; margin:4px 0 14px}

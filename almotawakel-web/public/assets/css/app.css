@@ -6182,3 +6182,101 @@ table.data th.col-primary{font-weight:var(--fw-bold)}
   .cs-period-custom label{flex:1 1 130px}
   .cs-pick-btn{flex:1 1 100%}
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   مركز التحكّم `/settings` — **أُعيد تصميمه في v76** (docs/19 · المرحلة ٣)
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ الكلاسات هنا **مش في `<style>` محلي** (قانون التصميم، بند ٧). الشاشة
+      كانت ٦٧١ سطرًا فيها ٣ بلوكات `<style>`، والتبويبات كانت بـ`#hash` بس:
+      مفيش رابط مباشر لقسم، ولا رجوع للخلف، ولا بحث — والشاشة كلها بترندر
+      في كل زيارة حتى لو المالك عايز خانة واحدة.
+
+   الشكل الجديد: **شريط أقسام جانبي + صفحة لكل قسم بمسار حقيقي + بحث فوري**.
+   ⚠️ البحث بيدوّر في **كل** الأقسام مش في المعروض بس — الفهرس بيتحقن مرة
+      واحدة من `SettingsSchema`، والنتيجة رابط لقسمها.
+   ══════════════════════════════════════════════════════════════════════ */
+.st-shell{display:grid;grid-template-columns:232px 1fr;gap:var(--space-5);align-items:start}
+
+/* ── الشريط الجانبي ─────────────────────────────────────────────────── */
+.st-rail{position:sticky;top:var(--space-4);display:flex;flex-direction:column;gap:2px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:var(--space-2)}
+.st-rail a{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:var(--radius-sm);
+  color:var(--accent);font-size:var(--fs-3);font-weight:500;text-decoration:none;
+  transition:background var(--dur-fast),color var(--dur-fast)}
+.st-rail a:hover{background:var(--zebra)}
+/* ⚠️ القسم النشط بتعبئة كحلي ثابتة ونصّه أبيض دايمًا — السطح ده غامق في
+   الوضعين فالنص فوقه **ما يتقلبش** (قاعدة دور اللون). */
+.st-rail a[aria-current="page"]{background:var(--navy);color:var(--white)}
+.st-rail a[aria-current="page"] svg{stroke:var(--white)}
+.st-rail .st-badge{margin-inline-start:auto;font-size:var(--fs-1);font-weight:600;
+  background:var(--tint-navy);color:var(--accent);border-radius:999px;padding:1px 7px;min-width:20px;text-align:center}
+.st-rail a[aria-current="page"] .st-badge{background:rgba(255,255,255,.22);color:var(--white)}
+.st-rail .st-badge.warn{background:var(--gold-light);color:var(--gold-fg)}
+
+/* ── رأس القسم ──────────────────────────────────────────────────────── */
+.st-head{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-4)}
+.st-head h2{margin:0;font-size:var(--fs-6);font-weight:700;color:var(--accent)}
+.st-head .st-role{font-size:var(--fs-1);color:var(--grey);background:var(--zebra);
+  border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+
+/* ── البحث الفوري ───────────────────────────────────────────────────── */
+.st-search{position:relative;margin-inline-start:auto;min-width:220px}
+.st-search input{width:100%;padding:8px 12px;border:1px solid var(--line2);
+  border-radius:var(--radius-sm);background:var(--input);font-family:inherit;font-size:var(--fs-3)}
+.st-search input:focus{outline:2px solid var(--focus);outline-offset:1px}
+.st-results{position:absolute;inset-inline-start:0;top:calc(100% + 6px);width:min(420px,80vw);
+  background:var(--surface-3);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow-lg);z-index:var(--z-sticky);max-height:60vh;overflow:auto;padding:6px}
+.st-results[hidden]{display:none}
+.st-results a{display:block;padding:8px 10px;border-radius:var(--radius-sm);text-decoration:none;color:var(--ink)}
+.st-results a:hover,.st-results a.on{background:var(--zebra)}
+.st-results b{display:block;color:var(--accent);font-size:var(--fs-3)}
+.st-results small{color:var(--grey);font-size:var(--fs-1)}
+.st-results .st-none{padding:10px;color:var(--grey);font-size:var(--fs-2);text-align:center}
+
+/* الخانة اللي البحث ودّاك لها بتلمع مرة واحدة — تحديد مكان مش زخرفة */
+@keyframes st-flash{0%{background:var(--gold-light)}100%{background:transparent}}
+.st-flash{animation:st-flash 1.6s ease-out}
+
+/* ── شبكة الحقول ومساعدات القسم ─────────────────────────────────────── */
+.st-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-4)}
+.st-grid .field-full{grid-column:1/-1}
+.st-note{background:var(--zebra);border:1px dashed var(--navy-line);border-radius:var(--radius-sm);
+  padding:12px 14px;color:var(--accent);line-height:1.8;margin-bottom:var(--space-4);font-size:var(--fs-2)}
+.st-note.warn{background:var(--gold-light);border-color:var(--gold-line);color:var(--gold-fg)}
+
+/* ── كروت مفاتيح المساعد الذكي ──────────────────────────────────────── */
+.st-key{border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px;
+  margin-top:var(--space-4);background:var(--zebra)}
+.st-key-top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.st-key-top label{display:flex;align-items:center;gap:6px;color:var(--accent);white-space:nowrap}
+.st-key-name{flex:1;min-width:140px;padding:6px 10px;border:1px solid var(--line2);
+  border-radius:var(--radius-sm);font-family:inherit;background:var(--card)}
+.st-key-row{display:flex;gap:8px}
+.st-token{flex:1;padding:9px 12px;border:1px solid var(--line2);border-radius:var(--radius-sm);
+  font-family:var(--mono,monospace);background:var(--input);direction:ltr}
+.st-res{margin-top:8px;font-size:var(--fs-2);display:none}
+.st-res.show{display:block}
+.st-res.ok{color:var(--green-fg)} .st-res.err{color:var(--red-fg)} .st-res.muted{color:var(--grey)}
+
+/* ── تأكيد «مفردة جديدة فعلاً» في القوائم ───────────────────────────── */
+.st-confirm{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;
+  font-size:var(--fs-1);color:var(--grey);cursor:pointer;white-space:nowrap}
+.st-confirm input{flex:0 0 auto;min-width:0;width:auto;padding:0}
+
+/* ── كارت القائمة المنسدلة ──────────────────────────────────────────── */
+.st-lk{border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px;background:var(--card)}
+.st-lk h4{margin:0 0 4px;color:var(--accent);font-size:var(--fs-4)}
+.st-lk .cnt{color:var(--grey);font-weight:400;font-size:var(--fs-2)}
+
+@media (max-width:900px){
+  .st-shell{grid-template-columns:1fr}
+  /* الشريط بيتحوّل صفًّا أفقيًّا بيتمرّر — أفضل من قايمة طويلة فوق المحتوى */
+  .st-rail{position:static;flex-direction:row;overflow-x:auto;gap:4px}
+  .st-rail a{white-space:nowrap}
+  .st-rail .st-badge{margin-inline-start:6px}
+}
+@media (max-width:820px){
+  .st-grid{grid-template-columns:1fr}
+  .st-search{min-width:100%;margin-inline-start:0}
+}

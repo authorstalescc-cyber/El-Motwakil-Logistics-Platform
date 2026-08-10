@@ -42,11 +42,57 @@ class SettingsController extends Controller
         'vat_rate', 'report_year', 'opening_balance', 'opening_balance_date',
     ];
 
+    /**
+     * **خريطة أقسام مركز التحكّم** (docs/19 · المرحلة ٣) — المصدر الوحيد
+     * للشريط الجانبي وللمسارات وللبحث مع بعض.
+     *
+     * ⚠️ **القسم اللي مش هنا مالوش مسار ولا يظهر في الشريط** — فإضافة قسم
+     *    جديد سطر واحد، ونسيان تسجيله بيبان فورًا مش بيقع بالسكوت.
+     *
+     *   view  = ملف الجزء تحت `settings/sections/`
+     *   icon  = اسم من كتالوج `icon()` (الاسم الغلط بيرسم دايرة فاضية)
+     *   owner = القسم للمالك بس
+     */
+    private const PAGES = [
+        'general' => ['label' => 'عام',                 'icon' => 'home',       'view' => 'general'],
+        'lists'   => ['label' => 'القوائم المنسدلة',    'icon' => 'clipboard',  'view' => 'lists'],
+        'permits' => ['label' => 'الأذونات والتايم لاين','icon' => 'folder',     'view' => 'permits'],
+        'business'=> ['label' => 'قواعد العمل المالية', 'icon' => 'calculator', 'view' => 'registry', 'owner' => true],
+        'ops'     => ['label' => 'التشغيل والخدمات',    'icon' => 'cpu',        'view' => 'registry', 'owner' => true],
+        'notify'  => ['label' => 'الإشعارات',           'icon' => 'bell',       'view' => 'registry', 'owner' => true],
+        'display' => ['label' => 'العرض والجداول',      'icon' => 'columns',    'view' => 'display'],
+        'ai'      => ['label' => 'المساعد الذكي',       'icon' => 'cpu',        'view' => 'ai',      'owner' => true],
+        'users'   => ['label' => 'المستخدمون',          'icon' => 'users',      'view' => 'users',   'owner' => true],
+        'maint'   => ['label' => 'الصيانة والحالة',     'icon' => 'wrench',     'view' => 'maint'],
+    ];
+
+    /** القسم الافتراضي لما يتفتح `/settings` بلا تحديد. */
+    private const DEFAULT_PAGE = 'general';
+
     public function index(): void
+    {
+        $this->page(self::DEFAULT_PAGE);
+    }
+
+    /**
+     * صفحة قسم واحد — **بترندر جزءها وبس**.
+     *
+     * ⚠️ الشاشة القديمة كانت بترندر الأقسام العشرة كلها في كل زيارة (٦٧١ سطر
+     *    وجداول المستخدمين والقوائم والمراحل) عشان تبويب واحد بس هو الظاهر.
+     */
+    public function page(string $section): void
     {
         $this->requireRole(['owner', 'manager']);
         $owner = Auth::isOwner();
+
+        if (!isset(self::PAGES[$section])) { $section = self::DEFAULT_PAGE; }
+        if (!empty(self::PAGES[$section]['owner']) && !$owner) { $section = self::DEFAULT_PAGE; }
+
         $this->render('settings/index', [
+            'section'   => $section,
+            'pages'     => $this->visiblePages($owner),
+            'pageMeta'  => self::PAGES[$section],
+            'searchIndex' => $this->searchIndex($owner),
             'title'   => 'الإعدادات',
             'lookups' => Lookup::withIds(),
             'types'   => Lookup::TYPES,
@@ -101,6 +147,93 @@ class SettingsController extends Controller
             'repMaint'       => \App\Models\RepMaintenance::state(),
             'repMaintBackAt' => \App\Models\RepMaintenance::backAtLabel(),
         ]);
+    }
+
+    /** الأقسام اللي الدور ده بيشوفها — مع شارة العدّ/التنبيه. */
+    private function visiblePages(bool $owner): array
+    {
+        $out = [];
+        foreach (self::PAGES as $key => $meta) {
+            if (!empty($meta['owner']) && !$owner) { continue; }
+            $meta['badge'] = $this->pageBadge($key, $owner);
+            $out[$key] = $meta;
+        }
+        return $out;
+    }
+
+    /**
+     * شارة القسم — **رقم بيقول حاجة، مش زخرفة** (قاعدة «ممنوع رقم أصمّ»).
+     * `null` = مفيش شارة · `warn` = محتاج انتباه.
+     */
+    private function pageBadge(string $key, bool $owner): ?array
+    {
+        switch ($key) {
+            case 'lists':
+                $n = 0;
+                foreach (Lookup::withIds() as $arr) { $n += count($arr); }
+                return ['text' => (string) $n, 'warn' => false];
+            case 'users':
+                return $owner
+                    ? ['text' => (string) Database::scalar('SELECT COUNT(*) FROM users'), 'warn' => false]
+                    : null;
+            case 'maint':
+                /* ⚠️ **تنبيه وظيفي**: بوابة المناديب مقفولة = المناديب واقفين
+                   في الميناء دلوقتي. الشارة دي هي اللي بتمنع نسيانهم. */
+                return \App\Models\RepMaintenance::state()['on'] ?? false
+                    ? ['text' => 'مقفولة', 'warn' => true] : null;
+            case 'display':
+                $n = UserPref::ready() ? count(UserPref::allFor()) : 0;
+                return $n > 0 ? ['text' => (string) $n, 'warn' => false] : null;
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * **فهرس البحث** — كل إعداد بتسميته وشرحه وقسمه.
+     *
+     * ⚠️ بيتبني من `SettingsSchema` فالبحث بيلاقي **كل** مفتاح، حتى اللي في
+     *    قسم المالك ما بيفتحوش دلوقتي — وده الفرق بين بحث حقيقي وفلترة للمعروض.
+     * ⚠️ الأقسام اللي مالهاش مفاتيح في السجل (القوائم · المستخدمون · الصيانة)
+     *    بتتضاف بأسمائها عشان البحث عنها بالاسم يوصّل.
+     */
+    private function searchIndex(bool $owner): array
+    {
+        $out = [];
+        foreach (SettingsSchema::all() as $key => $raw) {
+            $def = SettingsSchema::get($key);
+            if ($def['tier'] === SettingsSchema::TIER_STATE) { continue; }
+            $page = $this->pageOfSection($def['section']);
+            if ($page === null) { continue; }
+            if (!empty(self::PAGES[$page]['owner']) && !$owner) { continue; }
+            $out[] = [
+                'k' => $key,
+                't' => $def['label'],
+                'h' => $def['help'],
+                'p' => $page,
+                'pl' => self::PAGES[$page]['label'],
+            ];
+        }
+        foreach (['lists', 'users', 'maint', 'display'] as $page) {
+            if (!isset(self::PAGES[$page])) { continue; }
+            if (!empty(self::PAGES[$page]['owner']) && !$owner) { continue; }
+            $out[] = ['k' => '', 't' => self::PAGES[$page]['label'], 'h' => '',
+                      'p' => $page, 'pl' => self::PAGES[$page]['label']];
+        }
+        return $out;
+    }
+
+    /** أي صفحة بتعرض قسم السجل ده؟ */
+    private function pageOfSection(string $section): ?string
+    {
+        if (isset(self::PAGES[$section])) { return $section; }
+        // `identity` و`master` بيتعرضوا في صفحة «عام» و«القوائم»
+        return match ($section) {
+            'identity'    => 'general',
+            'master'      => 'lists',
+            'maintenance' => 'maint',
+            default       => null,
+        };
     }
 
     /**
