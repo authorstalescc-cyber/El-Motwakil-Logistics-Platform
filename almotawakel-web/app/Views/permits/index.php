@@ -32,6 +32,14 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
          وإجراءات جماعية، فالنافذة كانت هتبقى نسخة أفقر من حاجة موجودة.
          مكوّن `stat` بمعامل `url` (بدل `drill`) — نفس القاعدة: ممنوع رقم أصمّ.
          كانت ٤ بطاقات مكتوبة بالإيد بكلاسات `.pv-kpi` تخصّ الشاشة دي وحدها. */ ?>
+<?php /* ⚠️ **شبكة الأرقام مش بتتعرض في وضع المتابعة** (2026-08-10).
+         كانت بتدّي تناقضًا: «إجمالي الأذونات» بيعدّ **كل** الأذونات
+         (`SELECT ... FROM permits` بلا أي فلتر حالة)، وأزرار «الكل/ناقص/جاهز»
+         تحتها بتعدّ **المفتوحة بس** — رقمان جنب بعض الاتنين معناهم «الكل»
+         ومختلفين، ومفيش حاجة بتقول ليه. وأزرار المتابعة **بتفلتر فعلاً**
+         فهي أنفع من كارت بينقل لشاشة تانية.
+         الشبكة بتفضل زي ما هي في «الحركات» و«السجلّات» — هناك النطاق واحد. */ ?>
+<?php if ($mode !== 'follow'): ?>
 <?php partial('stat_grid', ['items' => 4, 'body' => function () use ($mode, $stats, $incomplete, $movesCount, $total) { ?>
   <?php partial('stat', [
     'label' => 'إجمالي الأذونات', 'value' => intf($stats['total']),
@@ -48,16 +56,8 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
     'icon' => 'check-circle', 'tone' => 'green',
     'url' => url('permits?view=records&st=closed'),
   ]); ?>
-  <?php if ($mode === 'follow'): ?>
-    <?php /* صفر ناقص = حالة كويسة، فبتاخد اللون الأخضر وبتوصّل لقايمة «جاهز»
-             بدل ما تبقى بطاقة ميتة مش بتتضغط. */ ?>
-    <?php partial('stat', [
-      'label' => 'تحتاج استكمال', 'value' => intf($incomplete),
-      'icon' => $incomplete > 0 ? 'alert' : 'check-circle',
-      'tone' => $incomplete > 0 ? 'red' : 'green',
-      'url' => url('permits?state=' . ($incomplete > 0 ? 'warn' : 'ok')),
-    ]); ?>
-  <?php elseif ($mode === 'movements'): ?>
+  <?php /* `$mode === 'follow'` اتشال من هنا — الشبكة كلها مش بتترسم في المتابعة */ ?>
+  <?php if ($mode === 'movements'): ?>
     <?php partial('stat', [
       'label' => 'إجمالي الحركات', 'value' => intf($movesCount),
       'icon' => 'shuffle', 'tone' => 'teal',
@@ -71,6 +71,7 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
     ]); ?>
   <?php endif; ?>
 <?php }]); ?>
+<?php endif; ?>
 
 <?php if ($mode === 'follow'): ?>
   <?php // ============ شاشة المتابعة ============ ?>
@@ -107,6 +108,8 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
     <label class="pvf-sort">
       <span>ترتيب</span>
       <select name="sort">
+        <?php /* «الناقص الأول» = الترتيب اللي الشاشة اتعملت عشانه أصلاً */ ?>
+        <option value="warn" <?= $followSort==='warn'?'selected':'' ?>>الناقص الأول</option>
         <option value="new" <?= $followSort==='new'?'selected':'' ?>>الأحدث تاريخاً</option>
         <option value="old" <?= $followSort==='old'?'selected':'' ?>>الأقدم تاريخاً</option>
         <option value="rem-desc" <?= $followSort==='rem-desc'?'selected':'' ?>>الأكبر متبقّياً</option>
@@ -116,14 +119,14 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
   </form>
   <?php endif; ?>
 
-  <?php // أزرار الشركات/الوكلاء المتكررين + تجميع البطاقات — تظهر تلقائيًا بلا أي إعداد
-    $pcCoList = $coChips ?? []; $pcClList = $clChips ?? [];
-    $pcCo = $followCo; $pcCl = $followCl; $pcUrl = $followUrl;
-    include __DIR__ . '/_party_chips.php';
-  ?>
-
-  <?php if ($followCo!=='' || $followCl!=='' || ($coChips??[])): ?>
+  <?php /* ⚠️ **صف تحكّم واحد** بدل تلاتة (صفّ شركات + صفّ وكلاء + شريط عرض).
+           الشاشة كان فوقها ٧ صفوف تحكّم قبل أول بطاقة — ٤٤% من الشاشة قبل
+           أول معلومة. الأطراف بقت قائمة منسدلة جوّه نفس الشريط. */ ?>
+  <?php if ($followCo!=='' || $followCl!=='' || ($coChips??[]) || ($clChips??[])): ?>
   <div class="pv-viewbar">
+    <?php $pcCoList = $coChips ?? []; $pcClList = $clChips ?? [];
+          $pcCo = $followCo; $pcCl = $followCl; $pcUrl = $followUrl;
+          include __DIR__ . '/_party_chips.php'; ?>
     <?php if ($followCo!=='' || $followCl!==''): ?>
       <span class="pvv-active">
         <?= icon('search', 14) ?> معروض الآن:
@@ -136,7 +139,7 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
     <?php endif; ?>
     <span class="pv-sp"></span>
     <a class="pvv-toggle<?= $followGroup==='co'?' on':'' ?>" href="<?= e($followUrl(['group'=>$followGroup==='co'?'':'co'])) ?>">
-      <?= icon('folder', 14) ?> <?= $followGroup==='co' ? 'إلغاء التجميع' : 'تجميع حسب الشركة' ?>
+      <?= icon('layers', 14) ?> <?= $followGroup==='co' ? 'إلغاء التجميع' : 'تجميع حسب الشركة' ?>
     </a>
   </div>
   <?php endif; ?>
@@ -161,13 +164,11 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
       }
       $grpCur = null;
     ?>
-    <div class="dkt-grid<?= $followGroup==='co'?' is-grouped':'' ?>" id="pvFollowGrid">
+    <div class="dkt-grid<?= $followGroup==='co'?' is-grouped':'' ?>">
       <?php foreach ($rows as $r): $inc = $r['is_incomplete']; $prog=(int)$r['progress']; $th = Permit::theme($r['permit_type']);
             $rcps = $r['receipts'] ?? []; $rcTotal = array_sum(array_map(fn($x)=>(float)$x['amount'], $rcps));
             $rcShow = array_slice($rcps, 0, 6); $rcMore = count($rcps) - count($rcShow);
             $ctLbl = Permit::containerLabel($r['ctype_breakdown'], (int)($r['containers']??0), $r['container_type']??null);
-            $missTip = $inc ? implode(' · ', $r['missing']) : 'كل البيانات مكتملة';
-            $searchKey = mb_strtolower(trim(($r['permit_no']?:('#'.$r['id'])).' '.($r['company']??'').' '.($r['client']??'').' '.($r['destination']??'').' '.($r['agency']??'')));
             $url = url('permits/'.$r['id']); ?>
         <?php if ($followGroup==='co'): $gk = (string)($r['company'] ?? ''); if ($gk !== $grpCur): $grpCur = $gk; ?>
           <div class="dkt-grp">
@@ -181,9 +182,13 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
             <?php endif; ?>
           </div>
         <?php endif; endif; ?>
+        <?php /* ⚠️ اتشالت من هنا ٦ خصائص ميتة (`data-status`/`data-search`/
+                 `data-prog`/`data-rem`/`data-date`/`data-seq` + `id="pvFollowGrid"`
+                 على الشبكة) — بقايا فلترة كانت بتحصل في المتصفح قبل ما تتنقل
+                 للخادم. **مفيش سطر جافاسكريبت واحد بيقراهم** (اللي في `app.js`
+                 تعليق بيشرح `search_norm` مش كود)، وكانوا بيتطبعوا على كل بطاقة
+                 في كل تحميل. */ ?>
         <div class="dkt t-<?= $th['cls'] ?> <?= $inc?'warn':'ok' ?>" onclick="location.href='<?= $url ?>'" tabindex="0" role="link"
-             data-status="<?= $inc?'warn':'ok' ?>" data-search="<?= e($searchKey) ?>" data-prog="<?= $prog ?>"
-             data-rem="<?= (float)$r['remaining'] ?>" data-date="<?= e($r['permit_date']?:'') ?>" data-seq="<?= (int)$r['id'] ?>"
              onkeydown="if(event.key==='Enter'){location.href='<?= $url ?>'}">
           <header class="dkt-hd">
             <span class="dkt-kind <?= $th['cls'] ?>"><?= $th['full'] ?> <span class="dk-arrow"><?= $th['arrow'] ?></span></span>
@@ -222,6 +227,17 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
               <span class="track"><span style="width:<?= $prog ?>%"></span></span>
               <span class="pct num"><?= $prog ?>%</span>
             </div>
+
+            <?php /* ⚠️ **اللي ناقص بيتقال نصًّا مش في `title`.** ده الغرض
+                     الأساسي للشاشة، وكان مخبّيًا في tooltip **مالوش وجود على
+                     الموبايل والتاتش** — يعني المعلومة الوحيدة اللي الشاشة
+                     اتعملت عشانها كانت غير موجودة لنص المستخدمين.
+                     تحت شريط الاكتمال بالظبط لأنها **بتفسّر النسبة**. */ ?>
+            <?php if ($inc): ?>
+              <div class="dkt-miss">
+                <?php foreach ($r['missing'] as $ms): ?><span class="miss-chip"><?= e($ms) ?></span><?php endforeach; ?>
+              </div>
+            <?php endif; ?>
           </div>
 
           <!-- الإيصالات: سطر مضغوط + قائمة تفصيلية تفتح/تقفل بالضغط -->
@@ -249,8 +265,16 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
           </div>
 
           <footer class="dkt-ft">
-            <span class="dkt-money"><span class="k">المتبقّي</span><b class="num <?= $r['remaining']>0?'neg':'pos' ?>"><?= money($r['remaining'],false) ?></b></span>
-            <?php if ($inc): ?><span class="stamp wip" title="<?= e($missTip) ?>"><?= icon('alert', 14) ?> ناقص</span>
+            <?php /* ⚠️ **المتبقّي بيظهر بس لما يبقى ليه قيمة.** كان بيتطبع على
+                     كل بطاقة وهو `0.00` **أخضر** في أغلبها — رقم أصمّ بيدّي
+                     طمأنينة كاذبة (الصفر معناه غالبًا «مفيش بوالص أصلاً» مش
+                     «مفيش مستحقّات»). ولمّا يبقى فيه رقم فعلاً بقى يبان. */ ?>
+            <?php if ((float)$r['remaining'] != 0): ?>
+              <span class="dkt-money"><span class="k">المتبقّي</span><b class="num <?= $r['remaining']>0?'neg':'pos' ?>"><?= money($r['remaining'],false) ?></b></span>
+            <?php endif; ?>
+            <?php /* الشارة بقت وسمًا بس — سبب النقص مكتوب نصًّا فوق (`dkt-miss`)
+                     بدل `title` اللي مالوش وجود على التاتش. */ ?>
+            <?php if ($inc): ?><span class="stamp wip"><?= icon('alert', 14) ?> ناقص</span>
             <?php else: ?><span class="stamp ready"><?= icon('check', 14) ?> جاهز</span><?php endif; ?>
             <span class="dkt-ft-sp"></span>
             <span class="dkt-acts" onclick="event.stopPropagation()">
@@ -349,21 +373,21 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
     <span class="pv-count"><span class="num"><?= intf($total) ?></span> إصدار</span>
   </div>
 
-  <?php // أزرار الشركات/الوكلاء المتكررين — تظهر تلقائيًا لأي طرف له أكثر من إصدار
-    $pcCoList = $coChips ?? []; $pcClList = $clChips ?? [];
-    $pcCo = $co; $pcCl = $cl; $pcUrl = $recordUrl;
-    include __DIR__ . '/_party_chips.php';
-  ?>
-
-  <?php if ($co!=='' || $cl!==''): ?>
+  <?php /* نفس شريط المتابعة: الأطراف قائمة منسدلة جوّه صفّ واحد */ ?>
+  <?php if ($co!=='' || $cl!=='' || ($coChips??[]) || ($clChips??[])): ?>
     <div class="pv-viewbar">
-      <span class="pvv-active"><?= icon('search', 14) ?> معروض الآن:
-        <?php if($co!==''): ?><b><?= e($co) ?></b><?php endif; ?>
-        <?php if($co!=='' && $cl!==''): ?> · <?php endif; ?>
-        <?php if($cl!==''): ?><b><?= e($cl) ?></b><?php endif; ?>
-        — <span class="num"><?= intf($total) ?></span> إصدار
-      </span>
-      <a class="pvv-x" href="<?= e($recordUrl(['co'=>'','cl'=>''])) ?>"><?= icon('x', 14) ?> إلغاء التصفية</a>
+      <?php $pcCoList = $coChips ?? []; $pcClList = $clChips ?? [];
+            $pcCo = $co; $pcCl = $cl; $pcUrl = $recordUrl;
+            include __DIR__ . '/_party_chips.php'; ?>
+      <?php if ($co!=='' || $cl!==''): ?>
+        <span class="pvv-active"><?= icon('search', 14) ?> معروض الآن:
+          <?php if($co!==''): ?><b><?= e($co) ?></b><?php endif; ?>
+          <?php if($co!=='' && $cl!==''): ?> · <?php endif; ?>
+          <?php if($cl!==''): ?><b><?= e($cl) ?></b><?php endif; ?>
+          — <span class="num"><?= intf($total) ?></span> إصدار
+        </span>
+        <a class="pvv-x" href="<?= e($recordUrl(['co'=>'','cl'=>''])) ?>"><?= icon('x', 14) ?> إلغاء التصفية</a>
+      <?php endif; ?>
     </div>
   <?php endif; ?>
 

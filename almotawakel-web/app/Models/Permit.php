@@ -344,6 +344,100 @@ class Permit
         return $out;
     }
 
+    // ═══════════════════ نسبة الاكتمال — المصدر الوحيد ═══════════════════
+    /*
+     * ⚠️ **كانت متحسوبة في مكانين بقاعدتين مختلفتين** (اتصادف فعليًّا):
+     *   • بطاقة المتابعة كانت بتعدّ كل مرحلة **مرة واحدة للإذن كله**.
+     *   • شاشة الإذن كانت بتعدّ مراحل الحركة **لكل حركة على حدة**.
+     * فطول ما الإذن فيه حركة واحدة الرقمان متطابقان — وأول ما يبقى فيه
+     * حركتين يفترقوا: إذن بحركتين والتانية فاضية كان بيقول **١٠٠%** في
+     * القايمة و**٨٧%** في صفحته. نفس السؤال بإجابتين، وبلا أي خطأ ظاهر.
+     *
+     * القاعدة الواحدة دلوقتي: **مراحل مستوى الإذن + مراحل كل حركة على حدة**
+     * (وهي الأدق لأن حركة فاضية شغل ناقص فعلاً). و`generators` مستثناة —
+     * اختيارية ومش بتدخل التقدّم.
+     */
+
+    /**
+     * حساب الاكتمال من حالة **منظَّمة** — دالة خالصة بلا أي استعلام، عشان
+     * الشاشة والقايمة يستدعوها بنفس المدخلات المعنوية ومستحيل يفترقوا.
+     *
+     * @param array $permitHas   ['data'=>bool, 'primary_fees'=>bool, ...] مراحل مستوى الإذن
+     * @param array $movementHas [ ['bills'=>bool,'receipts'=>bool,...], ... ] صف لكل حركة
+     * @return array{done:int, tot:int, percent:int}
+     */
+    public static function completionOf(array $permitHas, array $movementHas): array
+    {
+        $done = 0; $tot = 0;
+        foreach (self::scopedStages('permit') as $k => $_) {
+            if ($k === 'generators') { continue; }
+            $tot++;
+            // «بيانات الإذن» موجودة دايمًا (الإذن نفسه)، والباقي حسب بنوده
+            if ($k === 'data' || !empty($permitHas[$k])) { $done++; }
+        }
+        foreach ($movementHas as $mv) {
+            foreach (self::scopedStages('movement') as $k => $_) {
+                if ($k === 'generators') { continue; }
+                $tot++;
+                if (!empty($mv[$k])) { $done++; }
+            }
+        }
+        return ['done' => $done, 'tot' => $tot,
+                'percent' => $tot ? (int) round($done / $tot * 100) : 0];
+    }
+
+    /**
+     * الاكتمال لمجموعة أذونات دفعةً واحدة — **٣ استعلامات مهما كان العدد**
+     * (شاشة المتابعة بتعرض ٤٨ إذن، فاستعلام لكل إذن مرفوض).
+     *
+     * ⚠️ بيرجّع نفس نتيجة `completionOf` بالحرف لأنه **بينادي عليها** —
+     * مش بيعيد كتابة العدّ.
+     *
+     * @return array<int, array{done:int, tot:int, percent:int}>
+     */
+    public static function completionMap(array $permitIds): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $permitIds)));
+        if (!$ids) { return []; }
+        $in = implode(',', $ids);
+
+        // ① مراحل مستوى الإذن (بلا حركة)
+        $permitHas = [];
+        foreach (Database::all(
+            "SELECT permit_id, stage_key FROM permit_stages
+              WHERE permit_id IN ($in) AND movement_id IS NULL
+              GROUP BY permit_id, stage_key"
+        ) as $r) { $permitHas[(int) $r['permit_id']][$r['stage_key']] = true; }
+
+        // ② حركات كل إذن + مراحل كل حركة
+        $mvHas = [];
+        foreach (Database::all("SELECT id, permit_id FROM permit_movements WHERE permit_id IN ($in)") as $m) {
+            $mvHas[(int) $m['permit_id']][(int) $m['id']] = [];
+        }
+        foreach (Database::all(
+            "SELECT m.permit_id, s.movement_id, s.stage_key FROM permit_stages s
+               JOIN permit_movements m ON m.id = s.movement_id
+              WHERE m.permit_id IN ($in)
+              GROUP BY m.permit_id, s.movement_id, s.stage_key"
+        ) as $r) { $mvHas[(int) $r['permit_id']][(int) $r['movement_id']][$r['stage_key']] = true; }
+
+        // ③ البوالص بتتعدّ من `bawalis` مش من `permit_stages` (مرحلة `bills` مخزّنة في جدولها)
+        foreach (Database::all(
+            "SELECT permit_id, movement_id FROM bawalis
+              WHERE permit_id IN ($in) AND movement_id IS NOT NULL
+              GROUP BY permit_id, movement_id"
+        ) as $r) { $mvHas[(int) $r['permit_id']][(int) $r['movement_id']]['bills'] = true; }
+
+        $out = [];
+        foreach ($ids as $pid) {
+            $out[$pid] = self::completionOf(
+                $permitHas[$pid] ?? [],
+                array_values($mvHas[$pid] ?? [])
+            );
+        }
+        return $out;
+    }
+
     /** مفاتيح المراحل ذات المصروف الثابت (بدون البنود المخصّصة) */
     public static function expenseKeys(): array
     {

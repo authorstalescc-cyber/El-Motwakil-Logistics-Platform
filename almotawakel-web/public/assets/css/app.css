@@ -1786,11 +1786,25 @@ label.tl-visa input{width:18px;height:18px;accent-color:var(--gold)}
   .permits-v2 .pvf-sort select{flex:1;margin-inline-start:8px}
 }
 
-/* --- أزرار الأطراف المتكررة (شركة/وكيل) — تظهر تلقائيًا لأي طرف له أكثر من إذن --- */
-.permits-v2 .pv-parties{
-  background:var(--card);border:1px solid var(--rule);border-radius:var(--radius-2);
-  box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden
+/* --- أزرار الأطراف المتكررة (شركة/وكيل) — تظهر تلقائيًا لأي طرف له أكثر من إذن ---
+   ⚠️ **قائمة منسدلة جوّه شريط العرض** مش صفّين دايمين: كانت بتاكل صفّين من
+   ٧ صفوف تحكّم فوق أول بطاقة. اللوحة `absolute` عشان فتحها ما يزقّش الصفحة. */
+.permits-v2 .pv-partybox{position:relative;flex:none}
+.permits-v2 .pv-partybox > summary{list-style:none;cursor:pointer;user-select:none}
+.permits-v2 .pv-partybox > summary::-webkit-details-marker{display:none}
+.permits-v2 .pp-badge{
+  background:var(--zebra);border:1px solid var(--rule);color:var(--ink-mut);
+  font-size:var(--fs-1);font-weight:600;min-width:18px;height:18px;padding:0 5px;
+  border-radius:var(--radius-4);display:inline-flex;align-items:center;justify-content:center
 }
+.permits-v2 .pvv-toggle.on .pp-badge{background:rgba(255,255,255,.24);border-color:transparent;color:var(--white)}
+.permits-v2 .pv-partybox-in{
+  position:absolute;inset-inline-start:0;top:calc(100% + 6px);z-index:40;
+  min-width:min(340px,86vw);max-width:min(680px,90vw);max-height:60vh;overflow:auto;
+  background:var(--card);border:1px solid var(--rule);border-radius:var(--radius-2);
+  box-shadow:0 12px 30px rgba(21,53,91,.16)
+}
+/* (`.pv-parties` اتشالت — اللوحة بقت `.pv-partybox-in` وهي اللي شايلة الإطار) */
 .permits-v2 .pp-row{display:flex;align-items:flex-start;gap:12px;padding:9px 13px}
 .permits-v2 .pp-row + .pp-row{border-top:1px dashed var(--rule)}
 .permits-v2 .pp-lbl{flex:none;font-size:var(--fs-2);font-weight:600;color:var(--ink-mut);white-space:nowrap;padding-top:6px}
@@ -1948,6 +1962,16 @@ label.tl-visa input{width:18px;height:18px;accent-color:var(--gold)}
   background:linear-gradient(90deg,var(--gold-light),var(--gold));transition:width .6s cubic-bezier(.2,.7,.3,1)}
 .permits-v2 .dkt.ok .dkt-prog .track span{background:linear-gradient(90deg,#2f9256,var(--green))}
 .permits-v2 .dkt-prog .pct{font-size:var(--fs-2);font-weight:600;color:var(--ink-mut);min-width:36px;text-align:end}
+
+/* سبب النقص — نصًّا تحت شريط الاكتمال بدل `title` اللي مالوش وجود على التاتش.
+   ⚠️ **بلون وسم «ناقص» (دهبي) مش بلون شارات المرشد (أحمر).** البطاقة فيها
+   صفّان من الشارات معناهما مختلف: دي **بتمنع اكتمال الإذن** («بلا بوالص»)،
+   وشارات المرشد تحتها **إيصال متوقّع ناقص** («بدون تخصيص») وهي استرشادية
+   مالهاش أي إلزام. لون واحد للاتنين كان بيخلّيهم يتقروا فئة واحدة. */
+.permits-v2 .dkt-miss{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.permits-v2 .dkt-miss .miss-chip{
+  color:var(--gold-fg);background:var(--gold-light);border-color:var(--gold)
+}
 
 /* البطاقة صارت div قابلاً للنقر */
 .permits-v2 .dkt{cursor:pointer}

@@ -127,7 +127,7 @@ class PermitController extends Controller
             $followQ = trim((string)($_GET['q'] ?? ''));
             $followState = in_array($_GET['state'] ?? '', ['warn', 'ok'], true)
                 ? (string) $_GET['state'] : 'all';
-            $followSort = in_array($_GET['sort'] ?? '', ['old', 'rem-desc'], true)
+            $followSort = in_array($_GET['sort'] ?? '', ['old', 'rem-desc', 'warn'], true)
                 ? (string) $_GET['sort'] : 'new';
             // تصفية بطرف واحد (شركة/وكيل) + تجميع البطاقات حسب الشركة — عرض فقط، بلا أي أثر مالي
             $followCo    = trim((string)($_GET['co'] ?? ''));
@@ -173,9 +173,13 @@ class PermitController extends Controller
             $followPages = max(1, (int)ceil($followTotal / $perPage));
             $followPage = min(max(1, (int)($_GET['page'] ?? 1)), $followPages);
             $offset = ($followPage - 1) * $perPage;
+            /* ⚠️ «الناقص الأول» هو الترتيب اللي الشاشة دي **اتعملت عشانه**
+               وكان ناقص: الموجود كان تاريخ أو «الأكبر متبقّياً» — وده بيرتّب
+               على `SUM(bawalis.remaining)` اللي بيبقى صفر في أغلب الأذونات. */
             $order = match ($followSort) {
                 'old' => 'p.permit_date ASC, p.id ASC',
                 'rem-desc' => 'remaining DESC, p.id DESC',
+                'warn' => "($incompleteSql) DESC, pending DESC, p.permit_date DESC, p.id DESC",
                 default => 'p.permit_date DESC, p.id DESC',
             };
             // التجميع حسب الشركة: نرتّب بالشركة أولاً حتى تتجاور بطاقات كل شركة
@@ -197,15 +201,16 @@ class PermitController extends Controller
                 $rowParams
             );
 
-            // خريطة مراحل كل إذن (لعرض نقاط التقدّم)
             $ids = array_map(fn($r)=>(int)$r['id'], $rows);
-            $keysMap = [];
-            if ($ids) {
-                $in = implode(',', $ids);
-                foreach (Database::all("SELECT permit_id, stage_key FROM permit_stages WHERE permit_id IN ($in) GROUP BY permit_id, stage_key") as $k) {
-                    $keysMap[(int)$k['permit_id']][$k['stage_key']] = true;
-                }
-            }
+            if ($ids) { $in = implode(',', $ids); }
+
+            /* ⚠️ نسبة الاكتمال من **`Permit::completionMap()`** — نفس الدالة
+               اللي بتحسبها في شاشة الإذن (`show.php` بتنادي `completionOf`
+               اللي `completionMap` نفسها بتناديها). كانت متحسوبة هنا بالإيد
+               بقاعدة تانية: كل مرحلة **مرة واحدة للإذن**، بينما الشاشة بتعدّها
+               **لكل حركة**. فإذن بحركتين والتانية فاضية كان بيقول ١٠٠% في
+               القايمة و٨٧% في صفحته. ٣ استعلامات للصفحة كلها مهما كان العدد. */
+            $progMap = Permit::completionMap($ids);
 
             // تفصيل الحاويات حسب النوع لكل إذن (النوع + عدده) من البوالص
             $ctMap = self::containerBreakdown('permit_id', $ids);
@@ -222,7 +227,6 @@ class PermitController extends Controller
                 }
             }
 
-            $active = Permit::activeStages();
             $incomplete = 0;
             foreach ($rows as &$r) {
                 $r['ctype_breakdown'] = $ctMap[(int)$r['id']] ?? [];
@@ -230,23 +234,16 @@ class PermitController extends Controller
                 // الإحصاء الذكي: أي الإيصالات المتوقّعة ناقصة (لعرض «بدون هيئة» … على البطاقة)
                 // $r = صف الإذن كاملاً (SELECT p.*) فيشمل chk_* اللازمة للقواعد المشروطة
                 $r['rcp_missing'] = Permit::receiptGuide($r, $r['receipts'])['missing'];
-                $have = $keysMap[(int)$r['id']] ?? [];
-                $dots = []; $done = 0; $tot = 0;
-                foreach ($active as $k => $m) {
-                    if ($k === 'generators') { continue; }   // اختيارية — لا تدخل التقدّم
-                    $tot++;
-                    $isDone = $k === 'data' ? true
-                            : ($k === 'bills' ? ((int)$r['bills'] > 0) : isset($have[$k]));
-                    if ($isDone) { $done++; }
-                    $dots[] = ['icon' => $m['icon'], 'label' => $m['label'], 'done' => $isDone];
-                }
-                $r['dots'] = $dots;
-                $r['progress'] = $tot ? (int) round($done / $tot * 100) : 0;
+                $r['progress'] = $progMap[(int)$r['id']]['percent'] ?? 0;
 
+                /* ⚠️ **دي بتتعرض على البطاقة نصًّا مش في tooltip** — الغرض
+                   الأساسي للشاشة إنك تعرف الناقص، والـtooltip **مالوش وجود
+                   على الموبايل والتاتش**. فالنص قصير بحجم شارة (٢-٣ كلمات)
+                   عشان يتقرا في سطر واحد جنب باقي الشارات. */
                 $missing = [];
-                if ((int)$r['bills'] === 0)       { $missing[] = 'لا بوالص مرتبطة'; }
-                if ((int)$r['pending'] > 0)       { $missing[] = 'بنود ناقصة (' . (int)$r['pending'] . ')'; }
-                if ((int)$r['stage_count'] === 0) { $missing[] = 'لا بنود بعد'; }
+                if ((int)$r['bills'] === 0)       { $missing[] = 'بلا بوالص'; }
+                if ((int)$r['stage_count'] === 0) { $missing[] = 'بلا بنود'; }
+                if ((int)$r['pending'] > 0)       { $missing[] = intf((int)$r['pending']) . ' بند ناقص'; }
                 $r['missing'] = $missing;
                 $r['is_incomplete'] = !empty($missing);
                 if ($r['is_incomplete']) { $incomplete++; }

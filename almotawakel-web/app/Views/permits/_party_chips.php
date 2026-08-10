@@ -51,8 +51,24 @@ $pcRow = static function (string $icon, string $label, array $list, string $acti
     </div>
     <?php
 };
+
+/* ⚠️ **بقت قائمة منسدلة مش صفّين دايمين** (2026-08-10).
+   كانت بتاخد صفّين من ٧ صفوف تحكّم فوق أول بطاقة (٤٤% من الشاشة قبل أول
+   معلومة). ودول أزرار **استكشاف** مش تصفية يومية — مش محتاجين يفضلوا
+   مفتوحين. دلوقتي زرار واحد في شريط العرض، والقايمة بتنزل فوق المحتوى
+   (`position:absolute`) فما بتزقّش الصفحة لما تتفتح.
+   ⚠️ ولو فيه تصفية شغّالة القايمة **بتتفتح لوحدها** (`open`) — إخفاء الفلتر
+   اللي مغيّر النتيجة بيخلّي المستخدم يفتكر إن دي كل الأذونات. */
+$pcActive = ($pcCo !== '' || $pcCl !== '');
+$pcCount  = count($pcCoList) + count($pcClList);
 ?>
-<div class="pv-parties">
-  <?php $pcRow('🏢', 'شركات متكررة', $pcCoList, $pcCo, 'co', $pcUrl); ?>
-  <?php $pcRow('👤', 'وكلاء متكررون', $pcClList, $pcCl, 'cl', $pcUrl); ?>
-</div>
+<details class="pv-partybox"<?= $pcActive ? ' open' : '' ?>>
+  <summary class="pvv-toggle<?= $pcActive ? ' on' : '' ?>">
+    <?= icon('folder', 14) ?> تصفية بطرف
+    <span class="pp-badge num"><?= intf($pcCount) ?></span>
+  </summary>
+  <div class="pv-partybox-in">
+    <?php $pcRow(icon('building', 14), 'شركات متكررة', $pcCoList, $pcCo, 'co', $pcUrl); ?>
+    <?php $pcRow(icon('user', 14), 'وكلاء متكررون', $pcClList, $pcCl, 'cl', $pcUrl); ?>
+  </div>
+</details>

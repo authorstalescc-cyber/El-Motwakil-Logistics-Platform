@@ -125,6 +125,55 @@ foreach ([
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('②ب ⚠️⚠️ الاكتمال دالة واحدة — البطاقة والشاشة لازم يقولوا نفس الرقم');
+// ═══════════════════════════════════════════════════════════════════════
+
+/* ⚠️ **الحد الأحمر لهذا القسم.** الرقمان كانا متحسوبين بقاعدتين مختلفتين
+   (البطاقة: كل مرحلة مرة واحدة للإذن · الشاشة: مراحل كل حركة على حدة)،
+   فالإذن بأكتر من حركة كان بيقول نسبتين. الفحص بيمشي على **كل** الأذونات
+   ويقارن مسار البطاقة (`completionMap` — الاستعلام المجمّع) بمسار الشاشة
+   (`completionOf` من `$movements` زي `show.php` بالحرف).
+   ⚠️ **لازم يشمل أذونات بأكتر من حركة** وإلا بينجح كذبًا — بحركة واحدة
+   القاعدتان القديمتان كانتا بتديا نفس الرقم. */
+$allIds = array_map(fn($x) => (int) $x['id'], Database::all('SELECT id FROM permits ORDER BY id'));
+if (!$allIds) {
+    ok('مفيش أذونات — تخطّي مقارنة الاكتمال');
+} else {
+    $map = Permit::completionMap($allIds);
+    $mismatch = []; $multi = 0;
+    foreach ($allIds as $pid2) {
+        $mvs = Permit::movements($pid2);
+        foreach ($mvs as &$mv) {
+            $mv['bills']  = Permit::movementBills((int) $mv['id']);
+            $mv['stages'] = Permit::movementStagesGrouped((int) $mv['id']);
+        }
+        unset($mv);
+        if (count($mvs) >= 2) { $multi++; }
+        $ps = Permit::permitStagesGrouped($pid2);
+        $ph = []; foreach (Permit::scopedStages('permit') as $k => $_) { $ph[$k] = !empty($ps[$k] ?? []); }
+        $mh = [];
+        foreach ($mvs as $mv) {
+            $row = [];
+            foreach (Permit::scopedStages('movement') as $k => $_) {
+                $row[$k] = $k === 'bills' ? !empty($mv['bills']) : !empty($mv['stages'][$k] ?? []);
+            }
+            $mh[] = $row;
+        }
+        if (Permit::completionOf($ph, $mh) !== ($map[$pid2] ?? null)) { $mismatch[] = $pid2; }
+    }
+    chk($mismatch === [],
+        '⚠️⚠️ نسبة الاكتمال واحدة في البطاقة والشاشة على ' . count($allIds) . ' إذن'
+        . ($mismatch ? ' — مختلفة في: ' . implode(', ', array_slice($mismatch, 0, 8)) : ''));
+    chk($multi > 0,
+        "والعيّنة فيها $multi إذن بأكتر من حركة (الحالة اللي كانت بتفرق فعلاً)");
+}
+
+/* والقاعدة نفسها مش مكتوبة تاني في أي شاشة */
+chk(!preg_match('~\$tot\s*\+\+~', code_only((string) file_get_contents($root . '/app/Views/permits/show.php')))
+    && !preg_match('~\$tot\s*\+\+~', code_only($ctlSrc = (string) file_get_contents($root . '/app/Controllers/PermitController.php'))),
+    '⚠️ ومفيش عدّ مكتوب بالإيد في `show.php` ولا في الكنترولر');
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('③ الرندر الفعلي — كل رقم في الهيرو له نافذة، ومجموعها = رقمه');
 // ═══════════════════════════════════════════════════════════════════════
 

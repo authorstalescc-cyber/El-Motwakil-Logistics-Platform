@@ -29,26 +29,25 @@ $th   = Permit::theme($type);
 $noLabel  = Permit::noLabel($type);
 $isClosed = ($p['status'] ?? 'open') === 'closed';
 
-/* ⚠️ التقدّم بيتحسب **هنا** لأن الهيرو بيتطبع في الغلاف قبل الجسم. كان
-   محسوبًا في الشاشتين بنفس الكود بالحرف؛ لو رجع للجسم يبقى الهيرو بيقرا
-   متغيّرًا لسه ما اتحسبش (اتصاد فعليًّا: أربع تحذيرات PHP جوّه الصفحة). */
+/* ⚠️ التقدّم بيتحسب **هنا** لأن الهيرو بيتطبع في الغلاف قبل الجسم. لو رجع
+   للجسم يبقى الهيرو بيقرا متغيّرًا لسه ما اتحسبش (اتصاد فعليًّا: أربع
+   تحذيرات PHP جوّه الصفحة).
+   ⚠️ **العدّ نفسه في `Permit::completionOf()` مش هنا** — كان مكتوبًا بالإيد
+   هنا وبقاعدة تانية في كنترولر شاشة المتابعة، فالإذن اللي فيه أكتر من حركة
+   كان بيقول نسبتين مختلفتين في الشاشتين. هنا بنجهّز **المدخلات** بس. */
 $pStages = Permit::scopedStages('permit');
 $mStages = Permit::scopedStages('movement');
-$done = 0; $tot = 0;
-foreach ($pStages as $k => $m) {
-    if ($k === 'generators') { continue; }
-    $tot++;
-    if ($k === 'data' || !empty($permitStages[$k] ?? [])) { $done++; }
-}
+$permitHas = [];
+foreach ($pStages as $k => $m) { $permitHas[$k] = !empty($permitStages[$k] ?? []); }
+$movementHas = [];
 foreach ($movements as $mv) {
+    $row = [];
     foreach ($mStages as $k => $m) {
-        if ($k === 'generators') { continue; }
-        $tot++;
-        $has = $k === 'bills' ? !empty($mv['bills']) : !empty($mv['stages'][$k] ?? []);
-        if ($has) { $done++; }
+        $row[$k] = $k === 'bills' ? !empty($mv['bills']) : !empty($mv['stages'][$k] ?? []);
     }
+    $movementHas[] = $row;
 }
-$progress = $tot ? (int) round($done / $tot * 100) : 0;
+['done' => $done, 'tot' => $tot, 'percent' => $progress] = Permit::completionOf($permitHas, $movementHas);
 
 $permitFormState = $permitFormState ?? [
     'token' => '', 'old' => [], 'errors' => [], 'back' => 'permits/' . $pid . '/manage#stage-data',

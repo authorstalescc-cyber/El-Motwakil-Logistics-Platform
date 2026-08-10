@@ -85,8 +85,11 @@ chk($manageAt !== false && $greedy !== false && $manageAt < $greedy,
 
 // ═══ ④ ⚠️ التقدّم في الغلاف
 sec('④ ⚠️ التقدّم بيتحسب قبل الهيرو');
-chk(str_contains($show, '$progress = $tot ?'),
-    'التقدّم محسوب في الغلاف');
+/* ⚠️ العدّ نفسه اتنقل لـ`Permit::completionOf()` (2026-08-10) — كان مكتوبًا
+   بالإيد هنا وبقاعدة تانية في كنترولر شاشة المتابعة، فالإذن بأكتر من حركة
+   كان بيقول نسبتين. الغلاف بيجهّز المدخلات وبيستدعي الدالة، **مش بيعدّ**. */
+chk(str_contains($show, 'Permit::completionOf(') && str_contains($show, "'percent' => \$progress"),
+    'التقدّم محسوب في الغلاف — ومن `Permit::completionOf()` مش بالإيد');
 chk(!str_contains($bodyV, '$progress =') && !str_contains($bodyM, '$progress ='),
     'ومش محسوب في أي جسم — لو رجع هناك الهيرو بيقرا متغيّر لسه ما اتحسبش');
 chk(str_contains($show, 'اتصاد فعليًّا'),
@@ -186,6 +189,11 @@ $modesToRender = [
     'الحركات'  => ['view' => 'movements'],
     'السجلّات' => ['view' => 'records'],
 ];
+/* ⚠️ **«متابعة» بلا شبكة أرقام عن قصد** (2026-08-10): كانت بتعرض «إجمالي
+   الأذونات» اللي بيعدّ **كل** الأذونات، وتحتها أزرار «الكل/ناقص/جاهز» اللي
+   بتعدّ **المفتوحة بس** — رقمان جنب بعض معناهم «الكل» ومختلفين. والأزرار
+   بتفلتر فعلاً فهي أنفع. الوضعان التانيان نطاقهما واحد فالشبكة بتفضل. */
+$expectKpis = ['متابعة' => 0, 'الحركات' => 4, 'السجلّات' => 4];
 $savedGet = $_GET;
 foreach ($modesToRender as $mname => $mget) {
     $_GET = $mget; $_REQUEST = $mget;
@@ -196,7 +204,9 @@ foreach ($modesToRender as $mname => $mget) {
     preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $mh, $mm)
         ? bad("وضع «{$mname}»: " . ($mm[0] ?? ''))
         : ok("وضع «{$mname}» بيرندر بلا أخطاء PHP");
-    chk(preg_match_all('/class="d-kpi /', $mh) === 4, "و«{$mname}» فيه أربع بطاقات مرسومة فعلاً");
+    $kpiCount = preg_match_all('/class="d-kpi /', $mh);
+    chk($kpiCount === $expectKpis[$mname],
+        "و«{$mname}» فيه {$expectKpis[$mname]} بطاقة رقم مرسومة فعلاً (لقى {$kpiCount})");
     chk(!str_contains($mh, 'stat بلا drill'), "ومفيش رقم أصمّ في «{$mname}»");
     chk(preg_match_all('~<circle cx="12" cy="12" r="9"/></svg>~', $mh) === 0,
         "وولا أيقونة وقعت على الشكل الافتراضي في «{$mname}»");
