@@ -100,7 +100,7 @@
       <div class="table-wrap"><table class="data">
         <thead><tr>
           <th class="g-identity">الإعداد</th><th>من</th><th>لـ</th>
-          <th class="g-meta">مين</th><th class="g-meta">إمتى</th>
+          <th class="g-meta">مين</th><th class="g-meta">إمتى</th><th></th>
         </tr></thead>
         <tbody>
           <?php foreach ($recentChanges as $ch): ?>
@@ -110,6 +110,15 @@
               <td><b><bdi><?= e(mb_substr((string) $ch['new_value'], 0, 40)) ?></bdi></b></td>
               <td class="dim"><?= e((string) ($ch['changed_by'] ?? '—')) ?></td>
               <td class="dim nowrap"><?= e(dtfmt($ch['created_at'])) ?></td>
+              <?php /* رجوع بضغطة (v79) — بيمرّ على `Settings::set()` فالتحقّق
+                       والتسجيل بيتطبّقوا؛ الرجوع تغيير مش استثناء. */ ?>
+              <td class="end">
+                <form method="post" action="<?= url('settings/revert/' . (int) $ch['id']) ?>"
+                      data-confirm="ترجّع «<?= e($ch['label']) ?>» لقيمتها السابقة؟">
+                  <?= csrfField() ?>
+                  <button type="submit" class="btn ghost sm" title="رجوع"><?= icon('edit', 14) ?></button>
+                </form>
+              </td>
             </tr>
           <?php endforeach; ?>
         </tbody>

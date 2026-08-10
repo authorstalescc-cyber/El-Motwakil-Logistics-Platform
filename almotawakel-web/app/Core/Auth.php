@@ -12,6 +12,24 @@ class Auth
     private const IP_MAX_FAILURES = 30;
     private const IP_WINDOW_MINUTES = 10;
     private const IDLE_MINUTES = 120;
+
+    /* ══ الحدود دي بقت **إعدادات** (v79) ═══════════════════════════════════
+       ⚠️ **الثابت فوق فضل هو الافتراضي بالحرف** — قاعدة فاضية = نفس السلوك.
+       ⚠️ **`try` إجبارية**: `Auth` بيشتغل في مسار الدخول نفسه، وقبل ما القاعدة
+          تبقى جاهزة (المثبّت). الفشل بيقع على الثابت — يعني **الحد الأصلي
+          بيفضل مفروض** حتى لو الإعدادات مش متاحة، فمفيش لحظة بلا حماية. */
+    private static function limit(string $key, int $fallback): int
+    {
+        try {
+            $v = Settings::get($key);
+            return ($v === null || $v === '') ? $fallback : (int) $v;
+        } catch (\Throwable $e) { return $fallback; }
+    }
+    public static function minPasswordLength(): int { return self::limit('auth_min_password', self::MIN_PASSWORD_LENGTH); }
+    private static function maxTries(): int         { return self::limit('auth_max_tries', self::MAX_TRIES); }
+    private static function lockMinutes(): int      { return self::limit('auth_lock_minutes', self::LOCK_MINUTES); }
+    private static function idleMinutes(): int      { return self::limit('auth_idle_minutes', self::IDLE_MINUTES); }
+
     private const DUMMY_HASH = '$2y$12$FcwBkiR2DgsCP/uU1pYHueh5yYl1wD5yFiHDW8aTADVATj1NFIHfi';
 
     /** كل قد إيه نتأكد إن المستخدم لسه موجود ودوره ما اتغيّرش (بالثواني). */
@@ -165,7 +183,7 @@ class Auth
                      locked_until=CASE WHEN failed_tries+1>=? THEN DATE_ADD(NOW(), INTERVAL ? MINUTE) ELSE locked_until END,
                      failed_tries=CASE WHEN failed_tries+1>=? THEN 0 ELSE failed_tries+1 END
                  WHERE id=?',
-                [self::MAX_TRIES, self::LOCK_MINUTES, self::MAX_TRIES, (int) $user['id']]
+                [self::maxTries(), self::lockMinutes(), self::maxTries(), (int) $user['id']]
             );
         }
         if (self::securityReady()) { self::recordAttempt($username, false); }
@@ -184,7 +202,7 @@ class Auth
     {
         if (empty($_SESSION['uid'])) { return false; }
         $last = (int) ($_SESSION['last_activity'] ?? time());
-        if (time() - $last > self::IDLE_MINUTES * 60) {
+        if (time() - $last > self::idleMinutes() * 60) {
             self::logout();
             return false;
         }

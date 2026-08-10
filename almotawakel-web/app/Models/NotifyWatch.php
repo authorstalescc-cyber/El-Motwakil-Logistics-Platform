@@ -45,6 +45,29 @@ class NotifyWatch
     /** الملخّص اليومي بيتبعت الساعة كام (٢٤س، بساعة الخادم). */
     private const DIGEST_HOUR = 8;
 
+    /* ══ الثوابت دي بقت **إعدادات** (v79) ══════════════════════════════════
+       ⚠️ **الثابت فوق فضل هو الافتراضي بالحرف** — الدوال دي بتقرا الإعداد
+          وبتقع عليه لو مفيش قيمة، فقاعدة فاضية = نفس السلوك القديم تمامًا.
+       ⚠️ و`Settings::get` بتقرا من كاش `App::setting` (استعلام واحد للطلب كله)
+          فمفيش تكلفة استعلام لكل نداء. */
+    private static function cfgInt(string $key, int $fallback): int
+    {
+        $v = \App\Core\Settings::get($key);
+        return ($v === null || $v === '') ? $fallback : (int) $v;
+    }
+    private static function cfgFloat(string $key, float $fallback): float
+    {
+        $v = \App\Core\Settings::get($key);
+        return ($v === null || $v === '') ? $fallback : (float) $v;
+    }
+    private static function submissionWarn(): int  { return self::cfgInt('notify_submission_warn_hours', self::SUBMISSION_WARN); }
+    private static function submissionUrgent(): int{ return self::cfgInt('notify_submission_urgent_hours', self::SUBMISSION_URGENT); }
+    private static function permitIdleDays(): int  { return self::cfgInt('notify_permit_idle_days', self::PERMIT_IDLE_DAYS); }
+    private static function closingLateDays(): int { return self::cfgInt('notify_closing_late_days', self::CLOSING_LATE_DAYS); }
+    private static function custodyLow(): float    { return self::cfgFloat('notify_custody_low', self::CUSTODY_LOW); }
+    private static function digestHour(): int      { return self::cfgInt('notify_digest_hour', self::DIGEST_HOUR); }
+
+
     /**
      * تشغيلة واحدة — بيتنادى من العامل.
      * @return array<string,int> عدد الأحداث اللي اتولّدت من كل فحص
@@ -90,8 +113,8 @@ class NotifyWatch
         $sent = 0;
 
         foreach ([
-            [self::SUBMISSION_URGENT, 24, 'urgent', '🔴'],
-            [self::SUBMISSION_WARN,   6,  'warn',   '⏳'],
+            [self::submissionUrgent(), 24, 'urgent', '🔴'],
+            [self::submissionWarn(),   6,  'warn',   '⏳'],
         ] as [$hours, $window, $sev, $mark]) {
             // ⚠️ المقارنة الزمنية جوّه SQL (قاعدة v48)
             $n = (int) Database::scalar(
@@ -121,7 +144,7 @@ class NotifyWatch
         $last = Closing::lastClosedDate();
         if ($last === null) { return 0; }
         $days = (int) floor((strtotime(date('Y-m-d')) - strtotime($last)) / 86400) - 1;
-        if ($days < self::CLOSING_LATE_DAYS) { return 0; }
+        if ($days < self::closingLateDays()) { return 0; }
 
         return Notify::emitOnce('remind.closing', 20, [
             'title'    => '📋 ' . intf($days) . ' يوم لسه مش متقفل',
@@ -142,7 +165,7 @@ class NotifyWatch
      */
     private static function idlePermits(): int
     {
-        $d = self::PERMIT_IDLE_DAYS;
+        $d = self::permitIdleDays();
         // آخر حركة = آخر بند اتسجّل على الإذن، وإلا تاريخ الإذن نفسه
         $rows = Database::all(
             "SELECT p.id, p.permit_no, p.client, p.company,
@@ -192,7 +215,7 @@ class NotifyWatch
             $deposits = (float) ($t['deposits'] ?? 0);
             $balance  = (float) ($t['balance'] ?? 0);
             // نزّلوا له فعلاً النهاردة، والفاضل قلّ — مش مندوب ما نزلش له أصلاً
-            if ($deposits <= 0 || $balance > self::CUSTODY_LOW) { continue; }
+            if ($deposits <= 0 || $balance > self::custodyLow()) { continue; }
 
             $name = (string) (Database::scalar('SELECT name FROM reps WHERE id = ?', [(int) $repId]) ?? 'مندوب');
             $id = Notify::emitOnce('alert.rep_custody', 12, [
@@ -220,7 +243,7 @@ class NotifyWatch
      */
     private static function dailyDigest(): int
     {
-        if ((int) date('G') < self::DIGEST_HOUR) { return 0; }
+        if ((int) date('G') < self::digestHour()) { return 0; }
         $today = date('Y-m-d');
         if ((string) App::setting('notify_digest_last', '') === $today) { return 0; }
 

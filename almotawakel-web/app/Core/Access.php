@@ -83,6 +83,10 @@ class Access
         'SettingsController@saveModules',
         // تعديل الصلاحيات — قرار مالك بالتعريف
         'SettingsController@saveAccess',
+        // تصدير/استيراد ورجوع — كلها بتمسّ إعدادات المالك
+        'SettingsController@exportSettings',
+        'SettingsController@importSettings',
+        'SettingsController@revertSetting',
     ];
 
     /** وحدات الكتابة المالية المسموحة للمحاسب (والمدير والمالك). */

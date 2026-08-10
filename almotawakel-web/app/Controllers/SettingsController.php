@@ -17,6 +17,7 @@ use App\Models\Audit;
 use App\Models\UserPref;
 use App\Models\NavModule;
 use App\Models\AccessOverride;
+use App\Models\SettingsHealth;
 
 class SettingsController extends Controller
 {
@@ -32,6 +33,7 @@ class SettingsController extends Controller
         'business' => 'owner',      // قواعد مالية — خطر، للمالك بس
         'ops'      => 'owner',      // تشغيل وتتبع ومفاتيح
         'notify'   => 'owner',      // إشعارات الأجهزة
+        'security' => 'owner',      // حدود الدخول والجلسات
     ];
 
     /**
@@ -63,11 +65,13 @@ class SettingsController extends Controller
         'business'=> ['label' => 'قواعد العمل المالية', 'icon' => 'calculator', 'view' => 'registry', 'owner' => true],
         'ops'     => ['label' => 'التشغيل والخدمات',    'icon' => 'cpu',        'view' => 'registry', 'owner' => true],
         'notify'  => ['label' => 'الإشعارات',           'icon' => 'bell',       'view' => 'registry', 'owner' => true],
+        'security'=> ['label' => 'الأمان والجلسات',     'icon' => 'shield',     'view' => 'registry', 'owner' => true],
         'display' => ['label' => 'العرض والجداول',      'icon' => 'columns',    'view' => 'display'],
         'ai'      => ['label' => 'المساعد الذكي',       'icon' => 'cpu',        'view' => 'ai',      'owner' => true],
         'users'   => ['label' => 'المستخدمون',          'icon' => 'users',      'view' => 'users',   'owner' => true],
         'access'  => ['label' => 'الصلاحيات',           'icon' => 'shield',     'view' => 'access',  'owner' => true],
         'maint'   => ['label' => 'الصيانة والحالة',     'icon' => 'wrench',     'view' => 'maint'],
+        'health'  => ['label' => 'فحص صحة النظام',      'icon' => 'shield',     'view' => 'health',  'owner' => true],
     ];
 
     /** القسم الافتراضي لما يتفتح `/settings` بلا تحديد. */
@@ -132,6 +136,8 @@ class SettingsController extends Controller
             // مصفوفة الصلاحيات (v78) — الإجابة محسوبة من Access::allows نفسها
             'accessMatrix' => $owner && AccessOverride::ready() ? AccessOverride::matrix() : [],
             'accessUsers'  => $owner && AccessOverride::ready() ? AccessOverride::userRows() : [],
+            // فحص صحة الإعدادات (v79) — بيقول المشكلة والحل
+            'health'       => $owner && $section === 'health' ? SettingsHealth::check() : [],
             'permitCfg'  => Permit::stageConfig(),
             'userState'  => \App\Core\FormState::consume('settings.user.add', 'settings#tab-users'),
             // قواعد مرشد الإيصالات (v32): قوائم التوكيلات — سطر لكل توكيل
@@ -330,6 +336,59 @@ class SettingsController extends Controller
         $this->done('اتشالت نقطة التغيير.', 'settings', 'tab-business');
     }
 
+    /** تصدير الإعدادات JSON — بلا أي مفتاح سرّي. */
+    public function exportSettings(): void
+    {
+        $this->requireRole('owner');
+        $data = SettingsHealth::export();
+        $name = 'almotawakel-settings-' . date('Ymd-His') . '.json';
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $name . '"');
+        echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        exit;
+    }
+
+    /**
+     * استيراد ملف إعدادات.
+     *
+     * ⚠️ **بيمرّ على `Settings::set()`** فالتحقّق والدور والتسجيل في `Audit`
+     *    بيتطبّقوا زي أي تعديل يدوي — الاستيراد مش باب خلفي.
+     */
+    public function importSettings(): void
+    {
+        $this->requireRole('owner');
+        $this->requireCsrf();
+
+        $file = $_FILES['file'] ?? null;
+        if (!$file || ($file['error'] ?? 1) !== UPLOAD_ERR_OK) {
+            $this->fail('اختار ملف الإعدادات الأول.', 'settings/health');
+        }
+        if ((int) ($file['size'] ?? 0) > 512 * 1024) {
+            $this->fail('الملف أكبر من المتوقَّع لملف إعدادات.', 'settings/health');
+        }
+        $raw = (string) file_get_contents($file['tmp_name']);
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) { $this->fail('الملف مش JSON صالح.', 'settings/health'); }
+
+        $r = SettingsHealth::import($payload);
+        $msg = "اتطبّق {$r['applied']} إعداد · اتخطّى {$r['skipped']}";
+        if ($r['errors']) { $msg .= ' · ' . count($r['errors']) . ' مرفوض: ' . implode(' · ', array_slice($r['errors'], 0, 3)); }
+        $this->done($msg, 'settings/health', '', $r['errors'] ? 'error' : 'success');
+    }
+
+    /** رجوع إعداد لقيمته السابقة من السجل (v70). */
+    public function revertSetting(string $id): void
+    {
+        $this->requireRole('owner');
+        $this->requireCsrf();
+        try {
+            Settings::revert((int) $id);
+        } catch (\Throwable $e) {
+            $this->fail($e->getMessage(), 'settings/maint');
+        }
+        $this->done('رجعت القيمة السابقة.', 'settings/maint');
+    }
+
     /**
      * حفظ استثناء صلاحية (v78).
      *
@@ -492,7 +551,7 @@ class SettingsController extends Controller
         if ($username === '' || $password === '') {
             $this->userFailure('لازم تدخل اسم المستخدم وكلمة السر.');
         }
-        if (mb_strlen($password) < Auth::MIN_PASSWORD_LENGTH) {
+        if (mb_strlen($password) < Auth::minPasswordLength()) {
             $this->userFailure('كلمة السر قصيرة — الحد الأدنى ٨ أحرف.');
         }
         if (Database::row('SELECT id FROM users WHERE username = ?', [$username])) {
@@ -565,7 +624,7 @@ class SettingsController extends Controller
             redirect('settings#tab-users');
         }
         // لو أدخل كلمة سر جديدة لازم تكون ٨ أحرف على الأقل
-        if ($password !== '' && mb_strlen($password) < Auth::MIN_PASSWORD_LENGTH) {
+        if ($password !== '' && mb_strlen($password) < Auth::minPasswordLength()) {
             $this->userFailure('كلمة السر قصيرة — الحد الأدنى ٨ أحرف.');
         }
 

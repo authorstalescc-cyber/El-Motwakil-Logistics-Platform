@@ -440,6 +440,10 @@ $r->get('/quality/{key}',               'QualityController@field');
 $r->get('/settings',                    'SettingsController@index');
 /* صفحة كل قسم (docs/19 · المرحلة ٣) — **الجشع ده آخر مسار GET تحت `/settings`**
    فأي مسار حرفي جديد لازم يتحط فوقه (تحذير ٤: first-match-wins). */
+/* ⚠️ **حرفي قبل الجشع** (تحذير ٤): الراوتر first-match-wins، ولو `/settings/export`
+   جه بعد `/settings/{section}` كان هيتقري كأنه اسم قسم ويرندر «عام» بدل ما ينزّل
+   الملف — بلا أي خطأ ظاهر. */
+$r->get('/settings/export',             'SettingsController@exportSettings');
 $r->get('/settings/{section}',          'SettingsController@page');
 $r->post('/settings/general',           'SettingsController@saveGeneral');
 // حفظ أي قسم من السجل المعرَّف (docs/19 · المرحلة ١) — المسار الحرفي قبل الجشع
@@ -451,6 +455,9 @@ $r->post('/prefs/adopt',  'PrefController@adopt');
 $r->post('/prefs/reset',  'PrefController@reset');
 $r->post('/settings/modules',            'SettingsController@saveModules');
 $r->post('/settings/access',             'SettingsController@saveAccess');
+// تصدير/استيراد الإعدادات ورجوع تغيير (v79) — كلها حرفية قبل `/settings/{section}`
+$r->post('/settings/import',             'SettingsController@importSettings');
+$r->post('/settings/revert/{id}',        'SettingsController@revertSetting');
 $r->post('/settings/prefs/company',        'SettingsController@prefLock');
 $r->post('/settings/prefs/company/delete', 'SettingsController@prefCompanyDelete');
 $r->post('/settings/schedule',          'SettingsController@scheduleSetting');

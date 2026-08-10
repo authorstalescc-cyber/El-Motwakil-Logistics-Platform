@@ -68,8 +68,11 @@ $_GET = [];
 /* ⚠️ **كل قسم بيترندر لوحده دلوقتي** (المرحلة ٣): الشاشة اتقسمت لصفحات
    بمسارات، فالفحص لازم يعدّي على القايمة كلها — رندر `/settings` لوحده كان
    هيفحص قسم واحد ويعدّي والباقي مكسور. */
-$sections = ['general', 'lists', 'permits', 'business', 'ops', 'notify',
-             'display', 'ai', 'users', 'maint'];
+/* ⚠️ القايمة دي لازم تفضل **مطابقة لـ`SettingsController::PAGES`** — قسم
+   جديد مش هنا معناه إن مفاتيحه بتتفحص على HTML ما فيهوش، فبتفشل كأنها بلا
+   خانة. حصلت فعلاً مع قسم «الأمان» في v79. */
+$sections = ['general', 'modules', 'lists', 'permits', 'business', 'ops', 'notify',
+             'security', 'display', 'ai', 'users', 'access', 'maint'];
 $html = '';
 $broken = [];
 foreach ($sections as $sec) {

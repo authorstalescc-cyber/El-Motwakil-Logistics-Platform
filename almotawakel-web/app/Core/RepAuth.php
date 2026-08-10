@@ -47,6 +47,18 @@ class RepAuth
     /** انتهاء الجلسة بالخمول — 8 ساعات = وردية شغل. */
     private const IDLE_MINUTES = 480;
 
+    /* ⚠️ **الثابت فوق فضل هو الافتراضي** (v79) — و`try` إجبارية لأن البوابة
+       بتشتغل قبل ما القاعدة تبقى جاهزة، والسقوط على الثابت يعني الحد الأصلي
+       بيفضل مفروض. */
+    private static function idleMinutes(): int
+    {
+        try {
+            $v = Settings::get('rep_idle_minutes');
+            return ($v === null || $v === '') ? self::IDLE_MINUTES : (int) $v;
+        } catch (\Throwable $e) { return self::IDLE_MINUTES; }
+    }
+
+
     /** كل قد إيه نتأكد إن الحساب لسه مفعّل (بالثواني). */
     private const REVALIDATE_SECONDS = 120;
 
@@ -157,7 +169,7 @@ class RepAuth
         if (empty($_SESSION['rep_id'])) { return false; }
 
         $seen = (int) ($_SESSION['rep_seen'] ?? time());
-        if (time() - $seen > self::IDLE_MINUTES * 60) { self::logout(); return false; }
+        if (time() - $seen > self::idleMinutes() * 60) { self::logout(); return false; }
 
         if (!self::stillActive()) { self::logout(); return false; }
 

@@ -70,6 +70,7 @@ class SettingsSchema
         'master'      => 'البيانات المرجعية',
         'notify'      => 'الإشعارات',
         'ops'         => 'التشغيل والخدمات',
+        'security'    => 'الأمان والجلسات',
         'ai'          => 'المساعد الذكي',
         'maintenance' => 'الصيانة والحالة',
     ];
@@ -388,6 +389,76 @@ class SettingsSchema
             'help' => 'اسم بتعرفه بيه انت بس.', 'affects' => ['assistant'],
         ],
 
+
+        // ══════════════ ⑨ عتبات الإشعارات (v79 — كانت ثوابت في NotifyWatch) ══
+        'notify_submission_warn_hours' => [
+            'label' => 'بند المندوب يبقى «متأخّر» بعد (ساعة)', 'section' => 'notify',
+            'type' => self::T_INT, 'default' => '4', 'min' => 1, 'max' => 168, 'role' => 'manager',
+            'help' => 'البند المستني مراجعة أكتر من كده بيتعلّم متأخّر.',
+            'affects' => ['rep-custody', 'notifications'],
+        ],
+        'notify_submission_urgent_hours' => [
+            'label' => 'ويبقى «عاجل» بعد (ساعة)', 'section' => 'notify',
+            'type' => self::T_INT, 'default' => '24', 'min' => 1, 'max' => 336, 'role' => 'manager',
+            'help' => 'لازم يكون أكبر من ساعات «متأخّر».',
+            'affects' => ['rep-custody', 'notifications'],
+        ],
+        'notify_permit_idle_days' => [
+            'label' => 'إذن واقف بلا حركة (يوم)', 'section' => 'notify',
+            'type' => self::T_INT, 'default' => '7', 'min' => 1, 'max' => 120, 'role' => 'manager',
+            'help' => 'بعدها بيوصلك تنبيه إن الإذن مالوش حركة.',
+            'affects' => ['permits', 'notifications'],
+        ],
+        'notify_closing_late_days' => [
+            'label' => 'تأخّر التقفيل (يوم)', 'section' => 'notify',
+            'type' => self::T_INT, 'default' => '2', 'min' => 1, 'max' => 60, 'role' => 'manager',
+            'help' => 'بعدها بيتبعت تنبيه إن فيه أيام مش متقفلة.',
+            'affects' => ['closing', 'notifications'],
+        ],
+        'notify_custody_low' => [
+            'label' => 'تنبيه «العهدة قربت تخلص» عند', 'section' => 'notify',
+            'type' => self::T_MONEY, 'default' => '500', 'min' => 0, 'max' => 1000000, 'role' => 'manager',
+            'help' => 'لما رصيد المندوب ينزل تحت الرقم ده بيوصلك تنبيه.',
+            'affects' => ['rep-custody', 'notifications'],
+        ],
+        'notify_digest_hour' => [
+            'label' => 'ميعاد الملخّص اليومي (ساعة)', 'section' => 'notify',
+            'type' => self::T_INT, 'default' => '8', 'min' => 0, 'max' => 23, 'role' => 'manager',
+            'help' => 'بتوقيت القاهرة — ٨ يعني ٨ الصبح.',
+            'affects' => ['notifications'],
+        ],
+
+        // ══════════════ ⑩ حدود الأمان (v79 — كانت ثوابت في Auth/RepAuth) ══
+        'auth_max_tries' => [
+            'label' => 'محاولات الدخول قبل القفل', 'section' => 'security',
+            'type' => self::T_INT, 'default' => '5', 'min' => 3, 'max' => 20, 'role' => 'owner',
+            'help' => 'بعدها الحساب بيتقفل مؤقتًا.',
+            'affects' => ['security'],
+        ],
+        'auth_lock_minutes' => [
+            'label' => 'مدة قفل الحساب (دقيقة)', 'section' => 'security',
+            'type' => self::T_INT, 'default' => '10', 'min' => 1, 'max' => 1440, 'role' => 'owner',
+            'help' => 'بعدها الحساب بيفتح لوحده.',
+            'affects' => ['security'],
+        ],
+        'auth_idle_minutes' => [
+            'label' => 'خروج تلقائي بعد خمول (دقيقة)', 'section' => 'security',
+            'type' => self::T_INT, 'default' => '120', 'min' => 5, 'max' => 1440, 'role' => 'owner',
+            'help' => 'لجلسة المكتب. بوابة المندوب ليها رقمها.',
+            'affects' => ['security'],
+        ],
+        'auth_min_password' => [
+            'label' => 'أقل طول لكلمة السر', 'section' => 'security',
+            'type' => self::T_INT, 'default' => '8', 'min' => 6, 'max' => 64, 'role' => 'owner',
+            'help' => 'بيتطبّق على كلمات السر الجديدة بس.',
+            'affects' => ['users', 'security'],
+        ],
+        'rep_idle_minutes' => [
+            'label' => 'خمول بوابة المندوب (دقيقة)', 'section' => 'security',
+            'type' => self::T_INT, 'default' => '480', 'min' => 30, 'max' => 2880, 'role' => 'owner',
+            'help' => 'المندوب في الميدان محتاج مدة أطول من المكتب.',
+            'affects' => ['security'],
+        ],
         // ══════════════ ⑧ الصيانة والحالة ══════════════
         /* بوابة المناديب: `RepMaintenance` بتكتبها **وبتسجّل في Audit وتبعت
            إشعار** — فالكتابة العامة عليها بتتمنع، والرسالة بتوجّه للمكان الصح. */
