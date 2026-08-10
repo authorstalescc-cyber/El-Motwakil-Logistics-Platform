@@ -450,6 +450,7 @@ $r->post('/prefs',        'PrefController@save');
 $r->post('/prefs/adopt',  'PrefController@adopt');
 $r->post('/prefs/reset',  'PrefController@reset');
 $r->post('/settings/modules',            'SettingsController@saveModules');
+$r->post('/settings/access',             'SettingsController@saveAccess');
 $r->post('/settings/prefs/company',        'SettingsController@prefLock');
 $r->post('/settings/prefs/company/delete', 'SettingsController@prefCompanyDelete');
 $r->post('/settings/schedule',          'SettingsController@scheduleSetting');

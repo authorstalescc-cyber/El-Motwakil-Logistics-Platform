@@ -16,6 +16,7 @@ use App\Models\Debt;
 use App\Models\Audit;
 use App\Models\UserPref;
 use App\Models\NavModule;
+use App\Models\AccessOverride;
 
 class SettingsController extends Controller
 {
@@ -65,6 +66,7 @@ class SettingsController extends Controller
         'display' => ['label' => 'العرض والجداول',      'icon' => 'columns',    'view' => 'display'],
         'ai'      => ['label' => 'المساعد الذكي',       'icon' => 'cpu',        'view' => 'ai',      'owner' => true],
         'users'   => ['label' => 'المستخدمون',          'icon' => 'users',      'view' => 'users',   'owner' => true],
+        'access'  => ['label' => 'الصلاحيات',           'icon' => 'shield',     'view' => 'access',  'owner' => true],
         'maint'   => ['label' => 'الصيانة والحالة',     'icon' => 'wrench',     'view' => 'maint'],
     ];
 
@@ -127,6 +129,9 @@ class SettingsController extends Controller
             'prefMine'     => count(UserPref::allFor()),
             // الوحدات والقائمة (v77) — الافتراضي من الكود والفرق من القاعدة
             'modules'      => $owner && NavModule::ready() ? NavModule::adminRows() : [],
+            // مصفوفة الصلاحيات (v78) — الإجابة محسوبة من Access::allows نفسها
+            'accessMatrix' => $owner && AccessOverride::ready() ? AccessOverride::matrix() : [],
+            'accessUsers'  => $owner && AccessOverride::ready() ? AccessOverride::userRows() : [],
             'permitCfg'  => Permit::stageConfig(),
             'userState'  => \App\Core\FormState::consume('settings.user.add', 'settings#tab-users'),
             // قواعد مرشد الإيصالات (v32): قوائم التوكيلات — سطر لكل توكيل
@@ -323,6 +328,28 @@ class SettingsController extends Controller
             $this->fail($e->getMessage(), 'settings', 'tab-business');
         }
         $this->done('اتشالت نقطة التغيير.', 'settings', 'tab-business');
+    }
+
+    /**
+     * حفظ استثناء صلاحية (v78).
+     *
+     * ⚠️ **الحارس في `AccessOverride::set()`**: بيرفض المالك وطريق الرجوع
+     *    والكنترولر المجهول — فالطلب المزوَّر ما يقدرش يقفل حد برّه النظام.
+     */
+    public function saveAccess(): void
+    {
+        $this->requireRole('owner');
+        $this->requireCsrf();
+        $ctrl   = (string) ($_POST['controller'] ?? '');
+        $effect = (string) ($_POST['effect'] ?? '');
+        $role   = trim((string) ($_POST['role'] ?? '')) ?: null;
+        $uid    = isset($_POST['user_id']) && $_POST['user_id'] !== '' ? (int) $_POST['user_id'] : null;
+        try {
+            AccessOverride::set($ctrl, $effect, $uid !== null ? null : $role, $uid);
+        } catch (\Throwable $e) {
+            $this->fail($e->getMessage(), 'settings/access');
+        }
+        $this->done($effect === '' ? 'اتشال الاستثناء.' : 'اتسجّل الاستثناء.', 'settings/access');
     }
 
     /**

@@ -81,6 +81,8 @@ class Access
         'SettingsController@prefCompanyDelete',
         // إطفاء وحدة أو تغيير القائمة — قرار مالك (الحارس التاني في `NavModule::save`)
         'SettingsController@saveModules',
+        // تعديل الصلاحيات — قرار مالك بالتعريف
+        'SettingsController@saveAccess',
     ];
 
     /** وحدات الكتابة المالية المسموحة للمحاسب (والمدير والمالك). */
@@ -126,7 +128,30 @@ class Access
         self::deny($handler, strtoupper($httpMethod));
     }
 
+    /**
+     * **الإجابة النهائية** = سياسة الكود + استثناءات المالك (v78).
+     *
+     * ⚠️⚠️ **سياسة الكود بتفضل هي الأساس بالحرف** — `basePolicy()` تحت ما
+     *    اتغيّرش فيها سطر، والاستثناء بيتطبّق **بعدها**. الجدول الفاضي = نفس
+     *    الإجابة في الـ١٦١ حالة اللي `verify_access_matrix` بيقيسها.
+     * ⚠️ نفس درس v77: `class_exists` + `try` لأن `Access` بيتحمَّل في سياقات
+     *    بلا autoloader ولا قاعدة، **والسقوط على سياسة الكود** — يعني لو
+     *    القاعدة وقعت النظام بيرجع لسلوكه الأصلي مش بينفتح ولا بينقفل.
+     */
     public static function allows(string $role, string $handler, string $httpMethod): bool
+    {
+        $base = self::basePolicy($role, $handler, $httpMethod);
+        if (!class_exists(\App\Models\AccessOverride::class)) { return $base; }
+        try {
+            [$ctrl] = array_pad(explode('@', $handler, 2), 2, '');
+            return \App\Models\AccessOverride::apply($base, self::normalizeRole($role), $ctrl);
+        } catch (\Throwable $e) {
+            return $base;
+        }
+    }
+
+    /** سياسة الكود الأصلية — **ممنوع تتغيّر عشان استثناء**. */
+    private static function basePolicy(string $role, string $handler, string $httpMethod): bool
     {
         $role = self::normalizeRole($role);
         [$controller, $action] = array_pad(explode('@', $handler, 2), 2, '');
