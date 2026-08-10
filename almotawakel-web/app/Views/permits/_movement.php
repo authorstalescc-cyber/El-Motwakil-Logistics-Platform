@@ -144,7 +144,7 @@ $receiptRow = function(string $key, array $st, array $S, int $mid) use ($receipt
     ob_start(); ?>
     <div class="mstage <?= $S['has']?'has':'' ?>" id="stage-<?= e($key) ?>-<?= $mid ?>">
       <div class="ms-head">
-        <span class="ms-ic <?= $S['has']&&!$S['none']?'ok':'' ?>"><?= $S['has']&&!$S['none']?'✓':$st['icon'] ?></span>
+        <span class="ms-ic <?= $S['has']&&!$S['none']?'ok':'' ?>"><?= icon($S['has']&&!$S['none'] ? 'check' : $st['icon'], 16) ?></span>
         <span class="ms-name"><?= e($st['label']) ?></span>
         <?php if ($st['dir']===Permit::DIR_EXPENSE): ?><span class="tl-dir neg">مصروف</span>
         <?php elseif ($st['dir']===Permit::DIR_REVENUE): ?><span class="tl-dir pos">محصّل</span><?php endif; ?>
@@ -221,7 +221,7 @@ $customBlock = function(string $key, array $st, array $S, int $mid) use ($status
     ob_start(); ?>
     <div class="mstage <?= $real?'has':'' ?>" id="stage-<?= e($key) ?>-<?= $mid ?>">
       <div class="ms-head">
-        <span class="ms-ic <?= $real?'ok':'' ?>"><?= $real?'✓':$st['icon'] ?></span>
+        <span class="ms-ic <?= $real?'ok':'' ?>"><?= icon($real ? 'check' : $st['icon'], 16) ?></span>
         <span class="ms-name"><?= e($st['label']) ?></span>
         <span class="ms-sp"></span>
         <?php if ($real): ?><span class="ss-count"><?= intf(count($real)) ?></span><?php endif; ?>
@@ -261,7 +261,7 @@ $receiptsBlock = function(string $key, array $st, array $S, int $mid) use ($stat
     ob_start(); ?>
     <div class="mstage <?= $real?'has':'' ?>" id="stage-<?= e($key) ?>-<?= $mid ?>">
       <div class="ms-head">
-        <span class="ms-ic <?= $real?'ok':'' ?>"><?= $real?'✓':$st['icon'] ?></span>
+        <span class="ms-ic <?= $real?'ok':'' ?>"><?= icon($real ? 'check' : $st['icon'], 16) ?></span>
         <span class="ms-name"><?= e($st['label']) ?></span>
         <span class="tl-dir neg">مصروف</span>
         <span class="ms-sp"></span>
@@ -290,7 +290,7 @@ $receiptsBlock = function(string $key, array $st, array $S, int $mid) use ($stat
                     data-receipt-label="<?= e($en['note'] ?: 'إيصال') ?>"
                     data-receipt-date="<?= e(dfmt($en['entry_date'])) ?>"
                     data-receipt-amount="<?= e(money($en['amount'],false)) ?>"
-                    title="نقل الإيصال إلى إذن آخر">⇄ نقل</button><?php endif; ?>
+                    title="نقل الإيصال إلى إذن آخر"><?= icon('shuffle', 13) ?> نقل</button><?php endif; ?>
                   <button type="button" class="btn ghost xs ms-edit-btn" title="تعديل الإيصال"><?= icon('edit', 14) ?></button>
                   <form class="js-ajax confirm-delete" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>"><?= csrfField() ?><button class="btn ghost xs danger" type="submit" title="حذف الإيصال"><?= icon('trash', 14) ?></button></form>
                 </div>
@@ -461,7 +461,17 @@ $billsBlock = function(int $mid, array $bills) use ($pid, $p, $type, $ctTotal, $
                 </div></td>
               </tr>
             <?php endforeach; ?>
-          </tbody></table></div>
+          </tbody>
+          <?php /* صف إجمالي — ١٢ عمود هنا (فيه «صاحب البيان») مش ١١ زي وضع العرض */ ?>
+          <tfoot><tr>
+            <td colspan="6">الإجمالي (<?= intf(count($bills)) ?>)</td>
+            <td><?= intf(array_sum(array_map(fn($b)=>(int)($b['container_count'] ?? 0), $bills))) ?></td>
+            <td><?= money(array_sum(array_map(fn($b)=>(float)$b['custody'], $bills)),false) ?></td>
+            <td><?= money(array_sum(array_map(fn($b)=>(float)$b['debt'], $bills)),false) ?></td>
+            <td><?= money(array_sum(array_map(fn($b)=>(float)$b['remaining'], $bills)),false) ?></td>
+            <td colspan="2"></td>
+          </tr></tfoot>
+          </table></div>
 
           <?php // نماذج تعديل البوالص (مخفية — تُفتح في نافذة منبثقة) ?>
           <?php foreach ($bills as $bl): ?>
@@ -563,7 +573,7 @@ $generatorsBlock = function(array $generators, int $mid) {
       <?php $sn=0; foreach ($mStages as $k => $m): $sn++; $S = $stState[$k];
         $cls = $S['none'] ? 'done' : ($S['has'] ? 'done' : ''); ?>
         <a class="step-chip <?= $cls ?>" href="#stage-<?= e($k) ?>-<?= $mid ?>" data-scroll>
-          <span class="sc-dot"><?= $S['has'] ? '✓' : $sn ?></span><span><?= e($m['label']) ?></span>
+          <span class="sc-dot"><?= $S['has'] ? icon('check', 12) : $sn ?></span><span><?= e($m['label']) ?></span>
         </a>
       <?php endforeach; ?>
     </div>

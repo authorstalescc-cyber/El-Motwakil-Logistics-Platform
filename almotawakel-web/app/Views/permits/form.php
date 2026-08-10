@@ -28,7 +28,7 @@
     <div class="field"><label>الوكيل (العميل)</label><input list="dl_client" data-smart-name="client" id="permit_client" name="client" value="<?= e($p['client']) ?>" autocomplete="off"></div>
     <div class="field"><label>لصالح شركة</label><input list="dl_company" data-smart-name="company" id="permit_company" name="company" value="<?= e($p['company']) ?>" autocomplete="off"></div>
     <div class="field"><label>الجهة</label><input list="dl_dest" data-smart-name="destination" name="destination" value="<?= e($p['destination']) ?>" autocomplete="off"></div>
-    <div class="field"><label>🚢 شركة الشحن</label><?php partial('lookup_select', ['name'=>'shipping_co','type'=>'shipping_co','value'=>$p['shipping_co'] ?? '','attrs'=>'data-autofill-from="client" title="بتتملى تلقائيًا من العميل — غيّرها لو شركة الشحن مختلفة"']); ?></div>
+    <div class="field"><label><?= icon('ship', 14) ?> شركة الشحن</label><?php partial('lookup_select', ['name'=>'shipping_co','type'=>'shipping_co','value'=>$p['shipping_co'] ?? '','attrs'=>'data-autofill-from="client" title="بتتملى تلقائيًا من العميل — غيّرها لو شركة الشحن مختلفة"']); ?></div>
     <div class="field"><label><?= icon('receipt', 14) ?> التوكيل</label><?php partial('lookup_select', ['name'=>'agency','type'=>'agency','value'=>$p['agency'] ?? '']); ?></div>
     <div class="field"><label><?= icon('anchor', 14) ?> الميناء</label><?php partial('lookup_select', ['name'=>'port','type'=>'port','value'=>$p['port'] ?? '']); ?></div>
     <div class="field"><label>عدد الحاويات</label><input type="number" min="0" name="containers" value="<?= e($p['containers'] ?? 0) ?>" placeholder="0"></div>

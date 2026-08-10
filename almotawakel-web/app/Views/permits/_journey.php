@@ -64,7 +64,8 @@ $jForm = function (string $stageKey, int $billId, string $label, string $cls, st
               · <?= e($jCur['event']['actor_name']) ?>
             <?php endif; ?>
           <?php else: ?>
-            سجّل أول مرحلة عشان تبدأ التتبّع
+            <?php /* حالة مش تعليمات — الزرار الدهبي تحت بيقول الخطوة الجاية */ ?>
+            مفيش مراحل مسجّلة
           <?php endif; ?>
         </span>
       </div>

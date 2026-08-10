@@ -48,16 +48,25 @@ class Permit
      *  store=header  → بيانات الإصدار نفسه
      *  multi=true    → يسمح بأكثر من بند (مثل المصاريف الإضافية)
      */
+    /*
+     * ⚠️ **`icon` = اسم من `icon()` مش إيموجي** (2026-08-10). كانت إيموجي،
+     * فشاشة الإذن كانت بتخلط **أربعة أنظمة أيقونات** في نفس الصف: إيموجي من
+     * الكود · محارف نصية (`✓` `▾` `×`) · إيموجي مكتوبة بالإيد في الـviews ·
+     * وSVG من `icon()`. الإيموجي بتترسم بخط النظام فبتختلف شكلًا وحجمًا
+     * ووزنًا عن الـSVG جنبها، وبتتلوّن لوحدها فما بتسمعش لتوكنز الألوان.
+     * ⚠️ أي اسم جديد هنا لازم يكون موجود في `icon()` — الاسم الغلط **ما
+     * بيرميش خطأ، بيرسم دايرة فاضية** (`verify_typography` بيمسكها).
+     */
     public const STAGES = [
-        'data'         => ['label' => 'بيانات الإذن',     'icon' => '📄', 'store' => 'header',     'dir' => self::DIR_INFO,    'multi' => false, 'scope' => 'permit'],
-        'primary_fees' => ['label' => 'رسوم أولية',       'icon' => '🪙', 'store' => 'stages',     'dir' => self::DIR_EXPENSE, 'multi' => false, 'scope' => 'permit'],
-        'bills'        => ['label' => 'البوليصة',         'icon' => '🚛', 'store' => 'bills',      'dir' => self::DIR_LINK,    'multi' => true,  'scope' => 'movement'],
+        'data'         => ['label' => 'بيانات الإذن',     'icon' => 'file-text', 'store' => 'header',     'dir' => self::DIR_INFO,    'multi' => false, 'scope' => 'permit'],
+        'primary_fees' => ['label' => 'رسوم أولية',       'icon' => 'coins', 'store' => 'stages',     'dir' => self::DIR_EXPENSE, 'multi' => false, 'scope' => 'permit'],
+        'bills'        => ['label' => 'البوليصة',         'icon' => 'truck', 'store' => 'bills',      'dir' => self::DIR_LINK,    'multi' => true,  'scope' => 'movement'],
         // بند الإيصالات الموحّد: كل الإيصالات (تخصيص/حمولة/تعتيق/هيئة/رسوم محصّلة…) في مكان واحد متعدّد.
         // اسم كل إيصال يُحفظ في «البيان» (note). دُمجت فيه المراحل الخمس المنفصلة القديمة عبر migrate_v14.
-        'receipts'     => ['label' => 'إيصالات',          'icon' => '🧾', 'store' => 'stages',     'dir' => self::DIR_EXPENSE, 'multi' => true,  'scope' => 'movement'],
+        'receipts'     => ['label' => 'إيصالات',          'icon' => 'receipt', 'store' => 'stages',     'dir' => self::DIR_EXPENSE, 'multi' => true,  'scope' => 'movement'],
         // المصاريف الإضافية: بنود حرة، مصروف أو محصّل (إيراد) لكل بند. (دُمج فيه «extra» القديم عبر migrate_v9.)
-        'custom'       => ['label' => 'مصروفات إضافية',   'icon' => '➕', 'store' => 'stages',     'dir' => self::DIR_INFO,    'multi' => true,  'scope' => 'movement'],
-        'generators'   => ['label' => 'المولدات',         'icon' => '⚙️', 'store' => 'generators', 'dir' => self::DIR_LINK,    'multi' => true,  'scope' => 'movement'],
+        'custom'       => ['label' => 'مصروفات إضافية',   'icon' => 'plus', 'store' => 'stages',     'dir' => self::DIR_INFO,    'multi' => true,  'scope' => 'movement'],
+        'generators'   => ['label' => 'المولدات',         'icon' => 'settings', 'store' => 'generators', 'dir' => self::DIR_LINK,    'multi' => true,  'scope' => 'movement'],
     ];
 
     /** المراحل التي لا يمكن إخفاؤها (أساسية) */

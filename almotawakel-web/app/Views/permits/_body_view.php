@@ -43,7 +43,7 @@ $roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0
     ob_start(); ?>
     <details class="stage <?= $hasData?'has':'' ?>" <?= $hasData?'open':'' ?>>
       <summary class="stage-sum">
-        <span class="ss-ic <?= $hasData?'ok':'' ?>"><?= $hasData?'✓':$st['icon'] ?></span>
+        <span class="ss-ic <?= $hasData?'ok':'' ?>"><?= icon($hasData ? 'check' : $st['icon'], 16) ?></span>
         <span class="ss-num"><?= $idx ?></span>
         <span class="ss-name"><?= e($st['label']) ?></span>
         <?php if ($st['dir']===Permit::DIR_EXPENSE): ?><span class="tl-dir neg">مصروف</span>
@@ -55,7 +55,7 @@ $roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0
         <?php if ($showTotal): ?><span class="ss-amt <?= $st['dir']===Permit::DIR_EXPENSE?'neg':'pos' ?>"><?= money($headTotal,false) ?></span><?php endif; ?>
         <a class="ss-act" href="<?= $manageUrl($key,$mid) ?>" title="تعديل سريع" onclick="event.stopPropagation()"><?= icon('edit', 14) ?></a>
         <a class="ss-act add" href="<?= $manageUrl($key,$mid) ?>" title="إضافة بند" onclick="event.stopPropagation()"><?= icon('plus', 14) ?></a>
-        <span class="ss-chev">▾</span>
+        <span class="ss-chev"><?= icon('chevron', 14) ?></span>
       </summary>
       <div class="stage-body">
         <?php if ($isNone): ?>
@@ -81,7 +81,25 @@ $roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0
                 <td><?php if($en['attachment']): ?><a href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank"><?= icon('file-text', 14) ?></a><?php else: ?>—<?php endif; ?></td>
               </tr>
             <?php endforeach; ?>
-            </tbody></table></div>
+            </tbody>
+            <?php /* ⚠️ **صف إجمالي** — الجدول ممكن يبقى ١٥ صفًّا، والمجموع كان
+                     في الهيرو بس (على بُعد ١٥٠٠ بكسل تمرير لفوق). و`table.data
+                     tfoot` متنسَّق أصلاً، والـJS بتاع إخفاء الأعمدة بيعدّ
+                     `tFoot` فالصف بيتخفي مع عموده. */ ?>
+            <?php $tAmt = array_sum(array_map(fn($x)=>(float)$x['amount'], $entries));
+                  $tAct = 0; $hasAct = false;
+                  foreach ($entries as $en) {
+                      if (isset($en['actual_amount']) && $en['actual_amount']!==null && $en['actual_amount']!=='') {
+                          $tAct += (float)$en['actual_amount']; $hasAct = true;
+                      }
+                  } ?>
+            <tfoot><tr>
+              <td>الإجمالي (<?= intf(count($entries)) ?>)</td>
+              <td><?= money($tAmt,false) ?></td>
+              <?php if($key!=='primary_fees'): ?><td><?= $hasAct ? money($tAct,false) : '—' ?></td><?php endif; ?>
+              <td colspan="4"></td>
+            </tr></tfoot>
+            </table></div>
         <?php elseif ($autoPrimary): ?>
           <div class="tl-auto">
             <div class="tl-auto-h"><?= icon('coins', 14) ?> رسوم أولية محسوبة تلقائيًا من حاويات الإذن (<?= intf($primaryDef['containers']) ?> حاوية):</div>
@@ -101,14 +119,16 @@ $roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0
 <!-- ===== تفاصيل إضافية (بلا تكرار لبيانات الهيرو) ===== -->
 <?php
 $rows = [
-  ['📦 تصنيف الحاويات', ($p['container_type'] ?? '') !== '' ? $p['container_type'] : null],
-  ['سعر الكشف لكل حاوية', $p['inspection_rate']!==null ? money($p['inspection_rate'],false) : 'غير مُدخَل'],
-  ['سعر الضمان لكل حاوية', $p['guarantee_rate']!==null ? money($p['guarantee_rate'],false) : 'غير مُدخَل'],
-  ['🚢 شركة الشحن', ($p['shipping_co'] ?? '') !== '' ? $p['shipping_co'] : null],
+  /* ⚠️ الأيقونة من `icon()` **لكل صف** — كانت إيموجي في تلاتة وبلا أيقونة
+     خالص في اتنين، فالعمود كان بيتقرا كأن نص صفوفه ناقصة. */
+  [icon('package', 14).' تصنيف الحاويات', ($p['container_type'] ?? '') !== '' ? $p['container_type'] : null],
+  [icon('search', 14).' سعر الكشف لكل حاوية', $p['inspection_rate']!==null ? money($p['inspection_rate'],false) : 'غير مُدخَل'],
+  [icon('shield', 14).' سعر الضمان لكل حاوية', $p['guarantee_rate']!==null ? money($p['guarantee_rate'],false) : 'غير مُدخَل'],
+  [icon('ship', 14).' شركة الشحن', ($p['shipping_co'] ?? '') !== '' ? $p['shipping_co'] : null],
   /* ⚠️ «التوكيل» اتشال من هنا — بقى بلاطة بارزة في الهيرو (طلب المالك
      2026-08-10). **متكرّرش المعلومة في المكانين**: كان مدفونًا هنا وهو
      بيحدّد قواعد مرشد الإيصالات. «شركة الشحن» فوقه حاجة تانية خالص. */
-  ['📝 ملاحظة', ($p['note'] ?? '') !== '' ? $p['note'] : null],
+  [icon('edit', 14).' ملاحظة', ($p['note'] ?? '') !== '' ? $p['note'] : null],
 ];
 $rows = array_values(array_filter($rows, fn($r)=>$r[1]!==null));
 if ($rows): ?>
@@ -169,7 +189,7 @@ if ($permitMoney):
           <span class="neg" title="المصروفات"><?= icon('trending-down', 14) ?> <?= money($mvExp,false) ?></span>
           <?php if($mvCharged>0): ?><span class="chg" title="إجمالي السعر الفعلي (للعميل)"><?= icon('user', 14) ?> <?= money($mvCharged,false) ?></span><?php endif; ?>
         </span>
-        <span class="ss-chev">▾</span>
+        <span class="ss-chev"><?= icon('chevron', 14) ?></span>
       </summary>
       <div class="mv-body">
         <!-- شريط المراحل الأفقي -->
@@ -179,7 +199,7 @@ if ($permitMoney):
             elseif ($sk==='generators') { $shas = !empty($generators); }
             else { $srows = array_filter($mvStagesG[$sk] ?? [], fn($x)=>($x['status']??'')!=='none');
                    $shas = !empty($srows) || (empty($srows) && !empty($mvStagesG[$sk] ?? [])); } ?>
-            <span class="step-chip <?= $shas?'done':'' ?>"><span class="sc-dot"><?= $shas?'✓':$sn ?></span><span><?= e($sm['label']) ?></span></span>
+            <span class="step-chip <?= $shas?'done':'' ?>"><span class="sc-dot"><?= $shas ? icon('check', 12) : $sn ?></span><span><?= e($sm['label']) ?></span></span>
           <?php endforeach; ?>
         </div>
         <div class="stages">
@@ -191,12 +211,12 @@ if ($permitMoney):
             $bills = $mvBills; $has = !empty($bills); ?>
             <details class="stage <?= $bills?'has':'' ?>" <?= $bills?'open':'' ?>>
               <summary class="stage-sum">
-                <span class="ss-ic <?= $bills?'ok':'' ?>"><?= $bills?'✓':'🚛' ?></span>
+                <span class="ss-ic <?= $bills?'ok':'' ?>"><?= icon($bills ? 'check' : 'truck', 16) ?></span>
                 <span class="ss-num"><?= $si ?></span><span class="ss-name">البوالص</span><span class="ps-sp"></span>
                 <?php if (count($bills)): ?><span class="ss-count"><?= intf(count($bills)) ?></span><?php endif; ?>
                 <a class="ss-act" href="<?= $manageUrl('bills',$mid) ?>" title="تعديل البوالص" onclick="event.stopPropagation()"><?= icon('edit', 14) ?></a>
                 <a class="ss-act add" href="<?= $manageUrl('bills',$mid) ?>" title="إضافة بوليصة" onclick="event.stopPropagation()"><?= icon('plus', 14) ?></a>
-                <span class="ss-chev">▾</span>
+                <span class="ss-chev"><?= icon('chevron', 14) ?></span>
               </summary>
               <div class="stage-body">
                 <?php if ($bills): ?>
@@ -225,7 +245,17 @@ if ($permitMoney):
                         </div></td>
                       </tr>
                     <?php endforeach; ?>
-                    </tbody></table></div>
+                    </tbody>
+                    <?php /* صف إجمالي — نفس سبب جدول البنود فوق */ ?>
+                    <tfoot><tr>
+                      <td colspan="5">الإجمالي (<?= intf(count($bills)) ?>)</td>
+                      <td><?= intf(array_sum(array_map(fn($b)=>(int)($b['container_count'] ?? 0), $bills))) ?></td>
+                      <td><?= money(array_sum(array_map(fn($b)=>(float)$b['custody'], $bills)),false) ?></td>
+                      <td><?= money(array_sum(array_map(fn($b)=>(float)$b['debt'], $bills)),false) ?></td>
+                      <td><?= money(array_sum(array_map(fn($b)=>(float)$b['remaining'], $bills)),false) ?></td>
+                      <td colspan="2"></td>
+                    </tr></tfoot>
+                    </table></div>
                 <?php else: ?><div class="tl-hint">لا بوالص في هذه الحركة.</div><?php endif; ?>
               </div>
             </details>
@@ -235,7 +265,7 @@ if ($permitMoney):
             <details class="stage has">
               <summary class="stage-sum"><span class="ss-ic ok"><?= icon('check', 14) ?></span><span class="ss-num"><?= $si ?></span>
                 <span class="ss-name">المولدات</span><span class="ps-sp"></span>
-                <span class="ss-count"><?= intf(count($generators)) ?></span><span class="ss-chev">▾</span></summary>
+                <span class="ss-count"><?= intf(count($generators)) ?></span><span class="ss-chev"><?= icon('chevron', 14) ?></span></summary>
               <div class="stage-body"><div class="table-wrap"><table class="data">
                 <thead><tr><th class="g-identity">التاريخ</th><th class="g-identity">الشركة</th>
                   <th class="g-vehicle">العدد</th><th class="g-revenue">النولون</th><th class="g-result">المتبقي</th></tr></thead>

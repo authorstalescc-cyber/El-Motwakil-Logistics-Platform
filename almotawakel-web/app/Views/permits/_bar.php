@@ -17,7 +17,7 @@ $mode = $mode ?? 'view';
 <div class="permit-bar">
   <a class="btn ghost sm" href="<?= url('permits') ?>">‹ رجوع للإصدارات</a>
   <span class="pb-title"><?= Permit::typeLabel($type) ?> <b><?= e($p['permit_no'] ?: '#'.$pid) ?></b></span>
-  <span class="pill <?= $isClosed?'st-paid':'st-partial' ?>"><?= $isClosed?'مقفول ✓':'جارٍ' ?></span>
+  <span class="pill <?= $isClosed?'st-paid':'st-partial' ?>"><?= $isClosed ? icon('check', 13).' مقفول' : 'جارٍ' ?></span>
 
   <?php /* مفتاح الوضع — بيوضّح إن دي شاشة واحدة بوضعين مش شاشتين */ ?>
   <div class="pb-modes" role="group" aria-label="وضع العرض">
@@ -34,7 +34,7 @@ $mode = $mode ?? 'view';
     <button class="btn sm" type="submit" form="permitDataForm"><?= icon('download', 14) ?> حفظ الإذن</button>
     <form method="post" action="<?= url('permits/'.$pid.'/close') ?>" <?= $isClosed?'':'class="confirm-financial" data-confirm="تأكيد إتمام وإغلاق الإذن؟"' ?>>
       <?= csrfField() ?>
-      <button class="btn sm <?= $isClosed?'ghost':'gold' ?>" type="submit"><?= $isClosed?'↩️ إعادة فتح':'✅ إتمام الإذن' ?></button>
+      <button class="btn sm <?= $isClosed?'ghost':'gold' ?>" type="submit"><?= $isClosed ? icon('undo', 14).' إعادة فتح' : icon('check', 14).' إتمام الإذن' ?></button>
     </form>
   <?php endif; ?>
 </div>

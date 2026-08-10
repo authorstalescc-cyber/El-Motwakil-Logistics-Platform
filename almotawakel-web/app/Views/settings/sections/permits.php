@@ -40,7 +40,7 @@ use App\Models\Permit;
           ?>
             <tr>
               <td><input type="number" name="stage_order[<?= e($key) ?>]" value="<?= (int)$st['order'] ?>" class="set-num"></td>
-              <td class="set-lg"><?= $st['icon'] ?></td>
+              <td class="set-lg"><?= icon($st['icon'], 18) ?></td>
               <td><input name="stage_label[<?= e($key) ?>]" value="<?= e($st['label']) ?>" class="set-in"></td>
               <td><?= $dirTxt[$st['dir']] ?? '' ?></td>
               <td class="center">

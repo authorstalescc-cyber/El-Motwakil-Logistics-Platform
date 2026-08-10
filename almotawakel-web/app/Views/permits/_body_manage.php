@@ -82,7 +82,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
     ob_start(); ?>
     <details class="stage <?= $hasData?'has':'' ?>" id="stage-<?= e($key) ?>">
       <summary class="stage-sum">
-        <span class="ss-ic <?= $hasData?'ok':'' ?>"><?= $hasData?'✓':$st['icon'] ?></span>
+        <span class="ss-ic <?= $hasData?'ok':'' ?>"><?= icon($hasData ? 'check' : $st['icon'], 16) ?></span>
         <span class="ss-num"><?= $idx ?></span>
         <span class="ss-name"><?= e($st['label']) ?></span>
         <?php if ($st['dir']===Permit::DIR_EXPENSE): ?><span class="tl-dir neg">مصروف</span><?php endif; ?>
@@ -91,7 +91,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
         <?php elseif (count($realEntries)): ?><span class="ss-count"><?= intf(count($realEntries)) ?></span>
         <?php elseif ($autoPrimary): ?><span class="ss-count" title="محسوبة تلقائيًا من حاويات الإذن">تلقائي</span><?php endif; ?>
         <?php if ($showTotal): ?><span class="ss-amt neg"><?= money($headTotal,false) ?></span><?php endif; ?>
-        <span class="ss-chev">▾</span>
+        <span class="ss-chev"><?= icon('chevron', 14) ?></span>
       </summary>
       <div class="stage-body">
         <?php if ($autoPrimary): ?>
@@ -119,7 +119,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
               <?php if($en['note']): ?><span class="te-note"><?= e($en['note']) ?></span><?php endif; ?>
               <?= $statusBadge($en['status']) ?>
               <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank" onclick="event.stopPropagation()"><?= icon('file-text', 14) ?></a><?php endif; ?>
-              <span class="te-edit">تعديل ▾</span>
+              <span class="te-edit">تعديل <?= icon('chevron', 13) ?></span>
             </summary>
             <?= $stageForm($key, $en) ?>
             <form class="js-ajax confirm-delete ps-del-form" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>">
@@ -158,7 +158,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
         <summary class="stage-sum">
           <span class="ss-ic ok"><?= icon('file-text', 14) ?></span><span class="ss-num"><?= $pi ?></span>
           <span class="ss-name">بيانات الإذن</span><span class="ps-sp"></span>
-          <span class="ss-chev">▾</span>
+          <span class="ss-chev"><?= icon('chevron', 14) ?></span>
         </summary>
         <div class="stage-body">
           <form id="permitDataForm" class="tl-form" method="post" action="<?= url('permits/'.$pid) ?>">
@@ -183,7 +183,7 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
               <label>الوكيل (العميل)<input list="dl_client" id="permit_client" name="client" value="<?= e($p['client']) ?>" autocomplete="off"></label>
               <label>لصالح شركة<input list="dl_company" id="permit_company" name="company" value="<?= e($p['company']) ?>" autocomplete="off"></label>
               <label>الجهة<input list="dl_dest" name="destination" value="<?= e($p['destination']) ?>" autocomplete="off"></label>
-              <?php partial('lookup_select', ['name'=>'shipping_co','type'=>'shipping_co','value'=>$p['shipping_co'] ?? '','label'=>'🚢 شركة الشحن','attrs'=>'data-autofill-from="client" title="بتتملى تلقائيًا من العميل — غيّرها لو شركة الشحن مختلفة"']); ?>
+              <?php partial('lookup_select', ['name'=>'shipping_co','type'=>'shipping_co','value'=>$p['shipping_co'] ?? '','labelHtml'=>icon('ship', 14).' شركة الشحن','attrs'=>'data-autofill-from="client" title="بتتملى تلقائيًا من العميل — غيّرها لو شركة الشحن مختلفة"']); ?>
               <?php partial('lookup_select', ['name'=>'agency','type'=>'agency','value'=>$p['agency'] ?? '','labelHtml'=>icon('receipt', 14).' التوكيل']); ?>
               <?php partial('lookup_select', ['name'=>'port','type'=>'port','value'=>$p['port'] ?? '','labelHtml'=>icon('anchor', 14).' الميناء']); ?>
               <label class="wide">ملاحظة<input name="note" value="<?= e($p['note']) ?>"></label>
@@ -241,9 +241,10 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
         <?php endforeach; if ($lastTargetPermit !== null): ?></optgroup><?php endif; ?>
       </select>
     </label>
-    <div class="receipt-transfer-note">سيُنقل نفس السجل دون تغيير المبلغ أو الكمية أو السعر الفعلي أو التاريخ أو المرجع أو المرفق أو وسيلة الدفع.</div>
+    <?php /* تحذير **وظيفي** في ٦ كلمات بدل جملة بتعدّد ٧ حقول */ ?>
+    <div class="receipt-transfer-note"><?= icon('info', 14) ?> الإذن بس اللي بيتغيّر — البند زي ما هو</div>
     <div class="receipt-transfer-actions">
-      <button class="btn gold" type="submit" id="receiptTransferSubmit" disabled>⇄ نقل الإيصال</button>
+      <button class="btn gold" type="submit" id="receiptTransferSubmit" disabled><?= icon('shuffle', 14) ?> نقل الإيصال</button>
     </div>
   </form>
 </div>

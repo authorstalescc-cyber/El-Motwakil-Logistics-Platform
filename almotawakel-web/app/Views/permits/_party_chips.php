@@ -43,8 +43,8 @@ $pcRow = static function (string $icon, string $label, array $list, string $acti
         <?php endforeach; ?>
         <?php if ($extra): ?>
           <button type="button" class="pp-chip pp-more" onclick="this.closest('.pp-row').classList.toggle('open')">
-            <span class="pp-m-open">+<span class="num"><?= intf($extra) ?></span> أخرى ▾</span>
-            <span class="pp-m-close">أقلّ ▴</span>
+            <span class="pp-m-open">+<span class="num"><?= intf($extra) ?></span> أخرى <?= icon('chevron', 12, 'is-down') ?></span>
+            <span class="pp-m-close">أقلّ <?= icon('chevron', 12, 'is-up') ?></span>
           </button>
         <?php endif; ?>
       </div>

@@ -32,6 +32,12 @@
 @font-face{font-family:'Cairo';font-style:normal;font-weight:200 1000;font-display:swap;size-adjust:103%;
   src:url('../fonts/cairo-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 :root{
+  /* ارتفاع الترويسة اللاصقة — أي شريط لاصق تاني بيقف تحتها لازم يقرا منه
+     مش يكتب 62 بإيده، وإلا يفضل مخبّي وراها من غير ما حد ياخد باله. */
+  --topbar-h:62px;
+  /* مسافة نطّ الرابط الداخلي = الترويسة + شريط الإذن اللاصق تحتها، وإلا
+     المرحلة اللي بتتنطّ لها بتقف **ورا** الشريط وتبان إنها ما اتفتحتش. */
+  --anchor-gap:140px;
   --navy:#15355B; --navy-dark:#0E2440; --navy-mid:#1E4B7A;
   --gold:#C9A227; --gold-light:#F3E9C6;
   --green:#1E6E3C; --green-lt:#E3F1E7;
@@ -280,7 +286,7 @@ button,input,select,textarea{font-family:inherit;font-size:var(--fs-4);line-heig
 .main{flex:1;margin-inline-start:74px;display:flex;flex-direction:column;min-width:0}
 @media(max-width:820px){.main{margin-inline-start:0}}
 .topbar{
-  background:var(--card);border-bottom:1px solid var(--line);padding:0 26px;height:62px;
+  background:var(--card);border-bottom:1px solid var(--line);padding:0 26px;height:var(--topbar-h);
   display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:30;box-shadow:0 1px 2px rgba(0,0,0,.03)
 }
 .topbar .page-title{font-size:var(--fs-5);font-weight:700;color:var(--accent)}
@@ -434,7 +440,7 @@ table.table-sticky-first tbody td:first-child{background:var(--card)}table.table
   min-height:43px;padding:7px 12px;background:var(--card);border-bottom:1px solid var(--line)}
 .card.table-tools-host{overflow:visible}
 .card.table-tools-host>.table-wrap{border-radius:0 0 var(--radius) var(--radius)}
-.table-sort-hint{margin-inline-end:auto;color:var(--grey);font-size:var(--fs-1);font-weight:500}
+.table-tools-sp{margin-inline-end:auto}
 .table-columns-chooser{position:relative}
 .table-columns-btn{white-space:nowrap}
 .table-columns-panel{position:absolute;z-index:80;top:calc(100% + 7px);inset-inline-end:0;width:240px;max-height:330px;
@@ -447,7 +453,7 @@ table.table-sticky-first tbody td:first-child{background:var(--card)}table.table
 .table-columns-reset{display:block;width:100%;margin-top:7px;padding:7px;border:0;border-top:1px solid var(--line);
   background:var(--card);color:var(--accent);font-family:inherit;font-weight:600;cursor:pointer}
 .table-columns-reset:hover{background:var(--gold-light)}
-@media(max-width:700px){.table-sort-hint{display:none}.table-tools{justify-content:flex-start}.table-columns-chooser{margin-inline-start:auto}}
+@media(max-width:700px){.table-tools-sp{display:none}.table-tools{justify-content:flex-start}.table-columns-chooser{margin-inline-start:auto}}
 @media print{.table-tools,.tbl-sort-btn{display:none!important}.tbl-col-hidden{display:table-cell!important}}
 .actions{display:flex;gap:6px;justify-content:center}
 .actions a,.actions button{width:30px;height:30px;border-radius:var(--radius-1);display:inline-flex;align-items:center;justify-content:center;
@@ -1121,7 +1127,11 @@ input.name-warn{border-color:#e0a94f!important;background:var(--gold-light)!impo
 .ok-chip{background:var(--green-lt);color:var(--green-fg);font-size:var(--fs-1);font-weight:600;padding:3px 10px;border-radius:var(--radius-4)}
 
 /* شريط إجراءات الإذن */
-.permit-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);padding:10px 14px;margin-bottom:16px;box-shadow:var(--shadow);position:sticky;top:8px;z-index:5}
+/* ⚠️ **كان لاصقًا بـ`top:8px` — يعني مخبّي بالكامل ورا الترويسة** (اتقاس:
+   الشريط بيقف عند 8px والترويسة بتنتهي عند 62px وz-index بتاعها أعلى).
+   فالصفحة الطويلة (٦٠٠٠px+) كان مالهاش أي وصول لـ«طباعة/فاتورة/حفظ» بعد
+   أول تمرير، والـsticky كان شغّال وضايع. دلوقتي بيقف **تحت** الترويسة. */
+.permit-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);padding:10px 14px;margin-bottom:16px;box-shadow:var(--shadow);position:sticky;top:calc(var(--topbar-h) + 8px);z-index:20}
 .pb-title{font-weight:500;color:var(--accent)}
 .pb-title b{color:var(--gold);font-weight:600}
 
@@ -1204,21 +1214,25 @@ input.name-warn{border-color:#e0a94f!important;background:var(--gold-light)!impo
 
 /* الأكورديون */
 .stages{display:flex;flex-direction:column;gap:10px}
-.stage{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);box-shadow:var(--shadow);overflow:hidden;scroll-margin-top:80px}
+.stage{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);box-shadow:var(--shadow);overflow:hidden;scroll-margin-top:var(--anchor-gap)}
 .stage.has{border-inline-start:4px solid var(--green)}
 .stage:not(.has){border-inline-start:4px solid var(--line2)}
 .stage-sum{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:14px 18px;font-weight:500}
 .stage-sum::-webkit-details-marker{display:none}
 .stage[open] .stage-sum{border-bottom:1px solid var(--line);background:var(--zebra)}
-.ss-ic{width:34px;height:34px;border-radius:50%;background:var(--bg);border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font-size:var(--fs-4);flex:none}
+/* ⚠️ الأيقونة بقت SVG مش إيموجي — `color` هي اللي بتلوّنها دلوقتي (الإيموجي
+   كانت بتتلوّن لوحدها فما كانتش بتسمع لأي توكن). */
+.ss-ic{width:34px;height:34px;border-radius:50%;background:var(--bg);border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;color:var(--ink-mut);flex:none}
 .ss-ic.ok{background:var(--green-lt);border-color:var(--green);color:var(--green-fg)}
 .ss-num{width:22px;height:22px;border-radius:50%;background:var(--navy);color:var(--white);display:flex;align-items:center;justify-content:center;font-size:var(--fs-1);font-weight:700;flex:none}
 .ss-name{font-size:var(--fs-4);color:var(--accent);font-weight:600}
 .ss-count{background:var(--navy);color:var(--white);font-size:var(--fs-1);font-weight:600;min-width:20px;height:20px;padding:0 6px;border-radius:var(--radius-4);display:inline-flex;align-items:center;justify-content:center}
 .ss-amt{font-size:var(--fs-4);font-weight:600}
 .ss-amt.neg{color:var(--red-fg)} .ss-amt.pos{color:var(--green-fg)}
-.ss-chev{color:var(--grey);transition:transform .2s;flex:none}
-.stage[open] .ss-chev{transform:rotate(180deg)}
+/* السهم بيبصّ **تحت** وهو مقفول و**فوق** وهو مفتوح — زي `▾`/`▴` اللي كان
+   مكانه بالظبط. (كان بيلفّ ١٨٠° فيبقى سهم جنب في الحالتين.) */
+.ss-chev{color:var(--grey);transition:transform .2s;flex:none;transform:rotate(-90deg)}
+.stage[open] .ss-chev{transform:rotate(90deg)}
 .stage-body{padding:16px 18px}
 
 @media(max-width:1000px){ .hero-tiles{grid-template-columns:repeat(4,1fr)} }
@@ -1305,7 +1319,7 @@ details.movement > summary.mv-head::-webkit-details-marker{display:none}
 .mv-stats .chg{color:var(--gold-pale);background:rgba(243,233,198,.13);border-color:rgba(243,233,198,.3)}
 .mv-del{opacity:.85} .mv-del:hover{opacity:1}
 .mv-head .ss-chev{color:var(--gold-pale);transition:transform .2s}
-details.movement[open] > summary.mv-head .ss-chev{transform:rotate(180deg)}
+details.movement[open] > summary.mv-head .ss-chev{transform:rotate(90deg)}
 .mv-body{padding:14px 16px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
 .mv-body .stage{box-shadow:none}
 @media(max-width:820px){
@@ -1517,14 +1531,14 @@ label.tl-visa input{width:18px;height:18px;accent-color:var(--gold)}
 .mv-body{padding:14px 16px}
 /* شريط المراحل الأفقي داخل الحركة */
 .mv-body .stepper{margin:0 0 14px;padding:2px 0 10px;border-bottom:1px solid var(--line)}
-.step-chip[data-scroll]{scroll-margin-top:80px}
+.step-chip[data-scroll]{scroll-margin-top:var(--anchor-gap)}
 
 .mstages{display:flex;flex-direction:column;gap:8px}
-.mstage{background:var(--card);border:1px solid var(--line);border-inline-start:4px solid var(--line2);border-radius:var(--radius-2);overflow:hidden;transition:.15s;scroll-margin-top:80px}
+.mstage{background:var(--card);border:1px solid var(--line);border-inline-start:4px solid var(--line2);border-radius:var(--radius-2);overflow:hidden;transition:.15s;scroll-margin-top:var(--anchor-gap)}
 .mstage.has{border-inline-start-color:var(--green)}
 .ms-head{display:flex;align-items:center;gap:10px;padding:9px 14px;flex-wrap:wrap}
 .ms-ic{width:30px;height:30px;flex:none;border-radius:var(--radius-1);display:flex;align-items:center;justify-content:center;
-  background:var(--bg);border:1px solid var(--line2);font-size:var(--fs-4)}
+  background:var(--bg);border:1px solid var(--line2);color:var(--ink-mut)}
 .ms-ic.ok{background:var(--green-lt);border-color:var(--green);color:var(--green-fg)}
 .ms-name{font-weight:600;color:var(--accent);font-size:var(--fs-3)}
 .ms-sp{flex:1}
@@ -2176,6 +2190,11 @@ label.tl-visa input{width:18px;height:18px;accent-color:var(--gold)}
 /* --- أساس الأيقونة المتجهيّة --- */
 .ico{display:inline-block;vertical-align:middle;flex:none}
 svg.ico{stroke-width:2}
+/* أسهم الطيّ — بديل المحرفين `▾`/`▴` عشان الأيقونات كلها نظام واحد.
+   ⚠️ `icon('chevron')` بيرسم سهمًا **لجنب** (`‹`)، فالطيّ محتاج لفّة ٩٠°
+   عشان يبقى فوق/تحت. اللفّة ١٨٠° بتدّي سهمًا لجنب تاني — مش أفوردانس طيّ. */
+.ico.is-down{transform:rotate(-90deg)}
+.ico.is-up{transform:rotate(90deg)}
 
 /* حلقة تركيز واضحة للوصولية (keyboard nav) */
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible,[tabindex]:focus-visible{

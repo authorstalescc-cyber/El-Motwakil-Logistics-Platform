@@ -274,7 +274,111 @@ if ($pid <= 0) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-sec('④ ⚠️ العزل المالي — الحد الأحمر');
+sec('④ نظام أيقونات واحد · صفر جملة تعليمية · شريط لاصق · صف إجمالي');
+// ═══════════════════════════════════════════════════════════════════════
+
+/* ⚠️ الفحص على **الناتج المرندَر** مش على المصدر: الإيموجي ممكن تيجي من
+   `Permit::STAGES` أو من الـview أو من `icon()` — والمرندَر بيمسك التلاتة. */
+$permitHtml = '';
+if ($pid > 0) {
+    foreach (['view', 'manage'] as $m) {
+        $_GET = [];
+        ob_start();
+        try { $c = new PermitController(); $m === 'view' ? $c->view((string) $pid) : $c->manage((string) $pid); $permitHtml .= (string) ob_get_clean(); }
+        catch (\Throwable $e) { ob_end_clean(); bad("وضع `$m` رمى استثناء: " . $e->getMessage()); }
+    }
+}
+
+if ($permitHtml === '') {
+    ok('مفيش ناتج مرندَر — تخطّي');
+} else {
+    /* ① نظام أيقونات واحد.
+       ⚠️ **الفحص على مصادر الشاشتين مش على الناتج المرندَر**: الناتج بيشمل
+       الغلاف العام (`layout.php`) اللي لسه فيه إيموجي في لوحة الأوامر ورسايل
+       الإشعارات — ودي **برّه نطاق التعديل ده** (شاشتا الإذن). فحص الناتج كان
+       بيفشل على حاجة مش بتاعة الوحدة دي.
+       ⚠️ و`code_only()` إجبارية: التعليق اللي بيوثّق إن الإيموجي اتشالت
+       **بيذكرها**، فالفحص كان هيفشل على توثيق نفسه. */
+    $screenFiles = [
+        '_hero.php', '_bar.php', '_body_view.php', '_body_manage.php', '_movement.php',
+        '_journey.php', '_rcp_guide.php', '_party_chips.php', '_docs.php', 'show.php',
+        'index.php', 'form.php',
+    ];
+    $strayGlyphs = ['📄','🪙','🚛','🧾','➕','⚙️','📦','🚢','📝','✅','↩️','▾','▴','⇄','✓','✕','🏢','👤'];
+    $dirty = [];
+    foreach ($screenFiles as $fn) {
+        $src = code_only((string) file_get_contents($root . '/app/Views/permits/' . $fn));
+        foreach ($strayGlyphs as $g) { if (str_contains($src, $g)) { $dirty[] = "$fn:$g"; } }
+    }
+    foreach ($strayGlyphs as $g) { if (str_contains(code_only($model), $g)) { $dirty[] = "Permit.php:$g"; } }
+    chk($dirty === [],
+        '⚠️ شاشتا الإذن بنظام أيقونات واحد (`icon()`) — مفيش إيموجي ولا محرف رسم'
+        . ($dirty ? ' — لسه في: ' . implode(' · ', $dirty) : ''));
+    /* والأيقونة في `Permit::STAGES` اسم صالح مش إيموجي */
+    foreach (\App\Models\Permit::STAGES as $sk => $sm) {
+        chk(preg_match('~^[a-z0-9-]+$~', (string) $sm['icon']) === 1
+            && !str_contains(icon((string) $sm['icon'], 12), 'r="9"'),
+            "أيقونة مرحلة `$sk` اسم موجود في `icon()` (مش إيموجي ولا اسم غلط)");
+    }
+    /* ⚠️ والاسم الغلط ما بيرميش خطأ — بيرسم دايرة فاضية */
+    chk(preg_match_all('~<circle cx="12" cy="12" r="9"/></svg>~', $permitHtml) === 0,
+        'وولا أيقونة وقعت على الدايرة الفاضية (الاسم الغلط ما بيرميش خطأ)');
+
+    /* ② صفر جملة تعليمية — النصوص اللي اتشالت بالحرف */
+    $lectures = [
+        'يفكّرك بس'                  => 'مرشد الإيصالات',
+        'عشان تبدأ التتبّع'          => 'رحلة الشحنة',
+        'دون تغيير المبلغ أو الكمية'  => 'نقل الإيصال',
+    ];
+    foreach ($lectures as $txt => $where) {
+        chk(!str_contains($permitHtml, $txt), "مفيش جملة تعليمية في «{$where}»");
+    }
+    /* ⚠️ دي كانت بتتحقن من `app.js` على **كل** جدول في النظام، و`verify_density`
+       بيفحص `app/Views` بس فما كانش بيشوفها.
+       ⚠️ ولازم نقصّ تعليقات الجافاسكريبت الأول — التعليق اللي بيوثّق إن الجملة
+       اتشالت **بيقتبسها**، فالفحص كان بيفشل على توثيق نفسه (اتصاد فعليًّا).
+       نفس قاعدة `code_only()`/`css_only()` بالظبط. */
+    $jsCode = (string) preg_replace('~/\*.*?\*/|(?<![:\w])//[^\n]*~s', '',
+        (string) file_get_contents($root . '/public/assets/js/app.js'));
+    chk(!str_contains($jsCode, 'اضغط بجوار عنوان العمود'),
+        '⚠️ وجملة ترتيب الأعمدة اتشالت من `app.js` (كانت فوق كل جدول في النظام)');
+
+    /* ③ الشريط اللاصق بيقف **تحت** الترويسة مش وراها */
+    chk(str_contains($cssCode, '--topbar-h'),
+        'ارتفاع الترويسة توكن مشترك (`--topbar-h`) مش رقم مكتوب بالإيد');
+    chk(preg_match('~\.permit-bar\{[^}]*top:calc\(var\(--topbar-h\)~', $cssCode) === 1,
+        '⚠️ وشريط إجراءات الإذن لاصق **تحتها** — كان `top:8px` يعني مخبّي وراها بالكامل');
+
+    /* ④ صف الإجمالي — والأهم إن أعمدته **مطابقة لرأس الجدول** */
+    $dom = new \DOMDocument();
+    libxml_use_internal_errors(true);
+    $dom->loadHTML('<?xml encoding="utf-8"?>' . $permitHtml);
+    libxml_clear_errors();
+    $xp = new \DOMXPath($dom);
+    $span = static function (\DOMElement $row) use ($xp): int {
+        $n = 0;
+        foreach ($xp->query('./td|./th', $row) as $cell) { $n += max(1, (int) $cell->getAttribute('colspan')); }
+        return $n;
+    };
+    $withFoot = 0; $badFoot = [];
+    foreach ($xp->query('//table[tfoot]') as $tbl) {
+        $withFoot++;
+        $headRows = $xp->query('./thead/tr', $tbl);
+        if (!$headRows->length) { continue; }
+        $cols = $span($headRows->item(0));
+        foreach ($xp->query('./tfoot/tr', $tbl) as $fr) {
+            if ($span($fr) !== $cols) { $badFoot[] = $span($fr) . '≠' . $cols; }
+        }
+    }
+    chk($withFoot >= 3, "صف الإجمالي اتزوّد لجداول الإذن ($withFoot جدول)");
+    /* ⚠️ **`colspan` غلط بيزحلق كل الأرقام عمودًا** فيبان مبلغ تحت عنوان تاني
+       — وما بيرميش أي خطأ. ده الفحص الوحيد اللي بيمسكه. */
+    chk($badFoot === [],
+        '⚠️ وأعمدة كل تذييل مطابقة لرأس جدوله' . ($badFoot ? ' — مختلف: ' . implode(', ', $badFoot) : ''));
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+sec('⑤ ⚠️ العزل المالي — الحد الأحمر');
 // ═══════════════════════════════════════════════════════════════════════
 $treasuryAfter = Closing::currentBalance();
 chk(abs($treasuryBefore - $treasuryAfter) < 0.001,

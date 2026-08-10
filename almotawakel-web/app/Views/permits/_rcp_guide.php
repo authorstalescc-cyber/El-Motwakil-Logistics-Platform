@@ -14,8 +14,11 @@ if (!$g['items']) { return; }
 ?>
 <div class="rcp-guide" id="rcp-guide">
   <div class="rg-head">
+    <?php /* ⚠️ كانت جملة شرح كاملة («يفكّرك بس، مايلزمكش بأي حاجة») —
+             قانون التصميم: صفر جملة تعليمية. المعنى الحاكم (إنه **ما بيمنعش**
+             أي إدخال) اتحوّل لوسم من كلمة واحدة، والشرح في `title`. */ ?>
     <span class="rg-title"><?= icon('receipt', 14) ?> مرشد الإيصالات
-      <span class="rg-note">استرشادي — يفكّرك بس، مايلزمكش بأي حاجة</span>
+      <span class="rg-note" title="بيفكّرك بالمتوقّع — ما بيمنعش أي إدخال ولا فوترة">استرشادي</span>
     </span>
     <?php if ($missCount === 0): ?>
       <span class="rg-ok">كل المتوقّع موجود <?= icon('check', 14) ?></span>

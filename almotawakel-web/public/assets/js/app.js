@@ -1925,10 +1925,15 @@
       const tools = document.createElement('div');
       tools.className = 'table-tools';
       tools.setAttribute('data-for-table', table.id);
-      const hint = document.createElement('span');
-      hint.className = 'table-sort-hint';
-      hint.textContent = '⇅ اضغط بجوار عنوان العمود للترتيب';
-      tools.appendChild(hint);
+      /* ⚠️ **جملة «اضغط بجوار عنوان العمود للترتيب» اتشالت** (2026-08-10).
+         قانون التصميم: صفر جملة تعليمية — و`verify_density` بيفحص `app/Views`
+         بس، فالجملة اتسرّبت من هنا وكانت بتتطبع فوق **كل** جدول في النظام.
+         وهي زايدة أصلاً: كل `<th>` قابل للترتيب بيرسم `⇅` جنبه، والمؤشّر
+         بيتغيّر لـ`pointer` عليه — الأفوردانس موجود بلا شرح.
+         الفاضي مكانها بيدفع باقي الأزرار لآخر الشريط زي ما كانت بتعمل. */
+      const spacer = document.createElement('span');
+      spacer.className = 'table-tools-sp';
+      tools.appendChild(spacer);
 
       function savePrefs() { window.AppPrefs.set(prefKey, prefs, legacyPrefs); }
       const densityBtn = document.createElement('button'); densityBtn.type='button'; densityBtn.className='btn ghost sm table-density-btn';
