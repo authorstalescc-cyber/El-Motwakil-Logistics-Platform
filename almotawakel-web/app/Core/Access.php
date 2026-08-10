@@ -79,6 +79,8 @@ class Access
         // شكل الشركة وتثبيته — قرار مالك (الحارس التاني في `UserPref::setCompany`)
         'SettingsController@prefLock',
         'SettingsController@prefCompanyDelete',
+        // إطفاء وحدة أو تغيير القائمة — قرار مالك (الحارس التاني في `NavModule::save`)
+        'SettingsController@saveModules',
     ];
 
     /** وحدات الكتابة المالية المسموحة للمحاسب (والمدير والمالك). */
@@ -129,6 +131,25 @@ class Access
         $role = self::normalizeRole($role);
         [$controller, $action] = array_pad(explode('@', $handler, 2), 2, '');
         $method = strtoupper($httpMethod);
+
+        /* ⚠️⚠️ **الوحدة المطفية بترفض قبل أي سماح — حتى للمالك** (v77).
+           الإطفاء قرار المالك نفسه، فتخطّيه له كان هيخلّيه بلا معنى: الوحدة
+           «مطفية» والمالك لسه شايفها شغّالة. والرجوع بضغطة من `/settings/modules`.
+           ⚠️ و`NavModule::LOCKED` بيمنع إطفاء الإعدادات ولوحة التحكّم أصلاً،
+              فمستحيل الحارس ده يقفل طريق الرجوع. */
+        /* ⚠️⚠️ **`class_exists` + `try` مش زيادة دفاع — ضرورة**: `Access` كلاس
+           في `Core` بيتحمَّل في سياقات **بلا autoloader ولا قاعدة** (الفاحص
+           البنيوي `verify_access_matrix` بيشغّله كده عن قصد). الاستدعاء المباشر
+           كان بيرمي `Class not found` **ويقتل الفاحص كله**.
+           والسقوط هنا **مفتوح عن قصد**: إطفاء الوحدة تنظيم قائمة مش حاجز أمني
+           — الحاجز هو الدور، وهو فوق وتحت. لو القاعدة مش متاحة، الأسوأ إن
+           وحدة مطفية تفتح؛ ولو كان بيقفل، عطل قاعدة كان هيقفل النظام كله. */
+        if (class_exists(\App\Models\NavModule::class)) {
+            try {
+                $slug = \App\Models\NavModule::slugForHandler($handler);
+                if ($slug !== null && \App\Models\NavModule::isDisabled($slug)) { return false; }
+            } catch (\Throwable $e) { /* بلا قاعدة → مفيش إطفاء */ }
+        }
 
         if ($role === 'owner') { return true; }
         if (self::matchesAny($handler, self::OWNER_ONLY)) { return false; }

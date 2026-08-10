@@ -24,72 +24,11 @@ $isActive = function(string $seg) use ($cur): string {
    • مفتاح الشارة → بيتملّى من `/notifications/ping` في المتصفح، **صفر تكلفة
      على الخادم**، ونفس مصدر رقم الجرس فمستحيل الاتنين يختلفوا.
    ══════════════════════════════════════════════════════════════════════════ */
-$navRaw = [
-    ['__sec', 'الرئيسية', null, null, null],
-    ['',            'لوحة التحكم',   'dashboard',     'DashboardController@index',   null],
-    ['assistant',   'المساعد الذكي', 'sparkles',      'AssistantController@index',   null],
-
-    ['__sec', 'الشغل اليومي', null, null, null],
-    ['permits',     'الأذونات والشهادات', 'folder',   'PermitController@index',      null],
-    ['bawalis',     'البوالص',       'truck',         'CrudController@index',        null],
-    ['cars',        'سيارات المكتب', 'truck',         'OfficeCarController@index',   null],
-    ['tracking',    'تتبع الشحنات',  'map-pin',       'TrackController@index',       'track_stale'],
-    ['closing',     'التقفيل اليومي','calculator',    'DailyClosingController@index','closing_open'],
-
-    ['__sec', 'حسابات العملاء', null, null, null],
-    ['invoices',    'فواتير العملاء','receipt',       'InvoiceController@index',     'ready_invoice'],
-    ['payments',    'تحصيلات العملاء','wallet',       'PaymentController@index',     null],
-    ['debts',       'المديونيات',    'credit-card',   'DebtController@index',        null],
-
-    ['__sec', 'أصحاب البيان', null, null, null],
-    ['statements',  'كشوف الحساب',  'file-text',     'OwnerStatementController@index', null],
-    ['settlements', 'السداد',        'banknote',      'SettlementController@index',  null],
-
-    ['__sec', 'الخزنة والمصروفات', null, null, null],
-    // ⚠️ خزنة الشركة قبل خزنة المكتب عن قصد — هي الأكبر واللي بتغذّيها (v66).
-    ['company-safe', 'خزنة الشركة',  'home',          'CompanySafeController@index', null],
-    ['custody',     'خزنة المكتب',   'briefcase',     'CustodyController@index',     null],
-    ['office',      'كروت الفيزا',   'credit-card',   'OfficeController@index',      null],
-    ['expenses',    'المصروفات',     'trending-down', 'ExpenseController@index',     'receipts_missing'],
-
-    ['__sec', 'المناديب', null, null, null],
-    ['rep-custody', 'عهدة المناديب', 'briefcase',     'RepCustodyController@index',  'rep_pending'],
-    ['reps',        'رواتب وحسابات المناديب', 'user', 'RepController@index',         null],
-
-    ['__sec', 'السجلات والإدارة', null, null, null],
-    ['directory',   'دليل الأطراف',  'users',         'DirectoryController@index',   null],
-    ['legacy',      'أرشيف البوالص القديمة', 'inbox', 'LegacyController@index',      null],
-    ['takhlis',     'التخليص',       'clipboard',     'TakhlisController@index',     null],
-    ['generators',  'المولدات',      'cpu',           'GeneratorsController@index',  null],
-    ['ops',         'تقارير التشغيل','package',       'OpsReportController@index',   null],
-    ['reports',     'التقارير',      'bar-chart',     'ReportsController@index',     null],
-    ['audit',       'سجل العمليات',  'clipboard',     'AuditController@index',       null],
-    ['push',        'إشعارات التطبيق','bell',         'PushController@index',        null],
-    ['quality',     'تنظيف البيانات','clipboard',     'QualityController@index',     'data_quality'],
-    ['security',    'المراقبة الأمنية','alert',       'SecurityController@index',    'failed_logins'],
-    ['settings',    'الإعدادات',     'settings',      'SettingsController@index',    'weak_pins'],
-];
-
-/* فلترة بالدور: **الرفض هو الافتراضي** — البند يظهر بس لو السياسة المركزية
-   بتسمح لدور المستخدم يفتح صفحته. ده بيخفي «المراقبة الأمنية» عن غير المالك
-   و«الإعدادات» عن غير المالك/المدير تلقائيًّا، ومن غير ما نكتب أي شرط بالإيد. */
-$role = Auth::role();
-$nav = [];
-foreach ($navRaw as $item) {
-    [$seg, $label, $ic, $handler, $badge] = $item;
-    if ($ic === null) { $nav[] = $item; continue; }              // فاصل قسم
-    if ($handler !== null && !Access::allows($role, $handler, 'GET')) { continue; }
-    $nav[] = $item;
-}
-/* نشيل أي عنوان قسم فضي بعد الفلترة (مثلاً لو الدور مشافش أي بند تحته) */
-$clean = [];
-for ($i = 0, $n = count($nav); $i < $n; $i++) {
-    $isSection = $nav[$i][2] === null;
-    $nextIsLink = isset($nav[$i + 1]) && $nav[$i + 1][2] !== null;
-    if ($isSection && !$nextIsLink) { continue; }
-    $clean[] = $nav[$i];
-}
-$nav = $clean;
+/* ⚠️ **القائمة بقت من `NavModule`** (v77): الافتراضي لسه في الكود
+   (`NavModule::DEFAULTS` — نفس المصفوفة دي بالحرف)، والفروق (ترتيب · اسم ·
+   أيقونة · إخفاء · إطفاء) في `module_settings`. الفلترة بالدور جوّه الموديل
+   فمفيش تعريفان للقاعدة ممكن يختلفوا. */
+$nav = \App\Models\NavModule::menu();
 ?><!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -253,15 +192,18 @@ $nav = $clean;
          Breadcrumb — المرحلة ٥
          النظام كان **بلا أي breadcrumb** في ٨١ شاشة، و١١ شاشة مالهاش ولا
          رابط للأعلى خالص. بدل ما نعدّل كل شاشة، بنشتقّه هنا من **خريطة
-         القائمة نفسها** (`$navRaw` فوق) + المسار الحالي: مكان واحد بيغطّي
-         كل الشاشات تلقائيًّا ومستحيل يتفرّع عن القائمة.
+         القائمة نفسها** (`NavModule::DEFAULTS`) + المسار الحالي: مكان واحد
+         بيغطّي كل الشاشات تلقائيًّا ومستحيل يتفرّع عن القائمة.
+         ⚠️ بيقرا **الافتراضي** مش `menu()`: مسار الصفحة اللي انت فيها فعلاً
+            لازم يبان في المسار حتى لو الوحدة **مخفية** من القائمة — إخفاؤها
+            معناه «مش عايزها في الشريط» مش «مش موجودة».
          ══════════════════════════════════════════════════════════════════════ */
       $crumbs = [];
       if ($cur !== '/') {
           $curTrim = ltrim($cur, '/');
           $bestSeg = ''; $bestLabel = ''; $bestSection = '';
           $section = '';
-          foreach ($navRaw as [$seg, $label, $ic, $handler, $badge]) {
+          foreach (\App\Models\NavModule::DEFAULTS as [$seg, $label, $ic, $handler, $badge]) {
               if ($ic === null) { $section = $label; continue; }
               if ($seg === '') { continue; }
               // أطول تطابق بادئة يكسب: «rep-custody/inbox» قبل «rep-custody»

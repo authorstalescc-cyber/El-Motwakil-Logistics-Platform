@@ -504,7 +504,10 @@ yes('ومحدش يقدر يكتب (مفيش POST أصلاً)',
     !Access::allows('read_only', 'OpsReportController@index', 'POST'));
 
 $layout = (string) file_get_contents($root . '/app/Views/layout.php');
-yes('بند القائمة الجانبية موجود', str_contains($layout, "'OpsReportController@index'"));
+/* ⚠️ القائمة اتنقلت لـ`NavModule::DEFAULTS` في v77 — الفحص على وجود البند
+   في القائمة، مش على نص في `layout.php`. */
+yes('بند القائمة الجانبية موجود',
+    str_contains(file_get_contents(dirname(__DIR__) . '/app/Models/NavModule.php'), "'OpsReportController@index'"));
 yes('  › ومرادفات البحث (Ctrl+K) موجودة', str_contains($layout, "'ops'     =>"));
 
 // ⚠️ أي أيقونة مش في `icon()` بتقع على شكل افتراضي **بالسكوت**.

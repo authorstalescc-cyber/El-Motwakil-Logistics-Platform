@@ -487,7 +487,10 @@ yes('التشغيل ممنوع يكتب', !Access::allows('operator', 'OfficeCar
 // ═══════════════════════════════════════════ ١٢) الشاشات والواجهة
 sec('١٢) الشاشات والواجهة');
 $layout = (string) file_get_contents($root . '/app/Views/layout.php');
-yes('بند «سيارات المكتب» في القائمة', str_contains($layout, "'OfficeCarController@index'"));
+/* ⚠️ القائمة اتنقلت من `layout.php` لـ`NavModule::DEFAULTS` في v77 — الفحص
+   بقى على **وجود البند في القائمة** مش على وجود نص في ملف بعينه. */
+yes('بند «سيارات المكتب» في القائمة',
+    str_contains(file_get_contents($root . '/app/Models/NavModule.php'), "'OfficeCarController@index'"));
 yes('مرادفات Ctrl+K موجودة', str_contains($layout, "'cars'    =>"));
 
 /* ⚠️ مصيدة `.table-mobile-scroll`: أي كلاس بتطبعه الشاشة لازم يكون له CSS.

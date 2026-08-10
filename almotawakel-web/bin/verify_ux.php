@@ -710,11 +710,14 @@ $brokenM ? bad('موديلات مش بتتحمّل: ' . implode(' · ', $brokenM
 sec('١٦) القائمة الجانبية (المرحلة ٣)');
 
 $layoutSrc = (string) file_get_contents($root . '/app/Views/layout.php');
+$navSrc = (string) file_get_contents($root . '/app/Models/NavModule.php');
 $jsSrc     = (string) file_get_contents($root . '/public/assets/js/app.js');
 $cssSrc    = css_code((string) file_get_contents($root . '/public/assets/css/app.css'));
 
 // الفلترة بالدور بتمرّ على السياسة المركزية مش على شروط مكتوبة بالإيد
-str_contains($layoutSrc, "Access::allows(\$role, \$handler, 'GET')")
+/* ⚠️ القائمة اتنقلت من `layout.php` لـ`NavModule` في v77 — الفلترة بالدار
+   واشتقاق الـbreadcrumb بقوا هناك، والفحص بيتبع المنطق مش الملف. */
+str_contains($navSrc, "Access::allows(\$role, \$handler, 'GET')")
     ? ok('القائمة متفلترة بـAccess::allows (الرفض هو الافتراضي)')
     : bad('القائمة مش متفلترة بالسياسة المركزية');
 
@@ -974,7 +977,7 @@ sec('٢١) Breadcrumb وتوحيد الرجوع (المرحلة ٥)');
 str_contains($layoutSrc, 'class="crumbs"')
     ? ok('Breadcrumb موجود في الـlayout (كان صفر في ٨١ شاشة)')
     : bad('مفيش breadcrumb');
-str_contains($layoutSrc, 'foreach ($navRaw as')
+str_contains($layoutSrc, 'NavModule::DEFAULTS as')
     ? ok('Breadcrumb مشتقّ من خريطة القائمة نفسها — مستحيل يتفرّع عنها')
     : bad('Breadcrumb مكتوب بالإيد — هيتفرّع عن القائمة');
 

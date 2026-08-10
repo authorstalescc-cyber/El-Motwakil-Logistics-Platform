@@ -15,6 +15,7 @@ use App\Models\Maintenance;
 use App\Models\Debt;
 use App\Models\Audit;
 use App\Models\UserPref;
+use App\Models\NavModule;
 
 class SettingsController extends Controller
 {
@@ -55,6 +56,7 @@ class SettingsController extends Controller
      */
     private const PAGES = [
         'general' => ['label' => 'عام',                 'icon' => 'home',       'view' => 'general'],
+        'modules' => ['label' => 'الوحدات والقائمة',    'icon' => 'menu',       'view' => 'modules', 'owner' => true],
         'lists'   => ['label' => 'القوائم المنسدلة',    'icon' => 'clipboard',  'view' => 'lists'],
         'permits' => ['label' => 'الأذونات والتايم لاين','icon' => 'folder',     'view' => 'permits'],
         'business'=> ['label' => 'قواعد العمل المالية', 'icon' => 'calculator', 'view' => 'registry', 'owner' => true],
@@ -123,6 +125,8 @@ class SettingsController extends Controller
             'prefCompany'  => $owner ? UserPref::companyRows() : [],
             'prefUsers'    => $owner ? UserPref::usersWithPrefs() : 0,
             'prefMine'     => count(UserPref::allFor()),
+            // الوحدات والقائمة (v77) — الافتراضي من الكود والفرق من القاعدة
+            'modules'      => $owner && NavModule::ready() ? NavModule::adminRows() : [],
             'permitCfg'  => Permit::stageConfig(),
             'userState'  => \App\Core\FormState::consume('settings.user.add', 'settings#tab-users'),
             // قواعد مرشد الإيصالات (v32): قوائم التوكيلات — سطر لكل توكيل
@@ -319,6 +323,44 @@ class SettingsController extends Controller
             $this->fail($e->getMessage(), 'settings', 'tab-business');
         }
         $this->done('اتشالت نقطة التغيير.', 'settings', 'tab-business');
+    }
+
+    /**
+     * حفظ ترتيب القائمة وإظهار الوحدات (v77).
+     *
+     * ⚠️ **الحارس في `NavModule::save()`**: بيرفض أي وحدة مش في `DEFAULTS`
+     *    وبيمنع إطفاء الوحدة المقفولة — فحتى الطلب المزوَّر ما يقدرش يقفل
+     *    المالك برّه النظام.
+     * ⚠️ الحفظ **بالوحدة لا بمسح-وإعادة-بناء**: الفورم بيبعت كل الصفوف، بس
+     *    الوحدة اللي مش في الطلب بتفضل زي ما هي (درس `savePermits`).
+     */
+    public function saveModules(): void
+    {
+        $this->requireRole('owner');
+        $this->requireCsrf();
+
+        $orders   = (array) ($_POST['order'] ?? []);
+        $labels   = (array) ($_POST['label'] ?? []);
+        $hidden   = (array) ($_POST['hidden'] ?? []);
+        $disabled = (array) ($_POST['disabled'] ?? []);
+
+        $errors = [];
+        foreach (NavModule::adminRows() as $row) {
+            $slug = (string) $row['slug'];
+            if (!array_key_exists($slug, $orders) && !array_key_exists($slug, $labels)) { continue; }
+            try {
+                NavModule::save($slug, [
+                    'order'    => $orders[$slug] ?? null,
+                    'label'    => $labels[$slug] ?? '',
+                    'hidden'   => isset($hidden[$slug]),
+                    'disabled' => isset($disabled[$slug]),
+                ]);
+            } catch (\Throwable $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+        if ($errors) { $this->fail(implode(' · ', array_unique($errors)), 'settings', 'modules'); }
+        $this->done('اتحفظت القائمة.', 'settings/modules');
     }
 
     /**

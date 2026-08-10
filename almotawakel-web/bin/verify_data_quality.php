@@ -530,7 +530,7 @@ yes('المسارات الحرفية قبل الجشع /quality/{key}',
 yes('زرار «توحيد المسميات» الأعمى اتشال من الإعدادات',
     !str_contains($settingsTree(), "settings/normalize"));
 yes('وبقى رابط لشاشة التنظيف', str_contains($settingsTree(), "url('quality')"));
-yes('بند القائمة الجانبية موجود', str_contains(readf("$root/app/Views/layout.php"), "'QualityController@index'"));
+yes('بند القائمة الجانبية موجود', str_contains(readf("$root/app/Models/NavModule.php"), "'QualityController@index'"));
 
 // ═════════════════════════════════════ ٧د) السجل المرجعي للجهات
 sec('٧د) السجل المرجعي — الغلطة تتصلّح مرة واحدة وتفضل متصلّحة');

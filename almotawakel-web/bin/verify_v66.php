@@ -383,7 +383,9 @@ foreach (['owner' => true, 'manager' => true, 'accountant' => true, 'viewer' => 
 }
 
 // القائمة الجانبية
-str_contains(src('app/Views/layout.php'), "'CompanySafeController@index'")
+/* ⚠️ القائمة اتنقلت من `layout.php` لـ`NavModule::DEFAULTS` في v77 — الفحص
+   بقى على **وجود البند في القائمة** مش على وجود نص في ملف بعينه. */
+str_contains(src('app/Models/NavModule.php'), "'CompanySafeController@index'")
     ? ok('بند «خزنة الشركة» في القائمة الجانبية') : bad('البند مش في القائمة');
 
 // ═════════════════════════════════════════════ ⑨ب كل كلاس مطبوع له شكل
