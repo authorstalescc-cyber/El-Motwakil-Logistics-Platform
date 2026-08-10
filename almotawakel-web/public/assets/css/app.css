@@ -1189,13 +1189,9 @@ input.name-warn{border-color:#e0a94f!important;background:var(--gold-light)!impo
 .type-chip.sader{background:var(--sader)}
 .type-chip.warid{background:var(--warid)}
 .type-chip .tc-arrow{font-size:var(--fs-4);font-weight:700;line-height:1}
-/* هايلايتس */
+/* هايلايتس — الشبكة بس؛ الكارت جوّاها بقى `.d-kpi` بلغة النظام.
+   (قواعد `.htile` القديمة اتشالت: البلاطات الصمّاء اتحوّلت لمكوّن `stat`.) */
 .hero-tiles{display:grid;grid-template-columns:repeat(7,1fr)}
-.htile{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 8px;border-inline-start:1px solid var(--line);text-align:center}
-.htile:first-child{border-inline-start:none}
-.htile .ht-ic{font-size:var(--fs-5)}
-.htile b{font-size:var(--fs-5);font-weight:600;color:var(--accent)}
-.htile span:last-child{font-size:var(--fs-1);color:var(--grey);font-weight:500}
 
 /* شريط المراحل */
 .stepper{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 12px;margin-bottom:6px}
@@ -1228,7 +1224,6 @@ input.name-warn{border-color:#e0a94f!important;background:var(--gold-light)!impo
 @media(max-width:1000px){ .hero-tiles{grid-template-columns:repeat(4,1fr)} }
 @media(max-width:820px){
   .hero-tiles{grid-template-columns:repeat(2,1fr)}
-  .htile{border-top:1px solid var(--line)}
   .hero-main{padding:18px}
   .hero-no h1{font-size:var(--fs-7)}
   .stage-sum{flex-wrap:wrap;gap:8px}
@@ -2434,53 +2429,22 @@ td .ss-act{width:26px;height:26px}
 /* دائرة التقدّم — تحسين طفيف */
 .ring-fill{stroke-width:3.6}
 
-/* --- شبكة بلاطات المؤشّرات: هادئة، احترافية، اللون محصور في الأيقونة --- */
+/* --- شبكة أرقام الهيرو ---
+   الغلاف شبكة **وبس**؛ الكارت جوّاه `.d-kpi` (مكوّن `stat`) زيّه زيّ أي رقم
+   في النظام. كان جوّاه `.htile` — بلاطة خاصة بالشاشتين دول لوحدهم، صمّاء
+   ومالهاش تفاصيل، فاتشالت هي وكل قواعدها.
+   ⚠️ `.d-kpis` عمرها ما بتنزل عمودًا واحدًا (اتنين على أصغر شاشة) — الشبكة
+   هنا بتنزل لواحد عن قصد لأن أرقامها فلوس بفواصل بتتقص في نص عمود. */
 .hero-tiles{
   display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
   padding:18px;background:var(--zebra)
 }
-.htile{
-  /* ⚠️ الاسم كان `--accent` — وده **نفس اسم توكن النص العام**، فكل بلاطة كانت
-     بتدهس اللون العام جوّه شجرتها. اتسمّى `--tile-*` عشان يفضل محليًّا. */
-  --tile-fg:var(--accent);--tile-lt:var(--tint-navy);
-  display:flex;flex-direction:row;align-items:center;gap:14px;text-align:start;
-  background:var(--card);border:1px solid var(--line);border-radius:var(--radius-2);
-  padding:15px 16px;transition:transform .16s,box-shadow .16s,border-color .16s
-}
-.htile:hover{;box-shadow:0 8px 20px rgba(21,53,91,.10);border-color:var(--line2)}
-.htile .ht-ic{
-  width:46px;height:46px;border-radius:var(--radius-2);flex:none;
-  display:flex;align-items:center;justify-content:center;
-  background:var(--tile-lt);color:var(--tile-fg);
-  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tile-fg) 16%,transparent)
-}
-.htile .ht-ic svg{display:block;stroke-width:2}
-.htile .ht-txt{display:flex;flex-direction:column;gap:3px;min-width:0}
-/* الرقم بلون داكن موحّد — والأخضر/الأحمر للدلالة المالية فقط (راحة للعين) */
-.htile b{
-  font-size:var(--fs-6);font-weight:600;color:var(--ink);line-height:1.1;letter-spacing:-.3px;
-  font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis
-}
-.htile b.pos{color:var(--green-fg)} .htile b.neg{color:var(--red-fg)}
-.htile .ht-l{font-size:var(--fs-2);color:var(--grey);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-/* ألوان الأيقونات — كل بلاطة بهويّتها (اللون هنا فقط) */
-.htile.c-blue  {--tile-fg:var(--accent-2);--tile-lt:var(--tint-navy)}
-.htile.c-teal  {--tile-fg:var(--teal-fg);--tile-lt:var(--tint-teal)}
-.htile.c-indigo{--tile-fg:var(--purple-fg);--tile-lt:var(--tint-purple)}
-.htile.c-green {--tile-fg:var(--green-fg);--tile-lt:var(--green-lt)}
-.htile.c-red   {--tile-fg:var(--red-fg);--tile-lt:var(--red-lt)}
-.htile.c-gold  {--tile-fg:var(--gold-fg);--tile-lt:var(--gold-light)}
-.htile.c-purple{--tile-fg:var(--purple-fg);--tile-lt:var(--tint-purple)}
-.htile.c-amber {--tile-fg:var(--sader-fg);--tile-lt:var(--sader-lt)}
+.hero-tiles .d-kpi{margin-bottom:0}
 
 @media(max-width:1100px){.hero-tiles{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:820px){
   .hero-main{padding:18px}
   .hero-tiles{grid-template-columns:repeat(2,1fr);gap:10px;padding:12px}
-  .htile{padding:11px 12px;gap:10px}
-  .htile .ht-ic{width:40px;height:40px;border-radius:var(--radius-2)}
-  .htile b{font-size:var(--fs-5)}
 }
 @media(max-width:420px){.hero-tiles{grid-template-columns:1fr}}
 

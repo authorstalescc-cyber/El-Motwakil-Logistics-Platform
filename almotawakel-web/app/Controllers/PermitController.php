@@ -544,6 +544,13 @@ class PermitController extends Controller
             'permitStages' => Permit::permitStagesGrouped($pid),
             'generators'   => Permit::generators($p['permit_no']),
             'totals'       => Permit::totals($pid),
+            /* ⚠️ صفوف نوافذ أرقام الهيرو — **بتتجاب من نفس مصادر الأرقام**:
+               `Permit::bills` مصدر `totals['custody'/'debt'/'remaining']`،
+               و`Permit::moneyRows` مصدر `totals['expense'/'charged'/'margin']`.
+               استعلامان زيادة على الشاشة، والبديل (التجميع من `$movements`)
+               بيقلّ عن الإجمالي لأن فيه بنودًا بلا حركة — النافذة تكدب بالسكوت. */
+            'billRows'     => Permit::bills($pid),
+            'moneyRows'    => Permit::moneyRows($pid),
             'lookups'      => Lookup::allGrouped(),
             // مرشد الإيصالات الذكي (استرشادي — v32): المتوقّع/الناقص حسب النوع والتوكيل والـchecklist
             'rcpGuide'     => Permit::receiptGuideForPermit($pid),

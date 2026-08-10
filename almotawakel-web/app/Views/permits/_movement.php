@@ -567,21 +567,22 @@ $generatorsBlock = function(array $generators, int $mid) {
         </a>
       <?php endforeach; ?>
     </div>
-    <!-- صفوف المراحل — المكتمل أولًا ثم غير المكتمل -->
+    <!-- صفوف المراحل — بترتيب المراحل الثابت، والاكتمال بيتقال باللون مش بالمكان -->
     <div class="mstages">
       <?php
-      $rows = [];
+      /* ⚠️ **ممنوع إعادة الترتيب حسب الاكتمال.** كان «المكتمل أولًا»، وده كان
+         بيخلّي شريط المراحل الأفقي فوق (`.stepper`، بترتيبه الثابت) يوَدّي
+         لمكان **مخالف** لترتيب البلوكات تحته، وبيخلّي مكان كل قسم يتغيّر مع
+         أول بند بيتسجّل — في شاشة إدخال يومي. الحالة ظاهرة أصلاً في
+         `.mstage.has` وعلامة `✓`. */
       foreach ($mStages as $k => $st):
         if     ($k === 'bills')      { $h = $billsBlock($mid, $mvBills); }
         elseif ($k === 'generators') { $h = $generatorsBlock($generators, $mid); }
         elseif ($k === 'receipts')   { $h = $receiptsBlock($k, $st, $stState[$k], $mid); }
         elseif ($k === 'custom')     { $h = $customBlock($k, $st, $stState[$k], $mid); }
         else                         { $h = $receiptRow($k, $st, $stState[$k], $mid); }
-        if (trim($h) !== '') $rows[] = ['has' => !empty($stState[$k]['has']), 'html' => $h];
+        echo $h;
       endforeach;
-      $doneH = ''; $pendH = '';
-      foreach ($rows as $r) { if ($r['has']) $doneH .= $r['html']; else $pendH .= $r['html']; }
-      echo $doneH . $pendH;
       ?>
     </div>
   </div>

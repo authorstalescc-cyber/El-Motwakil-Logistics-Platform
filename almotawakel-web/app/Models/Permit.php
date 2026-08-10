@@ -872,6 +872,11 @@ class Permit
             'expense'   => round($expense, 2),
             'fees'      => round($revenue, 2),
             'charged'   => round($charged, 2),
+            /* الفرق = هيتحاسب − اتصرف. **بيتحسب هنا وبس** عشان يبقى حرفيًّا
+               طرح البلاطتين اللي جنبه على الشاشة — لو اتحسب في الـview كان
+               ممكن يختلف عنهم من غير ما حد ياخد باله (قاعدة المصدر الوحيد).
+               سالب = بنحاسب العميل بأقل مما دفعنا. */
+            'margin'    => round($charged - $expense, 2),
             'custody'   => round((float)$b['custody'], 2),
             'debt'      => round((float)$b['debt'], 2),
             'remaining' => round((float)$b['remaining'], 2),
@@ -894,6 +899,34 @@ class Permit
         return Database::all(
             "SELECT * FROM permit_stages s WHERE s.permit_id = ? AND " . self::expenseSql('s')
             . " ORDER BY s.entry_date, s.id",
+            [$permitId]
+        );
+    }
+
+    /**
+     * بنود أرقام الهيرو الثلاثة — **اتحاد** مجموعتَي الأرقام في استعلام واحد:
+     * كل بند مصروف (مصدر `totals['expense']`) + أي بند له سعر فعلي
+     * (مصدر `totals['charged']`). يعني:
+     *   SUM(actual_amount)                  = totals['charged']
+     *   SUM(amount WHERE is_expense)        = totals['expense']
+     *   الفرق بينهم                          = totals['margin']
+     * فالنوافذ التلاتة بتتغذّى من صفوف واحدة ومستحيل تقول رقمًا يخالف بلاطته.
+     *
+     * ⚠️ العمود `is_expense` بيتحسب بـ**`expenseSql()` نفسها** — الشاشة بتقرا
+     *    نتيجة الشرط، ما بتعيدش كتابته بإيدها (قاعدة المصدر الوحيد). وممنوع
+     *    تجميع البنود من `movementStagesGrouped()`: فيه بنود مربوطة بالإذن
+     *    **بلا حركة**، فالتجميع من الحركات بيقلّ عن الإجمالي والنافذة تكدب.
+     *
+     * ⚠️ بنود «لا يوجد» (`status='none'`) بتفضل هنا عن قصد: مبلغها صفر
+     *    فما بتغيّرش أي مجموع، وظهورها بيوضّح إن المرحلة **اتعلّمت** مش منسيّة.
+     */
+    public static function moneyRows(int $permitId): array
+    {
+        $exp = self::expenseSql('s');
+        return Database::all(
+            "SELECT s.*, ($exp) AS is_expense FROM permit_stages s
+              WHERE s.permit_id = ? AND (($exp) OR s.actual_amount IS NOT NULL)
+              ORDER BY s.entry_date, s.id",
             [$permitId]
         );
     }

@@ -125,14 +125,16 @@ if ($rows): ?>
 <?php
 $permitMoney = array_filter($pStages, fn($k)=>$k!=='data' && $k!=='generators', ARRAY_FILTER_USE_KEY);
 if ($permitMoney):
-  // ترقيم طبيعي ثابت + ترتيب المكتمل أولًا ثم غير المكتمل
-  $natNum=[]; $n=0; $doneS=[]; $pendS=[];
-  foreach ($permitMoney as $key=>$st){ $natNum[$key]=++$n;
-    $ents=$permitStages[$key]??[]; $real=array_filter($ents,fn($e)=>($e['status']??'')!=='none'); $none=(!$real && $ents);
-    $autoP=($key==='primary_fees' && !$real && !$none && ($primaryDef['containers']??0)>0 && !empty($primaryDef['rates_set']));
-    if($real||$none||$autoP) $doneS[$key]=$st; else $pendS[$key]=$st;
-  }
-  $orderedPermit = $doneS + $pendS; ?>
+  /* ⚠️ **الترتيب ثابت — ممنوع يتعاد ترتيبه حسب الاكتمال.**
+     كان «المكتمل أولًا ثم غير المكتمل»، والنتيجة عطلان مع بعض:
+       ① الرقم بيتحسب بالترتيب الطبيعي والعرض بيتعاد ترتيبه، فالموظف
+          بيشوف ٢ ← ٣ ← ١ (خطوات مرقّمة برّه ترتيبها الرقمي).
+       ② نفس الإذن بيغيّر ترتيب أقسامه **كل ما بند يتسجّل**، فمستحيل حد
+          يحفظ مكان أي قسم في شاشة بيشتغل عليها كل يوم.
+     الاكتمال بيتقال **باللون والعلامة** (`.stage.has` + `✓`) مش بالمكان. */
+  $natNum=[]; $n=0;
+  foreach ($permitMoney as $key=>$st){ $natNum[$key]=++$n; }
+  $orderedPermit = $permitMoney; ?>
   <div class="sec-head"><span><?= icon('coins', 14) ?> رسوم الإذن</span></div>
   <div class="stages mb">
     <?php foreach ($orderedPermit as $key=>$st){ echo $roStage($key, $st, $permitStages[$key] ?? [], $natNum[$key]); } ?>
@@ -251,10 +253,10 @@ if ($permitMoney):
           $html = ob_get_clean();
           if (trim($html) !== '') $mvItems[] = ['has'=>$has, 'html'=>$html];
         endforeach;
-        // المكتمل أولًا ثم غير المكتمل (مع الحفاظ على الترتيب النسبي)
-        $dH=''; $pH='';
-        foreach ($mvItems as $it){ if($it['has']) $dH.=$it['html']; else $pH.=$it['html']; }
-        echo $dH.$pH;
+        /* ⚠️ الترتيب الطبيعي زي ما هو — نفس سبب مراحل الإذن فوق: الترقيم
+           (`$si`) بيمشي طبيعي، فإعادة الترتيب كانت بتطلّع خطوات مرقّمة
+           برّه ترتيبها، والمكان بيتغيّر مع كل بند بيتسجّل. */
+        foreach ($mvItems as $it) { echo $it['html']; }
         ?>
         </div>
       </div>

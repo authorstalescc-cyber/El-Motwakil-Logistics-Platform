@@ -72,6 +72,7 @@ $catalog = [
     'verify_dashboard.php'        => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'لوحة التحكم بأربع طبقات + حركة اليوم — يزرع بند مندوب غير معتمَد داخل transaction ثم rollback'],
     'verify_reps_ui.php'          => ['impact' => 'read',       'self_guard' => false, 'note' => 'وحدة المناديب باللغة الجديدة — رندر التبويبات والنوافذ بلا كتابة'],
     'verify_permits_ui.php'       => ['impact' => 'read',       'self_guard' => false, 'note' => 'شاشة الإذن الواحدة بوضعين — رندر الوضعين بلا كتابة'],
+    'verify_permit_hero.php'      => ['impact' => 'read',       'self_guard' => false, 'note' => 'أرقام هيرو الإذن مضغوطة ونوافذها = بلاطاتها + ترتيب المراحل ثابت — رندر بلا كتابة'],
     'verify_money_ui.php'         => ['impact' => 'read',       'self_guard' => false, 'note' => 'شاشات الفلوس باللغة الجديدة — رندر الشاشات ونوافذها بلا كتابة'],
     'verify_money_input.php'      => ['impact' => 'none',       'self_guard' => false, 'note' => 'فواصل الآلاف في خانات المبالغ — دوال خالصة وتغطية الخانات وتطابق PHP/JS بلا قاعدة'],
     'verify_dark_print.php'       => ['impact' => 'none',       'self_guard' => false, 'note' => 'الوضع الليلي وتوحيد هوية الطباعة — فحص ملفات بلا قاعدة'],
