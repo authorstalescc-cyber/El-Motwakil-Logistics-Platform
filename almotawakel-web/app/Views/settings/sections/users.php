@@ -96,3 +96,26 @@ $minPw = \App\Core\Auth::minPasswordLength();
       </div>
     </div>
   </div>
+
+<script>
+/* ⚠️⚠️ **السكربت ده ضاع في تقسيم المرحلة ٣ (v76) فزرار «تعديل» بطّل يشتغل
+   تمامًا** — كان في آخر `settings/index.php` القديم مع سكربت التبويبات، والتقسيم
+   أخد الماركب وساب السلوك. الدرس: **الجزء لازم يبقى مكتفيًا بنفسه** — ماركب بلا
+   سلوكه بيفشل بالسكوت (مفيش خطأ في الكونسول، الزرار بيتضغط وما بيحصلش حاجة).
+
+   ⚠️ و`[hidden]{display:none!important}` في `app.css` **بتغلب `style.display`**
+      من الجافاسكريبت — عشان كده بنشيل/نحطّ `hidden` مش بنكتب `display`. */
+(function () {
+  function toggle(id, show) {
+    var row = document.getElementById('user-edit-' + id);
+    if (!row) { return; }
+    if (show) { row.removeAttribute('hidden'); } else { row.setAttribute('hidden', ''); }
+  }
+  document.querySelectorAll('[data-edit-user]').forEach(function (b) {
+    b.addEventListener('click', function () { toggle(b.dataset.editUser, true); });
+  });
+  document.querySelectorAll('[data-cancel-user]').forEach(function (b) {
+    b.addEventListener('click', function () { toggle(b.dataset.cancelUser, false); });
+  });
+})();
+</script>

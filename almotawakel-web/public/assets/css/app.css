@@ -6195,7 +6195,13 @@ table.data th.col-primary{font-weight:var(--fw-bold)}
    ⚠️ البحث بيدوّر في **كل** الأقسام مش في المعروض بس — الفهرس بيتحقن مرة
       واحدة من `SettingsSchema`، والنتيجة رابط لقسمها.
    ══════════════════════════════════════════════════════════════════════ */
-.st-shell{display:grid;grid-template-columns:232px 1fr;gap:var(--space-5);align-items:start}
+/* ⚠️⚠️ **`min-width:0` مش تجميل — هو إصلاح فيضان الشبكة**: عنصر الـgrid
+   افتراضيه `min-width:auto`، يعني **بيرفض ينكمش تحت عرض محتواه**. فجدول عريض
+   جوّه عمود بيمدّه برّه الشاشة والكارت يتقصّ من الناحية التانية (اتصاد فعليًّا
+   في «الصيانة» و«القوائم»). القاعدة دي بتخلّي العمود ينكمش والجدول يتمرّر
+   جوّه `.table-wrap` زي ما المفروض. */
+.st-shell{display:grid;grid-template-columns:232px minmax(0,1fr);gap:var(--space-5);align-items:start;min-width:0}
+.st-shell > *{min-width:0}
 
 /* ── الشريط الجانبي ─────────────────────────────────────────────────── */
 .st-rail{position:sticky;top:var(--space-4);display:flex;flex-direction:column;gap:2px;
@@ -6221,9 +6227,16 @@ table.data th.col-primary{font-weight:var(--fw-bold)}
 
 /* ── البحث الفوري ───────────────────────────────────────────────────── */
 .st-search{position:relative;margin-inline-start:auto;min-width:220px}
-.st-search input{width:100%;padding:8px 12px;border:1px solid var(--line2);
-  border-radius:var(--radius-sm);background:var(--input);font-family:inherit;font-size:var(--fs-3)}
-.st-search input:focus{outline:2px solid var(--focus);outline-offset:1px}
+/* ⚠️ **الخانة كانت بتبان صندوقًا فاضيًا مجهولًا**: بلا أيقونة ولا placeholder
+   (قانون التصميم بيمنع الجملة التعليمية)، فالمالك بلّغ «مش عارف ده إيه».
+   الحل أيقونة جوّه الخانة — **الأيقونة بدل الكلمة** هي نفس بند القانون. */
+.st-search{display:flex;align-items:center;gap:8px;border:1px solid var(--line2);
+  border-radius:var(--radius-sm);background:var(--input);padding:0 10px}
+.st-search svg{flex:0 0 auto;stroke:var(--grey)}
+.st-search input{flex:1;min-width:0;width:100%;padding:8px 2px;border:0;
+  background:transparent;font-family:inherit;font-size:var(--fs-3)}
+.st-search input:focus{outline:0}
+.st-search:focus-within{outline:2px solid var(--focus);outline-offset:1px}
 .st-results{position:absolute;inset-inline-start:0;top:calc(100% + 6px);width:min(420px,80vw);
   background:var(--surface-3);border:1px solid var(--line);border-radius:var(--radius);
   box-shadow:var(--shadow-lg);z-index:var(--z-sticky);max-height:60vh;overflow:auto;padding:6px}
@@ -6239,8 +6252,14 @@ table.data th.col-primary{font-weight:var(--fw-bold)}
 .st-flash{animation:st-flash 1.6s ease-out}
 
 /* ── شبكة الحقول ومساعدات القسم ─────────────────────────────────────── */
-.st-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-4)}
+.st-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-4);align-items:start}
+.st-grid > *{min-width:0}
 .st-grid .field-full{grid-column:1/-1}
+/* الكارت اللي جوّاه جدول بياخد العرض كله — عمود ضيّق بيقصّ الأعمدة أو يفيض. */
+.st-grid > .card:has(table){grid-column:1/-1}
+/* ⚠️ الكروت في نفس الصف بتتساوى بالطول: `align-items:start` فوق بيمنع التمدّد
+   للحقول، والكارت بيرجع `stretch` لنفسه عشان الصف يبان مستويًا. */
+.st-grid > .card{align-self:stretch}
 .st-note{background:var(--zebra);border:1px dashed var(--navy-line);border-radius:var(--radius-sm);
   padding:12px 14px;color:var(--accent);line-height:1.8;margin-bottom:var(--space-4);font-size:var(--fs-2)}
 .st-note.warn{background:var(--gold-light);border-color:var(--gold-line);color:var(--gold-fg)}
@@ -6280,3 +6299,15 @@ table.data th.col-primary{font-weight:var(--fw-bold)}
   .st-grid{grid-template-columns:1fr}
   .st-search{min-width:100%;margin-inline-start:0}
 }
+
+/* ── القوائم المنسدلة: ٢١٧٣ مفردة ما تترسمش دفعة واحدة (v80) ─────────────
+   ⚠️ الشاشة كانت بترسم **كل** مفردة في كل القوايم الأربعتاشر — جدار شرايح
+      مستحيل تلاقي فيه حاجة، والكروت بأطوال متنافرة بتكسر الصف. */
+.st-lk{display:flex;flex-direction:column}
+.st-lk-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.st-lk-head h4{margin:0}
+.st-lk-filter{flex:1;min-width:110px;padding:5px 9px;border:1px solid var(--line2);
+  border-radius:var(--radius-sm);background:var(--input);font-family:inherit;font-size:var(--fs-1)}
+/* الشرايح جوّه صندوق بارتفاع أقصى بيتمرّر — الكارت بيفضل بطول معقول مهما كان العدد */
+.st-lk-chips{max-height:210px;overflow:auto;margin:10px 0;padding-inline-end:2px}
+.st-lk-empty{color:var(--grey);font-size:var(--fs-2);padding:6px 0}

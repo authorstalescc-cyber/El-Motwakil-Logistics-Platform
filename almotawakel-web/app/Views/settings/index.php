@@ -47,7 +47,11 @@ $searchIndex = $searchIndex ?? [];
         <span class="st-role"><?= icon('lock', 12) ?> للمالك</span>
       <?php endif; ?>
       <?php /* ══ البحث الفوري — بيدوّر في **كل** الأقسام مش المعروض بس ══ */ ?>
+      <?php /* ⚠️ **الأيقونة إجبارية هنا**: الخانة بلا أيقونة ولا placeholder
+               (قانون التصميم بيمنع الجملة التعليمية) كانت بتبان **صندوقًا فاضيًا
+               مجهولًا** — والمالك بلّغ «مش عارف ده إيه». الأيقونة بدل الكلمة. */ ?>
       <div class="st-search">
+        <?= icon('search', 15) ?>
         <label class="sr-only" for="stSearch">دوّر في الإعدادات</label>
         <input type="search" id="stSearch" autocomplete="off" aria-controls="stResults" aria-expanded="false">
         <div class="st-results" id="stResults" role="listbox" hidden></div>
