@@ -14,6 +14,7 @@ use App\Models\Permit;
 use App\Models\Maintenance;
 use App\Models\Debt;
 use App\Models\Audit;
+use App\Models\UserPref;
 
 class SettingsController extends Controller
 {
@@ -71,6 +72,11 @@ class SettingsController extends Controller
             'recentChanges'=> Settings::recent(10),
             // سلاسل الإعدادات المؤرَّخة (v74) — «القيمة بقت كذا من تاريخ كذا»
             'chains'       => $owner ? $this->chainData() : [],
+            // تفضيلات العرض (v75) — الشركة والمستخدم
+            'prefReady'    => UserPref::ready(),
+            'prefCompany'  => $owner ? UserPref::companyRows() : [],
+            'prefUsers'    => $owner ? UserPref::usersWithPrefs() : 0,
+            'prefMine'     => count(UserPref::allFor()),
             'permitCfg'  => Permit::stageConfig(),
             'userState'  => \App\Core\FormState::consume('settings.user.add', 'settings#tab-users'),
             // قواعد مرشد الإيصالات (v32): قوائم التوكيلات — سطر لكل توكيل
@@ -180,6 +186,43 @@ class SettingsController extends Controller
             $this->fail($e->getMessage(), 'settings', 'tab-business');
         }
         $this->done('اتشالت نقطة التغيير.', 'settings', 'tab-business');
+    }
+
+    /**
+     * قفل/فتح تفضيل عرض على مستوى الشركة (v75).
+     *
+     * ⚠️ **القفل مش إخفاء زرار**: `UserPref::set()` بترفض كتابة أي مستخدم على
+     *    مفتاح مقفول، و`resolve()` بتتجاهل صفوفه القديمة — فالتثبيت حقيقي حتى
+     *    لو الطلب اتبعت بإيد (قاعدة ③).
+     */
+    public function prefLock(): void
+    {
+        $this->requireRole('owner');
+        $this->requireCsrf();
+        $key    = (string) ($_POST['pref_key'] ?? '');
+        $value  = (string) ($_POST['pref_value'] ?? '');
+        $locked = !empty($_POST['is_locked']);
+        try {
+            UserPref::setCompany($key, $value, $locked);
+        } catch (\Throwable $e) {
+            $this->fail($e->getMessage(), 'settings', 'tab-display');
+        }
+        $this->done($locked ? 'اتثبّت على كل المستخدمين.' : 'بقى افتراضيًّا — والمستخدم يقدر يغيّره.',
+            'settings', 'tab-display');
+    }
+
+    /** شيل افتراضي شركة (رجوع لافتراضي الكود). */
+    public function prefCompanyDelete(): void
+    {
+        $this->requireRole('owner');
+        $this->requireCsrf();
+        $key = (string) ($_POST['pref_key'] ?? '');
+        if (UserPref::validKey($key)) {
+            Database::exec('DELETE FROM user_prefs WHERE user_id = ? AND pref_key = ?',
+                [UserPref::COMPANY, $key]);
+            UserPref::refreshReady();
+        }
+        $this->done('اتشال افتراضي الشركة.', 'settings', 'tab-display');
     }
 
     /**

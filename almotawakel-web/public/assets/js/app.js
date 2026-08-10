@@ -3,6 +3,114 @@
   'use strict';
 
   /* ══════════════════════════════════════════════════════════════════════════
+     مخزن تفضيلات العرض — **الحساب هو المصدر، مش المتصفح** (docs/19 · v75)
+     ─────────────────────────────────────────────────────────────────────────
+     كل تفضيلات الجداول كانت في `localStorage`: الأعمدة المخفية · الكثافة ·
+     تثبيت أول عمود · **عرض كل عمود بالبكسل** · مناظر الفلاتر. يعني الموظف
+     يظبط شاشته على جهاز ويلاقيها راجعة على التاني، ومسح الكاش بيضيّع كل حاجة،
+     والمالك ما يقدرش يفرض شكلًا للشركة ولا يثبّت عمودًا مهمًّا.
+
+     ⚠️ **`localStorage` فضل موجود كـ«كاش وشبكة أمان» مش كمصدر**: القراءة
+        بتفضّل الخادم، وبتقع على المتصفح بس لو المفتاح لسه ما اتنقلش. والكتابة
+        بتروح للاتنين — عشان لو الشبكة وقعت الشكل ما يضيعش في نفس الجلسة.
+     ⚠️ **ما بنمسحش `localStorage` بعد الترحيل** — لو حاجة غلطت في النقل،
+        الشكل القديم لسه موجود. مسحه قرار لاحق مش جزء من النقل.
+     ⚠️ **القفل بيتفرض على الخادم** (`UserPref::set`). التعطيل هنا راحة عرض
+        بس — الطلب المزوَّر بيترفض هناك.
+     ══════════════════════════════════════════════════════════════════════════ */
+  const AppPrefs = (function () {
+    const server = (window.__PREFS && typeof window.__PREFS === 'object') ? window.__PREFS : {};
+    const api    = window.__PREFS_API || '';
+    const adoptApi = window.__PREFS_ADOPT || '';
+    const canSync = !!api && !!window.__CSRF;
+    const pending = {};
+    let timer = null;
+
+    function locked(key) { return !!(server[key] && server[key].locked); }
+
+    function get(key, legacyKey) {
+      // ① الخادم (المصدر)
+      if (server[key] && typeof server[key].value === 'string') {
+        try { return JSON.parse(server[key].value); } catch (e) { /* قيمة تالفة → تجاهل */ }
+      }
+      // ② المتصفح (كاش/لسه ما اتنقلش)
+      const lk = legacyKey || key;
+      try {
+        const raw = localStorage.getItem(lk);
+        if (raw !== null) { return JSON.parse(raw); }
+      } catch (e) { /* JSON تالف */ }
+      return null;
+    }
+
+    function flush() {
+      timer = null;
+      if (!canSync) { return; }
+      Object.keys(pending).forEach(function (key) {
+        const value = pending[key];
+        delete pending[key];
+        const fd = new FormData();
+        fd.append('_csrf', window.__CSRF);
+        fd.append('key', key);
+        fd.append('value', value === null ? '' : JSON.stringify(value));
+        fetch(api, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d && d.ok) {
+              server[key] = value === null ? undefined : { value: JSON.stringify(value), locked: false };
+              if (value === null) { delete server[key]; }
+            }
+          })
+          .catch(function () { /* الشبكة وقعت — النسخة المحلية لسه موجودة */ });
+      });
+    }
+
+    /** الكتابة **بتأجَّل** عشان سحب حافة العمود ما يبعتش طلبًا لكل بكسل. */
+    function set(key, value, legacyKey) {
+      if (locked(key)) { return false; }
+      const lk = legacyKey || key;
+      try {
+        if (value === null) { localStorage.removeItem(lk); }
+        else { localStorage.setItem(lk, JSON.stringify(value)); }
+      } catch (e) { /* التخزين ممتلي */ }
+      pending[key] = value;
+      if (timer) { clearTimeout(timer); }
+      timer = setTimeout(flush, 400);
+      return true;
+    }
+
+    /**
+     * نقل تفضيلات المتصفح للحساب — **مرة واحدة**، وبيتسجّل إنه اتعمل.
+     * ⚠️ بيبعت اللي في `localStorage` بس **واللي الخادم مش عارفه** — الخادم
+     *    بيتجاهل أي مفتاح عنده أحدث منه، فمفيش دهس.
+     */
+    function adoptLegacy(map) {
+      if (!canSync || !adoptApi) { return; }
+      const done = 'almotawakel:prefs-adopted';
+      try { if (localStorage.getItem(done)) { return; } } catch (e) { return; }
+      const pairs = {};
+      let n = 0;
+      Object.keys(map).forEach(function (newKey) {
+        if (server[newKey]) { return; }
+        try {
+          const raw = localStorage.getItem(map[newKey]);
+          if (raw !== null && raw !== '') { pairs[newKey] = raw; n++; }
+        } catch (e) { /* تجاهل */ }
+      });
+      if (!n) { try { localStorage.setItem(done, '1'); } catch (e) {} return; }
+      const fd = new FormData();
+      fd.append('_csrf', window.__CSRF);
+      fd.append('pairs', JSON.stringify(pairs));
+      fetch(adoptApi, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d && d.ok) { try { localStorage.setItem(done, '1'); } catch (e) {} } })
+        .catch(function () { /* تاني مرة */ });
+    }
+
+    return { get: get, set: set, locked: locked, adoptLegacy: adoptLegacy, canSync: canSync };
+  })();
+  window.AppPrefs = AppPrefs;
+
+  /* ══════════════════════════════════════════════════════════════════════════
      تطبيع نص البحث — **نظير مطابق لـ`search_norm()` في helpers.php**
      ⚠️ لازم الاتنين يفضلوا متطابقين: الخادم بيطبّع `data-search` والواجهة
         بتطبّع اللي المستخدم بيكتبه، فلو اختلفوا البحث بيرجّع صفر نتائج لنص
@@ -1795,18 +1903,24 @@
         }).join('|') === signature;
       });
       const ordinal = Math.max(0, siblings.indexOf(table));
-      const storeKey = 'almotawakel-table-columns-v1:' + location.pathname + ':' + storageHash(signature) + ':' + ordinal;
-      const prefKey = 'almotawakel-table-prefs-v1:' + location.pathname + ':' + storageHash(signature) + ':' + ordinal;
-      let prefs = {}; try { prefs = JSON.parse(localStorage.getItem(prefKey) || '{}'); } catch (e) { prefs = {}; }
+      /* مفاتيح المتصفح القديمة — بتفضل عشان النقل والكاش (v75). */
+      const legacyCols  = 'almotawakel-table-columns-v1:' + location.pathname + ':' + storageHash(signature) + ':' + ordinal;
+      const legacyPrefs = 'almotawakel-table-prefs-v1:' + location.pathname + ':' + storageHash(signature) + ':' + ordinal;
+      /* مفاتيح الحساب — مساحة أسماء `table.` اللي الخادم بيقبلها. */
+      const storeKey = 'table.' + location.pathname + '.' + storageHash(signature) + '.' + ordinal + '.cols';
+      const prefKey  = 'table.' + location.pathname + '.' + storageHash(signature) + '.' + ordinal + '.view';
+      // ⚠️ المفتاح مقفول من الإدارة ⇒ الأزرار بتتعطّل، والخادم بيرفض أي كتابة برضه
+      const prefsLocked = window.AppPrefs.locked(prefKey) || window.AppPrefs.locked(storeKey);
+      window.AppPrefs.adoptLegacy((function (m) { m[storeKey] = legacyCols; m[prefKey] = legacyPrefs; return m; })({}));
+      let prefs = window.AppPrefs.get(prefKey, legacyPrefs) || {};
+      if (typeof prefs !== 'object' || prefs === null) { prefs = {}; }
       if (prefs.density === 'compact') table.classList.add('table-compact');
       if (prefs.sticky) table.classList.add('table-sticky-first');
       const savedWidths = prefs.widths || {};
       columns.forEach((col) => { if (savedWidths[col.index]) col.th.style.width = savedWidths[col.index] + 'px'; });
       let hidden = [];
-      try {
-        const saved = JSON.parse(localStorage.getItem(storeKey) || '[]');
-        if (Array.isArray(saved)) hidden = saved.map(Number).filter(Number.isInteger);
-      } catch (e) { hidden = []; }
+      const savedCols = window.AppPrefs.get(storeKey, legacyCols);
+      if (Array.isArray(savedCols)) { hidden = savedCols.map(Number).filter(Number.isInteger); }
 
       const tools = document.createElement('div');
       tools.className = 'table-tools';
@@ -1816,7 +1930,7 @@
       hint.textContent = '⇅ اضغط بجوار عنوان العمود للترتيب';
       tools.appendChild(hint);
 
-      function savePrefs() { try { localStorage.setItem(prefKey, JSON.stringify(prefs)); } catch (e) {} }
+      function savePrefs() { window.AppPrefs.set(prefKey, prefs, legacyPrefs); }
       const densityBtn = document.createElement('button'); densityBtn.type='button'; densityBtn.className='btn ghost sm table-density-btn';
       const densityLabel=()=>{densityBtn.textContent=table.classList.contains('table-compact')?'↕ عرض مريح':'↕ عرض مضغوط';}; densityLabel();
       densityBtn.addEventListener('click',()=>{table.classList.toggle('table-compact');prefs.density=table.classList.contains('table-compact')?'compact':'normal';densityLabel();savePrefs();});
@@ -1848,6 +1962,45 @@
           handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',up);
         });col.th.appendChild(handle);
       });
+
+      /* ══ «اعمله شكل الشركة» — للمالك بس (v75) ══════════════════════════════
+         ⚠️ **الزرار مش هو الحارس**: `UserPref::setCompany()` بترفض أي طلب من
+            غير المالك مهما كان اللي في الصفحة. ده اختصار للمالك وبس. */
+      if (window.__PREFS_OWNER && window.__PREFS_COMPANY) {
+        const shareBtn = document.createElement('button');
+        shareBtn.type = 'button';
+        shareBtn.className = 'btn ghost sm';
+        shareBtn.textContent = '👥 اعمله شكل الشركة';
+        shareBtn.title = 'كل المستخدمين يشوفوا الجدول ده بالشكل اللي انت ظابطه دلوقتي';
+        shareBtn.addEventListener('click', function () {
+          /* ⚠️ `AppUI.confirm` بترجّع **Promise** مش بتاخد callback — استعمالها
+             بالغلط كان بيخلّي الزرار ما يعملش حاجة **بلا أي خطأ في الكونسول**. */
+          window.AppUI.confirm(
+            'كل المستخدمين هيشوفوا الجدول ده بشكلك الحالي، ومش هيقدروا يغيّروه. تمام؟'
+          ).then(function (yes) {
+            if (!yes) { return; }
+            const posts = [[prefKey, prefs], [storeKey, hidden]].map(function (pair) {
+              const fd = new FormData();
+              fd.append('_csrf', window.__CSRF);
+              fd.append('pref_key', pair[0]);
+              fd.append('pref_value', JSON.stringify(pair[1]));
+              fd.append('is_locked', '1');
+              return fetch(window.__PREFS_COMPANY, { method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            });
+            Promise.all(posts).then(function () { location.reload(); });
+          });
+        });
+        tools.appendChild(shareBtn);
+      }
+
+      /* المفتاح مثبَّت من الإدارة ⇒ عطّل أدوات التغيير وقول السبب. */
+      if (prefsLocked) {
+        [densityBtn, stickyBtn].forEach(function (b) {
+          b.disabled = true;
+          b.title = 'الشكل ده مثبَّت من الإدارة';
+        });
+      }
 
       const chooser = document.createElement('div');
       chooser.className = 'table-columns-chooser';
@@ -1885,7 +2038,7 @@
       chooser.appendChild(openBtn); chooser.appendChild(panel); tools.appendChild(chooser);
 
       function saveAndLabel() {
-        try { localStorage.setItem(storeKey, JSON.stringify(hidden)); } catch (e) {}
+        window.AppPrefs.set(storeKey, hidden, legacyCols);
         const shown = hideable.length - hidden.filter((i) => hideable.some((c) => c.index === i)).length;
         openBtn.textContent = '☷ الأعمدة ' + shown + '/' + hideable.length;
       }

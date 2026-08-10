@@ -442,6 +442,12 @@ $r->post('/settings/general',           'SettingsController@saveGeneral');
 // حفظ أي قسم من السجل المعرَّف (docs/19 · المرحلة ١) — المسار الحرفي قبل الجشع
 $r->post('/settings/section/{section}', 'SettingsController@saveSection');
 // تغيير مؤرَّخ لإعداد مالي (v74) — الحرفي قبل الجشع
+// تفضيلات العرض (v75) — كلها بتخصّ صاحب الجلسة، والهوية من الجلسة لا من الفورم
+$r->post('/prefs',        'PrefController@save');
+$r->post('/prefs/adopt',  'PrefController@adopt');
+$r->post('/prefs/reset',  'PrefController@reset');
+$r->post('/settings/prefs/company',        'SettingsController@prefLock');
+$r->post('/settings/prefs/company/delete', 'SettingsController@prefCompanyDelete');
 $r->post('/settings/schedule',          'SettingsController@scheduleSetting');
 $r->post('/settings/schedule/{id}/delete', 'SettingsController@unscheduleSetting');
 $r->post('/settings/permits',           'SettingsController@savePermits');

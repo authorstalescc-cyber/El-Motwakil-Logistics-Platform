@@ -33,6 +33,13 @@ class Access
         // تأجيل بند وتفضيلات الإشعارات — كلها بتخصّ **إشعارات نفسه** (v53).
         'NotificationController@snooze',
         'NotificationController@prefsSave',
+        /* تفضيلات العرض (v75) — **حق أي مستخدم مسجَّل مهما كان دوره**: إخفاء
+           عمود أو تضييق الصفوف مالوش أي أثر على بيانات ولا صلاحية، والكنترولر
+           بياخد الهوية من الجلسة لا من الفورم فمستحيل يكتب لغيره. من غير
+           السطور دي `read_only` كان هيتمنع من إخفاء عمود في شاشة بيقراها. */
+        'PrefController@save',
+        'PrefController@adopt',
+        'PrefController@reset',
     ];
 
     /**
@@ -69,6 +76,9 @@ class Access
         'SettingsController@deleteUser',
         'SettingsController@saveAi',
         'SettingsController@testAi',
+        // شكل الشركة وتثبيته — قرار مالك (الحارس التاني في `UserPref::setCompany`)
+        'SettingsController@prefLock',
+        'SettingsController@prefCompanyDelete',
     ];
 
     /** وحدات الكتابة المالية المسموحة للمحاسب (والمدير والمالك). */
