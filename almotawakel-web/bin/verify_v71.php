@@ -181,6 +181,44 @@ try {
     $day = date('Y-m-d');
     $tag = '__v71_';
 
+    /* ═══════════════════════════════════════════════════════════════════
+       ⚠️⚠️ **المسار الكامل من `$_POST` — مش من الموديل مباشرةً.**
+
+       النسخة الأولى من الفحص ده كانت بتنادي `RepPortal::submit()` وبتحطّ
+       `misc_kind` بإيدها، فعدّت ١٠٠٪ — والمندوب على الأرض كان بياخد **«اختر
+       نوع النثرية» وهو مختار النوع فعلاً** (بلاغ المالك 2026-08-10).
+       السبب: `RepPortalController::postedData()` **قايمة بيضا** بتنقّي حقول
+       بعينها من `$_POST`، و`misc_kind` مكانش فيها — فالكنترولر كان بيرمي
+       الوسم قبل ما الموديل يشوفه. الفحص كان بيقفز فوق الحلقة المقطوعة.
+
+       القاعدة المستخلَصة: **أي حقل جديد في فورم لازم يتفحص من `$_POST`**،
+       لأن نقطة الكسر مش في الموديل ولا في الشاشة — في الوصلة بينهم.
+       ═══════════════════════════════════════════════════════════════════ */
+    sec('②أ المسار الكامل: من `$_POST` للجدول (الوصلة اللي انكسرت فعلاً)');
+
+    $posted = new ReflectionMethod(\App\Controllers\RepPortalController::class, 'postedData');
+    $posted->setAccessible(true);
+    $ctrl = (new ReflectionClass(\App\Controllers\RepPortalController::class))
+        ->newInstanceWithoutConstructor();
+
+    $postBackup = $_POST;
+    foreach (RepMiscKind::keys() as $k) {
+        $_POST = ['kind' => 'misc', 'misc_kind' => $k, 'note' => $tag . 'post',
+                  'qty' => '1', 'unit_amount' => '12', 'client_token' => bin2hex(random_bytes(16))];
+        $d = $posted->invoke($ctrl, 0, true);
+        chk(($d['misc_kind'] ?? null) === $k,
+            "★ `postedData` بتوصّل وسم «{$k}» من الفورم للموديل");
+    }
+    $_POST = $postBackup;
+
+    // والوصلة التانية: درج تعديل المكتب — كان بيحفظ بلا ما يغيّر حاجة (فشل صامت)
+    $inbox = code71('app/Controllers/RepCustodyController.php');
+    chk(str_contains($inbox, "\$_POST['misc_kind']"),
+        '★ ودرج تعديل المكتب بيقرا الوسم من الفورم');
+    chk(preg_match('~misc_kind.{0,80}RepInbox::update~s', $inbox)
+        || preg_match('~inboxData\[.misc_kind.\]~', $inbox),
+        'وبيوصّله لـRepInbox::update فعلاً (مش بيتجمّع ويتنسى)');
+
     sec('② الوسم بيوصل من الفورم لجدول النثريات ومعاه تصنيفه');
 
     /** إرسال نثرية + اعتمادها، وبترجّع صف `rep_misc_expenses`. */

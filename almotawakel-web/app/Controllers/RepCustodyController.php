@@ -693,6 +693,10 @@ class RepCustodyController extends Controller
             // v57 — «غير مدفوع»: البند بيتسجّل على الإذن بلا خصم من عهدة المندوب
             // ولا من الخزنة. RepInbox::update بيرفضه على النثرية ومع الفيزا.
             'unpaid' => !empty($_POST['unpaid']) ? '1' : '',
+            /* ⚠️ v72 — وسم النثرية. **`$old` قايمة بيضا زي `postedData`**: الحقل
+               اللي مش مذكور هنا بالاسم ما بيوصلش الموديل خالص. وده وقع مرتين
+               على نفس السطر: وسوم الفيزا قبل كده (شوف التعليق تحت) والوسم ده. */
+            'misc_kind' => (string) ($_POST['misc_kind'] ?? ''),
             'approve_now' => !empty($_POST['approve_now']) ? '1' : '',
         ];
         $errors = [];
@@ -711,7 +715,7 @@ class RepCustodyController extends Controller
         if ($errors) { $this->inboxFailure('edit', $old, $errors, 'edit-' . $id); }
         $this->claimForm($this->inboxBack());
         try {
-            RepInbox::update($id, [
+            $inboxData = [
                 'note'        => $old['note'],
                 'kind'        => $old['kind'],
                 'qty'         => $old['qty'],
@@ -726,7 +730,15 @@ class RepCustodyController extends Controller
                 'is_visa'      => $old['is_visa'] !== '',
                 'visa_card_id' => $old['visa_card_id'],
                 'unpaid'       => $old['unpaid'] !== '',
-            ]);
+            ];
+            /* الخانة موجودة في درج التعديل **للنثرية بس**، فبنبعتها بس لما
+               تكون مبعوتة فعلاً: `RepInbox::update` بيفرّق بين «مبعوت وفاضي»
+               (رفض) و«مش مبعوت خالص» (سيب المخزَّن)، والتعديل الجماعي بيعتمد
+               على الفرق ده. بعتها فاضية على بند إذن كان هيرفض بلا سبب. */
+            if (array_key_exists('misc_kind', $_POST)) {
+                $inboxData['misc_kind'] = $old['misc_kind'];
+            }
+            RepInbox::update($id, $inboxData);
             // اعتماد فوري بعد التعديل لو المالك طلب كده
             if (!empty($_POST['approve_now'])) {
                 RepInbox::approve($id);
