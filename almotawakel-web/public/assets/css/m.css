@@ -881,13 +881,24 @@ input[data-money]{font-variant-numeric:tabular-nums}
 .hm-empty p{margin:6px 0 0; color:var(--hm-muted); font-size:.85rem; line-height:1.65}
 
 /* ── تاب بار تحت ─────────────────────────────────── */
+/* ⚠️⚠️ **ممنوع `backdrop-filter` هنا — ولا على أي عنصر `position:fixed`.**
+   الشريط ده كان `rgba(255,255,255,.94)` + `backdrop-filter:blur(12px)`، وده
+   وقّع باج مُبلَّغًا من المالك (2026-08-10، آيفون): **مع كل سكرول الشريط كان
+   بيسيب مكانه تحت ويتوسّط الشاشة** ويرجع لما السكرول يقف.
+   السبب: سفاري iOS بتفشل في إعادة رسم عنصر ثابت وراه ضبابية أثناء السكرول
+   السريع، فبتعرضه في **مكانه القديم** لحد ما الحركة تهدأ. وهو كان **العنصر
+   الوحيد في الملف كله** اللي عليه `backdrop-filter` — وباقي الأشرطة الثابتة
+   (`.hf-dock`) مالهاش المشكلة دي أصلاً.
+   الحل: **سطح معتم**. الضبابية زينة، وثبات الشريط وظيفة.
+   `bin/verify_mobile.php` بيمنع رجوعها. */
 .hm-tabs{
   position:fixed; inset-inline:0; bottom:0; z-index:40;
-  display:flex; background:rgba(255,255,255,.94);
-  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+  display:flex; background:var(--hm-card);
   border-top:1px solid var(--hm-line);
   padding-bottom:env(safe-area-inset-bottom,0px);
   max-width:640px; margin:0 auto;
+  /* ظل خفيف لأعلى بديل الضبابية: بيفصل الشريط عن المحتوى اللي بيعدّي تحته */
+  box-shadow:0 -1px 0 rgba(16,36,64,.04), 0 -8px 20px rgba(16,36,64,.06);
 }
 .hm-tabs a{
   flex:1; min-height:var(--hm-nav-h); position:relative;
