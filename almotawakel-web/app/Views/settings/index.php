@@ -220,6 +220,56 @@ foreach ($lookups as $arr) { $totalLookups += count($arr); }
         <div class="mt-4"><button class="btn gold" type="submit"><?= icon('download', 14) ?> حفظ <?= e($sectionMeta[$sKey] ?? '') ?></button></div>
       </form>
     </div>
+
+    <?php /* ══ السلاسل المؤرَّخة (v74) ══════════════════════════════════════
+             ⚠️ الإعداد ده **مالوش خانة واحدة عن قصد**: خانة واحدة معناها
+                «غيّر القيمة على كل التاريخ»، والرقم بيتضرب في كل بوليصة قديمة.
+                هنا بتقول «بقت كذا **من** تاريخ كذا» — واللي قبله ما بيتحركش. */ ?>
+    <?php foreach (($chains ?? []) as $cKey => $chain): ?>
+      <?php if (($chain['def']['section'] ?? '') !== $sKey) { continue; } ?>
+      <div class="card set-pad">
+        <div class="section-head"><?= icon('calculator', 17) ?> <?= e($chain['def']['label']) ?></div>
+        <p class="maint-note">
+          <?= icon('alert', 15) ?> السارية دلوقتي <b><?= e($chain['now']) ?></b>.
+          التغيير بيسري <b>من التاريخ اللي تختاره ورايح</b> — البوالص اللي قبله بتفضل زي ما هي.
+        </p>
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th class="g-identity">سارية من</th><th>القيمة</th><th class="g-meta">السبب</th><th></th></tr></thead>
+          <tbody>
+            <?php foreach ($chain['rows'] as $row): ?>
+              <tr>
+                <td><?= $row['is_base'] ? '<span class="pill">الأساس التاريخي</span>' : '<bdi>' . e((string) $row['effective_from']) . '</bdi>' ?></td>
+                <td><b><?= e((string) $row['value']) ?></b></td>
+                <td class="dim"><?= e((string) ($row['note'] ?? '—')) ?></td>
+                <td class="end">
+                  <?php if (!$row['is_base']): ?>
+                    <form method="post" action="<?= url('settings/schedule/' . (int) $row['id'] . '/delete') ?>"
+                          data-confirm="شيل التغيير السارٍ من <?= e((string) $row['effective_from']) ?>؟">
+                      <?= csrfField() ?>
+                      <button type="submit" class="btn ghost sm"><?= icon('trash', 14) ?></button>
+                    </form>
+                  <?php endif; ?>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table></div>
+
+        <form method="post" action="<?= url('settings/schedule') ?>" class="mt-4">
+          <?= csrfField() ?>
+          <input type="hidden" name="setting_key" value="<?= e($cKey) ?>">
+          <div class="set-grid">
+            <div class="field"><label for="sch-from-<?= e($cKey) ?>">سارية من تاريخ</label>
+              <input type="date" id="sch-from-<?= e($cKey) ?>" name="effective_from" required></div>
+            <div class="field"><label for="sch-val-<?= e($cKey) ?>">القيمة الجديدة</label>
+              <input type="number" step="0.01" data-money id="sch-val-<?= e($cKey) ?>" name="value" required></div>
+            <div class="field field-full"><label for="sch-note-<?= e($cKey) ?>">السبب</label>
+              <input type="text" id="sch-note-<?= e($cKey) ?>" name="note" maxlength="255"></div>
+          </div>
+          <button class="btn gold mt-4" type="submit"><?= icon('plus', 14) ?> سجّل التغيير</button>
+        </form>
+      </div>
+    <?php endforeach; ?>
   </div>
 <?php endforeach; ?>
 

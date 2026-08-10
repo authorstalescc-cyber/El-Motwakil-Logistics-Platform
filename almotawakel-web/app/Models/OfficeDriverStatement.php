@@ -431,7 +431,7 @@ class OfficeDriverStatement
                 $signed = self::movementSigned($m);
                 if ($signed >= 0) { $additions += $signed; } else { $returns += abs($signed); }
             }
-            $custody = round(Custody::billDeduction((float) ($bill['custody'] ?? 0), $bill['car_no'] ?? null), 2);
+            $custody = round(Custody::billDeduction((float) ($bill['custody'] ?? 0), $bill['car_no'] ?? null, $bill['bill_date'] ?? null), 2);
             $net = round($custody + $additions - $returns - $itemTotal - $receiptTotal, 2);
             if ($date < $from) { $opening += $net; continue; }
 

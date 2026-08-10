@@ -396,7 +396,11 @@ try {
     !str_contains($rbc, 'SUM(custody)')
         ? ok('مفيش `SUM(custody)` خام — كله بيمرّ على قاعدة الخصم')
         : bad('⚠️ لسه فيه SUM(custody) — بيخصم من المندوب 100 زيادة عن كل بوليصة');
-    str_contains($rbc, "Custody::deductionSql('custody', 'car_no')")
+    /* ⚠️ **الفحص على الاستدعاء مش على نصّه الحرفي.** كان مكتوب
+       `deductionSql('custody', 'car_no')` بالحرف، فأول ما v74 ضاف عمود التاريخ
+       (`'bill_date'`) الفحص فشل بإنذار كاذب رغم إن الاستدعاء بقى **أصحّ**.
+       اللي يهمّ هنا: بيمرّ على المصدر الوحيد ولا بيحسب بإيده. */
+    preg_match('~Custody::deductionSql\s*\(~', $rbc)
         ? ok('بينادي `Custody::deductionSql` — نفس مصدر خصم الخزنة') : bad('مش بينادي المصدر الوحيد');
 
     $bill = Database::row(

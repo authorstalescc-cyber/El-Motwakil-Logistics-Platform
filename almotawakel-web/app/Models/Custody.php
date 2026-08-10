@@ -3,6 +3,7 @@ namespace App\Models;
 
 use App\Core\App;
 use App\Core\Database;
+use App\Core\Settings;
 
 /**
  * رصيد عهدة المكتب (محفظة العهدة) — صفحة مستقلة بسجل تراكمي.
@@ -20,10 +21,20 @@ use App\Core\Database;
  */
 class Custody
 {
-    /** المبلغ المطروح من عهدة كل بوليصة (setting: custody_bill_deduction، افتراضي 100). */
-    public static function deductionRate(): float
+    /**
+     * المبلغ المطروح من عهدة كل بوليصة (setting: custody_bill_deduction، افتراضي 100).
+     *
+     * ⚠️⚠️ **الرقم ده بيتغيّر «من تاريخ» لا بأثر رجعي** (v74). مرّر `$onDate`
+     *    (تاريخ البوليصة) عشان تاخد القيمة اللي كانت سارية **يومها** — من غيره
+     *    بتاخد السارية النهارده، وده بيدّي حسابًا غلطًا لأي بوليصة قديمة بعد
+     *    أول تغيير مؤرَّخ.
+     *
+     * ⚠️ `$onDate = null` بترجّع السارية النهارده — نفس السلوك القديم بالحرف،
+     *    عشان أي مستدعي لسه ما اتحوّلش يفضل شغّال.
+     */
+    public static function deductionRate(?string $onDate = null): float
     {
-        return (float) App::setting('custody_bill_deduction', '100');
+        return (float) Settings::valueOn('custody_bill_deduction', $onDate);
     }
 
     /** توحيد رقم السيارة للمقارنة: إزالة كل المسافات (يطابق REPLACE(car_no,' ','') في SQL). */
@@ -61,27 +72,41 @@ class Custody
      *  • غير ذلك → GREATEST(custody − rate, 0).
      * يُعيد [sql, params]؛ تُدمج params بالترتيب في مكان التعبير داخل الاستعلام.
      */
-    public static function deductionSql(string $custodyCol = 'custody', string $carCol = 'car_no'): array
-    {
-        $rate   = self::deductionRate();
+    public static function deductionSql(
+        string $custodyCol = 'custody',
+        string $carCol = 'car_no',
+        ?string $dateCol = null
+    ): array {
+        /* ⚠️⚠️ **`$dateCol` هو اللي بيخلّي الماضي متجمّدًا** (v74): من غيره كل
+           صف بياخد القيمة السارية النهارده، فأول تغيير مؤرَّخ بيعيد حساب كل
+           البوالص القديمة بالسكوت. مرّر عمود تاريخ البوليصة (`bill_date`).
+           ⚠️ ولو السلسلة فيها صف واحد بس، `datedSql` بترجّع `?` عادي — يعني
+              نفس شكل الاستعلام القديم بالحرف. */
+        [$rateSql, $rateArgs] = $dateCol !== null
+            ? Settings::datedSql('custody_bill_deduction', $dateCol)
+            : ['?', [self::deductionRate()]];
+
         $exempt = array_keys(self::exemptCars());
         if (!$exempt) {
-            return ["GREATEST($custodyCol - ?, 0)", [$rate]];
+            return ["GREATEST($custodyCol - $rateSql, 0)", $rateArgs];
         }
         $ph  = implode(',', array_fill(0, count($exempt), '?'));
         $sql = "CASE WHEN REPLACE($carCol, ' ', '') IN ($ph) THEN $custodyCol"
-             . " ELSE GREATEST($custodyCol - ?, 0) END";
-        return [$sql, array_merge($exempt, [$rate])];
+             . " ELSE GREATEST($custodyCol - $rateSql, 0) END";
+        return [$sql, array_merge($exempt, $rateArgs)];
     }
 
     /**
      * خصم بوليصة واحدة من الرصيد = العهدة − المطروح (لا يقل عن صفر).
      * السيارة المستثناة تُخصم عهدتها كاملة (المطروح = 0).
+     *
+     * ⚠️ **مرّر `$onDate` = تاريخ البوليصة** (v74) عشان تاخد القيمة اللي كانت
+     *    سارية يومها. `null` = السارية النهارده (السلوك القديم بالحرف).
      */
-    public static function billDeduction(float $custody, ?string $carNo = null): float
+    public static function billDeduction(float $custody, ?string $carNo = null, ?string $onDate = null): float
     {
         if ($custody <= 0) { return 0.0; }
-        $rate = self::isExempt($carNo) ? 0.0 : self::deductionRate();
+        $rate = self::isExempt($carNo) ? 0.0 : self::deductionRate($onDate);
         return round(max($custody - $rate, 0), 2);
     }
 

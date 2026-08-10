@@ -574,7 +574,7 @@ class DailyReview
              . RepBillCustody::officeExcludeSql('b') . ' ORDER BY b.id', [$date]
         ) as $r) {
             $custody   = (float) $r['custody'];
-            $deduction = Custody::billDeduction($custody, $r['car_no'] ?? null);
+            $deduction = Custody::billDeduction($custody, $r['car_no'] ?? null, $date);
             $items[] = self::item('custody', (int) $r['id'], 'custody', $deduction, [
                 'ref'   => $r['bill_number'] ? 'بوليصة ' . $r['bill_number']
                                              : ($r['permit_no'] ? 'إذن ' . $r['permit_no'] : '#' . (int) $r['id']),

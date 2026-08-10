@@ -69,6 +69,8 @@ class SettingsController extends Controller
             'sectionMeta'  => SettingsSchema::SECTIONS,
             'stateRows'    => $this->stateRows(),
             'recentChanges'=> Settings::recent(10),
+            // سلاسل الإعدادات المؤرَّخة (v74) — «القيمة بقت كذا من تاريخ كذا»
+            'chains'       => $owner ? $this->chainData() : [],
             'permitCfg'  => Permit::stageConfig(),
             'userState'  => \App\Core\FormState::consume('settings.user.add', 'settings#tab-users'),
             // قواعد مرشد الإيصالات (v32): قوائم التوكيلات — سطر لكل توكيل
@@ -109,11 +111,75 @@ class SettingsController extends Controller
             $fields = [];
             foreach (SettingsSchema::bySection($section) as $key => $def) {
                 if (in_array($def['tier'], [SettingsSchema::TIER_STATE, SettingsSchema::TIER_MANAGED], true)) { continue; }
+                /* ⚠️ **المفتاح المؤرَّخ ما بياخدش خانة عادية** (v74): خانة واحدة
+                   معناها «غيّر القيمة على كل التاريخ» — وهو بالظبط اللي الآلية
+                   اتعملت تمنعه. بيتعرض كسلسلة بنقاط تحت. */
+                if (in_array($key, Settings::DATED_KEYS, true)) { continue; }
                 $fields[$key] = ['def' => $def, 'value' => (string) Settings::get($key)];
             }
             if ($fields) { $out[$section] = $fields; }
         }
         return $out;
+    }
+
+    /**
+     * سلاسل الإعدادات المؤرَّخة (v74) — نقاط «القيمة بقت كذا من تاريخ كذا».
+     *
+     * ⚠️ صف الأزل (`1970-01-01`) بيتعلَّم عشان الشاشة توريه كـ«الأساس» بلا
+     *    زرار حذف — تعديله أو شيله = إعادة حساب التاريخ كله.
+     */
+    private function chainData(): array
+    {
+        if (!Settings::scheduleReady()) { return []; }
+        $out = [];
+        foreach (Settings::DATED_KEYS as $key) {
+            $def = SettingsSchema::get($key);
+            if ($def === null) { continue; }
+            $rows = Database::all(
+                'SELECT * FROM setting_schedules WHERE setting_key = ? ORDER BY effective_from DESC', [$key]
+            );
+            foreach ($rows as &$r) { $r['is_base'] = (string) $r['effective_from'] === Settings::EPOCH_DATE; }
+            unset($r);
+            $out[$key] = ['def' => $def, 'rows' => $rows, 'now' => Settings::valueOn($key)];
+        }
+        return $out;
+    }
+
+    /**
+     * جدولة تغيير مؤرَّخ — الطريق الوحيد لتغيير إعداد مالي بيمسّ صفوفًا تاريخية.
+     *
+     * ⚠️ **الحارس في الموديل**: `Settings::schedule()` بتتحقّق من الدور والنوع
+     *    والنطاق وبترفض صف الأزل — الكنترولر بيترجم الاستثناء لرسالة وبس.
+     */
+    public function scheduleSetting(): void
+    {
+        $this->requireRole('owner');
+        $this->requireCsrf();
+        $key  = (string) ($_POST['setting_key'] ?? '');
+        $from = trim((string) ($_POST['effective_from'] ?? ''));
+        $val  = (string) ($_POST['value'] ?? '');
+        $note = trim((string) ($_POST['note'] ?? ''));
+
+        try {
+            Settings::schedule($key, $from, $val, $note);
+        } catch (\Throwable $e) {
+            $this->fail($e->getMessage(), 'settings', 'tab-business');
+        }
+        $this->done('تم تسجيل التغيير — سارٍ من ' . $from . ' واللي قبله ما اتغيّرش.',
+            'settings', 'tab-business');
+    }
+
+    /** شيل نقطة تغيير مؤرَّخة (صف الأساس محميّ في الموديل). */
+    public function unscheduleSetting(string $id): void
+    {
+        $this->requireRole('owner');
+        $this->requireCsrf();
+        try {
+            Settings::unschedule((int) $id);
+        } catch (\Throwable $e) {
+            $this->fail($e->getMessage(), 'settings', 'tab-business');
+        }
+        $this->done('اتشالت نقطة التغيير.', 'settings', 'tab-business');
     }
 
     /**

@@ -15,7 +15,7 @@
  */
 $num  = fn($v) => number_format((float) $v, 0);
 $ded  = fn(array $b) => \App\Models\Custody::billDeduction(
-    (float) ($b['custody'] ?? 0), $b['car_no'] ?? null);
+    (float) ($b['custody'] ?? 0), $b['car_no'] ?? null, $b['bill_date'] ?? null);
 $ctLbl = function (array $b): string {
     $c = (int) ($b['container_count'] ?? 0);
     $t = container_norm((string) ($b['container_type'] ?? ''));

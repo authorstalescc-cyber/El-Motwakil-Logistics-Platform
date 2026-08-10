@@ -39,8 +39,22 @@ class Settings
         'owner' => 5, 'manager' => 4, 'accountant' => 3, 'operator' => 2, 'read_only' => 1,
     ];
 
-    private static ?bool $historyReady = null;
-    private static bool  $recording    = false;   // حارس ضد التكرار الذاتي
+    /**
+     * **المفاتيح اللي قيمتها بتتغيّر «من تاريخ» لا بأثر رجعي** (v74).
+     *
+     * ⚠️ المفتاح هنا معناه إن حساباته بتضرب في **صفوف تاريخية**، فتغيير القيمة
+     *    من غير تأريخ بيعيد حساب الماضي بالسكوت. `verify_settings_registry`
+     *    بيفرض إن كل مفتاح `TIER_DANGER` يبقى إما هنا أو تاريخًا بنفسه.
+     */
+    public const DATED_KEYS = ['custody_bill_deduction'];
+
+    /** بداية الزمن للسلسلة — «القيمة دي كانت سارية من الأزل». */
+    public const EPOCH_DATE = '1970-01-01';
+
+    private static ?bool $historyReady  = null;
+    private static ?bool $scheduleReady = null;
+    private static array $chainCache    = [];    // key => [[from, value], …] الأحدث أولاً
+    private static bool  $recording     = false; // حارس ضد التكرار الذاتي
 
     // ─────────────────────────────────────────────────────────── القراءة
 
@@ -246,6 +260,196 @@ class Settings
     {
         self::$historyReady = null;
         return self::historyReady();
+    }
+
+    // ═══════════════════════════════════ السلسلة المؤرَّخة (v74)
+
+    /** هل جدول السلسلة موجود؟ (قبل v74 بيكون لأ — والنظام بيفضل شغّال بالأساس.) */
+    public static function scheduleReady(): bool
+    {
+        if (self::$scheduleReady !== null) { return self::$scheduleReady; }
+        try {
+            self::$scheduleReady = (bool) Database::scalar(
+                'SELECT COUNT(*) FROM information_schema.tables
+                  WHERE table_schema = DATABASE() AND table_name = ?', ['setting_schedules']
+            );
+        } catch (\Throwable $e) {
+            self::$scheduleReady = false;
+        }
+        return self::$scheduleReady;
+    }
+
+    /** ⚠️ إلزامية في آخر أي ترحيل بينشئ الجدول (مصيدة الكاش الساكن v57). */
+    public static function refreshScheduleReady(): bool
+    {
+        self::$scheduleReady = null;
+        self::$chainCache = [];
+        return self::scheduleReady();
+    }
+
+    /**
+     * سلسلة قيم المفتاح — **الأحدث أولاً**.
+     *
+     * ⚠️ بترجّع مصفوفة فاضية لو الجدول مش موجود أو المفتاح مالوش صفوف، والقارئ
+     *    بيرجع للأساس في `settings` — يعني **السلوك القديم بالحرف** (مهم عشان
+     *    الكود يشتغل قبل ترحيل v74 وبعده بنفس النتيجة).
+     *
+     * @return array<int,array{from:string,value:string}>
+     */
+    public static function chain(string $key): array
+    {
+        if (isset(self::$chainCache[$key])) { return self::$chainCache[$key]; }
+        if (!self::scheduleReady()) { return self::$chainCache[$key] = []; }
+        $rows = Database::all(
+            'SELECT effective_from, value FROM setting_schedules
+              WHERE setting_key = ? ORDER BY effective_from DESC', [$key]
+        );
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = ['from' => (string) $r['effective_from'], 'value' => (string) $r['value']];
+        }
+        return self::$chainCache[$key] = $out;
+    }
+
+    /**
+     * **القيمة السارية على تاريخ معيّن** — المصدر الوحيد لأي حساب مؤرَّخ.
+     *
+     * `$onDate = null` معناها «السارية النهارده» — وده اللي بيخلّي أي مستدعي
+     * قديم (ما بيمرّرش تاريخ) يفضل شغّال بنفس النتيجة.
+     *
+     * ⚠️ **التاريخ الحقيقي مش `work_date()`**: «يوم العمل» اختيار المستخدم
+     *    للإدخال، لكن «القاعدة السارية دلوقتي» بتتحدّد بالتقويم.
+     */
+    public static function valueOn(string $key, ?string $onDate = null): string
+    {
+        $date  = ($onDate !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $onDate)) ? $onDate : date('Y-m-d');
+        foreach (self::chain($key) as $point) {
+            if ($point['from'] <= $date) { return $point['value']; }
+        }
+        // مفيش صف سارٍ (أو السلسلة فاضية) → الأساس المخزَّن في `settings`
+        return (string) self::get($key, SettingsSchema::defaultOf($key));
+    }
+
+    /**
+     * **تعبير SQL بيترجم عمود تاريخ لقيمة الإعداد السارية** فيه.
+     *
+     * ⚠️⚠️ **الصف الواحد بيطلّع `?` عادي مش `CASE`** — ودي مش تحسين أداء:
+     *    معناها إن الاستعلامات تفضل **حرفيًّا زي ما كانت** لحد ما المالك يعمل
+     *    أول تغيير مؤرَّخ فعلاً. يعني v74 بيدخل النظام بصفر فرق في أي خطة تنفيذ.
+     *
+     * @return array{0:string,1:array} [التعبير, البارامترات بالترتيب]
+     */
+    public static function datedSql(string $key, string $dateCol): array
+    {
+        $chain = self::chain($key);
+        if (count($chain) <= 1) {
+            return ['?', [ $chain ? $chain[0]['value'] : self::valueOn($key) ]];
+        }
+        // الأحدث أولاً: أول شرط بيتحقّق هو الصح. الأقدم بيبقى ELSE.
+        $sql = 'CASE';
+        $params = [];
+        $last = array_pop($chain);              // الأقدم — بيروح ELSE
+        foreach ($chain as $point) {
+            $sql .= " WHEN $dateCol >= ? THEN ?";
+            $params[] = $point['from'];
+            $params[] = $point['value'];
+        }
+        $sql .= ' ELSE ? END';
+        $params[] = $last['value'];
+        return [$sql, $params];
+    }
+
+    /**
+     * إضافة/تعديل نقطة في السلسلة — **الطريق الوحيد لتغيير إعداد مؤرَّخ**.
+     *
+     * ⚠️ **الحارس هنا مش في الشاشة** (قاعدة ③): الدور والنوع والنطاق بيتفحصوا
+     *    بنفس `SettingsSchema::normalize()` بتاعة أي إعداد.
+     * ⚠️ **بيحدّث `settings` كمان** بالقيمة السارية النهارده، عشان أي مستدعي
+     *    قديم ما بيمرّرش تاريخ يفضل شايف الرقم الصح.
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function schedule(string $key, string $from, $value, string $note = ''): void
+    {
+        $def = SettingsSchema::get($key);
+        if ($def === null) {
+            throw new InvalidArgumentException("الإعداد «{$key}» مش معرَّف في سجل الإعدادات.");
+        }
+        if (!in_array($key, self::DATED_KEYS, true)) {
+            throw new InvalidArgumentException("«{$def['label']}» مش إعداد مؤرَّخ — استخدم الحفظ العادي.");
+        }
+        if (!self::scheduleReady()) {
+            throw new RuntimeException('جدول السلسلة المؤرَّخة مش موجود — شغّل bin/migrate_v74.php.');
+        }
+        if (Auth::check() && !self::roleAllows(Auth::role(), $def['role'])) {
+            throw new InvalidArgumentException(
+                "«{$def['label']}» مسموح تعديله لـ" . (Access::ROLES[$def['role']] ?? $def['role']) . ' بس.'
+            );
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) {
+            throw new InvalidArgumentException('تاريخ السريان لازم يكون بصيغة سنة-شهر-يوم.');
+        }
+        /* ⚠️ **ممنوع تغيير صف الأزل** — هو اللي بيمثّل «القيمة اللي كانت شغّالة
+           على كل الماضي». تعديله = إعادة حساب التاريخ كله، وهو بالظبط اللي
+           الآلية دي اتعملت تمنعه. */
+        if ($from === self::EPOCH_DATE) {
+            throw new InvalidArgumentException('صف الأساس التاريخي ما يتغيّرش — ضيف تاريخ سريان جديد.');
+        }
+
+        $norm = SettingsSchema::normalize($key, $value);
+        $old  = self::valueOn($key, $from);
+
+        Database::exec(
+            'INSERT INTO setting_schedules (setting_key, effective_from, value, note, created_by)
+             VALUES (?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE value = VALUES(value), note = VALUES(note), created_by = VALUES(created_by)',
+            [$key, $from, $norm, $note !== '' ? mb_substr($note, 0, 255) : null, self::actor()]
+        );
+        self::$chainCache = [];
+
+        // الأساس بيتحدّث بالسارية النهارده — للمستدعي اللي ما بيمرّرش تاريخ
+        $today = self::valueOn($key);
+        if ((string) self::get($key) !== $today) {
+            App::setSetting($key, $today);
+            self::refresh($def);
+        }
+
+        Audit::log(
+            'update', 'setting_schedules', $key,
+            ['setting_key' => $key, 'effective_from' => $from, 'value' => $old],
+            ['setting_key' => $key, 'effective_from' => $from, 'value' => $norm],
+            'تغيير مؤرَّخ: ' . $def['label'] . ' من ' . $from . ($note !== '' ? ' — ' . $note : ''),
+            ['tier' => $def['tier'], 'dated' => true]
+        );
+    }
+
+    /** حذف نقطة من السلسلة — صف الأزل محميّ. */
+    public static function unschedule(int $id): void
+    {
+        if (!self::scheduleReady()) { return; }
+        $row = Database::row('SELECT * FROM setting_schedules WHERE id = ?', [$id]);
+        if (!$row) { throw new RuntimeException('نقطة التغيير دي مش موجودة.'); }
+        if ((string) $row['effective_from'] === self::EPOCH_DATE) {
+            throw new RuntimeException('صف الأساس التاريخي ما يتشالش — من غيره الماضي بيفضل بلا قيمة.');
+        }
+        $key = (string) $row['setting_key'];
+        $def = SettingsSchema::get($key);
+        if ($def !== null && Auth::check() && !self::roleAllows(Auth::role(), $def['role'])) {
+            throw new RuntimeException('مالكش صلاحية تشيل نقطة التغيير دي.');
+        }
+        Database::exec('DELETE FROM setting_schedules WHERE id = ?', [$id]);
+        self::$chainCache = [];
+
+        $today = self::valueOn($key);
+        if ((string) self::get($key) !== $today) {
+            App::setSetting($key, $today);
+            if ($def !== null) { self::refresh($def); }
+        }
+        Audit::log(
+            'delete', 'setting_schedules', $key,
+            ['effective_from' => (string) $row['effective_from'], 'value' => (string) $row['value']],
+            null, 'شيل نقطة تغيير مؤرَّخة: ' . ($def['label'] ?? $key)
+        );
     }
 
     /** هل الدور ده كفاية للحد الأدنى المطلوب؟ */

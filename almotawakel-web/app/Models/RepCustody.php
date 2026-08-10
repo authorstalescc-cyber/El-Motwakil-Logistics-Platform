@@ -1147,7 +1147,7 @@ class RepCustody
             $rows[] = [
                 'id' => (int) $b['id'], 'src' => 'bill', 'd' => $b['bill_date'],
                 'note' => $b['bill_number'] ? ('بوليصة ' . $b['bill_number']) : null,
-                'qty' => 1, 'amount' => Custody::billDeduction((float) $b['custody'], $b['car_no'] ?? null),
+                'qty' => 1, 'amount' => Custody::billDeduction((float) $b['custody'], $b['car_no'] ?? null, $b['bill_date'] ?? null),
                 'gross_custody' => round((float) $b['custody'], 2),
                 'ref_no' => $b['bill_number'], 'stage_key' => 'custom', 'direction' => 'expense',
                 'category' => 'عهدة سائق على بوليصة',

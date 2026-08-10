@@ -527,7 +527,7 @@ class OfficeCar
             $r['owner_mismatch'] = trim((string) ($r['car_owner'] ?? '')) !== 'المكتب';
             // ⚠️ المخصوم من الخزنة **مش** العهدة كاملة — بيتحسب من نفس دالة
             //    الخزنة (`Custody::billDeduction`) فمستحيل الرقمين يختلفوا.
-            $r['custody_deducted'] = Custody::billDeduction((float) $r['custody'], $r['car_no'] ?? null);
+            $r['custody_deducted'] = Custody::billDeduction((float) $r['custody'], $r['car_no'] ?? null, $r['bill_date'] ?? null);
         }
         unset($r);
         return $rows;

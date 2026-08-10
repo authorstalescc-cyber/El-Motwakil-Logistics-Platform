@@ -191,7 +191,7 @@ class Closing
     /** إجمالي عهد السائقين المخصومة (بعد طرح 100 لكل بوليصة) في نطاق/يوم؛ يمكن استثناء بوليصة. */
     private static function sumDriverCustody(?string $gt, bool $gte, ?string $lt, ?string $eq = null, int $excludeBill = 0): float
     {
-        [$dedSql, $dp] = Custody::deductionSql('custody', 'car_no');
+        [$dedSql, $dp] = Custody::deductionSql('custody', 'car_no', 'bill_date');
         [$w, $p] = self::whereDate('bill_date', $gt, $gte, $lt, $eq);
         // is_legacy=0: البوالص المُرحَّلة من الأرشيف (v26) لا تدخل رصيد العهدة إطلاقًا
         $sql = "SELECT COALESCE(SUM($dedSql),0) FROM bawalis WHERE is_legacy = 0 AND custody > 0"
@@ -263,7 +263,7 @@ class Closing
         }
         $append('expenses', implode(' UNION ALL ', $expenseParts), $expenseParams);
 
-        [$dedSql, $dedParams] = Custody::deductionSql('custody', 'car_no');
+        [$dedSql, $dedParams] = Custody::deductionSql('custody', 'car_no', 'bill_date');
         [$w, $p] = self::whereDate('bill_date', $gt, $gte, $lt, $eq);
         $driverSql = "SELECT $dedSql amount FROM bawalis WHERE is_legacy=0 AND custody>0"
                    . RepBillCustody::officeExcludeSql() . " AND $w";

@@ -476,7 +476,7 @@ class DailyClosingController extends Controller
              . \App\Models\RepBillCustody::officeExcludeSql('b') . " ORDER BY b.id", [$date]
         );
         foreach ($custodyRows as &$c) {
-            $c['deduction'] = Custody::billDeduction((float) $c['custody'], $c['car_no'] ?? null);
+            $c['deduction'] = Custody::billDeduction((float) $c['custody'], $c['car_no'] ?? null, $date);
             /* v30: أي عرض لتصنيف حاوية يمرّ على المصدر الموحّد، حتى لو السجل
                قديم ولسه مخزّن فيه العدد والتصنيف في نص واحد. */
             $c['containers'] = Permit::containerLabel(

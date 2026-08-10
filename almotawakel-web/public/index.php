@@ -441,6 +441,9 @@ $r->get('/settings',                    'SettingsController@index');
 $r->post('/settings/general',           'SettingsController@saveGeneral');
 // حفظ أي قسم من السجل المعرَّف (docs/19 · المرحلة ١) — المسار الحرفي قبل الجشع
 $r->post('/settings/section/{section}', 'SettingsController@saveSection');
+// تغيير مؤرَّخ لإعداد مالي (v74) — الحرفي قبل الجشع
+$r->post('/settings/schedule',          'SettingsController@scheduleSetting');
+$r->post('/settings/schedule/{id}/delete', 'SettingsController@unscheduleSetting');
 $r->post('/settings/permits',           'SettingsController@savePermits');
 $r->post('/settings/lookup',            'SettingsController@addLookup');
 $r->post('/settings/lookup/{id}/delete','SettingsController@deleteLookup');

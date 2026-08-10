@@ -192,7 +192,7 @@ class OpsReport
         $args = [];
         $w = self::scope($from, $to, $args);
 
-        [$dedSql, $dedArgs] = Custody::deductionSql('b.custody', 'b.car_no');
+        [$dedSql, $dedArgs] = Custody::deductionSql('b.custody', 'b.car_no', 'b.bill_date');
         // بارامترات تعبير الخصم بتيجي **قبل** بارامترات النطاق لأن التعبير في SELECT
         $args = array_merge($dedArgs, $args);
 

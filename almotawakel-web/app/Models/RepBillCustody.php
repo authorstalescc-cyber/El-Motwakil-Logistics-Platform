@@ -176,7 +176,7 @@ class RepBillCustody
     public static function totalFor(int $repId, ?string $day = null): float
     {
         if (!self::on()) { return 0.0; }
-        [$ded, $dp] = Custody::deductionSql('custody', 'car_no');
+        [$ded, $dp] = Custody::deductionSql('custody', 'car_no', 'bill_date');
         $args = $dp; $args[] = $repId; $w = '';
         if ($day !== null && $day !== '') { $w = ' AND bill_date = ?'; $args[] = $day; }
         return round((float) Database::scalar(
@@ -189,7 +189,7 @@ class RepBillCustody
     {
         if (!self::on()) { return []; }
         $out = [];
-        [$ded, $dp] = Custody::deductionSql('custody', 'car_no');
+        [$ded, $dp] = Custody::deductionSql('custody', 'car_no', 'bill_date');
         foreach (Database::all(
             "SELECT bill_date d, SUM($ded) total FROM bawalis
              WHERE custody_rep_id = ? AND is_legacy = 0" . RepCustody::epochSql('bill_date')
@@ -203,7 +203,7 @@ class RepBillCustody
     public static function totalsByRep(?string $day = null): array
     {
         if (!self::on()) { return []; }
-        [$ded, $dp] = Custody::deductionSql('custody', 'car_no');
+        [$ded, $dp] = Custody::deductionSql('custody', 'car_no', 'bill_date');
         $args = $dp; $w = '';
         if ($day !== null && $day !== '') { $w = ' AND bill_date = ?'; $args[] = $day; }
         $out = [];
@@ -220,7 +220,7 @@ class RepBillCustody
     public static function totalAll(): float
     {
         if (!self::on()) { return 0.0; }
-        [$ded, $dp] = Custody::deductionSql('custody', 'car_no');
+        [$ded, $dp] = Custody::deductionSql('custody', 'car_no', 'bill_date');
         return round((float) Database::scalar(
             "SELECT COALESCE(SUM($ded),0) FROM bawalis
              WHERE custody_rep_id IS NOT NULL AND is_legacy = 0" . RepCustody::epochSql('bill_date'), $dp), 2);

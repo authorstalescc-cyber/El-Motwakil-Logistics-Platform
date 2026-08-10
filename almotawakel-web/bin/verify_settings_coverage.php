@@ -103,8 +103,18 @@ $exempt = [
 
 $missing = [];
 $covered = 0;
+$dated   = 0;
 foreach (SettingsSchema::editable() as $key => $def) {
     if (in_array($key, $exempt, true)) { continue; }
+    /* ⚠️ **المفتاح المؤرَّخ مالوش خانة عادية عن قصد** (v74): خانة واحدة معناها
+       «غيّر القيمة على كل التاريخ». بيتعرض كسلسلة نقاط، فالتغطية بتتقاس بوجود
+       فورم الجدولة بمفتاحه — مش بخانة باسمه. */
+    if (in_array($key, Settings::DATED_KEYS, true)) {
+        preg_match('~name="setting_key"\s+value="' . preg_quote($key, '~') . '"~', $html)
+            ? $dated++
+            : $missing[$key] = $def['label'] . ' (فورم الجدولة)';
+        continue;
+    }
     // الخانة ممكن تكون input/select/textarea — كلهم بيحملوا name="key"
     if (preg_match('~name="' . preg_quote($key, '~') . '"~', $html)) { $covered++; continue; }
     $missing[$key] = $def['label'];
@@ -112,7 +122,8 @@ foreach (SettingsSchema::editable() as $key => $def) {
 if ($missing) {
     foreach ($missing as $k => $label) { bad("«{$label}» ({$k}) مالوش خانة في الشاشة"); }
 } else {
-    ok("كل مفتاح قابل للتعديل له خانة ({$covered} مفتاح · " . count($exempt) . ' بفورم خاص)');
+    ok("كل مفتاح قابل للتعديل له خانة ({$covered} مفتاح · {$dated} مؤرَّخ بسلسلة · "
+        . count($exempt) . ' بفورم خاص)');
 }
 
 /* المفاتيح اللي كانت **يتيمة فعلاً** قبل المرحلة ١ — طريقها الوحيد كان SSH.
@@ -127,7 +138,11 @@ $wereOrphans = [
 ];
 $still = [];
 foreach ($wereOrphans as $k) {
-    if (!preg_match('~name="' . preg_quote($k, '~') . '"~', $html)) { $still[] = $k; }
+    // المؤرَّخ بيتحكّم فيه من فورم الجدولة لا من خانة باسمه (v74)
+    $re = in_array($k, Settings::DATED_KEYS, true)
+        ? '~name="setting_key"\s+value="' . preg_quote($k, '~') . '"~'
+        : '~name="' . preg_quote($k, '~') . '"~';
+    if (!preg_match($re, $html)) { $still[] = $k; }
 }
 $still ? bad('مفاتيح كانت يتيمة ولسه بلا خانة: ' . implode(' · ', $still))
        : ok('الـ' . count($wereOrphans) . ' مفتاح اللي كان طريقهم SSH بقى ليهم خانة');

@@ -1576,7 +1576,7 @@ class RepPortal
             throw $e;
         }
 
-        $amount = Custody::billDeduction((float) $bill['custody'], $bill['car_no'] ?? null);
+        $amount = Custody::billDeduction((float) $bill['custody'], $bill['car_no'] ?? null, $bill['bill_date'] ?? null);
         $label  = 'بوليصة ' . ($bill['bill_number'] ?: '#' . $billId);
         $after  = Database::row('SELECT * FROM bawalis WHERE id = ?', [$billId]);
         Audit::log('update', 'bawalis', $billId, $bill, $after,
