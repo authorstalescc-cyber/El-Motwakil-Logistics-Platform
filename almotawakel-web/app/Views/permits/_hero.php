@@ -71,6 +71,18 @@ $heroMoneyRow = static function (array $r, string $amount, string $tone, array $
       <div class="hero-meta">
         <?php if($p['company']): ?><span class="hm-pill"><span class="hm-ic"><?= icon('building',16) ?></span><span class="hm-tx"><small>لصالح شركة</small><b><?= e($p['company']) ?></b></span></span><?php endif; ?>
         <?php if($p['client']): ?><span class="hm-pill"><span class="hm-ic"><?= icon('user',16) ?></span><span class="hm-tx"><small>الوكيل</small><b><?= e($p['client']) ?></b></span></span><?php endif; ?>
+        <?php /* ⚠️ **التوكيل الملاحي بارز وبيتعرض دايمًا** (طلب المالك 2026-08-10).
+                 كان مدفونًا في «تفاصيل إضافية» تحت الطية رغم إنه بيحدّد قواعد
+                 مرشد الإيصالات (`receipt_rules_*_agencies`) وبيتطبع في الفاتورة.
+                 وغيابه **معلومة**: من غيره قواعد التوكيل في المرشد ما بتشتغلش،
+                 فالحالة الفاضية بتتعرض مطفية بدل ما تختفي. والاسم كامل
+                 «التوكيل الملاحي» مش «التوكيل» — عشان ما يتلخبطش بـ«الوكيل»
+                 اللي فوقه بالظبط (كلمتان متشابهتان لكيانين مختلفين). */ ?>
+        <?php $agency = trim((string)($p['agency'] ?? '')); ?>
+        <span class="hm-pill is-key<?= $agency==='' ? ' is-blank' : '' ?>">
+          <span class="hm-ic"><?= icon('landmark',16) ?></span>
+          <span class="hm-tx"><small>التوكيل الملاحي</small><b><?= $agency!=='' ? e($agency) : 'غير محدّد' ?></b></span>
+        </span>
         <?php if($p['destination']): ?><span class="hm-pill"><span class="hm-ic"><?= icon('map-pin',16) ?></span><span class="hm-tx"><small>الجهة</small><b><?= e($p['destination']) ?></b></span></span><?php endif; ?>
         <?php if(!empty($p['port'])): ?><span class="hm-pill"><span class="hm-ic"><?= icon('anchor',16) ?></span><span class="hm-tx"><small>الميناء</small><b><?= e($p['port']) ?></b></span></span><?php endif; ?>
         <span class="hm-pill"><span class="hm-ic"><?= icon('calendar',16) ?></span><span class="hm-tx"><small>التاريخ</small><b><?= dfmt($p['permit_date']) ?: '—' ?></b></span></span>
