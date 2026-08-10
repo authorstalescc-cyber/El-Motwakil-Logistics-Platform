@@ -15,3 +15,8 @@
 <?php /* فواصل الآلاف في خانات المبالغ — نفس وحدة المكتب بالحرف. البوابة دي
          **ما بتحمّلش app.js**، وخانات المبالغ هنا هي أكتر خانات بتتكتب. */ ?>
 <script defer src="<?= url('assets/js/money-input.js') ?>?v=<?= is_file($miJs) ? filemtime($miJs) : 1 ?>"></script>
+<?php $mcJs = \App\Core\App::basePath('public/assets/js/m-confirm.js'); ?>
+<?php /* تأكيد الحذف — نفس سبب اللي فوق بالظبط: معالج `confirm-delete` عايش في
+         `app.js` والبوابة دي ما بتحمّلهاش، فكان مكتوبًا جوّه `m/home.php` وبس
+         وباقي الشاشات بتحذف بلا سؤال. هنا بيتحمّل على **كل** شاشة. */ ?>
+<script defer src="<?= url('assets/js/m-confirm.js') ?>?v=<?= is_file($mcJs) ? filemtime($mcJs) : 1 ?>"></script>

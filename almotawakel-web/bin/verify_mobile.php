@@ -384,6 +384,78 @@ $whiteUses > 0
     ? ok("`#fff` ($whiteUses استخدام) متسايب عن قصد — غامض بين `--card` و`--white`")
     : skip('مفيش استخدامات `#fff`');
 
+/* ══════════════ 7ج) تأكيد الحذف في بوابة المندوب ══════════════
+   البوابة **ما بتحمّلش `app.js`** — واللي فيه معالج `form.confirm-delete`.
+   فأي شاشة `/m` بتطبع الكلاس من غير المعالج المشترك بتحذف **بلا سؤال**،
+   والماركب نفسه بيقول إنها المفروض تسأل. اتصاد فعليًّا في `m/permit_info.php`
+   (زرار شيل الورقة). الفحص بيقيس **السلوك**: الكلاس موجود ← الوحدة محمَّلة. */
+sec('7ج) تأكيد الحذف في بوابة المندوب');
+
+/**
+ * كود الشاشة بلا تعليقات — إلزامية قبل أي فحص نصّي (المصيدة الموثَّقة):
+ * التعليق اللي بيوثّق القاعدة بيذكر النص الممنوع، فالفحص كان بينجح أو يفشل كذبًا.
+ * بيشيل `/* … *​/` و`//` و`#` — تعليقات PHP والجافاسكريبت مع بعض.
+ */
+function mcode(string $s): string
+{
+    $s = (string) preg_replace('~/\*.*?\*/~s', '', $s);
+    $s = (string) preg_replace('~^\s*//.*$~m', '', $s);
+    return (string) preg_replace('~^\s*#(?!\[).*$~m', '', $s);
+}
+
+$mcPath = $root . '/public/assets/js/m-confirm.js';
+$mcSrc  = is_file($mcPath) ? (string) file_get_contents($mcPath) : '';
+
+is_file($mcPath)
+    ? ok('`assets/js/m-confirm.js` موجود — المصدر الوحيد لتأكيد الحذف في `/m`')
+    : bad('`assets/js/m-confirm.js` ناقص — شاشات `/m` هتحذف بلا تأكيد');
+
+/* بيتحمّل من `_pwa.php` — الملف اللي **كل** شاشة `/m` بتضمّنه في `<head>` */
+$pwa = (string) @file_get_contents($root . '/app/Views/m/_pwa.php');
+str_contains($pwa, 'm-confirm.js')
+    ? ok('`m/_pwa.php` بيحمّل الوحدة — يعني كل شاشة في البوابة مغطّاة')
+    : bad('`m/_pwa.php` مش بيحمّل `m-confirm.js` — التغطية بتبقى شاشة شاشة');
+
+/* التفويض على `document` مش `querySelectorAll` وقت التحميل: الصفوف اللي
+   بتتضاف بالجافاسكريبت بعد التحميل لازم تاخد التأكيد هي كمان. */
+str_contains($mcSrc, "document.addEventListener('submit'")
+    ? ok('الربط بالتفويض على `document` — الفورمات المضافة لاحقًا مغطّاة')
+    : bad('`m-confirm.js` بيربط وقت التحميل بس — أي فورم بيتضاف بعدين بيفلت');
+
+/* الشاشات اللي بتطبع الكلاس لازم تكون في البوابة وتضمّ `_pwa.php` */
+$mViews = [];
+foreach (glob($root . '/app/Views/m/*.php') ?: [] as $f) {
+    $src = mcode((string) file_get_contents($f));
+    if (str_contains($src, 'confirm-delete')) { $mViews[basename($f)] = $src; }
+}
+if (!$mViews) {
+    skip('مفيش شاشة `/m` بتطبع `confirm-delete`');
+} else {
+    $naked = [];
+    foreach ($mViews as $name => $src) {
+        if (!str_contains($src, '_pwa.php') && !str_contains($src, "require __DIR__ . \"/_pwa.php\"")) {
+            $naked[] = $name;
+        }
+    }
+    $naked
+        ? bad('شاشة بتطلب تأكيدًا بلا `_pwa.php`: ' . implode(', ', $naked))
+        : ok(count($mViews) . ' شاشة بتطبع `confirm-delete` وكلها بتضمّ `_pwa.php`');
+}
+
+/* ⚠️ **نسخة تانية من المعالج = المندوب يتسأل مرتين على نفس الحذف.** المعالج
+   كان عايشًا جوّه `m/home.php`؛ الفحص ده بيمنع رجوعه أو تكراره في شاشة تانية. */
+$dupes = [];
+foreach (glob($root . '/app/Views/m/*.php') ?: [] as $f) {
+    $src = mcode((string) file_get_contents($f));
+    if (preg_match('~(querySelectorAll|addEventListener)[^\n]{0,80}confirm-delete~', $src)
+        || preg_match('~confirm-delete[^\n]{0,80}(addEventListener|forEach)~', $src)) {
+        $dupes[] = basename($f);
+    }
+}
+$dupes
+    ? bad('معالج تأكيد مكرّر جوّه شاشة: ' . implode(', ', $dupes) . ' — الوحدة المشتركة هي المصدر الوحيد')
+    : ok('مفيش معالج تأكيد مكتوب بالإيد في أي شاشة — المصدر واحد');
+
 /* ══════════════ 8) العزل المالي ══════════════ */
 sec('8) العزل المالي — المرحلة ٨ عرض بحت');
 

@@ -634,23 +634,11 @@ foreach (array_keys($boxesUsed) as $bk) {
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   var vibe = function (ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
 
-  // ── تأكيد الحذف ──────────────────────────────────────
-  var confirmBox = document.getElementById('mConfirm'), pendingForm = null;
-  document.querySelectorAll('form.confirm-delete').forEach(function (form) {
-    form.addEventListener('submit', function (e) {
-      if (form.dataset.confirmed === '1') { form.dataset.confirmed = ''; return; }
-      e.preventDefault(); pendingForm = form;
-      document.getElementById('mConfirmText').textContent = form.dataset.confirm || 'هل أنت متأكد؟';
-      confirmBox.showModal();
-    });
-  });
-  confirmBox.querySelector('[data-m-cancel]').addEventListener('click', function () { pendingForm = null; confirmBox.close(); });
-  confirmBox.querySelector('[data-m-ok]').addEventListener('click', function () {
-    var form = pendingForm; pendingForm = null; confirmBox.close();
-    if (!form) { return; }
-    form.dataset.confirmed = '1';
-    if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
-  });
+  /* ⚠️ تأكيد الحذف **اتنقل** لـ`assets/js/m-confirm.js` (بيتحمّل من `_pwa.php`
+     على كل شاشة). كان مكتوبًا هنا وبس، فـ`m/permit_info.php` كانت بتشيل الورقة
+     بلمسة واحدة بلا سؤال رغم إن ماركبها طالب تأكيد. **ممنوع ترجّعه هنا** —
+     نسخة تانية معناها المندوب يتسأل مرتين على نفس الحذف.
+     نافذة `#mConfirm` تحت في الماركب — الوحدة المشتركة بتلاقيها وتستعملها. */
 
   // ── تفاصيل الرصيد ────────────────────────────────────
   var dBtn = document.getElementById('detailsBtn'), dBox = document.getElementById('balanceMore');
