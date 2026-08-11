@@ -30,22 +30,18 @@ $dr  = static fn (string $w): string =>
   'primary' => ['label' => 'تعديل الكارت', 'url' => url('reps/' . $rid . '/edit'), 'class' => 'btn'],
 ]); ?>
 
-<div class="rp-hero">
-  <span class="rp-av"><?= e(initials($rep['name'])) ?></span>
-  <div class="rp-id">
-    <span class="rp-name"><?= e($rep['name']) ?></span>
-    <span class="rp-meta">
-      <span class="chip"><?= icon($rep['status'] === 'active' ? 'check' : 'lock', 13) ?>
-        <?= $rep['status'] === 'active' ? 'شغّال' : 'موقوف' ?></span>
-      <?php if ($rep['phone']): ?>
-        <span><?= icon('smartphone', 13) ?> <bdi><?= e($rep['phone']) ?></bdi></span>
-      <?php endif; ?>
-      <span><?= icon('banknote', 13) ?> <?= money($rep['monthly_salary']) ?></span>
-      <?php if ($rep['hire_date']): ?>
-        <span><?= icon('calendar', 13) ?> <?= e(dfmt($rep['hire_date'])) ?></span>
-      <?php endif; ?>
-    </span>
-  </div>
+<?php /* ⚠️ **الاسم مش مكرَّر هنا**: `page_head` فوق هو اللي بيطبعه. الشاشة
+         كانت بتقوله مرتين فوق بعض (أفاتار + عنوان). السطر ده meta بس. */ ?>
+<div class="rpf-meta">
+  <span class="chip"><?= icon($rep['status'] === 'active' ? 'check' : 'lock', 13) ?>
+    <?= $rep['status'] === 'active' ? 'شغّال' : 'موقوف' ?></span>
+  <?php if ($rep['phone']): ?>
+    <span><?= icon('smartphone', 13) ?> <bdi><?= e($rep['phone']) ?></bdi></span>
+  <?php endif; ?>
+  <span><?= icon('banknote', 13) ?> <?= money($rep['monthly_salary']) ?></span>
+  <?php if ($rep['hire_date']): ?>
+    <span><?= icon('calendar', 13) ?> معيّن من <?= e(dfmt($rep['hire_date'])) ?></span>
+  <?php endif; ?>
 </div>
 
 <?php /* ⚠️ التحذير ده وظيفي مش شرح: الراتب الثابت صفر يعني «الصافي» تحت
@@ -58,22 +54,22 @@ $dr  = static fn (string $w): string =>
 
 <?php partial('stat_grid', ['items' => 5, 'body' => function () use ($head, $dr) { ?>
   <?php partial('stat', [
-    'label' => 'المستحق له علينا', 'value' => money0($head['balance']),
+    'label' => 'المستحق له علينا', 'value' => money0($head['balance'], false),
     'icon' => 'handshake', 'tone' => 'navy', 'unit' => 'ج', 'drill' => $dr('balance'),
     'title' => 'كشف حسابه كله',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'عهدته الميدانية', 'value' => money0($head['custody']),
+    'label' => 'عهدته الميدانية', 'value' => money0($head['custody'], false),
     'icon' => 'briefcase', 'tone' => 'teal', 'unit' => 'ج', 'drill' => $dr('custody'),
     'title' => 'اللي صرفه من محفظته',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'سلف الفترة', 'value' => money0($head['advances']),
+    'label' => 'سلف الفترة', 'value' => money0($head['advances'], false),
     'icon' => 'wallet', 'tone' => 'red', 'unit' => 'ج', 'drill' => $dr('advances'),
     'title' => 'السلف اللي سحبها',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'صافي راتب الفترة', 'value' => money0($head['net']),
+    'label' => 'صافي راتب الفترة', 'value' => money0($head['net'], false),
     'icon' => 'banknote', 'tone' => 'green', 'unit' => 'ج', 'drill' => $dr('net'),
     'title' => 'إزاي اتحسب',
   ]); ?>

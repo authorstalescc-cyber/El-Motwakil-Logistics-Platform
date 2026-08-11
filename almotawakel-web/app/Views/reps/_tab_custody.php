@@ -16,16 +16,16 @@ if (empty($custody['ready'])): ?>
 $b = $custody['breakdown'];
 ?>
 <?php partial('stat_grid', ['items' => 4, 'body' => function () use ($custody, $b, $dr) { ?>
-  <?php partial('stat', ['label' => 'رصيد محفظته', 'value' => money0($custody['balance']),
+  <?php partial('stat', ['label' => 'رصيد محفظته', 'value' => money0($custody['balance'], false),
     'icon' => 'briefcase', 'tone' => 'teal', 'unit' => 'ج', 'drill' => $dr('custody'),
     'title' => 'اللي صرفه من محفظته']); ?>
-  <?php partial('stat', ['label' => 'نزّلناله', 'value' => money0($b['deposits'] ?? 0),
+  <?php partial('stat', ['label' => 'نزّلناله', 'value' => money0($b['deposits'] ?? 0, false),
     'icon' => 'download', 'tone' => 'navy', 'unit' => 'ج', 'drill' => $dr('custody'),
     'title' => 'اللي صرفه من محفظته']); ?>
-  <?php partial('stat', ['label' => 'صرف', 'value' => money0($b['spent'] ?? 0),
+  <?php partial('stat', ['label' => 'صرف', 'value' => money0($b['spent'] ?? 0, false),
     'icon' => 'trending-down', 'tone' => 'red', 'unit' => 'ج', 'drill' => $dr('custody'),
     'title' => 'اللي صرفه من محفظته']); ?>
-  <?php partial('stat', ['label' => 'رجّع', 'value' => money0($b['returned'] ?? 0),
+  <?php partial('stat', ['label' => 'رجّع', 'value' => money0($b['returned'] ?? 0, false),
     'icon' => 'undo', 'tone' => 'gold', 'unit' => 'ج', 'drill' => $dr('custody'),
     'title' => 'اللي صرفه من محفظته']); ?>
 <?php }]); ?>
@@ -36,7 +36,7 @@ $b = $custody['breakdown'];
     <?php partial('table', [
       'cols'  => [['label' => 'التاريخ'], ['label' => 'المبلغ'], ['label' => 'المصدر'], ['label' => 'البيان']],
       'count' => count($custody['deposits']),
-      'empty' => ['title' => 'مفيش تنزيلات'],
+      'wrapClass' => 'rpf-tight', 'empty' => ['title' => 'مفيش تنزيلات'],
       'rows'  => function () use ($custody) {
         foreach ($custody['deposits'] as $d): ?>
           <tr>
@@ -56,7 +56,7 @@ $b = $custody['breakdown'];
     <?php partial('table', [
       'cols'  => [['label' => 'التاريخ'], ['label' => 'المرتجع'], ['label' => 'البيان']],
       'count' => count($custody['settles']),
-      'empty' => ['title' => 'مفيش تسويات'],
+      'wrapClass' => 'rpf-tight', 'empty' => ['title' => 'مفيش تسويات'],
       'rows'  => function () use ($custody) {
         foreach ($custody['settles'] as $s): ?>
           <tr>
@@ -77,7 +77,7 @@ $b = $custody['breakdown'];
       'cols'  => [['label' => 'التاريخ'], ['label' => 'الاتجاه'], ['label' => 'الزميل'],
                   ['label' => 'المبلغ'], ['label' => 'البيان']],
       'count' => count($custody['out']) + count($custody['in']),
-      'empty' => ['title' => 'مفيش تحويلات'],
+      'wrapClass' => 'rpf-tight', 'empty' => ['title' => 'مفيش تحويلات'],
       'rows'  => function () use ($custody) {
         foreach ($custody['out'] as $t): ?>
           <tr>

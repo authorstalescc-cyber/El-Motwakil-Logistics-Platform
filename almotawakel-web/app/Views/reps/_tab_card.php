@@ -11,40 +11,40 @@
 <div class="two-col">
   <div class="card oc-pad">
     <div class="section-head oc-sec"><?= icon('user', 17) ?> بيانات الكارت</div>
-    <div class="rp-calc">
-      <div class="rp-line"><span class="rp-k">الاسم</span><span class="rp-v"><?= e($rep['name']) ?></span></div>
-      <div class="rp-line"><span class="rp-k">التليفون</span>
-        <span class="rp-v"><?= $rep['phone'] ? '<bdi>' . e($rep['phone']) . '</bdi>' : '—' ?></span></div>
-      <div class="rp-line"><span class="rp-k">الراتب الثابت</span>
-        <span class="rp-v"><?= money((float) $rep['monthly_salary'], false) ?></span></div>
-      <div class="rp-line"><span class="rp-k">تاريخ التعيين</span>
-        <span class="rp-v"><?= $rep['hire_date'] ? e(dfmt((string) $rep['hire_date'])) : '—' ?></span></div>
-      <div class="rp-line"><span class="rp-k">الحالة</span>
-        <span class="rp-v"><?= $rep['status'] === 'active' ? 'شغّال' : 'موقوف' ?></span></div>
+    <div class="rpf-calc">
+      <div class="rpf-line"><span class="rpf-k">الاسم</span><span class="rpf-v"><?= e($rep['name']) ?></span></div>
+      <div class="rpf-line"><span class="rpf-k">التليفون</span>
+        <span class="rpf-v"><?= $rep['phone'] ? '<bdi>' . e($rep['phone']) . '</bdi>' : '—' ?></span></div>
+      <div class="rpf-line"><span class="rpf-k">الراتب الثابت</span>
+        <span class="rpf-v"><?= money((float) $rep['monthly_salary'], false) ?></span></div>
+      <div class="rpf-line"><span class="rpf-k">تاريخ التعيين</span>
+        <span class="rpf-v"><?= $rep['hire_date'] ? e(dfmt((string) $rep['hire_date'])) : '—' ?></span></div>
+      <div class="rpf-line"><span class="rpf-k">الحالة</span>
+        <span class="rpf-v"><?= $rep['status'] === 'active' ? 'شغّال' : 'موقوف' ?></span></div>
       <?php if (!empty($rep['note'])): ?>
-        <div class="rp-line"><span class="rp-k">ملاحظة</span><span class="rp-v"><?= e((string) $rep['note']) ?></span></div>
+        <div class="rpf-line"><span class="rpf-k">ملاحظة</span><span class="rpf-v"><?= e((string) $rep['note']) ?></span></div>
       <?php endif; ?>
     </div>
   </div>
 
   <div class="card oc-pad">
     <div class="section-head oc-sec"><?= icon('shield', 17) ?> صلاحياته على الموبايل</div>
-    <div class="rp-calc">
-      <div class="rp-line">
-        <span class="rp-k">يفتح إذن من موبايله</span>
-        <span class="rp-v"><?= $card['permReady']
+    <div class="rpf-calc">
+      <div class="rpf-line">
+        <span class="rpf-k">يفتح إذن من موبايله</span>
+        <span class="rpf-v"><?= $card['permReady']
           ? ($card['canCreatePermit'] ? icon('check', 16) : icon('x', 16))
           : '—' ?></span>
       </div>
-      <div class="rp-line">
-        <span class="rp-k">يتابع باقي المناديب</span>
-        <span class="rp-v"><?= $card['watchReady']
+      <div class="rpf-line">
+        <span class="rpf-k">يتابع باقي المناديب</span>
+        <span class="rpf-v"><?= $card['watchReady']
           ? ($card['canWatchReps'] ? icon('check', 16) : icon('x', 16))
           : '—' ?></span>
       </div>
-      <div class="rp-line">
-        <span class="rp-k">أذونات مثبّتة عنده</span>
-        <span class="rp-v"><?= intf(count($card['pins'])) ?></span>
+      <div class="rpf-line">
+        <span class="rpf-k">أذونات مثبّتة عنده</span>
+        <span class="rpf-v"><?= intf(count($card['pins'])) ?></span>
       </div>
     </div>
     <a class="btn ghost" href="<?= url('rep-custody') ?>"><?= icon('briefcase', 15) ?> ظبّط من عهدة المناديب</a>
@@ -57,7 +57,7 @@
     'cols'  => [['label' => 'تاريخ الصرف'], ['label' => 'الفترة'], ['label' => 'الصافي'],
                 ['label' => 'الطريقة'], ['label' => '']],
     'count' => count($card['settlements']),
-    'empty' => ['title' => 'لسه مفيش تقفيلات'],
+    'wrapClass' => 'rpf-tight', 'empty' => ['title' => 'لسه مفيش تقفيلات'],
     'rows'  => function () use ($card, $rid) {
       foreach ($card['settlements'] as $st): ?>
         <tr>

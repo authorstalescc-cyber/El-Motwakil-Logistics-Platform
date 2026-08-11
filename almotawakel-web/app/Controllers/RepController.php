@@ -77,7 +77,9 @@ class RepController extends Controller
             'ledger'  => ['ledger'  => Rep::ledger($repId),
                           'summary' => Rep::summary($repId)],
             'custody' => ['custody' => RepProfile::custody($repId)],
-            'work'    => ['work'    => RepProfile::work($repId)],
+            'work'    => ['work'      => RepProfile::work($repId),
+                          'stats'     => RepProfile::stats($repId, $period),
+                          'allStats'  => RepProfile::stats($repId)],
             default   => ['card'    => RepProfile::card($repId)],
         };
 
@@ -93,7 +95,8 @@ class RepController extends Controller
         $this->requireAuth();
         $repId = (int) $id;
         if (!Rep::find($repId)) { $this->notFound('المندوب ده مش موجود أو اتمسح.'); }
-        if (!in_array($what, ['balance', 'custody', 'advances', 'net', 'pending'], true)) {
+        if (!in_array($what, ['balance', 'custody', 'advances', 'net', 'pending',
+                              'permits', 'entries'], true)) {
             $this->notFound('نوع التفاصيل ده مش موجود.');
         }
 
@@ -111,6 +114,9 @@ class RepController extends Controller
                 'custody'  => RepCustody::available() ? RepCustody::spending($repId) : [],
                 'advances' => RepAccount::advanceRows($repId, $period),
                 'net'      => RepProfile::salary($repId, $period)['rows'],
+                'permits'  => RepProfile::periodPermits($repId, $period),
+                'entries'  => RepCustody::available()
+                    ? RepPortal::mySubmissions($repId, 60) : [],
                 default    => RepCustody::available()
                     ? RepPortal::mySubmissions($repId, 40, 'pending') : [],
             },

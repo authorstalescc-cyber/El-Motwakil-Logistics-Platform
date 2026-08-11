@@ -19,13 +19,13 @@ $preview = $pay['preview'];
 
 /** سطر في كشف الحساب — البند واحد فمفيش نسختين بيفترقوا. */
 $line = static function (string $label, float $v, string $tone = '', ?string $drill = null, ?string $title = null): void { ?>
-  <div class="rp-line">
-    <span class="rp-k"><?= e($label) ?></span>
+  <div class="rpf-line">
+    <span class="rpf-k"><?= e($label) ?></span>
     <?php if ($drill !== null): ?>
-      <button type="button" class="num-btn rp-v <?= e($tone) ?>" data-drill="<?= e($drill) ?>"
+      <button type="button" class="num-btn rpf-v <?= e($tone) ?>" data-drill="<?= e($drill) ?>"
               data-drill-title="<?= e($title ?? $label) ?>"><?= money($v, false) ?></button>
     <?php else: ?>
-      <span class="rp-v <?= e($tone) ?>"><?= money($v, false) ?></span>
+      <span class="rpf-v <?= e($tone) ?>"><?= money($v, false) ?></span>
     <?php endif; ?>
   </div>
 <?php };
@@ -42,7 +42,7 @@ $line = static function (string $label, float $v, string $tone = '', ?string $dr
         <?= $pay['approved'] ? 'متعمد' : 'مسوّدة' ?></span>
     </div>
 
-    <div class="rp-calc">
+    <div class="rpf-calc">
       <?php $line('راتب ثابت', $pay['salary']); ?>
       <?php $line('سلف الفترة', -$pay['advances'], 'neg', $dr('advances'), 'سلف الفترة'); ?>
       <?php $line('كومسيون البوالص', $pay['commission'], 'pos'); ?>
@@ -50,9 +50,9 @@ $line = static function (string $label, float $v, string $tone = '', ?string $dr
       <?php $line('زيادة / خصم / جزاءات', $pay['adjustments'],
                   $pay['adjustments'] < 0 ? 'neg' : 'pos',
                   $dr('net'), 'البنود اليدوية'); ?>
-      <div class="rp-line total">
-        <span class="rp-k">الصافي المستحق</span>
-        <span class="rp-v <?= $pay['net'] < 0 ? 'neg' : '' ?>"><?= money($pay['net'], false) ?></span>
+      <div class="rpf-line total">
+        <span class="rpf-k">الصافي المستحق</span>
+        <span class="rpf-v <?= $pay['net'] < 0 ? 'neg' : '' ?>"><?= money($pay['net'], false) ?></span>
       </div>
     </div>
 
@@ -71,13 +71,13 @@ $line = static function (string $label, float $v, string $tone = '', ?string $dr
       <div class="flash error" role="alert"><?= icon('alert', 17) ?> <?= e($sErr) ?></div>
     <?php endif; ?>
 
-    <div class="rp-calc">
+    <div class="rpf-calc">
       <?php $line('مستحقات غير متحاسبة', (float) $preview['due'], 'pos'); ?>
       <?php $line('خصومات', -(float) $preview['deductions'], 'neg'); ?>
       <?php $line('سلف مصروفة', -(float) $preview['advances'], 'neg'); ?>
-      <div class="rp-line total">
-        <span class="rp-k">اللي هيتصرف دلوقتي</span>
-        <span class="rp-v"><?= money((float) $preview['net'], false) ?></span>
+      <div class="rpf-line total">
+        <span class="rpf-k">اللي هيتصرف دلوقتي</span>
+        <span class="rpf-v"><?= money((float) $preview['net'], false) ?></span>
       </div>
     </div>
 
@@ -104,7 +104,7 @@ $line = static function (string $label, float $v, string $tone = '', ?string $dr
           </div>
           <div class="field">
             <label>طريقة الصرف</label>
-            <label class="visa-toggle p5-chk pt">
+            <label class="p5-chk pt">
               <input type="checkbox" name="is_visa" value="1" class="dbt-cbx">
               <?= icon('credit-card', 14) ?> فيزا
             </label>
@@ -139,7 +139,7 @@ $line = static function (string $label, float $v, string $tone = '', ?string $dr
       <?= icon('lock', 15) ?> الغِ اعتماد الفترة عشان تعدّل.
     </div>
   <?php else: ?>
-    <form method="post" action="<?= url('reps/' . $rid . '/entry') ?>" class="inline-form">
+    <form method="post" action="<?= url('reps/' . $rid . '/entry') ?>" class="rpf-form">
       <?= csrfField() ?>
       <?= formStateFields($entryState['token'], $entryState['back']) ?>
       <div class="field w150">
@@ -185,7 +185,7 @@ $line = static function (string $label, float $v, string $tone = '', ?string $dr
     'cols'  => [['label' => 'التاريخ'], ['label' => 'النوع'], ['label' => 'البيان'],
                 ['label' => 'المبلغ'], ['label' => '']],
     'count' => count($pay['rows']),
-    'empty' => ['title' => 'مفيش بنود يدوية في الفترة'],
+    'wrapClass' => 'rpf-tight', 'empty' => ['title' => 'مفيش بنود يدوية في الفترة'],
     'rows'  => function () use ($pay, $locked) {
       foreach ($pay['rows'] as $r): ?>
         <tr>
@@ -216,7 +216,7 @@ $line = static function (string $label, float $v, string $tone = '', ?string $dr
                 ['label' => 'كومسيون'], ['label' => 'مصروف'], ['label' => 'يدوي'],
                 ['label' => 'الصافي'], ['label' => 'الحالة']],
     'count' => count($pay['history']),
-    'empty' => ['title' => 'لسه مفيش فترات معتمدة'],
+    'wrapClass' => 'rpf-tight', 'empty' => ['title' => 'لسه مفيش فترات معتمدة'],
     'rows'  => function () use ($pay, $rid) {
       foreach ($pay['history'] as $h): ?>
         <tr>

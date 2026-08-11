@@ -65,22 +65,22 @@ $dr      = static fn (string $what): string => url('payroll/drill/' . $what) . '
     'title' => 'البوالص اللي دخلت الحساب',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'حوض الكومسيون', 'value' => money0($calc['commission_pool']),
+    'label' => 'حوض الكومسيون', 'value' => money0($calc['commission_pool'], false),
     'icon' => 'coins', 'tone' => 'gold', 'unit' => 'ج', 'drill' => $dr('commission'),
     'title' => 'المحتجز من عهدة البوالص',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'حوض المصروف', 'value' => money0($calc['expense_pool']),
+    'label' => 'حوض المصروف', 'value' => money0($calc['expense_pool'], false),
     'icon' => 'crane', 'tone' => 'teal', 'unit' => 'ج', 'drill' => $dr('expense'),
     'title' => 'مصروف البوالص قبل الخصم',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'المصروف المسموح', 'value' => money0($calc['allowed_expenses']),
+    'label' => 'المصروف المسموح', 'value' => money0($calc['allowed_expenses'], false),
     'icon' => 'wallet', 'tone' => 'red', 'unit' => 'ج', 'drill' => $dr('allowed'),
     'title' => 'اللي اتصرف من حوض المصروف',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'صافي المستحق', 'value' => money0($calc['net_total']),
+    'label' => 'صافي المستحق', 'value' => money0($calc['net_total'], false),
     'icon' => 'banknote', 'tone' => 'green', 'unit' => 'ج', 'drill' => $dr('nets'),
     'title' => 'المستحق لكل المناديب',
   ]); ?>

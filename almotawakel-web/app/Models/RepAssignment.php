@@ -18,7 +18,11 @@ class RepAssignment
     {
         if (!RepCustody::available()) { return []; }
         return Database::all(
-            "SELECT a.*, p.permit_no, p.permit_type, p.company, p.client, p.permit_date, p.status AS permit_status,
+            /* ⚠️ `containers` بيتجاب هنا (v88ب) عشان البروفايل يقول «اشتغل على
+               كام حاوية» — طلب المالك. عدد الإذن الرسمي هو نفسه اللي الكشف
+               والضمان بيتحسبوا عليه، فمفيش تعريفان للحاوية. */
+            "SELECT a.*, p.permit_no, p.permit_type, p.company, p.client, p.permit_date,
+                    p.containers, p.status AS permit_status,
                     (SELECT COUNT(*) FROM rep_submissions s
                       WHERE s.permit_id = a.permit_id AND s.rep_id = a.rep_id) AS subs
              FROM permit_assignments a

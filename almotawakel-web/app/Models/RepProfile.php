@@ -153,6 +153,104 @@ final class RepProfile
         ];
     }
 
+    // ─────────────────────────────────────────────── مقاييس الشغل
+
+    /**
+     * **أرقام شغل المندوب الحقيقية** (v88ب — طلب المالك: «عاوز معلومات
+     * احترافية: اشتغل على كام حاوية وكام إذن…»).
+     *
+     * ⚠️⚠️ **تعريف «اشتغل عليه» = سجّل عليه بند فعلاً** — مش «اتنزّلله».
+     *    الفرق مقصود: التنزيل قرار مكتب بيحصل مرة واحدة وبيفضل سنة، فلو عددنا
+     *    بيه كان المندوب اللي متنزّلله ٢٣ إذن من يوليو هيبان شغّالًا في أغسطس
+     *    وهو ما لمسش حاجة. البند بتاريخ = شغل حصل يومه.
+     *
+     * ⚠️ **الحاويات من `permits.containers`** (عدد الإذن الرسمي — نفس اللي
+     *    الكشف والضمان بيتحسبوا عليه)، مش من عدّ البوالص: البوليصة ممكن تشيل
+     *    أكتر من حاوية وممكن الإذن يكون فيه بوالص ناقصة.
+     *
+     * @param array|null $period `null` = **من أول يوم شغل** (الإجمالي)
+     */
+    public static function stats(int $repId, ?array $period = null): array
+    {
+        $w = ''; $args = [$repId];
+        if ($period !== null) {
+            $w = ' AND s.entry_date BETWEEN ? AND ?';
+            $args[] = $period['from']; $args[] = $period['to'];
+        }
+
+        /* أذونات + حاويات: الأذونات المميّزة اللي عليها بند في المدى، وبعدين
+           مجموع حاوياتها. `DISTINCT` جوّه استعلام فرعي عشان الإذن اللي عليه
+           ١٠ بنود ما يتعدّش ١٠ مرات ولا حاوياته تتجمّع ١٠ مرات. */
+        $row = Database::row(
+            "SELECT COUNT(*) AS permits,
+                    COALESCE(SUM(p.containers),0) AS containers,
+                    COUNT(DISTINCT p.company)      AS companies
+               FROM (SELECT DISTINCT s.permit_id AS pid
+                       FROM rep_submissions s
+                      WHERE s.rep_id = ?" . $w . RepCustody::epochSql('s.entry_date') . ") x
+               JOIN permits p ON p.id = x.pid", $args) ?: [];
+
+        /* البنود بحالتها — نسبة الاعتماد مقياس جودة حقيقي: المندوب اللي نص
+           بنوده بترفض بيضيّع وقت المكتب. */
+        $byStatus = ['approved' => 0, 'pending' => 0, 'rejected' => 0];
+        $amount   = 0.0;
+        foreach (Database::all(
+            "SELECT s.status, COUNT(*) c, COALESCE(SUM(s.amount),0) v
+               FROM rep_submissions s
+              WHERE s.rep_id = ?" . $w . RepCustody::epochSql('s.entry_date') . "
+              GROUP BY s.status", $args) as $r) {
+            $k = (string) $r['status'];
+            if (isset($byStatus[$k])) { $byStatus[$k] = (int) $r['c']; }
+            if ($k === 'approved') { $amount = round((float) $r['v'], 2); }
+        }
+        $decided = $byStatus['approved'] + $byStatus['rejected'];
+
+        // أيام فيها شغل فعلي — «١٨ يوم من ٣١» بيقول أكتر من أي رقم تاني
+        $days = (int) Database::scalar(
+            "SELECT COUNT(DISTINCT s.entry_date) FROM rep_submissions s
+              WHERE s.rep_id = ?" . $w . RepCustody::epochSql('s.entry_date'), $args);
+
+        return [
+            'permits'    => (int) ($row['permits'] ?? 0),
+            'containers' => (int) ($row['containers'] ?? 0),
+            'companies'  => (int) ($row['companies'] ?? 0),
+            'entries'    => array_sum($byStatus),
+            'approved'   => $byStatus['approved'],
+            'pending'    => $byStatus['pending'],
+            'rejected'   => $byStatus['rejected'],
+            /* ⚠️ النسبة **من المحسوم بس** (معتمد + مرفوض): حساب المستنّي في
+               المقام بيدّي نسبة بتنزل كل ما يسجّل بند جديد، وهو ما عملش حاجة
+               غلط — الرقم كان بيعاقبه على شغله. */
+            'accuracy'   => $decided > 0 ? round($byStatus['approved'] * 100 / $decided) : null,
+            'amount'     => $amount,
+            'days'       => $days,
+            'bills'      => RepBillCustody::ready()
+                ? count(RepBillCustody::forRep($repId)) : 0,
+            'handovers'  => RepDriverHandover::available()
+                ? count(RepDriverHandover::forRep($repId)) : 0,
+        ];
+    }
+
+    /**
+     * الأذونات اللي المندوب **اشتغل عليها فعلاً** في الفترة + حاوياتها.
+     * ⚠️ نفس تعريف `stats()` بالحرف (بند مسجَّل = شغل) — لو اتفرّقوا يبقى
+     *    الرقم بيفتح قايمة مش بتاعته.
+     */
+    public static function periodPermits(int $repId, array $period): array
+    {
+        return Database::all(
+            "SELECT p.id, p.permit_no, p.permit_type, p.company, p.client,
+                    p.permit_date, p.containers, p.container_type,
+                    COUNT(s.id) AS subs, COALESCE(SUM(s.amount),0) AS spent
+               FROM rep_submissions s
+               JOIN permits p ON p.id = s.permit_id
+              WHERE s.rep_id = ? AND s.entry_date BETWEEN ? AND ?"
+            . RepCustody::epochSql('s.entry_date') . "
+              GROUP BY p.id
+              ORDER BY p.permit_date DESC, p.id DESC",
+            [$repId, $period['from'], $period['to']]);
+    }
+
     // ─────────────────────────────────────────────── تبويب الشغل
 
     /** كل شغل المندوب: أذونه · بنوده تحت المراجعة · عهد بوالص · تسليمات سائقين. */

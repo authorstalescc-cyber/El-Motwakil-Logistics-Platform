@@ -5144,25 +5144,42 @@ table.data th.col-owner{min-width:230px}
       التعريفات بدل نسختين بيفترقوا.
    ⚠️ كل لون توكن: `--accent` نص على سطح فاتح (`--navy` عليه = 1.3:1)،
       و`--card` سطح (`--white` نص أبيض على داكن). */
-.rp-hero{display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4)}
-.rp-av{width:56px;height:56px;border-radius:50%;background:var(--navy);color:var(--gold);
-  display:flex;align-items:center;justify-content:center;font-weight:600;font-size:var(--fs-5);flex:0 0 auto}
-.rp-id{display:flex;flex-direction:column;gap:2px;min-width:0}
-.rp-name{font-weight:600;font-size:var(--fs-5);color:var(--accent)}
-.rp-meta{display:flex;gap:var(--space-3);flex-wrap:wrap;color:var(--grey);font-size:var(--fs-2)}
-.rp-meta bdi{direction:ltr}
+/* ⚠️ **الاسم مش هنا** — `page_head` هو اللي بيطبعه. كان مكتوب في الاتنين
+   فالشاشة كانت بتقول اسم المندوب مرتين فوق بعض (اتصاد بلقطة شاشة). */
+.rpf-meta{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;
+  color:var(--grey);font-size:var(--fs-2);margin-bottom:var(--space-4)}
+.rpf-meta bdi{direction:ltr}
+
+/* ⚠️ `.spacer` معرَّف لـ`.topbar` و`.toolbar` **بس** — استخدامه جوّه
+   `.section-head` كان بيقع على `display:inline` فالشارة بتلزق في العنوان
+   بدل ما تروح للجنب التاني (اتصاد بلقطة شاشة). */
+.section-head .spacer{flex:1}
+
+/* فورم البند اليدوي — ⚠️ `.inline-form` بتدّي `flex:1 1 120px` للخانات بس،
+   والزرار من غير قيد بيتمدّد بارتفاع الصف كله فيطلع مستطيل أصفر ضخم
+   (اتصاد بلقطة شاشة). هنا كل عنصر بينتهي عند حدّه والزرار بيقف تحت. */
+/* ⚠️ حالة الفراغ العامة `padding:60px` وأيقونتها `--fs-8` — جوّه بروفايل فيه
+   ٦ جداول ممكن يبقوا فاضيين، ده بيدّي صفحة طولها شاشتين كلها «مفيش بيانات»
+   (اتصاد بلقطة شاشة). التضييق **مقصور على الوحدة دي** عشان ما يغيّرش أي
+   شاشة تانية. */
+.rpf-tight .empty{padding:20px 16px}
+.rpf-tight .empty .ic{font-size:var(--fs-5);margin-bottom:2px}
+
+.rpf-form{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:flex-end}
+.rpf-form .field{margin:0}
+.rpf-form .btn{flex:0 0 auto;align-self:flex-end}
 
 /* صفّ الحساب: سطر لكل بند بمبلغ على الجنب — بديل الجدول في المقارنة الرأسية */
-.rp-calc{display:flex;flex-direction:column;gap:0}
-.rp-calc .rp-line{display:flex;align-items:center;gap:var(--space-3);
+.rpf-calc{display:flex;flex-direction:column;gap:0}
+.rpf-calc .rpf-line{display:flex;align-items:center;gap:var(--space-3);
   padding:10px 0;border-bottom:1px dashed var(--line)}
-.rp-calc .rp-line:last-child{border-bottom:0}
-.rp-calc .rp-k{flex:1;min-width:0;color:var(--grey);font-size:var(--fs-3)}
-.rp-calc .rp-v{font-weight:600;font-variant-numeric:tabular-nums}
-.rp-calc .rp-v.neg{color:var(--red-fg)} .rp-calc .rp-v.pos{color:var(--green-fg)}
-.rp-calc .rp-line.total{border-top:2px solid var(--line2);border-bottom:0;margin-top:4px;padding-top:12px}
-.rp-calc .rp-line.total .rp-k{color:var(--accent);font-weight:600;font-size:var(--fs-4)}
-.rp-calc .rp-line.total .rp-v{font-size:var(--fs-5);color:var(--accent)}
+.rpf-calc .rpf-line:last-child{border-bottom:0}
+.rpf-calc .rpf-k{flex:1;min-width:0;color:var(--grey);font-size:var(--fs-3)}
+.rpf-calc .rpf-v{font-weight:600;font-variant-numeric:tabular-nums}
+.rpf-calc .rpf-v.neg{color:var(--red-fg)} .rpf-calc .rpf-v.pos{color:var(--green-fg)}
+.rpf-calc .rpf-line.total{border-top:2px solid var(--line2);border-bottom:0;margin-top:4px;padding-top:12px}
+.rpf-calc .rpf-line.total .rpf-k{color:var(--accent);font-weight:600;font-size:var(--fs-4)}
+.rpf-calc .rpf-line.total .rpf-v{font-size:var(--fs-5);color:var(--accent)}
 
 /* رقم جوّه خلية جدول بيفتح تفاصيله — «ممنوع رقم أصمّ» في الجداول (v87).
    ⚠️ الألوان توكنز مش قيم: `--accent` نص على سطح فاتح، والخط المتقطّع هو

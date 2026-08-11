@@ -11,16 +11,16 @@
 use App\Models\Rep;
 ?>
 <?php partial('stat_grid', ['items' => 4, 'body' => function () use ($summary, $dr) { ?>
-  <?php partial('stat', ['label' => 'مستحقات له', 'value' => money0($summary['due']),
+  <?php partial('stat', ['label' => 'مستحقات له', 'value' => money0($summary['due'], false),
     'icon' => 'trending-up', 'tone' => 'green', 'unit' => 'ج', 'drill' => $dr('balance'),
     'title' => 'كل بنود الكشف']); ?>
-  <?php partial('stat', ['label' => 'خصومات وجزاءات', 'value' => money0($summary['deductions']),
+  <?php partial('stat', ['label' => 'خصومات وجزاءات', 'value' => money0($summary['deductions'], false),
     'icon' => 'trending-down', 'tone' => 'red', 'unit' => 'ج', 'drill' => $dr('balance'),
     'title' => 'كل بنود الكشف']); ?>
-  <?php partial('stat', ['label' => 'سلف مصروفة', 'value' => money0($summary['advances']),
+  <?php partial('stat', ['label' => 'سلف مصروفة', 'value' => money0($summary['advances'], false),
     'icon' => 'wallet', 'tone' => 'gold', 'unit' => 'ج', 'drill' => $dr('advances'),
     'title' => 'سلف الفترة']); ?>
-  <?php partial('stat', ['label' => 'تسويات مدفوعة', 'value' => money0($summary['paid']),
+  <?php partial('stat', ['label' => 'تسويات مدفوعة', 'value' => money0($summary['paid'], false),
     'icon' => 'receipt', 'tone' => 'navy', 'unit' => 'ج', 'drill' => $dr('balance'),
     'title' => 'كل بنود الكشف']); ?>
 <?php }]); ?>
@@ -31,7 +31,7 @@ use App\Models\Rep;
     'cols'  => [['label' => 'التاريخ'], ['label' => 'النوع'], ['label' => 'البيان'],
                 ['label' => 'له (+)'], ['label' => 'عليه (−)'], ['label' => 'الرصيد'], ['label' => '']],
     'count' => count($ledger),
-    'empty' => ['title' => 'مفيش بنود في سجل المندوب'],
+    'wrapClass' => 'rpf-tight', 'empty' => ['title' => 'مفيش بنود في سجل المندوب'],
     'rows'  => function () use ($ledger) {
       foreach ($ledger as $r):
         $isCredit = in_array($r['kind'], Rep::CREDIT_KINDS, true);

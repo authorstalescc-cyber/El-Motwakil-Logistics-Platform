@@ -41,6 +41,39 @@ if ($what === 'balance') {
             'amount_tone' => $v < 0 ? 'ex' : 'pos',
         ]);
     }
+} elseif ($what === 'permits') {
+    /* ⚠️ الحاوية هنا من `permits.containers` — **نفس** الرقم اللي الكشف
+       والضمان بيتحسبوا عليه، مش عدّ بوالص (البوليصة ممكن تشيل أكتر من واحدة). */
+    foreach ($rows as $p) {
+        $meta = [];
+        if ((int) $p['containers'] > 0) {
+            $meta[] = ['icon' => 'containers', 'text' => intf((int) $p['containers']) . ' حاوية'];
+        }
+        if (!empty($p['company'])) { $meta[] = ['icon' => 'building', 'text' => (string) $p['company']]; }
+        $meta[] = ['icon' => 'clipboard', 'text' => intf((int) $p['subs']) . ' بند'];
+        partial('row_item', [
+            'title'  => (string) ($p['permit_no'] ?: '#' . (int) $p['id']),
+            'icon'   => 'folder',
+            'url'    => url('permits/' . (int) $p['id']),
+            'meta'   => $meta,
+            'amount' => $money($p['spent']),
+            'sub'    => !empty($p['permit_date']) ? dfmt((string) $p['permit_date']) : null,
+        ]);
+    }
+} elseif ($what === 'entries') {
+    foreach ($rows as $s) {
+        $st = (string) ($s['status'] ?? '');
+        partial('row_item', [
+            'title'  => (string) ($s['note'] ?: 'بند'),
+            'icon'   => $st === 'rejected' ? 'x' : ($st === 'approved' ? 'check' : 'clock'),
+            'meta'   => !empty($s['permit_no'])
+                ? [['icon' => 'folder', 'text' => 'إذن ' . $s['permit_no']]] : [],
+            'chips'  => $st === 'rejected' && !empty($s['review_note'])
+                ? [['icon' => 'alert', 'text' => (string) $s['review_note']]] : [],
+            'amount' => $money($s['amount'] ?? 0),
+            'sub'    => !empty($s['entry_date']) ? dfmt((string) $s['entry_date']) : null,
+        ]);
+    }
 } elseif ($what === 'custody') {
     foreach ($rows as $s) {
         $meta = [];
@@ -84,6 +117,7 @@ $body = ob_get_clean();
 
 $total = match ($what) {
     'net'     => $pay['net'] ?? 0,
+    'permits' => array_sum(array_column($rows, 'spent')),
     'balance' => array_sum(array_map(
         static fn ($r) => \App\Models\Rep::sign((string) $r['kind']) * (float) $r['amount'], $rows)),
     default   => array_sum(array_column($rows, 'amount')),

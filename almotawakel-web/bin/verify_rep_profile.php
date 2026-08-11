@@ -117,9 +117,51 @@ chk($posDrill !== false && $posGreedy !== false && $posDrill < $posGreedy,
     '★ /reps/{id}/drill/{what} قبل /reps/{id} الجشع');
 
 $css = srcR('public/assets/css/app.css');
-foreach (['rp-hero', 'rp-av', 'rp-id', 'rp-name', 'rp-meta', 'rp-calc', 'rp-line',
-          'rp-k', 'rp-v', 'num-btn'] as $cls) {
+foreach (['rpf-meta', 'rpf-calc', 'rpf-line', 'rpf-k', 'rpf-v', 'rpf-form',
+          'rpf-tight', 'num-btn'] as $cls) {
     chk(str_contains($css, '.' . $cls), "الكلاس «{$cls}» له CSS");
+}
+
+/* ⚠️⚠️ **اصطدام أسماء اتصاد فعليًّا**: البروفايل بدأ بالبادئة `rp-`، وطلع
+   `.rp-av` و`.rp-id` **موجودين أصلاً** لمكوّن «كارت الكيان» — فالأفاتار كان
+   بياخد `width:36px` من مكوّن تاني خالص بلا أي خطأ ولا تحذير. البادئة بقت
+   `rpf-`، والحارس ده بيمنع الرجوع لـ`rp-` تاني. */
+foreach (glob(dirname(__DIR__) . '/app/Views/reps/*.php') ?: [] as $f) {
+    $b = basename($f);
+    if (in_array($b, ['form.php', 'index.php', 'settlement_print.php'], true)) { continue; }
+    chk(!preg_match('~class="[^"]*\brp-~', srcR('app/Views/reps/' . $b)),
+        "★ {$b} مش بيستخدم البادئة المزدحمة rp-");
+}
+
+/* ⚠️⚠️ **مصيدة العملة المكرّرة الموثَّقة**: `money0()` بترجّع «ج.م» جوّه النص،
+   ومكوّن `stat` بيضيف `unit` جنبه ⇒ «٢٤٥٬٠٥٠ ج.م ج» (اتصاد بلقطة شاشة).
+   الحارس بيمسك أي `unit` سطرها السابق فيه `money0(` بلا `false`. */
+foreach (array_merge(glob(dirname(__DIR__) . '/app/Views/reps/*.php') ?: [],
+                     glob(dirname(__DIR__) . '/app/Views/payroll/*.php') ?: []) as $f) {
+    $lines = file($f) ?: [];
+    foreach ($lines as $i => $ln) {
+        if (!str_contains($ln, "'unit'")) { continue; }
+        $prev = $lines[$i - 1] ?? '';
+        if (!str_contains($prev, 'money0(')) { continue; }
+        chk(str_contains($prev, 'false'),
+            '★★ ' . basename($f) . ':' . ($i + 1) . ' العملة مش مكرّرة مع unit');
+    }
+}
+
+/* ⚠️ `.spacer` معرَّفة لـ`.topbar`/`.toolbar` بس — واستخدامها جوّه
+   `.section-head` (٤ مرات في البروفايل) كان بيخلّي الشارة تلزق في العنوان. */
+chk(str_contains($css, '.section-head .spacer'), '★ و.spacer شغّالة جوّه .section-head');
+
+/* ⚠️ كل نوع تفاصيل بيتطبع في شاشة لازم يكون **مسموحًا** في الكنترولر، وإلا
+   الرقم بيفتح «مش موجود» — عطل ما بيبانش غير بالضغط. */
+$ctrlSrc = srcR('app/Controllers/RepController.php');
+$viewsAll = '';
+foreach (glob(dirname(__DIR__) . '/app/Views/reps/*.php') ?: [] as $f) {
+    $viewsAll .= (string) file_get_contents($f);
+}
+preg_match_all('~drill/([a-z]+)~', $viewsAll, $um);
+foreach (array_unique($um[1]) as $w) {
+    chk(str_contains($ctrlSrc, "'" . $w . "'"), "نوع التفاصيل «{$w}» مسموح في الكنترولر");
 }
 
 $views = ['show', '_tab_salary', '_tab_ledger', '_tab_custody', '_tab_work', '_tab_card', '_drill'];
