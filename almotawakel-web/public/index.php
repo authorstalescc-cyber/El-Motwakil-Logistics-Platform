@@ -325,6 +325,12 @@ $r->post('/reps/entry/{eid}/delete',         'RepController@deleteEntry');
 $r->post('/reps/{id}',                       'RepController@update');   // بعد كل مسارات /reps/{id}/*
 $r->get('/reps/{id}',                        'RepController@show');     // الجشع أخيرًا
 
+// رواتب المناديب (v87) — الثابت + حوض الكومسيون + حوض المصروف. الحرفي قبل الجشع.
+$r->get('/payroll',                    'PayrollController@index');
+$r->get('/payroll/drill/{what}',       'PayrollController@drill');    // تفاصيل رقم — حرفي
+$r->post('/payroll/approve',           'PayrollController@approve');  // حرفي قبل /{id}
+$r->post('/payroll/{id}/unapprove',    'PayrollController@unapprove');
+
 // عهدة المناديب (v35) — محفظة منفصلة تمامًا عن الخزنة (زي كروت الفيزا).
 // المسارات الحرفية قبل الجشعة /{id}
 $r->get('/rep-custody',                            'RepCustodyController@index');

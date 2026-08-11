@@ -101,6 +101,44 @@ $owed = $sum['net'] < 0;   // سحب أكتر من راتبه
     </div>
   </details>
 
+  <?php /* حصّتا الحوضين (v87) — كومسيون البوالص وباقي مصروف البوالص.
+           ⚠️ الرقم بييجي من `Payroll` جاهزًا؛ الشاشة **ما بتحسبش** حاجة.
+           ⚠️ حصة المصروف ممكن تبقى **بالسالب** لو المالك قرّر خصم الزيادة —
+              وساعتها الصف بيتقلب لناقص بدل ما يعرض سالبًا في خانة موجب. */ ?>
+  <details class="ma-row">
+    <summary>
+      <span class="ma-ic"><?= icon('coins', 16) ?></span>
+      <span class="ma-lbl">كومسيون البوالص</span>
+      <span class="ma-val"><?= $num0($sum['commission']) ?></span>
+    </summary>
+    <div class="ma-body">
+      <div class="ma-line">
+        <span class="ma-line-n">حصتك من فرق الـ١٠٠</span>
+        <span class="ma-line-v"><?= $num($sum['commission']) ?></span>
+      </div>
+      <?php if (!$sum['approved']): ?>
+        <p class="ma-note">لسه مسوّدة — ممكن يتغيّر.</p>
+      <?php endif; ?>
+    </div>
+  </details>
+
+  <details class="ma-row <?= $sum['expenseShare'] < 0 ? 'is-minus' : '' ?>">
+    <summary>
+      <span class="ma-ic"><?= icon('crane', 16) ?></span>
+      <span class="ma-lbl">حصتك من مصروف البوالص</span>
+      <span class="ma-val"><?= ($sum['expenseShare'] < 0 ? '− ' : '') . $num0(abs($sum['expenseShare'])) ?></span>
+    </summary>
+    <div class="ma-body">
+      <div class="ma-line">
+        <span class="ma-line-n">الباقي بعد مصروفاتكم</span>
+        <span class="ma-line-v"><?= $num($sum['expenseShare']) ?></span>
+      </div>
+      <?php if (!$sum['approved']): ?>
+        <p class="ma-note">لسه مسوّدة — ممكن يتغيّر.</p>
+      <?php endif; ?>
+    </div>
+  </details>
+
   <?php /* مصروفاتي — الأنواع اللي المالك اختارها من الإعدادات.
            ⚠️ **مش بتتخصم من الراتب** (قرار المالك): مصروف شركة دفعه من عهدته،
               وبيتحاسب من مصروف المناديب الأسبوعي. القسم كله بيختفي لو الإعداد فاضي. */ ?>

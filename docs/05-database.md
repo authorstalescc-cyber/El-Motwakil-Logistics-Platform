@@ -159,6 +159,23 @@ PK مركّب `(agent_id, company_id)`, FK **CASCADE** على الطرفين. و
 ### `rep_entries` — بنود سجل المندوب — من migrate_v21
 `rep_id, entry_date, kind, amount DECIMAL (يُخزَّن موجبًا)، is_visa, note, settlement_id (NULL حتى يتحاسب)` + timestamps. `kind` ∈ مستحقات **له (+)**: `salary|transport|expense_logistic|bonus` — وخصومات/صرف **عليه (−)**: `expense_deducted|deduction|advance|settlement`. **الرصيد = Σ(المستحقات) − Σ(الخصومات)**. الإشارة مشتقّة من النوع لا مخزَّنة (`Rep::sign`). **بس `advance`+`settlement` (Rep::CASH_KINDS) بتطلّع كاش** → تدخل `Expense` (مصدر reps) والعهدة/الإقفال.
 
+### `payroll_periods` — لقطة فترة رواتب — من migrate_v87
+
+`period_from, period_to` (فريد معًا) `status ('draft'|'approved')`
+`bills_counted, bills_excluded` `commission_pool, expense_pool, allowed_expenses,
+expense_remainder, deficit` `deficit_decision ('office'|'deduct')` `reps_count`
+`note, approved_at, approved_by`. **كل رقم مشترك بيتخزّن وقت الاعتماد** — تغيير
+معدّل الـ١٠٠ أو الـ١٥٠ بعدين، أو تعديل بوليصة قديمة، ما بيلمسش فترة معتمدة.
+
+### `payroll_lines` — سطر كل مندوب في الفترة — من migrate_v87
+
+`period_id, rep_id` (فريد معًا) `rep_name` (لقطة) `included` (داخل قسمة الحوضين؟)
+`base_salary, advances, commission_share, expense_share, net`. **`expense_share`
+ممكن يكون سالبًا** لو المالك قرّر خصم العجز.
+
+⚠️ عمود `rep_entries.payroll_period_id` (من نفس الترحيل) بيربط البند بالفترة
+اللي ولّدته — من غيره إلغاء الاعتماد ما يعرفش يشيل أنهي بنود.
+
 ### `rep_settlements` — تقفيلات حساب المندوب — من migrate_v21
 `rep_id, period_from, period_to, total_due, total_deductions, total_advances, net, paid_amount, is_visa, note, settled_at, settled_by, pay_date`. لقطة تقفيل دوري (يدوي من–إلى): `net = due − deductions − advances`. عند التقفيل تُربَط بنود الفترة غير المتحاسبة بـ`settlement_id`، ويُنشأ بند `settlement` بتاريخ الدفع (كاش يخرج فعلاً).
 

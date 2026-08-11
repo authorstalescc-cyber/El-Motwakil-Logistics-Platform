@@ -67,6 +67,10 @@
 | الدالة | بتجاوب على |
 |---|---|
 | `Custody::billDeduction()` / `deductionSql()` | المخصوم من أي محفظة بسبب عهدة بوليصة |
+| `Custody::retained()` | المحتجز من البوليصة (الـ١٠٠ اللي ما خرجتش للسائق) = مصدر كومسيون المناديب |
+| `Payroll::ENTRY_KINDS` | نوع بند الراتب المتولَّد — **ولا واحد منهم كاش** (حارس التحسيب المزدوج) |
+| `Payroll::split()` | قسمة حوض بالتساوي بلا فقد قرش |
+| `Payroll::isExcludedType()` | الشحنة دي برّه حساب المناديب؟ |
 | `Permit::cashOutSql()` | البند ده طلّع كاش فعلاً؟ (`is_visa=0 AND unpaid=0`) |
 | `RepCustody::epochSql()` | الحركة بعد خط فصل العهد؟ |
 | `RepCustody::safeChargeSql()` / `officeDepositSql()` | ده بيمسّ درج المكتب؟ |

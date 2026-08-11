@@ -175,6 +175,34 @@ class SettingsSchema
             'help' => 'اكتب الأنواع بالعربي مفصولة بفاصلة: مواصلات داخلية، مواصلات خارجية، نثرية عامة. عرض للعلم بس — مش بتتخصم من راتبه.',
             'affects' => ['reps'],
         ],
+        /* ── رواتب المناديب (v87) ────────────────────────────────────────
+           ⚠️ التلاتة دول **بيحرّكوا فلوس فعلاً** (بيحدّدوا حوض الكومسيون
+              وحوض المصروف اللي بيتصرفوا للمناديب) — عشان كده `TIER_DANGER`
+              على عكس إعدادات «حسابي» العرضية فوق. */
+        'rep_expense_per_bill' => [
+            'label' => 'مصروف المناديب على البوليصة', 'section' => 'business',
+            'type' => self::T_MONEY, 'default' => '150', 'min' => 0, 'max' => 10000,
+            'role' => 'owner', 'tier' => self::TIER_DANGER, 'dated' => true,
+            'help' => 'المبلغ اللي بيتحطّ للمناديب على كل بوليصة. المصروف المسموح بيتخصم منه والباقي بيتقسم عليهم.',
+            'affects' => ['reps'],
+        ],
+        'payroll_excluded_container_types' => [
+            'label' => 'شحنات برّه حساب المناديب', 'section' => 'business',
+            'type' => self::T_LIST, 'default' => "جامبو\nتانك",
+            'role' => 'owner', 'tier' => self::TIER_DANGER,
+            'help' => 'نوع في كل سطر — البوالص دي ما بتدخلش لا حوض الكومسيون ولا حوض المصروف.',
+            'affects' => ['reps'],
+        ],
+        /* ⚠️ `T_LIST` مش `T_TEXT`: قاعدة السجل بتلزم أي إعداد مالي خطر إنه
+           يكون «سارٍ من تاريخ» **إلا القوايم** — والقايمة هنا فعلاً مش معدّلًا
+           يتأرّخ، هي اختيار أنواع. (verify_settings_registry بيفشل لو رجعت T_TEXT.) */
+        'payroll_allowed_expense_kinds' => [
+            'label' => 'المصروف المسموح للمناديب', 'section' => 'business',
+            'type' => self::T_LIST, 'default' => "مواصلات داخلية\nتصوير وطباعة",
+            'role' => 'owner', 'tier' => self::TIER_DANGER,
+            'help' => 'نوع في كل سطر — دول اللي بيتخصموا من حوض المصروف. أي نوع تاني بيتحمّله المكتب.',
+            'affects' => ['reps'],
+        ],
         'vat_rate' => [
             'label' => 'نسبة القيمة المضافة', 'section' => 'business', 'type' => self::T_RATE,
             'default' => '0.14', 'min' => 0, 'max' => 1, 'role' => 'manager',
@@ -390,7 +418,7 @@ class SettingsSchema
         ],
 
 
-        // ══════════════ ⑨ عتبات الإشعارات (v79 — كانت ثوابت في NotifyWatch) ══
+        // ══════════════ ⑨ عتبات الإشعارات (v87 — كانت ثوابت في NotifyWatch) ══
         'notify_submission_warn_hours' => [
             'label' => 'بند المندوب يبقى «متأخّر» بعد (ساعة)', 'section' => 'notify',
             'type' => self::T_INT, 'default' => '4', 'min' => 1, 'max' => 168, 'role' => 'manager',
@@ -428,7 +456,7 @@ class SettingsSchema
             'affects' => ['notifications'],
         ],
 
-        // ══════════════ ⑩ حدود الأمان (v79 — كانت ثوابت في Auth/RepAuth) ══
+        // ══════════════ ⑩ حدود الأمان (v87 — كانت ثوابت في Auth/RepAuth) ══
         'auth_max_tries' => [
             'label' => 'محاولات الدخول قبل القفل', 'section' => 'security',
             'type' => self::T_INT, 'default' => '5', 'min' => 3, 'max' => 20, 'role' => 'owner',

@@ -22,10 +22,14 @@ use App\Core\App;
  * الخزنة، ده **قرار مالي جديد** ولازم جدول رواتب بتاريخ صرف — مش تعديل هنا.
  *
  * ═══ ⚠️ قرار المالك (سؤال مباشر 2026-08-10): السلف بس هي اللي بتتخصم ═══
- * «المتبقي» = الراتب − السلف. **المواصلات ما بتتخصمش منه** لأنها مصروف شركة
- * بيتحاسب من مصروف المناديب الأسبوعي — بتتعرض في الشاشة **للعلم بس**.
- * والسؤال «أنهي نوع بيتخصم؟» بيتجاوب من `RepMiscKind::deductsSalary()` لا من
- * شرط مكتوب هنا (قاعدة ② — المصدر الوحيد).
+ * **المواصلات ما بتتخصمش من راتبه** لأنها مصروف شركة بيتحاسب من حوض مصروف
+ * المناديب — بتتعرض في الشاشة **للعلم بس**. والسؤال «أنهي نوع بيتخصم؟»
+ * بيتجاوب من `RepMiscKind::deductsSalary()` لا من شرط مكتوب هنا (قاعدة ②).
+ *
+ * ═══ ⚠️ اتوسّع في v87 — «المتبقي» بقى فيه الحوضين ═══
+ * «المتبقي» = الراتب − السلف **+ حصة الكومسيون + حصة المصروف**، والحصّتان
+ * بييجوا من `Payroll::repShare()` (المصدر الوحيد) لا محسوبين هنا. قبل v87 كان
+ * = الراتب − السلف بس، لأن الحوضين ما كانوش موجودين في النظام أصلاً.
  *
  * ═══ ⚠️ الفترة فترة رواتب مش شهر تقويمي ═══
  * قرار المالك: الشهر بيبدأ من يوم بيتحدّد من الإعدادات (`payroll_start_day`).
@@ -144,7 +148,7 @@ final class RepAccount
     /**
      * ملخّص فترة واحدة لمندوب واحد.
      *
-     * @return array{salary:float,advances:float,net:float,expenses:array<string,float>,expensesTotal:float}
+     * @return array{salary:float,advances:float,commission:float,expenseShare:float,approved:bool,net:float,expenses:array<string,float>,expensesTotal:float}
      */
     public static function summary(int $repId, array $period): array
     {
@@ -159,11 +163,20 @@ final class RepAccount
         $expenses = [];
         foreach (self::expenseKinds() as $k) { $expenses[$k] = round($byKind[$k] ?? 0, 2); }
 
+        /* ⚠️ حصّتا الحوضين (v87) بييجوا من `Payroll` **مش محسوبين هنا**: نفس
+           الدالة اللي شاشة المكتب بتقرا منها، فمستحيل موبايل المندوب يقول رقم
+           والكشف يقول تاني. والفترة المعتمدة بترجّع اللقطة الثابتة. */
+        $share = Payroll::repShare($repId, $period);
+
         return [
             'salary'        => $salary,
             'advances'      => $advances,
-            // ⚠️ المواصلات **مش** في المعادلة دي (قرار المالك) — شوف رأس الملف.
-            'net'           => round($salary - $advances, 2),
+            'commission'    => $share['commission'],
+            'expenseShare'  => $share['expense'],
+            'approved'      => $share['approved'],
+            /* ⚠️ المواصلات **مش** في المعادلة (قرار المالك) — بتتحاسب من حوض
+               المصروف، واللي بيوصل المندوب منها هو `expenseShare` بس. */
+            'net'           => round($salary - $advances + $share['commission'] + $share['expense'], 2),
             'expenses'      => $expenses,
             'expensesTotal' => round(array_sum($expenses), 2),
         ];

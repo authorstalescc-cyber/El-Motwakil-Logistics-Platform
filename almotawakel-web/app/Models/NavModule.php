@@ -61,7 +61,11 @@ class NavModule
 
     ['__sec', 'المناديب', null, null, null],
     ['rep-custody', 'عهدة المناديب', 'briefcase',     'RepCustodyController@index',  'rep_pending'],
-    ['reps',        'رواتب وحسابات المناديب', 'user', 'RepController@index',         null],
+    /* ⚠️ التسمية اتغيّرت في v87: بقى فيه شاشتان — `payroll` بتحسب الفترة
+       وبتعتمدها، و`reps` كارت وكشف حساب كل مندوب. الاسم القديم («رواتب
+       وحسابات المناديب») كان بيوعد بحاجة الشاشة ما بتعملهاش. */
+    ['payroll',     'رواتب المناديب', 'banknote',    'PayrollController@index',     null],
+    ['reps',        'حسابات المناديب', 'user',       'RepController@index',         null],
 
     ['__sec', 'السجلات والإدارة', null, null, null],
     ['directory',   'دليل الأطراف',  'users',         'DirectoryController@index',   null],

@@ -5138,6 +5138,12 @@ table.data th.col-owner{min-width:230px}
 .p5-mw340{min-width:340px} .p5-mw280{min-width:280px} .p5-mw200{min-width:200px}
 .p5-grow240{flex:1;min-width:240px}
 .field.grow200{flex:1;min-width:200px} .field.grow150{flex:1;min-width:150px}
+/* رقم جوّه خلية جدول بيفتح تفاصيله — «ممنوع رقم أصمّ» في الجداول (v87).
+   ⚠️ الألوان توكنز مش قيم: `--accent` نص على سطح فاتح، والخط المتقطّع هو
+      الإشارة الوحيدة إن الرقم ده بيتضغط (الجدول مفيهوش مساحة لزرار). */
+.num-btn{background:none;border:0;padding:0;font:inherit;color:var(--accent);
+  cursor:pointer;border-bottom:1px dashed var(--line2)}
+.num-btn:hover,.num-btn:focus-visible{color:var(--gold);border-bottom-color:var(--gold)}
 .p5-search{position:relative;flex:1;min-width:280px;max-width:420px}
 .p5-in{width:100%;padding:9px 12px;border:1px solid var(--line);
   border-radius:var(--radius-1);background:var(--input);color:var(--ink);font-family:inherit}

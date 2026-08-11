@@ -327,16 +327,24 @@ class RepMiscExpense
     public static function rowsForKinds(int $repId, array $kinds, string $from = '', string $to = ''): array
     {
         if (!self::available() || !$kinds) { return []; }
-        $args = [$repId]; $w = '';
-        if ($from !== '') { $w .= ' AND exp_date >= ?'; $args[] = $from; }
-        if ($to !== '')   { $w .= ' AND exp_date <= ?'; $args[] = $to; }
+        // ⚠️ `$repId = 0` معناها **كل المناديب** (تفاصيل رقم جماعي في شاشة
+        //    الرواتب). كان قبل كده بيدّي صفر صف بالسكوت لأن `rep_id = 0` مالوش
+        //    مقابل — والرقم كان بيفتح قايمة فاضية بلا أي خطأ ظاهر.
+        $args = []; $w = '';
+        if ($repId > 0)   { $w .= ' AND m.rep_id = ?';   $args[] = $repId; }
+        if ($from !== '') { $w .= ' AND m.exp_date >= ?'; $args[] = $from; }
+        if ($to !== '')   { $w .= ' AND m.exp_date <= ?'; $args[] = $to; }
 
-        $or = implode(' OR ', array_map(static fn($k) => self::kindSql($k), $kinds));
+        /* ⚠️ اسم المندوب بيتضمّ هنا (v87) عشان قايمة «كل المناديب» تقدر تقول
+           الصف ده بتاع مين — من غيره التفاصيل الجماعية بتبقى مبالغ بلا صاحب. */
+        $or = implode(' OR ', array_map(static fn($k) => self::kindSql($k, 'm'), $kinds));
         return Database::all(
-            "SELECT * FROM rep_misc_expenses
-              WHERE rep_id = ? AND " . self::cashOnlySql() . " AND ($or)" . $w
-            . RepCustody::epochSql('exp_date')
-            . ' ORDER BY exp_date DESC, id DESC', $args);
+            "SELECT m.*, r.name AS rep_name
+               FROM rep_misc_expenses m
+               LEFT JOIN reps r ON r.id = m.rep_id
+              WHERE " . self::cashOnlySql('m') . " AND ($or)" . $w
+            . RepCustody::epochSql('m.exp_date')
+            . ' ORDER BY m.exp_date DESC, m.id DESC', $args);
     }
 
     /** نثريات مندوب (الأحدث أولاً) — لكشف حسابه. */

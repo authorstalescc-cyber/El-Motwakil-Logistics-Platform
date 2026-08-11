@@ -46,7 +46,11 @@ class Settings
      *    من غير تأريخ بيعيد حساب الماضي بالسكوت. `verify_settings_registry`
      *    بيفرض إن كل مفتاح `TIER_DANGER` يبقى إما هنا أو تاريخًا بنفسه.
      */
-    public const DATED_KEYS = ['custody_bill_deduction'];
+    /* ⚠️ المفتاح اللي هنا **بيتجمّد ماضيه**: أي حساب بيمرّ على `valueOn`/`datedSql`
+       بياخد القيمة اللي كانت سارية يوم البند لا السارية النهارده. `rep_expense_per_bill`
+       انضم في v87 لأن المالك قال صراحةً «١٥٠ من الممكن أن يتغير» — ومن غير
+       التأريخ أول تغيير كان هيعيد حساب كل فترة رواتب قديمة بالسكوت. */
+    public const DATED_KEYS = ['custody_bill_deduction', 'rep_expense_per_bill'];
 
     /** بداية الزمن للسلسلة — «القيمة دي كانت سارية من الأزل». */
     public const EPOCH_DATE = '1970-01-01';
