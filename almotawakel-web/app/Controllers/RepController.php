@@ -4,6 +4,10 @@ namespace App\Controllers;
 use App\Core\Controller;
 use App\Models\Closing;
 use App\Models\Rep;
+use App\Models\RepAccount;
+use App\Models\RepCustody;
+use App\Models\RepPortal;
+use App\Models\RepProfile;
 
 /**
  * وحدة المناديب — كارت لكل مندوب + كشف حساب بطرفين + تقفيل دوري يدوي.
@@ -35,24 +39,83 @@ class RepController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────── كارت المندوب (بروفايل + كشف)
+    // ─────────────────────────────────────────── بروفايل المندوب (v88)
+
+    /**
+     * البروفايل بتبويبات — **روابط حقيقية** (`?tab=`) لا تبديل بجافاسكريبت،
+     * فالرجوع بالمتصفح والمشاركة والفتح في تبويب جديد كلهم شغّالين.
+     *
+     * ⚠️ كل تبويب بيجيب **بياناته هو بس**: البروفايل فيه ٨ مصادر، وجلبهم كلهم
+     *    في كل فتحة كان بيدّي عشرات الاستعلامات عشان يتعرض واحد.
+     */
     public function show(string $id): void
     {
         $this->requireAuth();
-        $rep = Rep::find((int) $id);
+        $repId = (int) $id;
+        $rep   = Rep::find($repId);
         if (!$rep) { $this->notFound('المندوب ده مش موجود أو اتمسح.'); }
 
-        $entryState = \App\Core\FormState::consume('reps.entry.' . (int) $id, 'reps/' . $id);
-        $this->render('reps/show', [
-            'entryState'  => $entryState,
-            'settleState' => \App\Core\FormState::consume('reps.settle.' . (int) $id, 'reps/' . $id),
+        $tab    = RepProfile::tab($_GET['tab'] ?? '');
+        $period = RepAccount::period(trim($_GET['at'] ?? ''));
+
+        $data = [
+            'entryState'  => \App\Core\FormState::consume('reps.entry.' . $repId, 'reps/' . $id),
+            'settleState' => \App\Core\FormState::consume('reps.settle.' . $repId, 'reps/' . $id),
             'title'       => 'المندوب: ' . $rep['name'],
             'rep'         => $rep,
-            'summary'     => Rep::summary((int) $id),
-            'ledger'      => Rep::ledger((int) $id),
-            'settlements' => Rep::settlements((int) $id),
+            'tab'         => $tab,
+            'period'      => $period,
+            'prev'        => RepAccount::shift($period, -1),
+            'next'        => RepAccount::shift($period, 1),
+            'isFuture'    => RepAccount::isFuture(RepAccount::shift($period, 1)),
+            'head'        => RepProfile::head($repId, $period),
             'kinds'       => Rep::KINDS,
-        ]);
+        ];
+
+        $data += match ($tab) {
+            'salary'  => ['pay'     => RepProfile::salary($repId, $period)],
+            'ledger'  => ['ledger'  => Rep::ledger($repId),
+                          'summary' => Rep::summary($repId)],
+            'custody' => ['custody' => RepProfile::custody($repId)],
+            'work'    => ['work'    => RepProfile::work($repId)],
+            default   => ['card'    => RepProfile::card($repId)],
+        };
+
+        $this->render('reps/show', $data);
+    }
+
+    /**
+     * تفاصيل أي رقم في الترويسة — «ممنوع رقم أصمّ» (قاعدة ⑤).
+     * `what`: balance | custody | advances | net | pending
+     */
+    public function drill(string $id, string $what): void
+    {
+        $this->requireAuth();
+        $repId = (int) $id;
+        if (!Rep::find($repId)) { $this->notFound('المندوب ده مش موجود أو اتمسح.'); }
+        if (!in_array($what, ['balance', 'custody', 'advances', 'net', 'pending'], true)) {
+            $this->notFound('نوع التفاصيل ده مش موجود.');
+        }
+
+        $period = RepAccount::period(trim($_GET['at'] ?? ''));
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: private, no-store, max-age=0');
+        }
+        $this->render('reps/_drill', [
+            'what'   => $what,
+            'repId'  => $repId,
+            'period' => $period,
+            'rows'   => match ($what) {
+                'balance'  => Rep::ledger($repId),
+                'custody'  => RepCustody::available() ? RepCustody::spending($repId) : [],
+                'advances' => RepAccount::advanceRows($repId, $period),
+                'net'      => RepProfile::salary($repId, $period)['rows'],
+                default    => RepCustody::available()
+                    ? RepPortal::mySubmissions($repId, 40, 'pending') : [],
+            },
+            'pay'    => $what === 'net' ? RepProfile::salary($repId, $period) : null,
+        ], false);
     }
 
     // ─────────────────────────────────────────── إنشاء / تعديل كارت
@@ -148,8 +211,14 @@ class RepController extends Controller
         // بعد نجاح التحقّق وقبل الكتابة — إرسال نفس الشاشة مرتين يُرفض
         // بدل أن يسجّل نفس المرتب/الخصم/السلفة مرتين في سجل المندوب.
         $this->claimForm('reps/' . $id);
-        Rep::createEntry((int) $id, $data);
-        $this->done('تمت إضافة البند لسجل المندوب.', 'reps/' . $id, 'entries');
+        /* ⚠️ حارس «الفترة اتعتمدت» بيرمي من الموديل (قاعدة ③) — الشاشة بتخفي
+           الفورم، بس الطلب المزوَّر أو التبويب القديم لازم يترفض هنا كمان. */
+        try {
+            Rep::createEntry((int) $id, $data);
+        } catch (\RuntimeException $e) {
+            $this->repFailure('reps.entry.' . (int) $id, 'reps/' . $id, $data, $e->getMessage());
+        }
+        $this->done('تمت إضافة البند لسجل المندوب.', 'reps/' . $id . '?tab=salary', 'entries');
     }
 
     public function deleteEntry(string $eid): void
@@ -162,7 +231,11 @@ class RepController extends Controller
         if (Rep::isCashKind($entry['kind']) && ($err = Closing::guard($entry['entry_date']))) {
             $this->fail($err, 'reps/' . $entry['rep_id']);
         }
-        Rep::deleteEntry((int) $eid);
+        try {
+            Rep::deleteEntry((int) $eid);
+        } catch (\RuntimeException $e) {
+            $this->fail($e->getMessage(), 'reps/' . $entry['rep_id']);
+        }
         flash('success', 'تم حذف البند.');
         redirect('reps/' . $entry['rep_id']);
     }

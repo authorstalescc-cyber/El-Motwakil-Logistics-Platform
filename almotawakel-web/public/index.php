@@ -317,6 +317,7 @@ $r->get('/reps',                             'RepController@index');
 $r->get('/reps/new',                         'RepController@create');
 $r->post('/reps',                            'RepController@store');
 $r->get('/reps/{id}/edit',                   'RepController@edit');
+$r->get('/reps/{id}/drill/{what}',           'RepController@drill');   // تفاصيل رقم — حرفي قبل الجشع
 $r->post('/reps/{id}/delete',                'RepController@destroy');
 $r->post('/reps/{id}/entry',                 'RepController@addEntry');
 $r->post('/reps/{id}/settle',                'RepController@settle');

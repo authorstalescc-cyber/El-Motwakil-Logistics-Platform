@@ -139,6 +139,25 @@ $owed = $sum['net'] < 0;   // سحب أكتر من راتبه
     </div>
   </details>
 
+  <?php /* زيادة / خصم / جزاء (v88) — البنود اللي المكتب سجّلها في بروفايله.
+           ⚠️ الصف بيختفي خالص لما تكون صفر: صفر جنيه جزاء مش معلومة، وعرضه
+              دايمًا بيخلّي المندوب يفتكر إن فيه حاجة عليه. */ ?>
+  <?php if (abs($sum['adjustments']) > 0.005): $isCut = $sum['adjustments'] < 0; ?>
+    <details class="ma-row <?= $isCut ? 'is-minus' : '' ?>">
+      <summary>
+        <span class="ma-ic"><?= icon($isCut ? 'alert' : 'star', 16) ?></span>
+        <span class="ma-lbl"><?= $isCut ? 'خصومات وجزاءات' : 'مكافآت' ?></span>
+        <span class="ma-val"><?= ($isCut ? '− ' : '') . $num0(abs($sum['adjustments'])) ?></span>
+      </summary>
+      <div class="ma-body">
+        <div class="ma-line">
+          <span class="ma-line-n">المكتب هو اللي بيحطّها</span>
+          <span class="ma-line-v"><?= $num(abs($sum['adjustments'])) ?></span>
+        </div>
+      </div>
+    </details>
+  <?php endif; ?>
+
   <?php /* مصروفاتي — الأنواع اللي المالك اختارها من الإعدادات.
            ⚠️ **مش بتتخصم من الراتب** (قرار المالك): مصروف شركة دفعه من عهدته،
               وبيتحاسب من مصروف المناديب الأسبوعي. القسم كله بيختفي لو الإعداد فاضي. */ ?>

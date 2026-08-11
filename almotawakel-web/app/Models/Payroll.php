@@ -181,6 +181,93 @@ final class Payroll
         return $out;
     }
 
+    // ─────────────────────────────────────────────── البنود اليدوية (v88)
+
+    /**
+     * أنواع البنود اليدوية اللي بتدخل حساب الفترة = **كل نوع مش كاش**.
+     *
+     * ⚠️ محسوبة من `Rep::KINDS` ناقص `Rep::CASH_KINDS` لا مكتوبة قايمة:
+     *    أي نوع جديد (زي `penalty`) بيدخل تلقائيًّا. القايمة اليدوية كانت
+     *    هتسيبه برّه الحساب **بالسكوت** فالبروفايل يقول رقم والراتب يقول تاني.
+     * ⚠️ و**الكاش برّه عن قصد**: السلفة ودفعة التسوية حركتان نقديتان ليهما
+     *    قناتهما (المصروفات والتقفيل) — حسابهما هنا كمان = تحسيب مزدوج.
+     *
+     * @return string[]
+     */
+    public static function adjustKinds(): array
+    {
+        return array_values(array_diff(array_keys(Rep::KINDS), Rep::CASH_KINDS));
+    }
+
+    /** `[sql, args]` لشرط البنود اليدوية بتاعة مندوب في فترة. */
+    private static function adjustWhere(int $repId, string $from, string $to): array
+    {
+        $kinds = self::adjustKinds();
+        $ph    = implode(',', array_fill(0, count($kinds), '?'));
+        /* ⚠️ `payroll_period_id IS NULL` هي اللي بتمنع البنود اللي **الوحدة دي
+           نفسها** ولّدتها إنها تتحسب تاني كتعديل يدوي — من غيرها الاعتماد
+           بيضاعف نفسه في أي إعادة حساب. */
+        return [
+            'rep_id = ? AND payroll_period_id IS NULL AND kind IN (' . $ph . ')
+             AND entry_date BETWEEN ? AND ?',
+            array_merge([$repId], $kinds, [$from, $to]),
+        ];
+    }
+
+    /** صافي البنود اليدوية في الفترة (موجب = زيادة له · سالب = خصم/جزاء). */
+    public static function adjustmentsFor(int $repId, string $from, string $to): float
+    {
+        if (!self::available()) { return 0.0; }
+        [$w, $args] = self::adjustWhere($repId, $from, $to);
+        $credit = "'" . implode("','", Rep::CREDIT_KINDS) . "'";
+        return round((float) Database::scalar(
+            "SELECT COALESCE(SUM(CASE WHEN kind IN ($credit) THEN amount ELSE -amount END),0)
+               FROM rep_entries WHERE $w", $args), 2);
+    }
+
+    /** صفوف البنود اليدوية — «ممنوع رقم أصمّ»: الرقم بيفتح بنوده. */
+    public static function adjustmentRows(int $repId, string $from, string $to): array
+    {
+        if (!self::available()) { return []; }
+        [$w, $args] = self::adjustWhere($repId, $from, $to);
+        $rows = Database::all(
+            "SELECT id, entry_date, kind, amount, note, is_visa, settlement_id
+               FROM rep_entries WHERE $w
+              ORDER BY entry_date DESC, id DESC", $args);
+        foreach ($rows as &$r) {
+            $r['label']  = Rep::kindLabel((string) $r['kind']);
+            $r['signed'] = round(Rep::sign((string) $r['kind']) * (float) $r['amount'], 2);
+        }
+        unset($r);
+        return $rows;
+    }
+
+    /**
+     * **الفترة المعتمدة اللي التاريخ ده واقع فيها** — أو `null`.
+     *
+     * ⚠️ ده حارس الكتابة (قاعدة ③): بند يتزوّد أو يتشال جوّه فترة **اتعتمدت
+     *    خلاص** بيخلّي لقطة الراتب تقول رقم وسجل المندوب يقول رقم تاني، وهي
+     *    نفس مصيدة «كارت يقول رقم وكشف يقول تاني». الحل: يترفض، والمالك
+     *    يلغي الاعتماد لو عايز يعدّل.
+     */
+    public static function lockOn(?string $date): ?array
+    {
+        if (!self::available() || $date === null || $date === '') { return null; }
+        return Database::row(
+            "SELECT * FROM payroll_periods
+              WHERE status = 'approved' AND ? BETWEEN period_from AND period_to
+              LIMIT 1", [$date]);
+    }
+
+    /** رسالة الرفض الجاهزة — نص واحد فمستحيل شاشتان تقولا سببين مختلفين. */
+    public static function lockMessage(?string $date): ?string
+    {
+        $p = self::lockOn($date);
+        return $p === null ? null
+            : 'راتب الفترة (' . dfmt((string) $p['period_from']) . ' – '
+            . dfmt((string) $p['period_to']) . ') اتعتمد خلاص — الغِ الاعتماد الأول.';
+    }
+
     // ─────────────────────────────────────────────── القسمة بالتساوي
 
     /**
@@ -298,7 +385,11 @@ final class Payroll
             $allowed = 0.0;
             foreach ($allow as $k) { $allowed += (float) ($byKind[$k] ?? 0); }
 
-            if (!$active && $advances <= 0 && $allowed <= 0) { continue; }
+            /* البنود اليدوية (مكافأة · خصم · جزاء) اللي المالك سجّلها في
+               بروفايل المندوب داخل الفترة — بتدخل الصافي زي ما هي. */
+            $adjust = self::adjustmentsFor($id, $from, $to);
+
+            if (!$active && $advances <= 0 && $allowed <= 0 && abs($adjust) < 0.005) { continue; }
 
             /* ⚠️ بيتجمّع من **كل** اللي في الكشف حتى المستبعَد من القسمة:
                المصروف ده اتصرف فعلاً من الحوض المشترك سواء صاحبه هياخد
@@ -313,6 +404,7 @@ final class Payroll
                 'base_salary' => $active ? round((float) ($r['monthly_salary'] ?? 0), 2) : 0.0,
                 'advances'    => round($advances, 2),
                 'allowed'     => round($allowed, 2),
+                'adjustments' => $adjust,
             ];
         }
         $allowedTotal = round($allowedTotal, 2);
@@ -336,7 +428,8 @@ final class Payroll
             $l['expense_share']    = $l['included'] ? ($expShares[$i]  ?? 0.0) : 0.0;
             if ($l['included']) { $i++; }
             $l['net'] = round(
-                $l['base_salary'] - $l['advances'] + $l['commission_share'] + $l['expense_share'], 2);
+                $l['base_salary'] - $l['advances'] + $l['commission_share']
+                + $l['expense_share'] + $l['adjustments'], 2);
         }
         unset($l);
 
@@ -451,14 +544,14 @@ final class Payroll
                 Database::exec(
                     "INSERT INTO payroll_lines
                         (period_id, rep_id, rep_name, included, base_salary, advances,
-                         commission_share, expense_share, net)
-                     VALUES (:p, :r, :n, :i, :b, :a, :c, :e, :net)",
+                         commission_share, expense_share, adjustments, net)
+                     VALUES (:p, :r, :n, :i, :b, :a, :c, :e, :adj, :net)",
                     [
                         ':p' => $pid, ':r' => $l['rep_id'], ':n' => $l['rep_name'],
                         ':i' => $l['included'] ? 1 : 0,
                         ':b' => $l['base_salary'], ':a' => $l['advances'],
                         ':c' => $l['commission_share'], ':e' => $l['expense_share'],
-                        ':net' => $l['net'],
+                        ':adj' => $l['adjustments'], ':net' => $l['net'],
                     ]);
 
                 self::entry($pid, $l['rep_id'], $to, 'base',       $l['base_salary']);
@@ -536,20 +629,23 @@ final class Payroll
      * حصة مندوب واحد في فترة — **معتمدة لو الفترة اتعتمدت، محسوبة لو لأ**.
      * شاشة «حسابي» بتقرا من هنا فمستحيل الكارت يقول رقم والكشف يقول تاني.
      *
-     * @return array{commission:float,expense:float,approved:bool}
+     * @return array{commission:float,expense:float,adjust:float,approved:bool}
      */
     public static function repShare(int $repId, array $period): array
     {
-        if (!self::available()) { return ['commission' => 0.0, 'expense' => 0.0, 'approved' => false]; }
+        if (!self::available()) {
+            return ['commission' => 0.0, 'expense' => 0.0, 'adjust' => 0.0, 'approved' => false];
+        }
 
         $row = self::findPeriod($period['from'], $period['to']);
         if ($row) {
             $line = Database::row(
-                'SELECT commission_share, expense_share FROM payroll_lines WHERE period_id = ? AND rep_id = ?',
+                'SELECT * FROM payroll_lines WHERE period_id = ? AND rep_id = ?',
                 [(int) $row['id'], $repId]);
             return [
                 'commission' => round((float) ($line['commission_share'] ?? 0), 2),
                 'expense'    => round((float) ($line['expense_share'] ?? 0), 2),
+                'adjust'     => round((float) ($line['adjustments'] ?? 0), 2),
                 'approved'   => true,
             ];
         }
@@ -559,10 +655,11 @@ final class Payroll
                 return [
                     'commission' => (float) $l['commission_share'],
                     'expense'    => (float) $l['expense_share'],
+                    'adjust'     => (float) $l['adjustments'],
                     'approved'   => false,
                 ];
             }
         }
-        return ['commission' => 0.0, 'expense' => 0.0, 'approved' => false];
+        return ['commission' => 0.0, 'expense' => 0.0, 'adjust' => 0.0, 'approved' => false];
     }
 }

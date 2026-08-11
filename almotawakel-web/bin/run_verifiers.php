@@ -65,6 +65,7 @@ $catalog = [
     'verify_v67.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'خزنة الشركة الموسّعة (v67) — مصروفات وفيزا وعهدة مندوب ومرفقات وتعديل وميزانية وكشف A4، الاتجاهان مع بعض والفلوس محفوظة، fixtures داخل rollback'],
     'verify_v71.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'وسم النثرية (v71) — الحياد المالي ووصول الوسم للجدول النهائي وإجباريّته والسلفة كاش بنيويًّا، fixtures داخل rollback'],
     'verify_rep_account.php'      => ['impact' => 'rollback',   'self_guard' => false, 'note' => '«حسابي» للمندوب (v72) — فترة الرواتب بأي يوم بداية والمتبقي = الراتب − السلف + حصّتا الحوضين (v87)، والإعدادات بتتغيّر جوّه transaction ثم rollback'],
+    'verify_rep_profile.php'      => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'بروفايل المندوب والبنود اليدوية (v88) — الجزاء وسم مش معاملة، وحارس الفترة المعتمدة، والبند بيغيّر الصافي بمقداره، fixtures داخل rollback'],
     'verify_payroll.php'          => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'رواتب المناديب (v87) — حارس التحسيب المزدوج (ولا نوع بند في CASH_KINDS) والقسمة بلا فقد قرش واللقطة الثابتة، fixtures داخل rollback'],
     'verify_design_system.php'    => ['impact' => 'read',       'self_guard' => false, 'note' => 'لغة تصميم النظام + قاعدة «ممنوع رقم أصمّ» + نافذة التفاصيل الواحدة'],
     'verify_density.php'          => ['impact' => 'read',       'self_guard' => false, 'note' => 'قانون التصميم: صفر جملة تعليمية — الشرح يتشال والتحذير الوظيفي يفضل'],

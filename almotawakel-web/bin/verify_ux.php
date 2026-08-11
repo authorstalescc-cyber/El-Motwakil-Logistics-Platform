@@ -622,14 +622,27 @@ $preserve = [
     'توزيع أصحاب البيان' => ['SettlementController.php',  'settlements.assign', 'settlements/unassigned.php', '$assignState'],
     'مستخدمو الإعدادات' => ['SettingsController.php',     'settings.user.add',  'settings/sections/users.php', '$userState'],
     'كارت المندوب'     => ['RepController.php',           'reps.create',        'reps/form.php',             '$formErr'],
-    'بنود المندوب'     => ['RepController.php',           'reps.entry.',        'reps/show.php',             '$eOld'],
-    'تسوية المندوب'    => ['RepController.php',           'reps.settle.',       'reps/show.php',             '$sOld'],
+    /* ⚠️ **مجلد لا ملف** (v88): البروفايل اتقسم لتبويبات، فالفورمان اتنقلوا من
+       `reps/show.php` لـ`reps/_tab_salary.php`. الفحص كان مقفولًا على اسم
+       الملف فبقى بيفشل على شغل سليم — والقاعدة إن **الفحص يبقى على السلوك**
+       (الشاشة بترجّع المُدخَل ولا لأ) لا على مكانه. الشرطة المايلة في الآخر
+       معناها «دوّر في المجلد كله». */
+    'بنود المندوب'     => ['RepController.php',           'reps.entry.',        'reps/',                     '$eOld'],
+    'تسوية المندوب'    => ['RepController.php',           'reps.settle.',       'reps/',                     '$sOld'],
     'وجهات الخريطة'    => ['TrackController.php',         'tracking.place',     'tracking/places.php',       '$pOld'],
     'تحصيل العميل'     => ['DirectoryController.php',     'directory.pay.',     'directory/agent.php',       '$payOld'],
 ];
+/** محتوى شاشة واحدة، أو كل شاشات مجلد لو المسار منتهي بـ«/». */
+$viewSrc = static function (string $view) use ($root): string {
+    $base = $root . '/app/Views/' . $view;
+    if (!str_ends_with($view, '/')) { return (string) @file_get_contents($base); }
+    $out = '';
+    foreach (glob($base . '*.php') ?: [] as $f) { $out .= (string) file_get_contents($f); }
+    return $out;
+};
 foreach ($preserve as $label => [$ctrl, $formId, $view, $marker]) {
     $cSrc = php_code((string) file_get_contents($root . '/app/Controllers/' . $ctrl));
-    $vSrc = (string) file_get_contents($root . '/app/Views/' . $view);
+    $vSrc = $viewSrc($view);
     $hasCtrl = str_contains($cSrc, "'" . $formId);
     $hasView = str_contains($vSrc, $marker);
     ($hasCtrl && $hasView)
@@ -638,7 +651,8 @@ foreach ($preserve as $label => [$ctrl, $formId, $view, $marker]) {
 }
 
 // حقلا الملاحظة في كارت المندوب لازم يبقوا من حقيبتين مختلفتين (اتصادفت غلطة فعلية)
-$repShow = (string) file_get_contents($root . '/app/Views/reps/show.php');
+// ⚠️ على مجلد البروفايل كله — الفورمان بقوا في `_tab_salary.php` من v88.
+$repShow = $viewSrc('reps/');
 (substr_count($repShow, "\$eOld['note']") === 1 && substr_count($repShow, "\$sOld['note']") === 1)
     ? ok('ملاحظة البند وملاحظة التسوية كل واحدة من حقيبتها')
     : bad('حقلا الملاحظة في كارت المندوب بيقروا من نفس الحقيبة');

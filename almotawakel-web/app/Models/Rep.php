@@ -9,8 +9,12 @@ use App\Core\Database;
  *
  * سجل المندوب كشف من طرفين:
  *   مستحقات له (+): salary | transport | expense_logistic | bonus
- *   خصومات/صرف عليه (−): expense_deducted | deduction | advance | settlement
+ *   خصومات/صرف عليه (−): expense_deducted | deduction | penalty | advance | settlement
  *   الرصيد = Σ(المستحقات) − Σ(الخصومات) = المستحق للمندوب علينا (الدين علينا — تحذير 1).
+ *
+ * ⚠️ **من v88 البنود اليدوية بتدخل حساب راتب الفترة** (`Payroll::adjustKinds`)،
+ *    و**الكتابة بتترفض جوّه فترة راتبها اتعتمد** (`assertPayrollOpen`) — وإلا
+ *    لقطة الراتب تقول رقم وسجل المندوب يقول رقم تاني.
  *
  * الربط بالمصروفات/العهدة (قرار صاحب الشركة):
  *   بس البنود اللي بتطلّع فلوس من الخزنة فعلاً — advance + settlement — بتدخل
@@ -20,7 +24,16 @@ use App\Core\Database;
  */
 class Rep
 {
-    /** تسميات أنواع البنود (للشارات والفورم). */
+    /**
+     * تسميات أنواع البنود (للشارات والفورم).
+     *
+     * ⚠️ **المفتاح بيتخزّن في `rep_entries.kind`** — إعادة تسمية مفتاح = بنود
+     *    يتيمة. زوّد نوعًا جديدًا ولا تعيد تسمية القديم.
+     * ⚠️ `penalty` انضم في v88 (طلب المالك): كان بيتسجّل «خصم» زي أي خصم تاني،
+     *    فمفيش طريقة تعرف بيها الجزاءات من خصم المصروف من تسوية فرق. الفصل
+     *    **وسم** — المعاملة المالية نفسها ما اتغيّرتش بالحرف (خصم بيقلّل
+     *    المستحق ومش بيمسّ خزنة).
+     */
     public const KINDS = [
         'salary'            => 'مرتب',
         'transport'         => 'مواصلات',
@@ -28,6 +41,7 @@ class Rep
         'bonus'             => 'مكافأة',
         'expense_deducted'  => 'مصروف يُخصم من المرتب',
         'deduction'         => 'خصم',
+        'penalty'           => 'جزاء',
         'advance'           => 'سُلفة / عهدة',
         'settlement'        => 'دفعة تسوية',
     ];
@@ -36,7 +50,7 @@ class Rep
     public const CREDIT_KINDS = ['salary', 'transport', 'expense_logistic', 'bonus'];
 
     /** البنود المخصومة / المصروفة عليه (−). */
-    public const DEBIT_KINDS = ['expense_deducted', 'deduction', 'advance', 'settlement'];
+    public const DEBIT_KINDS = ['expense_deducted', 'deduction', 'penalty', 'advance', 'settlement'];
 
     /** البنود اللي بتطلّع فلوس من الخزنة فعلاً (تدخل المصروفات العامة والعهدة). */
     public const CASH_KINDS = ['advance', 'settlement'];
@@ -249,8 +263,12 @@ class Rep
         foreach ($rows as $r) { $by[$r['kind']] = (float) $r['v']; }
         $sum = fn(array $keys) => array_sum(array_map(fn($k) => $by[$k] ?? 0.0, $keys));
 
+        /* ⚠️ «الخصومات» = كل بند بيقلّل المستحق **وهو مش كاش خارج** — يعني
+           `DEBIT_KINDS` ناقص `CASH_KINDS`. مكتوبة كده بدل قايمة يدوية عشان
+           أي نوع خصم جديد (زي `penalty` في v88) يدخل تلقائيًّا؛ القايمة اليدوية
+           كانت هتسيبه برّه الملخّص **بالسكوت** والرصيد يقول رقم والكارت تاني. */
         $due        = $sum(self::CREDIT_KINDS);
-        $deductions = $sum(['expense_deducted', 'deduction']);
+        $deductions = $sum(array_values(array_diff(self::DEBIT_KINDS, self::CASH_KINDS)));
         $advances   = $sum(['advance']);
         $paid       = $sum(['settlement']);
         return [
@@ -271,7 +289,11 @@ class Rep
     public static function ledger(int $repId): array
     {
         $rows = Database::all(
-            "SELECT id, entry_date AS d, kind, amount, is_visa, note, settlement_id
+            /* ⚠️ `payroll_period_id` بيتجاب عشان الشاشة تعرف إن البند ده النظام
+               ولّده من اعتماد الراتب فتخفي زرار الحذف — شيله بيفضّي لقطة
+               الفترة، والطريق الصح إلغاء الاعتماد. (`Rep::deleteEntry` بيرفض
+               برضه — الإخفاء تسهيل مش حماية، قاعدة ③.) */
+            "SELECT id, entry_date AS d, kind, amount, is_visa, note, settlement_id, payroll_period_id
              FROM rep_entries WHERE rep_id = ?
              ORDER BY (entry_date IS NULL), entry_date, id", [$repId]);
 
@@ -295,8 +317,28 @@ class Rep
         return Database::row("SELECT * FROM rep_entries WHERE id = ?", [$id]);
     }
 
+    /**
+     * ⚠️⚠️ **حارس الفترة المعتمدة** (v88 — قاعدة ③: الحارس في الموديل).
+     *
+     * بند بيتزوّد أو يتشال جوّه فترة **راتبها اتعتمد خلاص** بيخلّي لقطة الراتب
+     * تقول رقم وسجل المندوب يقول رقم تاني — ودي بالظبط مصيدة «كارت يقول رقم
+     * وكشف يقول رقم تاني». الحل إن الكتابة تترفض والمالك يلغي الاعتماد لو
+     * عايز يعدّل.
+     *
+     * ⚠️ **بنود الرواتب نفسها ما بتمرّش من هنا**: `Payroll::approve` بتكتب
+     *    بإدخالها الخاص، فالحارس ده ما بيقفلش على الوحدة نفسها.
+     *
+     * @throws \RuntimeException
+     */
+    private static function assertPayrollOpen(?string $date): void
+    {
+        $msg = Payroll::lockMessage($date);
+        if ($msg !== null) { throw new \RuntimeException($msg); }
+    }
+
     public static function createEntry(int $repId, array $d): int
     {
+        self::assertPayrollOpen(($d['entry_date'] ?? '') !== '' ? (string) $d['entry_date'] : null);
         Database::exec(
             "INSERT INTO rep_entries (rep_id, entry_date, kind, amount, is_visa, note)
              VALUES (:rep_id, :entry_date, :kind, :amount, :is_visa, :note)",
@@ -306,6 +348,13 @@ class Rep
 
     public static function updateEntry(int $id, int $repId, array $d): void
     {
+        // التاريخ القديم **والجديد** — نقل بند برّه فترة معتمدة بيفضّي لقطتها.
+        $old = self::findEntry($id);
+        self::assertPayrollOpen($old['entry_date'] ?? null);
+        self::assertPayrollOpen(($d['entry_date'] ?? '') !== '' ? (string) $d['entry_date'] : null);
+        if (!empty($old['payroll_period_id'])) {
+            throw new \RuntimeException('البند ده النظام ولّده من اعتماد الراتب — مايتعدّلش بالإيد.');
+        }
         $p = self::bindEntry($repId, $d);
         $p[':id'] = $id;
         Database::exec(
@@ -315,6 +364,14 @@ class Rep
 
     public static function deleteEntry(int $id): void
     {
+        $old = self::findEntry($id);
+        if ($old !== null) {
+            if (!empty($old['payroll_period_id'])) {
+                throw new \RuntimeException(
+                    'البند ده النظام ولّده من اعتماد الراتب — الغِ اعتماد الفترة عشان يتشال.');
+            }
+            self::assertPayrollOpen($old['entry_date'] ?? null);
+        }
         Database::exec("DELETE FROM rep_entries WHERE id = ?", [$id]);
     }
 

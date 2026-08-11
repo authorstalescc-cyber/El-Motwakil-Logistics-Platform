@@ -148,7 +148,7 @@ final class RepAccount
     /**
      * ملخّص فترة واحدة لمندوب واحد.
      *
-     * @return array{salary:float,advances:float,commission:float,expenseShare:float,approved:bool,net:float,expenses:array<string,float>,expensesTotal:float}
+     * @return array{salary:float,advances:float,commission:float,expenseShare:float,adjustments:float,approved:bool,net:float,expenses:array<string,float>,expensesTotal:float}
      */
     public static function summary(int $repId, array $period): array
     {
@@ -173,10 +173,17 @@ final class RepAccount
             'advances'      => $advances,
             'commission'    => $share['commission'],
             'expenseShare'  => $share['expense'],
+            /* البنود اليدوية اللي المالك سجّلها في البروفايل (مكافأة · خصم ·
+               جزاء) — موجب = زيادة له، سالب = خصم عليه (v88). */
+            'adjustments'   => $share['adjust'],
             'approved'      => $share['approved'],
             /* ⚠️ المواصلات **مش** في المعادلة (قرار المالك) — بتتحاسب من حوض
-               المصروف، واللي بيوصل المندوب منها هو `expenseShare` بس. */
-            'net'           => round($salary - $advances + $share['commission'] + $share['expense'], 2),
+               المصروف، واللي بيوصل المندوب منها هو `expenseShare` بس.
+               ⚠️ و`adjustments` **لازم تفضل هنا**: من غيرها البروفايل بيعرض
+                  جزاءً والصافي ما بيتغيّرش، وهي بالظبط مصيدة «كارت يقول رقم
+                  وكشف يقول رقم تاني». */
+            'net'           => round(
+                $salary - $advances + $share['commission'] + $share['expense'] + $share['adjust'], 2),
             'expenses'      => $expenses,
             'expensesTotal' => round(array_sum($expenses), 2),
         ];
