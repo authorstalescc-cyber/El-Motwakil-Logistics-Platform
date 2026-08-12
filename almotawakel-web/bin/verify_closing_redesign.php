@@ -135,25 +135,29 @@ $sumRows = static fn(array $rows): float => round(
     (float) array_sum(array_map(static fn($r) => (float) $r['amount'], $rows)), 2);
 foreach (array_unique(array_filter([$day, $repDay])) as $checkDay) {
     $d = $method->invoke(new DailyClosingController(), (string) $checkDay);
-    foreach (['repRows', 'miscRows', 'receiptRows', 'totRep'] as $key) {
+    foreach (['repRows', 'advanceRows', 'miscRows', 'receiptRows', 'totRep', 'totAdvance'] as $key) {
         if (!array_key_exists($key, $d)) {
             throw new RuntimeException("تفاصيل التقفيل ناقصها `{$key}` ({$checkDay}).");
         }
     }
-    $parts = count($d['receiptRows']) + count($d['repRows']) + count($d['miscRows']);
+    $buckets = ['receiptRows', 'repRows', 'advanceRows', 'miscRows'];
+    $parts = 0;
+    foreach ($buckets as $b) { $parts += count($d[$b]); }
     if ($parts !== count($d['expenses'])) {
         throw new RuntimeException(
-            "بنود الورقة مش مساوية لمجموع الجداول التلاتة يوم {$checkDay}: "
+            "بنود الورقة مش مساوية لمجموع الجداول يوم {$checkDay}: "
             . $parts . ' ≠ ' . count($d['expenses']));
     }
-    $split = round($sumRows($d['receiptRows']) + $sumRows($d['repRows']) + $sumRows($d['miscRows']), 2);
-    if (abs($split - $sumRows($d['expenses'])) > 0.009) {
+    $split = 0.0;
+    foreach ($buckets as $b) { $split += $sumRows($d[$b]); }
+    if (abs(round($split, 2) - $sumRows($d['expenses'])) > 0.009) {
         throw new RuntimeException(
-            "مجموع الجداول التلاتة مش مساوي لإجمالي المصروفات يوم {$checkDay}: "
-            . $split . ' ≠ ' . $sumRows($d['expenses']));
+            "مجموع الجداول مش مساوي لإجمالي المصروفات يوم {$checkDay}: "
+            . round($split, 2) . ' ≠ ' . $sumRows($d['expenses']));
     }
-    if (abs($sumRows($d['repRows']) - (float) $d['totRep']) > 0.009) {
-        throw new RuntimeException("إجمالي مصروفات المناديب مش مطابق لصفوفه يوم {$checkDay}.");
+    if (abs($sumRows($d['repRows']) - (float) $d['totRep']) > 0.009
+        || abs($sumRows($d['advanceRows']) - (float) $d['totAdvance']) > 0.009) {
+        throw new RuntimeException("إجمالي جدول مناديب مش مطابق لصفوفه يوم {$checkDay}.");
     }
     foreach ($d['repRows'] as $row) {
         if (!\App\Models\Payroll::isAllowedKind($row['misc_kind'] ?? null)) {
@@ -162,10 +166,22 @@ foreach (array_unique(array_filter([$day, $repDay])) as $checkDay) {
                 . (string) ($row['misc_kind'] ?? '—'));
         }
     }
+    /* ⚠️ الشرط بالمعنى مش بالاسم: أي بند بيتخصم من الراتب أو كاش اتسلّم
+       للمندوب ما ينفعش يفضل في «المصروفات العامة». */
     foreach ($d['miscRows'] as $row) {
-        if (\App\Models\Payroll::isAllowedKind($row['misc_kind'] ?? null)) {
+        $kind = (string) ($row['misc_kind'] ?? '');
+        if (\App\Models\Payroll::isAllowedKind($kind)) {
             throw new RuntimeException(
                 "مصروف مندوب من الحوض لسه بيتعرض في المصروفات العامة يوم {$checkDay}.");
+        }
+        if ($kind !== '' && \App\Models\RepMiscKind::deductsSalary($kind)) {
+            throw new RuntimeException(
+                "مسحوب شخصي لسه بيتعرض في المصروفات العامة يوم {$checkDay}.");
+        }
+        if (in_array((string) ($row['stage_label'] ?? ''), \App\Models\Rep::KINDS, true)
+            && (string) ($row['permit_no'] ?? '') === 'مندوب') {
+            throw new RuntimeException(
+                "سلفة/تسوية مندوب لسه في المصروفات العامة يوم {$checkDay}.");
         }
     }
 }
@@ -196,12 +212,34 @@ if ($allowKinds && $probeRep && \App\Models\RepMiscExpense::kindReady()) {
         $seed($allowKinds[0], 70);
         foreach (\App\Models\RepMiscKind::salaryKeys() as $salaryKind) { $seed($salaryKind, 130); break; }
 
+        /* كاش المندوب (`rep_entries`) قناة تانية خالص للسلفة — بيتزرع كمان
+           عشان الفحص يثبت إن الجدول بيلمّ **القناتين** مش نثرية السلفة بس. */
+        $entrySeeded = false;
+        if (Database::scalar(
+            "SELECT COUNT(*) FROM information_schema.tables
+             WHERE table_schema = DATABASE() AND table_name = 'rep_entries'")) {
+            foreach (\App\Models\Rep::CASH_KINDS as $cashKind) {
+                Database::exec(
+                    'INSERT INTO rep_entries (rep_id, entry_date, kind, amount, is_visa, note)
+                     VALUES (?,?,?,?,0,?)',
+                    [$probeRep, $probeDay, $cashKind, 45, 'بند فحص']
+                );
+                $entrySeeded = true;
+                break;
+            }
+        }
+
         $probe = $method->invoke(new DailyClosingController(), $probeDay);
         if (count($probe['repRows']) !== 1 || abs((float) $probe['totRep'] - 70) > 0.009) {
             throw new RuntimeException('بند حوض مصروف المناديب ما وصلش لجدوله في الورقة.');
         }
-        if (count($probe['miscRows']) !== 1 || abs((float) $probe['totMisc'] - 130) > 0.009) {
-            throw new RuntimeException('السلفة المفروض تفضل في المصروفات العامة — الفرز غلط.');
+        $wantAdvance = 130 + ($entrySeeded ? 45 : 0);
+        if (count($probe['advanceRows']) !== ($entrySeeded ? 2 : 1)
+            || abs((float) $probe['totAdvance'] - $wantAdvance) > 0.009) {
+            throw new RuntimeException('السلفة/المسحوب الشخصي ما وصلش لجدوله المستقل.');
+        }
+        if ($probe['miscRows'] || abs((float) $probe['totMisc']) > 0.009) {
+            throw new RuntimeException('المصروفات العامة لقطت بند مندوب مالوش مكان فيها.');
         }
         if (trim((string) ($probe['repRows'][0]['rep_name'] ?? '')) === '') {
             throw new RuntimeException('جدول مصروفات المناديب مش بيعرف اسم المندوب.');
@@ -217,7 +255,8 @@ if ($allowKinds && $probeRep && \App\Models\RepMiscExpense::kindReady()) {
         (new DailyClosingController())->printable();
         $probeHtml = ob_get_clean();
         foreach (['مصروفات المناديب', 'من حوض مصروف المناديب', '>النوع<',
-                  'إجمالي مصروفات المناديب'] as $needle) {
+                  'إجمالي مصروفات المناديب',
+                  'سلف ومسحوبات المناديب', 'إجمالي السلف والمسحوبات'] as $needle) {
             if (!str_contains($probeHtml, $needle)) {
                 throw new RuntimeException('ورقة الطباعة مش فاصلة مصروفات المناديب: ' . $needle);
             }
@@ -324,4 +363,4 @@ echo "✓ مفيش أثر للمطابقة اليدوية القديمة ولا 
 echo "✓ البحث بيطبّع العربي على الطرفين (PHP + app.js متطابقين)\n";
 echo "✓ عنوان كل بند = بيانه المكتوب مش نوعه\n";
 echo "✓ طباعة التقفيل بخط كبير وهيدر أفقي وQR محلي، بلا توقيعات، وترتيبها حسب الشركة\n";
-echo "✓ ورقة الطباعة بتفصل مصروفات المناديب (حوض المصروف) عن المصروفات العامة\n";
+echo "✓ ورقة الطباعة بتفصل مصروف المناديب والسلف عن المصروفات العامة\n";

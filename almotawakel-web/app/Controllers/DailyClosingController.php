@@ -374,16 +374,21 @@ class DailyClosingController extends Controller
                  JOIN reps r ON r.id = e.rep_id
                  WHERE e.kind IN ($cash) AND e.is_visa = 0 AND e.amount <> 0 AND e.entry_date = ?
                  ORDER BY e.id", [$date]) as $r) {
+                /* السلفة/التسوية كاش خرج **للمندوب نفسه** مش مصروف شركة (طلب
+                   المالك 2026-08-12) — جدولها لوحدها، والقايمة `CASH_KINDS`
+                   هي شرط الاستعلام أصلاً فمفيش شرط تاني مكتوب هنا. */
                 $expenses[] = ['permit_no'=>'مندوب','company'=>$r['name'] ?: '—',
                     'stage_label'=>\App\Models\Rep::kindLabel((string) $r['kind']),
-                    'note'=>$r['note'],'ref_no'=>null,'amount'=>$r['amount']];
+                    'note'=>$r['note'],'ref_no'=>null,'amount'=>$r['amount'],
+                    'rep_name'=>$r['name'],'grp'=>'advance'];
             }
         }
         if ($this->tableExists('rep_misc_expenses')) {
             $cashOnly = \App\Models\RepMiscExpense::cashOnlySql('x');
             /* ⚠️ الوسم (v71) بيتقرا هنا عشان الورقة تفصل نثرية **حوض مصروف
-               المناديب** (مواصلات · تصوير) عن المصروف العام — والسؤال بيتجاوب
-               من `Payroll::isAllowedKind()` لا بشرط مكتوب هنا. وقبل الترحيل
+               المناديب** (مواصلات · تصوير) عن **المسحوب الشخصي** عن المصروف
+               العام — والسؤالين بيتجاوبوا من `Payroll::isAllowedKind()` و
+               `RepMiscKind::deductsSalary()` لا بشرط مكتوب هنا. وقبل الترحيل
                العمود مش موجود، فالوسم بيرجع فاضي وكل النثريات بتفضل في الجدول
                العام زي ما كانت بالحرف. */
             $kindReady = \App\Models\RepMiscExpense::kindReady();
@@ -394,12 +399,14 @@ class DailyClosingController extends Controller
                  WHERE x.amount <> 0 AND $cashOnly AND x.exp_date = ?"
                  . \App\Models\RepCustody::safeChargeSql('x.exp_date')
                  . " ORDER BY x.id", [$date]) as $r) {
-                $fromPool = \App\Models\Payroll::isAllowedKind($r['misc_kind'] ?? null);
+                $kind     = (string) ($r['misc_kind'] ?? '');
+                $fromPool = \App\Models\Payroll::isAllowedKind($kind);
+                $personal = $kind !== '' && \App\Models\RepMiscKind::deductsSalary($kind);
                 $expenses[] = ['permit_no'=>'نثرية','company'=>$r['name'] ?: '—',
                     'stage_label'=>$r['category'] ?: \App\Models\RepMiscExpense::CATEGORY,
                     'note'=>$r['note'],'ref_no'=>$r['ref_no'],'amount'=>$r['amount'],
-                    'rep_name'=>$r['name'],'misc_kind'=>(string) ($r['misc_kind'] ?? ''),
-                    'grp'=>$fromPool ? 'rep' : 'misc'];
+                    'rep_name'=>$r['name'],'misc_kind'=>$kind,
+                    'grp'=>$fromPool ? 'rep' : ($personal ? 'advance' : 'misc')];
             }
         }
         /* ⚠️ المرحلة ٢ — التنزيل من الدرج بقى مصروفًا نقديًّا، فلازم يظهر في ورقة
@@ -527,23 +534,25 @@ class DailyClosingController extends Controller
             );
             return $cmp !== 0 ? $cmp : ((int) ($a['id'] ?? 0) <=> (int) ($b['id'] ?? 0));
         };
-        /* ⚠️ التصنيف كله بيتقرا من الوسم `grp` اللي اتحطّ فوق — تلات دلاء
+        /* ⚠️ التصنيف كله بيتقرا من الوسم `grp` اللي اتحطّ فوق — أربع دلاء
            متنافية ومجموعهم = مجموع `$expenses` بالحرف: إيصال · نثرية بتتحاسب
-           من حوض مصروف المناديب · أي مصروف تاني. أي صف بلا وسم بيقع على
-           «عام»، فمستحيل يختفي بند من الورقة مهما كان مصدره. */
+           من حوض مصروف المناديب · سلفة أو مسحوب شخصي للمندوب · أي مصروف تاني.
+           أي صف بلا وسم بيقع على «عام»، فمستحيل يختفي بند من الورقة مهما كان
+           مصدره. */
         $grpOf       = static fn(array $r): string => (string) ($r['grp'] ?? 'misc');
         $receiptRows = array_values(array_filter($expenses, static fn($r) => $grpOf($r) === 'receipt'));
         $repRows     = array_values(array_filter($expenses, static fn($r) => $grpOf($r) === 'rep'));
+        $advanceRows = array_values(array_filter($expenses, static fn($r) => $grpOf($r) === 'advance'));
         $miscRows    = array_values(array_filter(
             $expenses,
-            static fn($r) => !in_array($grpOf($r), ['receipt', 'rep'], true)
+            static fn($r) => !in_array($grpOf($r), ['receipt', 'rep', 'advance'], true)
         ));
         usort($receiptRows, $byCompany);
         usort($custodyRows, $byCompany);
         usort($miscRows, $byPermit);
-        /* مصروفات المناديب بتتجمّع حسب المندوب: الورقة بتتقرا «فلان صرف كام
+        /* جدولا المناديب بيتجمّعوا حسب المندوب: الورقة بتتقرا «فلان صرف كام
            النهاردة» بدل سطور متبعترة على ترتيب الإدخال. */
-        usort($repRows, static function (array $a, array $b): int {
+        $byRep = static function (array $a, array $b): int {
             $cmp = strnatcasecmp(
                 search_norm(trim((string) ($a['rep_name'] ?? $a['company'] ?? ''))),
                 search_norm(trim((string) ($b['rep_name'] ?? $b['company'] ?? '')))
@@ -552,15 +561,19 @@ class DailyClosingController extends Controller
                 (string) ($a['stage_label'] ?? ''),
                 (string) ($b['stage_label'] ?? '')
             );
-        });
+        };
+        usort($repRows, $byRep);
+        usort($advanceRows, $byRep);
 
         return [
             'expenses'    => $expenses,
             'receiptRows' => $receiptRows,
             'repRows'     => $repRows,
+            'advanceRows' => $advanceRows,
             'miscRows'    => $miscRows,
             'totReceipts' => $sum($receiptRows, 'amount'),
             'totRep'      => $sum($repRows, 'amount'),
+            'totAdvance'  => $sum($advanceRows, 'amount'),
             'totMisc'     => $sum($miscRows, 'amount'),
             'visaRows'    => $visaRows,
             'visaByCard'  => array_values($visaByCard),
