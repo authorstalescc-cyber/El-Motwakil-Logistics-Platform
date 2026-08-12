@@ -10,9 +10,11 @@
  *    `CompanySafe::statement()` بنفس تعبير الاتجاه بتاع `balance()`،
  *    فمستحيل الورقة تقول رصيدًا يخالف الشاشة. محروسة بفحص في `verify_v67`.
  *
- * ⚠️ **كروت الإجمالي بتعرض «اتسلّم للمكتب» و«مصروفات الخزنة» لا «داخل/خارج»**
- *    (قرار المالك): «خارج» كانت بتجمّع خمسة أنواع مختلفة في رقم واحد ما بيقولش
- *    راح فين. الاتجاه المجمَّع لسه في تذييل الجدول وفي سطر المعادلة تحته.
+ * ⚠️ **شكل الكروت قرار مالك صريح**: «أول المدة + الداخل» بيتجمعوا في كارت
+ *    واحد اسمه **الإجمالي**، و«خارج» بتتقسم لـ**اتسلّم للمكتب** و**مصروفات
+ *    الخزنة** — لأنها كانت بتجمّع خمسة أنواع في رقم واحد ما بيقولش راح فين.
+ *    ⚠️ **ولا رقم من الأربعة بيختفي**: أول المدة والداخل بيفضلوا مكتوبين في
+ *    سطر الميتا تحت «الإجمالي» — الدمج تجميع مش حذف (اللبس ده وقع فعلاً).
  *
  * ⚠️ **قسم «تفاصيل إضافية» أرصدة لحظية وقت الطباعة** — مش أرقام الفترة، فلازم
  *    الورقة تقول كده صراحةً وإلا القارئ يجمعها على الختامي وهي محفظة تانية.
@@ -61,6 +63,9 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
   .tt.op{background:var(--bg)}
   .tt.cl{background:var(--navy);color:#fff;border-color:var(--navy)}
   .tt.cl .l{color:#cfdcec}
+  /* ⚠️ سطر الميتا على السطح الغامق **لازم يقلب لونه** — `--muted` على `--navy`
+     بيدّي تباينًا ٢:١ يعني غير مقروء مطبوعًا (قاعدة: اللون له دور تعبئة ودور نص). */
+  .tt.cl .n{color:#cfdcec}
   .extra{margin-top:18px;border-top:1px solid var(--line);padding-top:12px;break-inside:avoid}
   .extra h3{font-size:10pt;font-weight:700;color:var(--navy);margin-bottom:8px}
   .extra .totals{margin:0}
@@ -109,15 +114,25 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
       </div>
     </div>
 
+    <?php /* ⚠️ **الأربعة بيقفلوا حسابيًّا**: الإجمالي − المكتب − المصروفات −
+             الباقي = الختامي. لو نوع خارج جديد اتضاف ومحدّش عرضه، بيقع في
+             `other_out` وبيبان تحت الكارت الأخير بدل ما الطرح يكدب بالسكوت. */ ?>
     <div class="totals">
-      <div class="tt op"><div class="l">رصيد أول المدة</div>
-        <div class="v"><?= money($st['opening'], false) ?></div></div>
+      <div class="tt op"><div class="l">الإجمالي</div>
+        <div class="v"><?= money($st['gross'], false) ?></div>
+        <div class="n">أول المدة <?= money($st['opening'], false) ?>
+          + داخل <?= money($st['in'], false) ?></div></div>
       <div class="tt"><div class="l">اتسلّم لخزنة المكتب</div>
-        <div class="v neg"><?= money($st['to_office'], false) ?></div></div>
+        <div class="v neg"><?= money($st['to_office'], false) ?></div>
+        <div class="n"><?= intf($st['by_kind']['to_office']['count'] ?? 0) ?> تحويل</div></div>
       <div class="tt"><div class="l">مصروفات خزنة الشركة</div>
-        <div class="v neg"><?= money($st['expense'], false) ?></div></div>
+        <div class="v neg"><?= money($st['expense'], false) ?></div>
+        <div class="n"><?= intf($st['by_kind']['expense']['count'] ?? 0) ?> بند</div></div>
       <div class="tt cl"><div class="l">رصيد آخر المدة</div>
-        <div class="v"><?= money($st['closing'], false) ?></div></div>
+        <div class="v"><?= money($st['closing'], false) ?></div>
+        <?php if ($st['other_out'] > 0.005): ?>
+          <div class="n">بعد خصم <?= money($st['other_out'], false) ?> فيزا وعهد مناديب</div>
+        <?php endif; ?></div>
     </div>
 
     <?php if ($st['by_kind']): ?>

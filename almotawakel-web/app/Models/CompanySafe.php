@@ -1003,20 +1003,24 @@ class CompanySafe
      *    `signedSql()` بتاع `balance()` — فمستحيل يطلع رقم مخالف للرصيد
      *    المعروض في الشاشة. (`الافتتاحي + صافي الفترة = الختامي` محروسة بفحص.)
      *
-     * ⚠️ `to_office` و`expense` بيترجّعوا **مفاتيح مستقلّة** مش محسوبين في الورقة:
-     *    كروت الكشف بتعرضهم مباشرةً (طلب المالك: «الرصيد اللي تم تسليمه للمكتب»
-     *    و«مصروفات خزنة الشركة» بدل «داخل/خارج» المجمَّعين). حسابهم في الـview
-     *    من `by_kind` كان هيكرّر قاعدة الاتجاه برّه الموديل.
+     * ⚠️ `gross` و`to_office` و`expense` بيترجّعوا **مفاتيح مستقلّة** مش محسوبين
+     *    في الورقة: كروت الكشف بتعرضهم مباشرةً (طلب المالك: كارت «الإجمالي» =
+     *    أول المدة + الداخل، و«خارج» تتقسم لـ«اتسلّم للمكتب» و«مصروفات الخزنة»).
+     *    حسابهم في الـview كان هيكرّر قاعدة الاتجاه برّه الموديل.
+     *
+     * ⚠️ **`gross − to_office − expense` مش الختامي** — الفرق بيروح للفيزا وعهدة
+     *    المناديب. الكشف بيقول الفرق ده صراحةً تحت الكارت الأخير بدل ما يسيب
+     *    القارئ يطرح كارتين ويلاقي رقمًا مخالفًا.
      *
      * @return array{from:string,to:string,opening:float,closing:float,in:float,out:float,
-     *               to_office:float,expense:float,
+     *               gross:float,to_office:float,expense:float,other_out:float,
      *               rows:list<array>,by_kind:array<string,array{in:float,out:float,count:int}>}
      */
     public static function statement(string $from, string $to): array
     {
         $empty = ['from' => $from, 'to' => $to, 'opening' => 0.0, 'closing' => 0.0,
-                  'in' => 0.0, 'out' => 0.0, 'to_office' => 0.0, 'expense' => 0.0,
-                  'rows' => [], 'by_kind' => []];
+                  'in' => 0.0, 'out' => 0.0, 'gross' => 0.0, 'to_office' => 0.0,
+                  'expense' => 0.0, 'other_out' => 0.0, 'rows' => [], 'by_kind' => []];
         if (!self::ready()) { return $empty; }
 
         $opening = round((float) Database::scalar(
@@ -1049,10 +1053,17 @@ class CompanySafe
         unset($r);
         self::attachWallets($rows);
 
+        $toOffice = round($byKind['to_office']['out'] ?? 0.0, 2);
+        $expense  = round($byKind['expense']['out'] ?? 0.0, 2);
+
         return ['from' => $from, 'to' => $to, 'opening' => $opening,
                 'closing' => round($run, 2), 'in' => round($in, 2), 'out' => round($out, 2),
-                'to_office' => round($byKind['to_office']['out'] ?? 0.0, 2),
-                'expense'   => round($byKind['expense']['out'] ?? 0.0, 2),
+                // كارت «الإجمالي» = اللي كان تحت إيد الشركة في الفترة كلها.
+                'gross'     => round($opening + $in, 2),
+                'to_office' => $toOffice,
+                'expense'   => $expense,
+                // ⚠️ باقي الخارج (فيزا + عهدة مناديب) — عشان الطرح يقفل.
+                'other_out' => round($out - $toOffice - $expense, 2),
                 'rows' => $rows, 'by_kind' => $byKind];
     }
 
