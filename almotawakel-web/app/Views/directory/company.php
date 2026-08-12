@@ -28,7 +28,8 @@ $p = $summary['permits']; $inv = $summary['invoices'];
   <?php if($agents): ?>
     <div class="co-grid">
       <?php foreach($agents as $a): ?>
-        <div class="co-card agent" onclick="location.href='<?= url('directory/agent/'.$a['id']) ?>'">
+        <?php /* ⚠️ الوكيل بقى له وحدته (v93) — اللينك على طول بدل ما يعدّي بتحويل. */ ?>
+        <div class="co-card agent" onclick="location.href='<?= url('clients/'.$a['id']) ?>'">
           <div class="co-ava"><?= e(initials($a['name'])) ?></div>
           <b title="<?= e($a['name']) ?>"><?= e($a['name']) ?></b>
           <span class="chev">←</span>

@@ -38,8 +38,8 @@ class ClientPayment
 
     /**
      * ⚠️⚠️ **المصدر الوحيد لسؤال «أنهي توجيه متاح دلوقتي؟»** — لازم تقرا منه
-     *    الشاشتان (`payments/index` · `directory/agent`) **والكنترولران**
-     *    (`PaymentController::pay` · `DirectoryController::addPayment`) مع بعض.
+     *    الشاشتان (`payments/index` · `clients/_tab_payments`) **والكنترولران**
+     *    (`PaymentController::pay` · `ClientController::pay`) مع بعض.
      *    لو الشاشة عرضت خيارًا والكنترولر رفضه، المستخدم بيختار ويلاقي دفعته
      *    اتسجّلت «بدون توجيه» **بلا أي رسالة** — وده أسوأ من منع الخيار أصلاً.
      *
