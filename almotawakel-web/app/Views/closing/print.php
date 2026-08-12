@@ -221,47 +221,68 @@ $splitCols = static function (int $n) use ($perCol): int {
       <?php endif; ?>
     </table>
 
-    <?php /* ⚠️ الإيصالات في جدول والنثريات والمصروفات في جدول تاني (طلب المالك)،
-             والتصنيف جاي من `grp` في الكنترولر — مفيش شرط مكتوب هنا. الأعمدة
-             الإيصالات مرتبة حسب الشركة وتعرض اسم المندوب الذي أدخلها، بينما
-             المصروفات الأخرى تفضل مرتبة حسب رقم الإذن.
+    <?php /* ⚠️ تلات جداول (طلب المالك): الإيصالات · مصروفات المناديب اللي بتتحاسب
+             من حوض مصروف المناديب (مواصلات · تصوير) · المصروفات العامة. والتصنيف
+             كله جاي من `grp` في الكنترولر — مفيش شرط مكتوب هنا. الإيصالات مرتبة
+             حسب الشركة وتعرض اسم المندوب الذي أدخلها، ومصروفات المناديب مجمّعة
+             حسب المندوب، والباقي حسب رقم الإذن.
              ⚠️ الجدول الطويل بينقسم **نصّين جنب بعض** (طلب المالك: الورقة صفحتين
              بحد أقصى) — القراءة من اليمين لتحت ثم الشمال لتحت، والترتيب محفوظ. */ ?>
+    <?php
+      /* «البيان» = ملاحظة البند، وبترجع لاسم البند لو فاضية عشان ما يبقاش فيه
+         سطر بلا وصف بعد ما عمود «البند» اتشال. */
+      $vCompany = static fn(array $ex) => $dash($ex['company'] ?? '');
+      $vBayan   = static fn(array $ex) => $dash(trim((string)($ex['note'] ?? '')) ?: ($ex['stage_label'] ?? ''));
+      $vRep     = static fn(array $ex) => trim((string)($ex['rep_name'] ?? '')) ?: 'المكتب';
+      $vKind    = static fn(array $ex) => $dash($ex['stage_label'] ?? '');
+    ?>
     <?php foreach ([
       ['t'=>'الإيصالات', 'i'=>'file-text', 'rows'=>$receiptRows, 'sum'=>$totReceipts,
-       'lbl'=>'إجمالي الإيصالات', 'empty'=>'لا إيصالات بتاريخ اليوم', 'show_rep'=>true],
-      ['t'=>'النثريات والمصروفات', 'i'=>'trending-down', 'rows'=>$miscRows, 'sum'=>$totMisc,
-       'lbl'=>'إجمالي النثريات والمصروفات', 'empty'=>'لا نثريات أو مصروفات بتاريخ اليوم', 'show_rep'=>false],
+       'lbl'=>'إجمالي الإيصالات', 'empty'=>'لا إيصالات بتاريخ اليوم', 'note'=>'',
+       'cols'=>[['h'=>'الشركة','cls'=>'bayan','v'=>$vCompany],
+                ['h'=>'البيان','cls'=>'bayan','v'=>$vBayan],
+                ['h'=>'المندوب','w'=>'72px','v'=>$vRep]]],
+      /* اليوم اللي مفيهوش مصروف مندوب ما بياخدش جدولًا فاضيًا — نفس سلوك جدول
+         الفيزا، والورقة مقيّدة بصفحتين. */
+      ['t'=>'مصروفات المناديب', 'i'=>'wallet', 'rows'=>$repRows ?? [], 'sum'=>$totRep ?? 0,
+       'lbl'=>'إجمالي مصروفات المناديب', 'empty'=>'لا مصروفات مناديب بتاريخ اليوم',
+       'note'=>'من حوض مصروف المناديب', 'hide_empty'=>true,
+       'cols'=>[['h'=>'المندوب','cls'=>'bayan','v'=>$vRep],
+                ['h'=>'النوع','cls'=>'bayan','w'=>'88px','v'=>$vKind],
+                ['h'=>'البيان','cls'=>'bayan','v'=>$vBayan]]],
+      ['t'=>'المصروفات العامة', 'i'=>'trending-down', 'rows'=>$miscRows, 'sum'=>$totMisc,
+       'lbl'=>'إجمالي المصروفات العامة', 'empty'=>'لا مصروفات عامة بتاريخ اليوم', 'note'=>'',
+       'cols'=>[['h'=>'الشركة','cls'=>'bayan','v'=>$vCompany],
+                ['h'=>'البيان','cls'=>'bayan','v'=>$vBayan]]],
     ] as $blk): ?>
       <?php
         $rows   = $blk['rows'];
+        if (!$rows && !empty($blk['hide_empty'])) { continue; }
         $cols   = $splitCols(count($rows));
         $chunks = $rows ? array_chunk($rows, (int) ceil(count($rows) / $cols)) : [[]];
+        $span   = count($blk['cols']) + 1;   // + عمود المبلغ
       ?>
-      <div class="sec"><?= icon($blk['i'], 14) ?> <?= e($blk['t']) ?> <span class="c"><?= intf(count($rows)) ?> بند</span></div>
+      <div class="sec"><?= icon($blk['i'], 14) ?> <?= e($blk['t']) ?>
+        <span class="c"><?= intf(count($rows)) ?> بند<?= $blk['note'] !== '' ? ' • ' . e($blk['note']) : '' ?></span></div>
       <div class="split<?= $cols > 1 ? ' c' . $cols : '' ?>">
         <?php foreach ($chunks as $chunk): ?>
           <table class="data">
             <thead><tr>
-              <th class="bayan">الشركة</th>
-              <th class="bayan">البيان</th>
-              <?php if($blk['show_rep']): ?><th style="width:72px">المندوب</th><?php endif; ?>
+              <?php foreach ($blk['cols'] as $c): ?>
+                <th class="<?= e($c['cls'] ?? '') ?>"<?= isset($c['w']) ? ' style="width:' . e($c['w']) . '"' : '' ?>><?= e($c['h']) ?></th>
+              <?php endforeach; ?>
               <th style="width:72px">المبلغ</th>
             </tr></thead>
             <tbody>
               <?php foreach ($chunk as $ex): ?>
                 <tr>
-                  <td class="bayan"><?= e($dash($ex['company'])) ?></td>
-                  <?php /* «البيان» = ملاحظة البند، وبترجع لاسم البند لو فاضية عشان
-                           ما يبقاش فيه سطر بلا وصف بعد ما عمود «البند» اتشال. */ ?>
-                  <td class="bayan"><?= e($dash(trim((string)($ex['note'] ?? '')) ?: ($ex['stage_label'] ?? ''))) ?></td>
-                  <?php if($blk['show_rep']): ?>
-                    <td><?= e(trim((string)($ex['rep_name'] ?? '')) ?: 'المكتب') ?></td>
-                  <?php endif; ?>
+                  <?php foreach ($blk['cols'] as $c): ?>
+                    <td class="<?= e($c['cls'] ?? '') ?>"><?= e(($c['v'])($ex)) ?></td>
+                  <?php endforeach; ?>
                   <td class="num"><?= money($ex['amount'],false) ?></td>
                 </tr>
               <?php endforeach; ?>
-              <?php if(!$chunk): ?><tr><td colspan="<?= $blk['show_rep'] ? 4 : 3 ?>" class="empty"><?= e($blk['empty']) ?></td></tr><?php endif; ?>
+              <?php if(!$chunk): ?><tr><td colspan="<?= $span ?>" class="empty"><?= e($blk['empty']) ?></td></tr><?php endif; ?>
             </tbody>
           </table>
         <?php endforeach; ?>

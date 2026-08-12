@@ -120,6 +120,115 @@ foreach ($details['custodyRows'] as $row) {
     }
 }
 
+/* ═══ فصل مصروفات المناديب عن المصروفات العامة (v89) ═══
+   فحص سلوكي على **يوم فيه نثريات مناديب فعلاً** — الدلاء التلاتة متنافية
+   ومجموعها = مجموع كل البنود، والتصنيف بيتجاوب من `Payroll::isAllowedKind`
+   لا من اسم تصنيف مكتوب. */
+$repDay = Database::scalar(
+    "SELECT COUNT(*) FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'rep_misc_expenses'"
+) ? Database::scalar(
+    "SELECT exp_date FROM rep_misc_expenses WHERE amount <> 0 AND exp_date IS NOT NULL
+     GROUP BY exp_date ORDER BY COUNT(*) DESC LIMIT 1"
+) : null;
+$sumRows = static fn(array $rows): float => round(
+    (float) array_sum(array_map(static fn($r) => (float) $r['amount'], $rows)), 2);
+foreach (array_unique(array_filter([$day, $repDay])) as $checkDay) {
+    $d = $method->invoke(new DailyClosingController(), (string) $checkDay);
+    foreach (['repRows', 'miscRows', 'receiptRows', 'totRep'] as $key) {
+        if (!array_key_exists($key, $d)) {
+            throw new RuntimeException("تفاصيل التقفيل ناقصها `{$key}` ({$checkDay}).");
+        }
+    }
+    $parts = count($d['receiptRows']) + count($d['repRows']) + count($d['miscRows']);
+    if ($parts !== count($d['expenses'])) {
+        throw new RuntimeException(
+            "بنود الورقة مش مساوية لمجموع الجداول التلاتة يوم {$checkDay}: "
+            . $parts . ' ≠ ' . count($d['expenses']));
+    }
+    $split = round($sumRows($d['receiptRows']) + $sumRows($d['repRows']) + $sumRows($d['miscRows']), 2);
+    if (abs($split - $sumRows($d['expenses'])) > 0.009) {
+        throw new RuntimeException(
+            "مجموع الجداول التلاتة مش مساوي لإجمالي المصروفات يوم {$checkDay}: "
+            . $split . ' ≠ ' . $sumRows($d['expenses']));
+    }
+    if (abs($sumRows($d['repRows']) - (float) $d['totRep']) > 0.009) {
+        throw new RuntimeException("إجمالي مصروفات المناديب مش مطابق لصفوفه يوم {$checkDay}.");
+    }
+    foreach ($d['repRows'] as $row) {
+        if (!\App\Models\Payroll::isAllowedKind($row['misc_kind'] ?? null)) {
+            throw new RuntimeException(
+                "بند في جدول مصروفات المناديب مش بيتحاسب من الحوض يوم {$checkDay}: "
+                . (string) ($row['misc_kind'] ?? '—'));
+        }
+    }
+    foreach ($d['miscRows'] as $row) {
+        if (\App\Models\Payroll::isAllowedKind($row['misc_kind'] ?? null)) {
+            throw new RuntimeException(
+                "مصروف مندوب من الحوض لسه بيتعرض في المصروفات العامة يوم {$checkDay}.");
+        }
+    }
+}
+if (!str_contains($printHtml, 'المصروفات العامة')) {
+    throw new RuntimeException('ورقة الطباعة مش بتسمّي المصروفات العامة.');
+}
+
+/* ⚠️ القاعدة ممكن تكون بلا ولا نثرية (زي القاعدة المحلية النضيفة)، وساعتها
+   الفحص فوق بيعدّي على مجموعات فاضية = نجاح كاذب. فبنزرع بندين حقيقيين
+   جوّه معاملة بترجع: واحد من الحوض (مواصلات/تصوير) وواحد سلفة — والمطلوب
+   إنهم يتفرزوا في جدولين مختلفين. */
+$allowKinds = \App\Models\Payroll::allowedKinds();
+$probeRep   = (int) Database::scalar('SELECT id FROM reps ORDER BY id LIMIT 1');
+if ($allowKinds && $probeRep && \App\Models\RepMiscExpense::kindReady()) {
+    $probeDay = date('Y-m-d', strtotime('+402 days'));
+    $pdo = Database::conn();
+    $pdo->beginTransaction();
+    try {
+        $seed = static function (string $kind, float $amount) use ($probeRep, $probeDay): void {
+            Database::exec(
+                "INSERT INTO rep_misc_expenses
+                   (rep_id, exp_date, category, note, qty, unit_amount, amount, is_visa, misc_kind, created_by)
+                 VALUES (?,?,?,?,1,?,?,0,?,'فحص فصل المصروفات')",
+                [$probeRep, $probeDay, \App\Models\RepMiscKind::category($kind),
+                 'بند فحص', $amount, $amount, $kind]
+            );
+        };
+        $seed($allowKinds[0], 70);
+        foreach (\App\Models\RepMiscKind::salaryKeys() as $salaryKind) { $seed($salaryKind, 130); break; }
+
+        $probe = $method->invoke(new DailyClosingController(), $probeDay);
+        if (count($probe['repRows']) !== 1 || abs((float) $probe['totRep'] - 70) > 0.009) {
+            throw new RuntimeException('بند حوض مصروف المناديب ما وصلش لجدوله في الورقة.');
+        }
+        if (count($probe['miscRows']) !== 1 || abs((float) $probe['totMisc'] - 130) > 0.009) {
+            throw new RuntimeException('السلفة المفروض تفضل في المصروفات العامة — الفرز غلط.');
+        }
+        if (trim((string) ($probe['repRows'][0]['rep_name'] ?? '')) === '') {
+            throw new RuntimeException('جدول مصروفات المناديب مش بيعرف اسم المندوب.');
+        }
+
+        /* الورقة نفسها لازم تطلع بجدول المناديب فعلاً — الكنترولر ممكن يفرز صح
+           والعرض يفضل جدولين زي الأول، فالفحص بيقرا الـHTML المزروع مش الصفوف بس.
+           ⚠️ والجدول ده بيختفي في اليوم الفاضي، فالنيدل ما ينفعش يتفحص برّه هنا. */
+        $_GET['date'] = $probeDay;
+        $_SESSION['work_date'] = $probeDay;
+        $_SERVER['REQUEST_URI'] = '/closing/print?date=' . rawurlencode($probeDay);
+        ob_start();
+        (new DailyClosingController())->printable();
+        $probeHtml = ob_get_clean();
+        foreach (['مصروفات المناديب', 'من حوض مصروف المناديب', '>النوع<',
+                  'إجمالي مصروفات المناديب'] as $needle) {
+            if (!str_contains($probeHtml, $needle)) {
+                throw new RuntimeException('ورقة الطباعة مش فاصلة مصروفات المناديب: ' . $needle);
+            }
+        }
+    } finally {
+        $pdo->rollBack();
+    }
+} else {
+    echo "⚠️ فحص الفرز المزروع اتخطّى: مفيش مناديب أو مفيش أنواع مسموحة في الإعدادات.\n";
+}
+
 // أثر المطابقة اليدوية القديمة (v28) لازم يكون اختفى تمامًا
 foreach (['manual_total', 'reconForm', 'closing/reconcile'] as $gone) {
     if (str_contains($html, $gone)) {
@@ -215,3 +324,4 @@ echo "✓ مفيش أثر للمطابقة اليدوية القديمة ولا 
 echo "✓ البحث بيطبّع العربي على الطرفين (PHP + app.js متطابقين)\n";
 echo "✓ عنوان كل بند = بيانه المكتوب مش نوعه\n";
 echo "✓ طباعة التقفيل بخط كبير وهيدر أفقي وQR محلي، بلا توقيعات، وترتيبها حسب الشركة\n";
+echo "✓ ورقة الطباعة بتفصل مصروفات المناديب (حوض المصروف) عن المصروفات العامة\n";

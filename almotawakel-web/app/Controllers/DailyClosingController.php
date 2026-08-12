@@ -381,15 +381,25 @@ class DailyClosingController extends Controller
         }
         if ($this->tableExists('rep_misc_expenses')) {
             $cashOnly = \App\Models\RepMiscExpense::cashOnlySql('x');
+            /* ⚠️ الوسم (v71) بيتقرا هنا عشان الورقة تفصل نثرية **حوض مصروف
+               المناديب** (مواصلات · تصوير) عن المصروف العام — والسؤال بيتجاوب
+               من `Payroll::isAllowedKind()` لا بشرط مكتوب هنا. وقبل الترحيل
+               العمود مش موجود، فالوسم بيرجع فاضي وكل النثريات بتفضل في الجدول
+               العام زي ما كانت بالحرف. */
+            $kindReady = \App\Models\RepMiscExpense::kindReady();
+            $kindCol   = $kindReady ? 'x.misc_kind' : "'' AS misc_kind";
             foreach (Database::all(
-                "SELECT x.amount, x.category, x.note, x.ref_no, r.name FROM rep_misc_expenses x
+                "SELECT x.amount, x.category, x.note, x.ref_no, r.name, $kindCol FROM rep_misc_expenses x
                  JOIN reps r ON r.id = x.rep_id
                  WHERE x.amount <> 0 AND $cashOnly AND x.exp_date = ?"
                  . \App\Models\RepCustody::safeChargeSql('x.exp_date')
                  . " ORDER BY x.id", [$date]) as $r) {
+                $fromPool = \App\Models\Payroll::isAllowedKind($r['misc_kind'] ?? null);
                 $expenses[] = ['permit_no'=>'نثرية','company'=>$r['name'] ?: '—',
                     'stage_label'=>$r['category'] ?: \App\Models\RepMiscExpense::CATEGORY,
-                    'note'=>$r['note'],'ref_no'=>$r['ref_no'],'amount'=>$r['amount']];
+                    'note'=>$r['note'],'ref_no'=>$r['ref_no'],'amount'=>$r['amount'],
+                    'rep_name'=>$r['name'],'misc_kind'=>(string) ($r['misc_kind'] ?? ''),
+                    'grp'=>$fromPool ? 'rep' : 'misc'];
             }
         }
         /* ⚠️ المرحلة ٢ — التنزيل من الدرج بقى مصروفًا نقديًّا، فلازم يظهر في ورقة
@@ -517,18 +527,40 @@ class DailyClosingController extends Controller
             );
             return $cmp !== 0 ? $cmp : ((int) ($a['id'] ?? 0) <=> (int) ($b['id'] ?? 0));
         };
-        $isReceipt   = static fn(array $r): bool => ($r['grp'] ?? 'misc') === 'receipt';
-        $receiptRows = array_values(array_filter($expenses, $isReceipt));
-        $miscRows    = array_values(array_filter($expenses, static fn($r) => !$isReceipt($r)));
+        /* ⚠️ التصنيف كله بيتقرا من الوسم `grp` اللي اتحطّ فوق — تلات دلاء
+           متنافية ومجموعهم = مجموع `$expenses` بالحرف: إيصال · نثرية بتتحاسب
+           من حوض مصروف المناديب · أي مصروف تاني. أي صف بلا وسم بيقع على
+           «عام»، فمستحيل يختفي بند من الورقة مهما كان مصدره. */
+        $grpOf       = static fn(array $r): string => (string) ($r['grp'] ?? 'misc');
+        $receiptRows = array_values(array_filter($expenses, static fn($r) => $grpOf($r) === 'receipt'));
+        $repRows     = array_values(array_filter($expenses, static fn($r) => $grpOf($r) === 'rep'));
+        $miscRows    = array_values(array_filter(
+            $expenses,
+            static fn($r) => !in_array($grpOf($r), ['receipt', 'rep'], true)
+        ));
         usort($receiptRows, $byCompany);
         usort($custodyRows, $byCompany);
         usort($miscRows, $byPermit);
+        /* مصروفات المناديب بتتجمّع حسب المندوب: الورقة بتتقرا «فلان صرف كام
+           النهاردة» بدل سطور متبعترة على ترتيب الإدخال. */
+        usort($repRows, static function (array $a, array $b): int {
+            $cmp = strnatcasecmp(
+                search_norm(trim((string) ($a['rep_name'] ?? $a['company'] ?? ''))),
+                search_norm(trim((string) ($b['rep_name'] ?? $b['company'] ?? '')))
+            );
+            return $cmp !== 0 ? $cmp : strcmp(
+                (string) ($a['stage_label'] ?? ''),
+                (string) ($b['stage_label'] ?? '')
+            );
+        });
 
         return [
             'expenses'    => $expenses,
             'receiptRows' => $receiptRows,
+            'repRows'     => $repRows,
             'miscRows'    => $miscRows,
             'totReceipts' => $sum($receiptRows, 'amount'),
+            'totRep'      => $sum($repRows, 'amount'),
             'totMisc'     => $sum($miscRows, 'amount'),
             'visaRows'    => $visaRows,
             'visaByCard'  => array_values($visaByCard),
