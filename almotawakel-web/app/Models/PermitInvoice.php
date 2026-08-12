@@ -284,13 +284,37 @@ class PermitInvoice
         );
     }
 
-    /** هل الرقم المسلسل الخاص بالعميل مستخدَم من قبل؟ (لمنع التكرار) */
-    public static function serialExists(string $serial, ?int $exceptId = null): bool
+    /**
+     * هل الرقم المسلسل مستخدَم من قبل **مع نفس العميل**؟ (لمنع التكرار)
+     *
+     * ⚠️ نطاق التفرّد = العميل الواحد لا النظام كله (قرار المالك 2026-08-12، v91):
+     * الرقم ده مرجع العميل نفسه («كشف رقم ٧ عند فلان»)، فعميلان مختلفان
+     * ليهما نفس الرقم حاجة عادية — والحجب العام كان بيمنع إصدارًا مشروعًا.
+     * المصدر الوحيد لسؤال «الرقم ده متكرّر؟» — والقيد في القاعدة
+     * (`uq_pinv_agent_serial`) على نفس النطاق فالطبقتان بتقولا نفس الحكم.
+     *
+     * مطابقة العميل بـ`agent_id` (الهوية القانونية من PartyMaster) مع رجوع
+     * لاسم اللقطة للصفوف القديمة اللي مالهاش ربط. والعميل الفارغ نطاق قائم
+     * بذاته (فواتير بلا عميل ما تتكررش بينها).
+     */
+    public static function serialExists(string $serial, string $client = '', ?int $exceptId = null): bool
     {
         $serial = trim($serial);
         if ($serial === '' || !self::hasTable()) { return false; }
         $sql = 'SELECT COUNT(*) FROM permit_invoices WHERE serial_no = ?';
         $params = [$serial];
+
+        $client = trim($client);
+        $master = $client !== '' ? PartyMaster::resolve('agent', $client) : null;
+        if ($master) {
+            $sql .= ' AND (agent_id = ? OR (agent_id IS NULL AND client = ?))';
+            $params[] = (int) $master['id'];
+            $params[] = $client;
+        } else {
+            $sql .= ' AND COALESCE(client, \'\') = ?';
+            $params[] = $client;
+        }
+
         if ($exceptId) { $sql .= ' AND id <> ?'; $params[] = $exceptId; }
         return (bool) Database::scalar($sql, $params);
     }

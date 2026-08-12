@@ -920,11 +920,11 @@ class PermitController extends Controller
         // الضريبة تُقبل فقط للفاتورة (كشف الحساب والمطالبة بالإيصالات لا يخضعان للضريبة أبداً)
         $taxable = ($kind === 'invoice' && ($_POST['taxable'] ?? '') === '1') ? 1 : 0;
 
-        // رقم مسلسل خاص بالعميل (اختياري) — يجب ألا يتكرّر
+        // رقم مسلسل خاص بالعميل (اختياري) — يجب ألا يتكرّر **مع نفس العميل** (v91)
         $serial = trim($_POST['serial_no'] ?? '');
-        if ($serial !== '' && PermitInvoice::serialExists($serial)) {
+        if ($serial !== '' && PermitInvoice::serialExists($serial, (string)($p['client'] ?? ''))) {
             $this->formFailure('permits.invoice.' . $pid, 'permits/'.$pid.'/invoice', $_POST,
-                ['serial_no' => 'الرقم المسلسل «' . $serial . '» مستخدَم من قبل — اختر رقماً آخر.'],
+                ['serial_no' => self::serialTakenMsg($serial, (string)($p['client'] ?? ''))],
                 'permits/' . $pid);
         }
 
@@ -1040,9 +1040,9 @@ class PermitController extends Controller
         if (!$p) { $this->fail('الإصدار ده مش موجود أو اتمسح.', 'permits'); }
 
         $serial = trim($_POST['serial_no'] ?? '');
-        if ($serial !== '' && PermitInvoice::serialExists($serial)) {
+        if ($serial !== '' && PermitInvoice::serialExists($serial, (string)($p['client'] ?? ''))) {
             $this->formFailure('permits.invoice.' . $pid, 'permits/'.$pid.'/invoice', $_POST,
-                ['serial_no' => 'الرقم المسلسل «' . $serial . '» مستخدَم من قبل — اختر رقماً آخر.'],
+                ['serial_no' => self::serialTakenMsg($serial, (string)($p['client'] ?? ''))],
                 'permits/' . $pid);
         }
         if (!self::invoiceRowsFromPost()) {
@@ -1100,6 +1100,17 @@ class PermitController extends Controller
             ];
         }
         return $rows;
+    }
+
+    /**
+     * رسالة «الرقم المسلسل متكرّر» — **تحذير وظيفي** بيقول النطاق صراحةً:
+     * التكرار ممنوع مع نفس العميل بس، فالمالك ما يفتكرش إن الرقم محجوز عليه كله.
+     */
+    private static function serialTakenMsg(string $serial, string $client): string
+    {
+        $who = trim($client) !== '' ? ' مع «' . trim($client) . '»' : ' في المستندات بلا عميل';
+        return 'الرقم المسلسل «' . $serial . '» مستخدَم من قبل' . $who . ' — اختر رقماً آخر. '
+             . '(نفس الرقم مسموح مع عميل تاني.)';
     }
 
     /** يجمع بيانات الفاتورة المشتركة بين المعاينة والإصدار من POST + الإذن + البنود. */

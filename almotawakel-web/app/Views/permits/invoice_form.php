@@ -284,7 +284,7 @@ $billRow = function (array $b, string $amount, string $tone): void {
       </div>
       <div class="field<?= !empty($errors['serial_no']) ? ' has-error' : '' ?>">
         <label for="invoice-serial-no">رقم مسلسل خاص بالعميل</label>
-        <input id="invoice-serial-no" type="text" name="serial_no" value="<?= e($old['serial_no'] ?? '') ?>" placeholder="رقم مرجعي للعميل — لا يتكرّر"<?= fieldErrorAttrs('serial_no', $errors) ?>>
+        <input id="invoice-serial-no" type="text" name="serial_no" value="<?= e($old['serial_no'] ?? '') ?>" placeholder="لا يتكرّر مع نفس العميل"<?= fieldErrorAttrs('serial_no', $errors) ?>>
         <?= fieldError('serial_no', $errors) ?>
       </div>
     </div>
