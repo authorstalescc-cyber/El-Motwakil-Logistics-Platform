@@ -54,3 +54,6 @@ AGENTS.md
 فورمات المراجعة/
 bariq.jpg
 almotawakel-web/storage/*.lock
+
+# مخرجات متولّدة من الإكسل — بيانات مالية كاملة، بتتولّد بأمر واحد
+almotawakel-web/storage/imports/

@@ -69,7 +69,11 @@ $catalog = [
     'verify_rep_profile.php'      => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'بروفايل المندوب والبنود اليدوية (v88) — الجزاء وسم مش معاملة، وحارس الفترة المعتمدة، والبند بيغيّر الصافي بمقداره، fixtures داخل rollback'],
     'verify_clients.php'          => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'حسابات العملاء (v93) — العدسة قراءة بحتة، والقائمة = الترويسة = الموديل، وكشف الحساب متوازن، والتحصيل اتنقل بلا تغيير، fixtures داخل rollback'],
     'verify_v91.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'الرقم المسلسل في مستند العميل (v91) — نطاق التفرّد = العميل الواحد في القاعدة وفي الحارس مع بعض، fixtures داخل rollback'],
-    'verify_v93.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'المستند الأرشيفي واستيراد كشوف العملاء (v93) — صفر أثر على الخزنة وحارس التحسيب المزدوج برقم الإذن وحارس تكرار الاستيراد في القاعدة نفسها، fixtures داخل rollback'],
+    // ⚠️ الاسم **v92** لا v93: رقم الفاحص بيتبع رقم **الترحيل** (`migrate_v92.php`
+    //    المطبَّق على الإنتاج في سجل الـledger) مش رقم الـcommit. جلسة موازية
+    //    كانت سمّته v93 على اسم وحدتها هي، فالكتالوج بقى يشاور على ملف مش موجود
+    //    والرانر بيرفض تشغيل الكل. (مصيدة الجلستين — CLAUDE.md.)
+    'verify_v92.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'المستند الأرشيفي واستيراد كشوف العملاء (v92) — صفر أثر على الخزنة وحارس التحسيب المزدوج برقم الإذن وحارس تكرار الاستيراد في القاعدة نفسها، fixtures داخل rollback'],
     'verify_payroll.php'          => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'رواتب المناديب (v87) — حارس التحسيب المزدوج (ولا نوع بند في CASH_KINDS) والقسمة بلا فقد قرش واللقطة الثابتة، fixtures داخل rollback'],
     'verify_design_system.php'    => ['impact' => 'read',       'self_guard' => false, 'note' => 'لغة تصميم النظام + قاعدة «ممنوع رقم أصمّ» + نافذة التفاصيل الواحدة'],
     'verify_density.php'          => ['impact' => 'read',       'self_guard' => false, 'note' => 'قانون التصميم: صفر جملة تعليمية — الشرح يتشال والتحذير الوظيفي يفضل'],

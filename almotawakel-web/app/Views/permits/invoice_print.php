@@ -178,7 +178,14 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
              وهو البلاغ الأصلي (2026-07-25) وسبب خطر الفاتورة المكررة.
              القاعدة: الرجوع يذهب لما صُنع لا للشاشة التي صنعته
              (docs/16-navigation-master-plan.md §٤ — يحرسها verify_navigation). */ ?>
-    <a class="btn ghost" href="<?= url('permits/'.$inv['permit_id']) ?>">‹ رجوع للإذن</a>
+    <?php /* المستند الأرشيفي (v92) مالوش إذن — الرجوع بيروح لحساب العميل بدل
+             ما يوصّل لـ`permits/` فاضية. القاعدة نفسها: الرجوع يوصّل للحاجة
+             اللي المستند بيخصّها. */ ?>
+    <?php if (!empty($inv['permit_id'])): ?>
+      <a class="btn ghost" href="<?= url('permits/'.(int)$inv['permit_id']) ?>">‹ رجوع للإذن</a>
+    <?php elseif (!empty($inv['agent_id'])): ?>
+      <a class="btn ghost" href="<?= url('clients/'.(int)$inv['agent_id']) ?>">‹ رجوع لحساب العميل</a>
+    <?php endif; ?>
     <a class="btn ghost" href="<?= url('invoices') ?>"><?= icon('folder', 14) ?> سجل الفواتير</a>
   </div>
 <?php endif; ?>
