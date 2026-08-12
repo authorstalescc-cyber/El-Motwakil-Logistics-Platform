@@ -423,9 +423,14 @@ class CompanySafeController extends Controller
         $to   = $ok($_GET['to']   ?? null) ? (string) $_GET['to']   : date('Y-m-t',  strtotime($day));
         if ($from > $to) { [$from, $to] = [$to, $from]; }
 
+        /* ⚠️ **قسم «تفاصيل إضافية» أرصدة لحظية مش أرقام فترة** — رصيد الدرج
+           والمناديب دلوقتي، مصدرهم `Closing::walletSplit()` نفسها اللي بتغذّي
+           الشاشة وشاشة التقفيل. حسابهم هنا بالإيد كان هيدّي «كارت يقول رقم
+           وكشف يقول رقم تاني»، والورقة بتقول صراحةً إنهم وقت الطباعة. */
         $this->render('company_safe/statement', [
-            'title' => 'كشف حساب خزنة الشركة',
-            'st'    => CompanySafe::statement($from, $to),
+            'title'   => 'كشف حساب خزنة الشركة',
+            'st'      => CompanySafe::statement($from, $to),
+            'wallets' => Closing::walletSplit(),
         ], false);
     }
 }

@@ -10,7 +10,15 @@
  *    `CompanySafe::statement()` بنفس تعبير الاتجاه بتاع `balance()`،
  *    فمستحيل الورقة تقول رصيدًا يخالف الشاشة. محروسة بفحص في `verify_v67`.
  *
- * @var array $st  مخرَج `CompanySafe::statement()`
+ * ⚠️ **كروت الإجمالي بتعرض «اتسلّم للمكتب» و«مصروفات الخزنة» لا «داخل/خارج»**
+ *    (قرار المالك): «خارج» كانت بتجمّع خمسة أنواع مختلفة في رقم واحد ما بيقولش
+ *    راح فين. الاتجاه المجمَّع لسه في تذييل الجدول وفي سطر المعادلة تحته.
+ *
+ * ⚠️ **قسم «تفاصيل إضافية» أرصدة لحظية وقت الطباعة** — مش أرقام الفترة، فلازم
+ *    الورقة تقول كده صراحةً وإلا القارئ يجمعها على الختامي وهي محفظة تانية.
+ *
+ * @var array $st       مخرَج `CompanySafe::statement()`
+ * @var array $wallets  مخرَج `Closing::walletSplit()` — الدرج والمناديب دلوقتي
  */
 use App\Core\App;
 use App\Models\CompanySafe;
@@ -53,6 +61,10 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
   .tt.op{background:var(--bg)}
   .tt.cl{background:var(--navy);color:#fff;border-color:var(--navy)}
   .tt.cl .l{color:#cfdcec}
+  .extra{margin-top:18px;border-top:1px solid var(--line);padding-top:12px;break-inside:avoid}
+  .extra h3{font-size:10pt;font-weight:700;color:var(--navy);margin-bottom:8px}
+  .extra .totals{margin:0}
+  .tt .n{color:var(--muted);font-size:7.8pt;margin-top:3px}
   .kinds{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
   .kx{border:1px solid var(--line);border-radius:5px;padding:5px 9px;font-size:8.6pt;background:var(--bg)}
   .kx b{font-weight:700}
@@ -100,10 +112,10 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
     <div class="totals">
       <div class="tt op"><div class="l">رصيد أول المدة</div>
         <div class="v"><?= money($st['opening'], false) ?></div></div>
-      <div class="tt"><div class="l">داخل</div>
-        <div class="v pos"><?= money($st['in'], false) ?></div></div>
-      <div class="tt"><div class="l">خارج</div>
-        <div class="v neg"><?= money($st['out'], false) ?></div></div>
+      <div class="tt"><div class="l">اتسلّم لخزنة المكتب</div>
+        <div class="v neg"><?= money($st['to_office'], false) ?></div></div>
+      <div class="tt"><div class="l">مصروفات خزنة الشركة</div>
+        <div class="v neg"><?= money($st['expense'], false) ?></div></div>
       <div class="tt cl"><div class="l">رصيد آخر المدة</div>
         <div class="v"><?= money($st['closing'], false) ?></div></div>
     </div>
@@ -138,7 +150,18 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
           <?php foreach ($st['rows'] as $i => $r): ?>
             <?php
               $isIn = $r['signed'] >= 0;
+              /* ⚠️ **اسم المحفظة قبل أي شرح** (طلب المالك: «يتم ذكر اسم الفيزا
+                 اللي خرج منها المال»). الاسم بيتوسم بمصدره — «كارت» لحركات
+                 الفيزا و«مندوب» للعهدة — عشان قارئ الورقة ما يخلطش بين
+                 اسم كارت واسم شخص. والصف المتفلَّت (كارت اتمسح) بيعدّي بلا وسم
+                 بدل ما نخترع اسمًا. */
+              $wallet = trim((string) ($r['wallet'] ?? ''));
+              if ($wallet !== '') {
+                  $wallet = (in_array((string) $r['kind'], CompanySafe::VISA_KINDS, true)
+                      ? 'كارت: ' : 'مندوب: ') . $wallet;
+              }
               $desc = array_filter([
+                  $wallet !== '' ? $wallet : null,
                   $r['cat_label'] ?? null,
                   $r['source'] ?: null,
                   $r['note'] ?: null,
@@ -165,6 +188,24 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
         </tr>
       </tfoot>
     </table>
+
+    <?php /* ⚠️ **محافظ تانية مش جزء من كشف الشركة** — الدرج وجيوب المناديب
+             فلوس خرجت من خزنة الشركة خلاص، فجمعها على الختامي تحسيب مزدوج.
+             القسم منفصل بعنوانه وبسطر تاريخ لحظته تحت كل رقم. */ ?>
+    <div class="extra">
+      <h3>تفاصيل إضافية</h3>
+      <div class="totals">
+        <div class="tt"><div class="l">رصيد المكتب الفعلي حاليًا</div>
+          <div class="v <?= $wallets['drawer'] < -0.005 ? 'neg' : '' ?>">
+            <?= money($wallets['drawer'], false) ?></div>
+          <div class="n">كاش في درج المكتب — <?= e(dfmt(date('Y-m-d'))) ?></div></div>
+        <div class="tt"><div class="l">آخر رصيد مع المناديب</div>
+          <div class="v"><?= money($wallets['reps_total'], false) ?></div>
+          <div class="n"><?= $wallets['reps']
+              ? intf(count($wallets['reps'])) . ' مندوب معاهم فلوس'
+              : 'مفيش عهد مفتوحة' ?> — <?= e(dfmt(date('Y-m-d'))) ?></div></div>
+      </div>
+    </div>
 
     <div class="foot">
       <span>رصيد أول المدة <?= money($st['opening'], false) ?>

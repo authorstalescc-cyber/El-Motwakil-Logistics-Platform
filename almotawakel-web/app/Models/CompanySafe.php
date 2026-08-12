@@ -1003,13 +1003,20 @@ class CompanySafe
      *    `signedSql()` بتاع `balance()` — فمستحيل يطلع رقم مخالف للرصيد
      *    المعروض في الشاشة. (`الافتتاحي + صافي الفترة = الختامي` محروسة بفحص.)
      *
+     * ⚠️ `to_office` و`expense` بيترجّعوا **مفاتيح مستقلّة** مش محسوبين في الورقة:
+     *    كروت الكشف بتعرضهم مباشرةً (طلب المالك: «الرصيد اللي تم تسليمه للمكتب»
+     *    و«مصروفات خزنة الشركة» بدل «داخل/خارج» المجمَّعين). حسابهم في الـview
+     *    من `by_kind` كان هيكرّر قاعدة الاتجاه برّه الموديل.
+     *
      * @return array{from:string,to:string,opening:float,closing:float,in:float,out:float,
+     *               to_office:float,expense:float,
      *               rows:list<array>,by_kind:array<string,array{in:float,out:float,count:int}>}
      */
     public static function statement(string $from, string $to): array
     {
         $empty = ['from' => $from, 'to' => $to, 'opening' => 0.0, 'closing' => 0.0,
-                  'in' => 0.0, 'out' => 0.0, 'rows' => [], 'by_kind' => []];
+                  'in' => 0.0, 'out' => 0.0, 'to_office' => 0.0, 'expense' => 0.0,
+                  'rows' => [], 'by_kind' => []];
         if (!self::ready()) { return $empty; }
 
         $opening = round((float) Database::scalar(
@@ -1031,14 +1038,21 @@ class CompanySafe
             $r['running'] = round($run, 2);
             $r['label']   = self::label($k);
             $r['cat_label'] = $r['category'] ? self::catLabel($r['category']) : null;
+            /* ⚠️ **اسم الكارت/المندوب في الورقة زي الشاشة بالظبط** (طلب المالك:
+               «يجب ذكر اسم الفيزا اللي خرج منها المال»). بيتحلّ في `attachWallets`
+               بعد الحلقة — استعلامان لكل الكشف لا استعلام لكل صف. */
+            $r['wallet']  = null;
             $byKind[$k] ??= ['in' => 0.0, 'out' => 0.0, 'count' => 0];
             $byKind[$k][$isIn ? 'in' : 'out'] += $amt;
             $byKind[$k]['count']++;
         }
         unset($r);
+        self::attachWallets($rows);
 
         return ['from' => $from, 'to' => $to, 'opening' => $opening,
                 'closing' => round($run, 2), 'in' => round($in, 2), 'out' => round($out, 2),
+                'to_office' => round($byKind['to_office']['out'] ?? 0.0, 2),
+                'expense'   => round($byKind['expense']['out'] ?? 0.0, 2),
                 'rows' => $rows, 'by_kind' => $byKind];
     }
 
