@@ -8,24 +8,26 @@ class DatabaseBackup
     public static function create(string $label = 'backup'): array
     {
         $cfg = App::config('db');
-        // ⚠️ استضافة الإنتاج (Hostinger) بتقفل كل دوال تشغيل العمليات
-        //    (exec/shell_exec/proc_open/popen/passthru). من غير الفحص ده كان
-        //    زرار النسخ الاحتياطي بيرمي Fatal Error صفحة بيضا بدل رسالة مفهومة.
-        if (!function_exists('proc_open')) {
-            throw new \RuntimeException(
-                'النسخ الاحتياطي من داخل النظام متوقف على السيرفر ده (دوال تشغيل '
-                . 'العمليات مقفولة من الاستضافة). خد النسخة من hPanel أو من '
-                . 'سكربت الرفع bin/deploy.sh اللي بياخدها عبر SSH.');
-        }
-        $dump = self::findBinary('mysqldump');
-        if (!$dump) { throw new \RuntimeException('تعذّر إيجاد أداة mysqldump.'); }
-
         $dir = App::basePath('storage/backups');
         if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
             throw new \RuntimeException('تعذّر تجهيز مجلد النسخ الاحتياطية.');
         }
         $safeLabel = preg_replace('/[^a-z0-9_-]+/i', '-', $label) ?: 'backup';
         $path = $dir . '/' . $safeLabel . '-' . date('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '.sql';
+
+        /* ⚠️ استضافة الإنتاج (Hostinger) بتقفل كل دوال تشغيل العمليات
+              (exec/shell_exec/proc_open/popen/passthru)، فـ`mysqldump` **مستحيل
+              يتنادى من PHP هناك** حتى وهو موجود في `/usr/bin`. الزرار كان بيرمي
+              رسالة «النسخ الاحتياطي متوقف على السيرفر ده» — دلوقتي بيقع على
+              `SqlDump` (PDO خالص) فالزرار بيشتغل على الإنتاج زي المحلي بالظبط.
+           ⚠️ mysqldump يفضل **المفضَّل** لما يكون متاحًا: هو المرجع، وأي فرق
+              بينه وبين `SqlDump` نكتشفه من فرق النتيجة لا من نسخة مش مستعملة. */
+        $dump = function_exists('proc_open') ? self::findBinary('mysqldump') : null;
+        if ($dump === null) {
+            $res = SqlDump::toFile($path);
+            @chmod($path, 0600);
+            return ['path' => $path, 'bytes' => $res['bytes'], 'sha256' => hash_file('sha256', $path)];
+        }
 
         $cmd = [
             $dump,

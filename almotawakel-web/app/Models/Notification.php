@@ -105,7 +105,7 @@ class Notification
      *    غير يوم ما يحتاجها فعلاً وساعتها يكون فات شهور. عشان كده بنقيس
      *    **عمر آخر نسخة ناجحة** مش وجود الملف.
      *
-     * العلامة بيكتبها `bin/backup_cron.sh` بعد ما يتأكد إن الـdump كمل
+     * العلامة بيكتبها `AutoBackup` بعد ما يتأكد إن الـdump كمل
      * (سطر `Dump completed`) — يعني نجاح حقيقي مش مجرّد ملف اتعمل.
      */
     private static function staleBackup(): ?array
@@ -116,8 +116,8 @@ class Notification
         if ($last === '') {
             return self::item(
                 'backup_never', 'warn', 'alert',
-                'النسخة الاحتياطية التلقائية مش مفعّلة',
-                'ظبّط المهمة اليومية من لوحة الاستضافة عشان بيانات النظام تبقى محفوظة.',
+                'لسه مفيش نسخة احتياطية ناجحة',
+                'المفروض تتاخد لوحدها كل يوم — لو الرسالة فضلت، العامل واقف.',
                 'settings', 1, 'SettingsController@index'
             );
         }
@@ -131,7 +131,7 @@ class Notification
         return self::item(
             'backup_stale', $days >= 7 ? 'err' : 'warn', 'alert',
             'آخر نسخة احتياطية من ' . intf($days) . ' يوم',
-            'المفروض تتاخد كل يوم — راجع المهمة اليومية على لوحة الاستضافة.',
+            'المفروض تتاخد لوحدها كل يوم — شوف «حالة النظام» في الإعدادات.',
             'settings', $days, 'SettingsController@index'
         );
     }

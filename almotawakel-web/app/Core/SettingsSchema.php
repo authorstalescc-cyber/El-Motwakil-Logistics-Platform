@@ -521,14 +521,25 @@ class SettingsSchema
         'backup_last_ok' => [
             'label' => 'آخر نسخة احتياطية ناجحة', 'section' => 'maintenance',
             'type' => self::T_TEXT, 'default' => '', 'role' => 'owner',
-            'tier' => self::TIER_STATE, 'writer' => 'bin/backup_cron.sh',
-            'help' => 'بيتحدّث لوحده بعد كل نسخة.', 'affects' => ['security'],
+            'tier' => self::TIER_STATE, 'writer' => 'النسخة اليومية التلقائية',
+            'help' => 'بيتحدّث لوحده بعد كل نسخة كملت.', 'affects' => ['security'],
         ],
         'backup_last_msg' => [
             'label' => 'رسالة آخر نسخة احتياطية', 'section' => 'maintenance',
             'type' => self::T_TEXT, 'default' => '', 'role' => 'owner',
-            'tier' => self::TIER_STATE, 'writer' => 'bin/backup_cron.sh',
+            'tier' => self::TIER_STATE, 'writer' => 'النسخة اليومية التلقائية',
             'help' => 'تفاصيل نجاح أو فشل آخر نسخة.', 'affects' => ['security'],
+        ],
+        /* ⚠️ مختلفة عن `backup_last_ok` عن قصد: دي بتتحدّث مع **كل محاولة**
+              حتى الفاشلة، عشان تخنق إعادة المحاولة على ساعة. لو الاتنين
+              بقوا مفتاحًا واحدًا، الفشل كان هيمسح دليل «آخر نجاح» ويخلّي
+              التوقّف صامتًا. */
+        'backup_last_try' => [
+            'label' => 'آخر محاولة نسخة احتياطية', 'section' => 'maintenance',
+            'type' => self::T_TEXT, 'default' => '', 'role' => 'owner',
+            'tier' => self::TIER_STATE, 'writer' => 'النسخة اليومية التلقائية',
+            'help' => 'نجحت أو فشلت — بيمنع تكرار المحاولة كل ٥ دقايق.',
+            'affects' => ['security'],
         ],
         'notify_digest_last' => [
             'label' => 'آخر ملخّص يومي اتبعت', 'section' => 'maintenance', 'type' => self::T_TEXT,

@@ -70,7 +70,7 @@ class SettingsHealth
         // ④ حالة التشغيل
         $backup = trim((string) App::setting('backup_last_ok', ''));
         if ($backup === '') {
-            $out[] = ['warn', 'مفيش نسخة احتياطية مسجَّلة', 'شغّل نسخة من قسم الصيانة.'];
+            $out[] = ['warn', 'مفيش نسخة احتياطية مسجَّلة', 'المفروض تتاخد لوحدها كل يوم — خد واحدة من قسم الصيانة.'];
         } elseif (strtotime($backup) !== false && strtotime($backup) < strtotime('-3 days')) {
             $out[] = ['warn', 'آخر نسخة احتياطية من أكتر من ٣ أيام', 'خد نسخة جديدة.'];
         }

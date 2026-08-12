@@ -22,6 +22,7 @@ $catalog = [
     'verify_access_matrix.php'    => ['impact' => 'none',       'self_guard' => false, 'note' => 'مصفوفة route/action × roles بنيوية بلا قاعدة'],
     'verify_accessibility_foundation.php' => ['impact' => 'none', 'self_guard' => false, 'note' => 'أساس الوصولية والكاش لشاشتي التخطيط والدخول بلا قاعدة'],
     'verify_app_update.php'       => ['impact' => 'none',       'self_guard' => false, 'note' => 'التحديث الإجباري — فحص بنيوي على الملفات بلا قاعدة'],
+    'verify_backup_auto.php'      => ['impact' => 'cleanup',    'self_guard' => false, 'note' => 'النسخة اليومية التلقائية — نسخة حقيقية في ملف مؤقّت وتمرين استعادة على قاعدة خردة ينشئها ويحذفها، ومفاتيح settings ترجع في finally'],
     'verify_clock_display.php'    => ['impact' => 'read',       'self_guard' => false, 'note' => 'عرض الوقت على ساعة المستخدم — يقرأ NOW() لقياس الفرق بلا كتابة'],
     'verify_closing_redesign.php' => ['impact' => 'read',       'self_guard' => false, 'note' => 'يرندر من بيانات القاعدة دون كتابة مقصودة'],
     'verify_components.php'       => ['impact' => 'read',       'self_guard' => false, 'note' => 'يرندر مكوّنات app/Views/partials في الذاكرة ويقرأ رصيد الخزنة للمقارنة'],
