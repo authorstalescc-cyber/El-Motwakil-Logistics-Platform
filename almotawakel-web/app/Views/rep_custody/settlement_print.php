@@ -140,11 +140,27 @@ $eq[] = ['اتقفل واتسلّم', $back2, '−'];
   .btn{padding:10px 22px;border:none;border-radius:9px;font-weight:600;font-size:14px;cursor:pointer;
     font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
   .btn.gold{background:var(--gold);color:var(--navy)} .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
+  /* ⚠️ رسالة نجاح التقفيل بتتعرض هنا لأن الصفحة دي بقت **وجهة** التسوية نفسها
+     (مش بس رابط من الكارت). من غير عرضها كانت هتفضل مخزَّنة وتطلع فجأة على
+     أول صفحة عادية بعد كده — والمالك يشوف «تمت التسوية» في مكان مالوش علاقة. */
+  .flashbar{max-width:210mm;margin:10px auto 0;padding:0 6px}
+  .flashbar .msg{border-radius:9px;padding:10px 14px;font-size:13.5px;font-weight:500;
+    background:#e9f7ef;color:#186a3b;border:1px solid #a9dfbf}
+  .flashbar .msg.err{background:#fdedec;color:#922b21;border-color:#f5b7b1}
   @media print{ @page{size:A4;margin:0} html,body{background:#fff} .noprint{display:none!important}
     .sheet{margin:0;box-shadow:none;width:auto;min-height:auto} }
 </style>
 </head>
 <body>
+
+<?php $flashes = flash_all(); ?>
+<?php if ($flashes): ?>
+<div class="flashbar noprint">
+  <?php foreach ($flashes as $f): ?>
+    <div class="msg<?= $f['type'] === 'success' ? '' : ' err' ?>"><?= e($f['msg']) ?></div>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
 
 <div class="bar noprint">
   <button class="btn gold" onclick="window.print()"><?= icon('file-text', 14) ?> طباعة / حفظ PDF</button>

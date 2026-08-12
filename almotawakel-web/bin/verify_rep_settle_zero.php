@@ -413,6 +413,31 @@ try {
         has('وزرار الطباعة في تبويب «الحساب الكامل»',
             'app/Views/rep_custody/_tab_account.php', "/print') ?>");
 
+        /* ⚠️ بعد التقفيل المستخدم لازم يقع على **ورقة الإيصال** لا على الكارت
+           (طلب المالك: «التسوية تودّيني على كشفها أطبعه»). الفحص بيقرا جسم
+           الدالتين بالـReflection ويتأكد إن الاتنين بيمرّوا على `receiptUrl()`
+           — المصدر الوحيد لمسار الورقة. */
+        $methodBody = static function (string $m): string {
+            $r = new \ReflectionMethod(\App\Controllers\RepCustodyController::class, $m);
+            $src = file($r->getFileName()) ?: [];
+            return implode('', array_slice($src, $r->getStartLine() - 1,
+                                           $r->getEndLine() - $r->getStartLine() + 1));
+        };
+        method_exists(\App\Controllers\RepCustodyController::class, 'receiptUrl')
+            ? ok('receiptUrl موجودة (المصدر الوحيد لمسار الإيصال)')
+            : bad('receiptUrl ناقصة — مسار الورقة مكتوب بالإيد في مكانين');
+        foreach (['settle' => 'التسوية الجزئية', 'settleAll' => 'التصفية بضغطة'] as $m => $label) {
+            str_contains($methodBody($m), 'receiptUrl(')
+                ? ok("⚠️ {$label} بتودّي على ورقة الإيصال")
+                : bad("{$label} لسه بترجّع للكارت من غير إيصال");
+        }
+        /* ⚠️ ممنوع `done()` في مسار الإيصال: `done()` بتمرّ على
+           `safe_back($_POST['_back'])` وفورم التصفية بيبعت `_back` بتاع الكارت،
+           فالورقة كانت هتتلغي بالسكوت. */
+        !str_contains($methodBody('settleAll'), '$this->done(')
+            ? ok('⚠️ ومش بتعدّي على `done()` (كان `_back` هيدهس الورقة)')
+            : bad('settleAll لسه بتستخدم done() — `_back` هيرجّعه للكارت');
+
         /* ⚠️⚠️ أهم فحصين في القسم — `deposits_total`/`spent_total` **ممنوع**
            يتعرضوا في الورقة: العمودان ليهم معنيان مختلفان حسب مسار التقفيل
            (`settleZero` بتخزّن مجاميع **اليوم** و`settle` بتخزّن **التراكمي**)

@@ -1182,6 +1182,19 @@ class RepCustodyController extends Controller
     }
 
     // ─────────────────────────────────────────── تسوية
+
+    /**
+     * **مسار الإيصال بعد أي تقفيل** — التسوية بتوصّل على ورقتها على طول.
+     *
+     * ⚠️ **مش `done()`**: `done()` بتمرّ على `safe_back($_POST['_back'])`، وفورم
+     *    التصفية بيبعت `_back` بتاع الكارت — فالورقة كانت هتتلغي بالسكوت
+     *    ويرجع للكارت زي الأول. الرجوع للكارت موجود كزرار جوّه الورقة نفسها.
+     */
+    private static function receiptUrl(int $sid): string
+    {
+        return 'rep-custody/settlement/' . $sid . '/print';
+    }
+
     public function settle(string $id): void
     {
         $this->requireAuth();
@@ -1211,12 +1224,12 @@ class RepCustodyController extends Controller
         // v42: التسوية بقت في محفظة المندوب بس ومابتمسّش الخزنة، فمفيش داعي لفحص القفل.
         // (الفلوس اللي رجعت ماخرجتش من الخزنة أصلاً — الخصم بيحصل وقت الصرف.)
         $this->claimForm(self::cardUrl($repId, self::TAB_ACCOUNT, 'settle-form'));
-        RepCustody::settle($repId, $returned, $date, false, $note);
+        $sid = RepCustody::settle($repId, $returned, $date, false, $note);
         // ⚠️ الإشعار **بعد** نجاح العملية وخارج أي transaction (docs/15 §٨.٢)
         PushNotify::repSettled($repId, (string) ($rep['name'] ?? 'مندوب'), $returned, $date,
                                (string) (\App\Core\Auth::user() ?? 'المكتب'));
-        flash('success', 'تمت التسوية وخلص حساب العهدة مع المندوب.');
-        redirect(self::cardUrl($repId, self::TAB_ACCOUNT));
+        flash('success', 'تمت التسوية — ده إيصالها، اطبعه أو احفظه PDF.');
+        redirect(self::receiptUrl($sid));
     }
 
     /**
@@ -1248,7 +1261,19 @@ class RepCustodyController extends Controller
             $this->fail($e->getMessage(), $back);
         }
         PushNotify::repSettled($repId, (string) $rep['name'], $res['amount'], $date, (string) Auth::user());
-        $this->done(self::settleMessage($res, (string) $rep['name']), $back);
+
+        // ⚠️ تقفيل يوم واحد = إيصال واحد → روح عليه على طول. تقفيل **كذا يوم**
+        //    بيولّد إيصالًا **لكل يوم** (كل يوم بيتقفل على تاريخه هو)، ومفيش
+        //    ورقة واحدة تجمعهم — فالمكان الصح ساعتها قايمة «التسويات» في تبويب
+        //    الحساب، وكل إيصال جنبه زرار طباعته.
+        $ids = array_values(array_map('intval', $res['ids'] ?? []));
+        $msg = self::settleMessage($res, (string) $rep['name']);
+        if (count($ids) === 1) {
+            flash('success', $msg . ' ده إيصالها، اطبعه أو احفظه PDF.');
+            redirect(self::receiptUrl($ids[0]));
+        }
+        flash('success', $msg . ' إيصالات الأيام تحت في «التسويات».');
+        redirect(self::cardUrl($repId, self::TAB_ACCOUNT));
     }
 
     /** رسالة نتيجة التصفية — نفس الصيغة للمكتب وللمندوب. */
