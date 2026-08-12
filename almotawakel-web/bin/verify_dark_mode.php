@@ -47,7 +47,7 @@ $cssCode = code_only($css);
 
 /** الشاشات اللي بتحمّل `app.css` فعلاً. المستندات المستقلة (A4) ليها `:root`
  *  خاص بها وبتفضل فاتحة عن قصد — فتوكنز النظام ما تنطبقش عليها. */
-$standalone = '~(print_base|_print_styles|invoice_print|settlement_print|batch_print'
+$standalone = '~(print_base|_print_styles|invoice_print|settlement_print|statement_print|batch_print'
             . '|/print\.php|/statement\.php|/report\.php|errors/500|tracking/driver)~';
 $screens = [];
 foreach (glob($root . '/app/Views/**/*.php', GLOB_BRACE) as $f) { $screens[] = $f; }

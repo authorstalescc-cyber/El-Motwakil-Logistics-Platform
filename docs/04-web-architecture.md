@@ -248,8 +248,16 @@
 | POST | `/reps/entry/{eid}/delete` | RepController@deleteEntry |
 | POST | `/reps/{id}` | RepController@update (بعد كل مسارات `/reps/{id}/*`) |
 | GET | `/reps/{id}` | RepController@show (الجشع أخيرًا) |
-| GET | `/directory` | DirectoryController@index |
-| GET | `/directory/agent/{id}` | DirectoryController@agent |
+| GET | `/clients` | ClientController@index (حسابات العملاء — v93) |
+| POST | `/clients/{id}/pay` | ClientController@pay |
+| POST | `/clients/{id}/edit` | ClientController@save |
+| POST | `/clients/{id}/payment/{pid}/reverse` | ClientController@reversePayment |
+| GET | `/clients/{id}/drill/{what}` | ClientController@drill |
+| GET | `/clients/{id}/statement` | ClientController@statement (A4) |
+| GET | `/clients/{id}/edit` | ClientController@edit |
+| GET | `/clients/{id}` | ClientController@show (الجشع أخيرًا) |
+| GET | `/directory` | DirectoryController@index (شركات + أصحاب بيان) |
+| GET | `/directory/agent/{id}` | ClientController@legacyProfile (تحويل للرابط الجديد) |
 | GET | `/directory/company/{id}` | DirectoryController@company |
 | GET | `/balances` | BalancesController@index |
 | POST | `/balances` | BalancesController@store |

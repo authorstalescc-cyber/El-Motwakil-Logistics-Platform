@@ -96,6 +96,9 @@ class Access
         'CompanySafeController', 'OfficeCarController', 'OfficeDriverController',
         'DailyClosingController', 'OwnerStatementController',
         'InvoiceController', 'ExpenseController', 'RepController',
+        /* ⚠️ حسابات العملاء (v93): التحصيل كان استثناءً مكتوبًا تحت
+           (`DirectoryController@addPayment`)، وبقى وحدة مالية كاملة. */
+        'ClientController',
         'RepCustodyController', 'StatementsController',
     ];
 
@@ -199,7 +202,6 @@ class Access
         if ($role === 'accountant') {
             if (in_array($controller, self::FINANCIAL_CONTROLLERS, true)) { return true; }
             if ($controller === 'PermitController' && in_array($action, self::PERMIT_FINANCIAL_ACTIONS, true)) { return true; }
-            if ($controller === 'DirectoryController' && in_array($action, ['addPayment', 'deletePayment'], true)) { return true; }
             return false;
         }
 

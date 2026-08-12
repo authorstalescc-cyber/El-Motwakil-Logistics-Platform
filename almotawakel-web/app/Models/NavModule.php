@@ -43,7 +43,10 @@ class NavModule
     ['tracking',    'تتبع الشحنات',  'map-pin',       'TrackController@index',       'track_stale'],
     ['closing',     'التقفيل اليومي','calculator',    'DailyClosingController@index','closing_open'],
 
-    ['__sec', 'حسابات العملاء', null, null, null],
+    ['__sec', 'العملاء', null, null, null],
+    /* ⚠️ «حسابات العملاء» أول القسم عن قصد (v93): هي **نقطة الدخول** لأي شغل
+       على عميل — الفواتير والتحصيلات تحتها سجلات عرضية عبر كل العملاء. */
+    ['clients',     'حسابات العملاء','users',         'ClientController@index',      null],
     ['invoices',    'فواتير العملاء','receipt',       'InvoiceController@index',     'ready_invoice'],
     ['payments',    'تحصيلات العملاء','wallet',       'PaymentController@index',     null],
     ['debts',       'المديونيات',    'credit-card',   'DebtController@index',        null],

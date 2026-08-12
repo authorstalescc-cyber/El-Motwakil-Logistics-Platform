@@ -333,7 +333,7 @@ try {
 sec('⑤ب قايمة التوجيه — مصدر واحد للشاشة والخادم');
 foreach ([
     'app/Controllers/PaymentController.php'   => 'الكنترولر /payments',
-    'app/Controllers/DirectoryController.php' => 'الكنترولر /directory',
+    'app/Controllers/ClientController.php'    => 'الكنترولر /clients',
 ] as $f => $label) {
     $c = code_only($f);
     str_contains($c, 'routeChoices()')
@@ -344,7 +344,7 @@ foreach ([
 }
 foreach ([
     'app/Views/payments/index.php'   => 'شاشة /payments',
-    'app/Views/directory/agent.php'  => 'شاشة بروفايل العميل',
+    'app/Views/clients/_tab_payments.php' => 'شاشة تحصيل العميل',
 ] as $f => $label) {
     str_contains(src($f), 'routeChoices()')
         ? ok("{$label} بتقرا `routeChoices()` قبل عرض الخيار")

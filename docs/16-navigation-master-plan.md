@@ -125,7 +125,7 @@ grep -rln "page_head" app/Views | wc -l                          # 1
 | `POST /statements` | **كشف حساب مكرر** |
 | `POST /reps/{id}/entry` | بند استحقاق/خصم مكرر |
 | `POST /reps/{id}/settle` | تسوية مندوب مكررة |
-| `POST /directory/agent/{id}/pay` | دفعة سداد عميل مكررة |
+| `POST /clients/{id}/pay` | دفعة سداد عميل مكررة (كان `/directory/agent/{id}/pay` قبل v93) |
 | `POST /m/misc` | نثرية مندوب مكررة |
 | `POST /m/handover` | تسليم عهدة سائق مكرر |
 | `POST /m/transfer` | تحويل عهدة مكرر |

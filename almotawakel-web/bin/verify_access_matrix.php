@@ -70,7 +70,7 @@ $matrix = [
     ['إنشاء إذن تشغيل',    'POST', '/permits',                             'PermitController@store',                 ['owner', 'manager', 'operator']],
     ['إنشاء رابط تتبع',     'POST', '/tracking',                            'TrackController@store',                  ['owner', 'manager', 'operator']],
     ['عكس عملية من السجل', 'POST', '/audit/{id}/undo',                    'AuditController@undo',                   ['owner', 'manager']],
-    ['سداد عميل',             'POST', '/directory/agent/{id}/pay',            'DirectoryController@addPayment',         ['owner', 'manager', 'accountant']],
+    ['سداد عميل',             'POST', '/clients/{id}/pay',                    'ClientController@pay',                   ['owner', 'manager', 'accountant']],
     ['دمج طرفين',             'POST', '/directory/master/{type}/{id}/merge',  'DirectoryController@mergeParty',         ['owner', 'manager']],
     ['قراءة التقارير',          'GET',  '/reports',                             'ReportsController@index',                $roles],
     ['حفظ تاريخ العمل',      'POST', '/work-date',                           'WorkDateController@save',                $roles],

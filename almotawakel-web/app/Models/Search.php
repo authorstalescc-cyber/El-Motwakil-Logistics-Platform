@@ -215,7 +215,7 @@ class Search
                 'sub'   => ['note'],
                 'fuzzy' => ['name'],
                 'amount'=> null, 'date' => null,
-                'route' => 'directory/agent/{id}',
+                'route' => 'clients/{id}',
             ],
             'companies' => [
                 'title' => 'الشركات (الجهات)', 'icon' => 'building', 'table' => 'companies',

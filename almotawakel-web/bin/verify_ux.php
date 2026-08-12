@@ -513,6 +513,10 @@ $exempt = [
        داخل نافذة الـ٦ سطور اللي الفحص بيبصّ فيها؛ أول ما اتزاد سطر واحد
        في الدالة الفحص فشل بإنذار كاذب. الاستثناء الصريح أوضح من الصدفة. */
     'AuthController.php'      => ['login'],
+    /* محوّل الروابط القديمة لبروفايل العميل (v92): مش «إجراء» — هو إعادة
+       توجيه لرابط اتغيّر مكانه، والمستخدم بيلاقي نفسه في الشاشة اللي طلبها.
+       رسالة هنا كانت هتقول «تم» على حاجة هو ما عملهاش. */
+    'ClientController.php'    => ['legacyProfile'],
 ];
 $silent = [];
 foreach (glob($root . '/app/Controllers/*.php') ?: [] as $file) {
@@ -630,7 +634,7 @@ $preserve = [
     'بنود المندوب'     => ['RepController.php',           'reps.entry.',        'reps/',                     '$eOld'],
     'تسوية المندوب'    => ['RepController.php',           'reps.settle.',       'reps/',                     '$sOld'],
     'وجهات الخريطة'    => ['TrackController.php',         'tracking.place',     'tracking/places.php',       '$pOld'],
-    'تحصيل العميل'     => ['DirectoryController.php',     'directory.pay.',     'directory/agent.php',       '$payOld'],
+    'تحصيل العميل'     => ['ClientController.php',        'clients.pay.',       'clients/_tab_payments.php', '$payOld'],
 ];
 /** محتوى شاشة واحدة، أو كل شاشات مجلد لو المسار منتهي بـ«/». */
 $viewSrc = static function (string $view) use ($root): string {

@@ -4,172 +4,38 @@ namespace App\Controllers;
 use App\Core\Controller;
 use App\Models\Party;
 use App\Models\PermitInvoice;
-use App\Models\ClientPayment;
-use App\Models\Closing;
-use App\Models\VisaCard;
 use App\Models\PartyMaster;
 use App\Models\PartyDoc;
 
 /**
- * دليل الوكلاء والشركات — وحدة «عرض فقط».
- *   /directory                 قائمة الوكلاء + الشركات (تبويبان)
- *   /directory/agent/{id}      بروفايل الوكيل
+ * دليل الأطراف — وحدة «عرض فقط» للشركات وأصحاب البيان.
+ *   /directory                 قائمة الشركات + أصحاب البيان (تبويبان)
  *   /directory/company/{id}    بروفايل الشركة
+ *
+ * ⚠️⚠️ **العملاء (الوكلاء) اتفصلوا من هنا في v93** لوحدة «حسابات العملاء»
+ *    (`ClientController` · `/clients`): العميل عنده **حساب** (فواتير وتحصيلات
+ *    وأعمار دين) مش مجرد كارت في دليل، وحشره جنب الشركات كان بيخلّي نص
+ *    الشاشة أرقامًا ماليّة ونصّها التاني أسماء. الرابط القديم بيحوّل هناك،
+ *    والتحصيل كله (تسجيل/عكس) اتنقل معاه بلا أي تغيير في المنطق.
  */
 class DirectoryController extends Controller
 {
     public function index(): void
     {
         $this->requireAuth();
-        $requestedTab = $_GET['tab'] ?? 'agents';
-        $tab = in_array($requestedTab,['agents','companies','owners'],true) ? $requestedTab : 'agents';
+        /* ⚠️ الرابط القديم `?tab=agents` بيحوّل للوحدة الجديدة بدل ما يدّي
+           تبويبًا فاضيًا — الروابط المحفوظة عند المالك لازم تفضل شغّالة. */
+        if (($_GET['tab'] ?? '') === 'agents') { redirect('clients'); }
+        $requestedTab = $_GET['tab'] ?? 'companies';
+        $tab = in_array($requestedTab,['companies','owners'],true) ? $requestedTab : 'companies';
         $q   = trim($_GET['q'] ?? '');
-        $agents = Party::agents($q);
-        // إثراء بطاقات الوكلاء بالمتبقّي (فواتير الأذونات − دفعات السداد) — خريطتان مجمّعتان
-        $charges = PermitInvoice::totalsByClient();
-        $paid    = ClientPayment::totalsByClient();
-        foreach ($agents as &$a) {
-            $c = $charges[$a['name']] ?? 0.0;
-            $p = $paid[$a['name']] ?? 0.0;
-            $a['charges']   = $c;
-            $a['paid']      = $p;
-            $a['remaining'] = round($c - $p, 2);
-        }
-        unset($a);
         $this->render('directory/index', [
             'title'     => 'دليل الأطراف',
             'tab'       => $tab,
             'q'         => $q,
-            'agents'    => $agents,
             'companies' => Party::companies($q),
             'owners'    => Party::owners($q),
         ]);
-    }
-
-    public function agent(string $id): void
-    {
-        $this->requireAuth();
-        $agent = Party::agent((int)$id);
-        if (!$agent) { $this->notFound(); }
-        $name = $agent['name'];
-        $summary       = Party::summary('client', $name);
-        $permitInvSum  = PermitInvoice::summaryFor('client', $name);
-        // المطلوب من العميل = فواتير الأذونات + فواتير شامل (إن وُجدت)
-        $charges       = (float) ($permitInvSum['total'] ?? 0) + (float) ($summary['invoices']['total'] ?? 0);
-        $permitInvoices = PermitInvoice::forName('client', $name);
-        // مجموعة أرقام الأذونات التي صُدِرت لها فاتورة (لتمييزها بلون في جدول الأذونات)
-        $invoicedPermitIds = [];
-        foreach ($permitInvoices as $iv) {
-            if (!empty($iv['permit_id'])) { $invoicedPermitIds[(int)$iv['permit_id']] = true; }
-        }
-        $this->render('directory/agent', [
-            'title'     => 'وكيل: ' . $name,
-            'agent'     => $agent,
-            'companies' => Party::agentCompanies((int)$id),
-            'summary'   => $summary,
-            'permits'   => Party::permitsBy('client', $name),
-            'invoices'  => Party::invoicesBy('client', $name),
-            'permitInvoices' => $permitInvoices,
-            'invoicedPermitIds' => $invoicedPermitIds,
-            'payState'  => \App\Core\FormState::consume('directory.pay.' . (int)$id, 'directory/agent/' . (int)$id),
-            'permitInvSum'   => $permitInvSum,
-            'balance'   => Party::clientBalance($name),
-            'payments'  => ClientPayment::forClient($name),
-            'statement' => ClientPayment::statement($name, $charges),
-            'visaCards' => VisaCard::all(true),
-            'docs'      => PartyDoc::forParty('agent', (int)$id),
-            'docParty'  => ['type' => 'agent', 'id' => (int)$id, 'name' => $name],
-            'docState'  => \App\Core\FormState::consume('partydoc.agent.' . (int)$id, 'directory/agent/' . (int)$id),
-        ]);
-    }
-
-    /** تسجيل دفعة سداد للعميل (مع توجيه اختياري للعهدة النقدية أو كارت فيزا). */
-    public function addPayment(string $id): void
-    {
-        $this->requireAuth();
-        $this->requireCsrf();
-        $agent = Party::agent((int)$id);
-        if (!$agent) { $this->notFound(); }
-        $name  = $agent['name'];
-        $back  = 'directory/agent/' . (int)$id;
-
-        $amount = ($_POST['amount'] ?? '') === '' ? 0 : (float) $_POST['amount'];
-        if ($amount <= 0) { $this->payFailure((int)$id, 'اكتب مبلغ الدفعة الأول.'); }
-
-        $date  = trim($_POST['pay_date'] ?? '');
-        $date  = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : work_date();
-        // ⚠️ القايمة من `ClientPayment::routeChoices()` — المصدر الوحيد اللي
-        //    الشاشة بتقرا منه كمان (وإلا خيار معروض والخادم يرفضه بالسكوت).
-        $route = isset(ClientPayment::routeChoices()[$_POST['route'] ?? '']) ? (string) $_POST['route'] : 'none';
-        $card  = (int) ($_POST['visa_card_id'] ?? 0);
-
-        if ($route === 'visa' && $card <= 0) {
-            $this->payFailure((int)$id, 'اختار كارت الفيزا اللي الدفعة هتتوجّه له.');
-        }
-        // العهدة النقدية تدخل التقفيل اليومي → امنع الكتابة على يوم متقفل
-        if ($route === 'cash' && ($err = Closing::guard($date))) { $this->payFailure((int)$id, $err); }
-
-        // بعد نجاح التحقّق وقبل الكتابة — دفعة مكررة تعني رصيد عميل غلط،
-        // ولو `route=cash` تعني كمان إضافة عهدة مكررة تدخل التقفيل اليومي.
-        $this->claimForm($back);
-
-        try {
-            ClientPayment::create([
-                'client_name'  => $name,
-                'agent_id'     => (int)$agent['id'],
-                'pay_date'     => $date,
-                'amount'       => $amount,
-                'note'         => trim($_POST['note'] ?? ''),
-                'route'        => $route,
-                'visa_card_id' => $card,
-                'auto_allocate'=> !empty($_POST['auto_allocate']),
-            ]);
-        } catch (\Throwable $e) { $this->payFailure((int)$id, $e->getMessage()); }
-        $this->done('تم تسجيل التحصيل.', $back);
-    }
-
-    /** فشل تسجيل تحصيل — بيرجّع المبلغ والتاريخ والملاحظة بدل ما يضيعوا. */
-    private function payFailure(int $agentId, string $msg): never
-    {
-        $path = 'directory/agent/' . $agentId;
-        $this->formFailure(
-            'directory.pay.' . $agentId,
-            $path,
-            [
-                'amount'        => (string) ($_POST['amount'] ?? ''),
-                'pay_date'      => (string) ($_POST['pay_date'] ?? ''),
-                'note'          => (string) ($_POST['note'] ?? ''),
-                'route'         => (string) ($_POST['route'] ?? 'none'),
-                'visa_card_id'  => (string) ($_POST['visa_card_id'] ?? ''),
-                'auto_allocate' => !empty($_POST['auto_allocate']) ? '1' : '',
-            ],
-            ['_form' => $msg],
-            $path
-        );
-    }
-
-    /** حذف دفعة سداد (مع السجل المرتبط بها في العهدة/الفيزا). */
-    public function deletePayment(string $id, string $pid): void
-    {
-        $this->requireAuth();
-        $this->requireCsrf();
-        $back = 'directory/agent/' . (int)$id;
-        $pay  = ClientPayment::find((int)$pid);
-        if (!$pay) { flash('error', 'الدفعة غير موجودة.'); redirect($back); }
-        $agentId = (int)$id;
-        if ((int)($pay['agent_id'] ?? 0) !== $agentId) {
-            http_response_code(404);
-            flash('error','التحصيل لا يخص هذا الوكيل.'); redirect($back);
-        }
-        // لو الدفعة أنشأت عهدة نقدية على يوم متقفل، امنع الحذف حتى يُفتَح الإقفال
-        if ($pay['route'] === 'cash' && ($err = Closing::guard($pay['pay_date']))) {
-            flash('error', $err); redirect($back);
-        }
-        try {
-            ClientPayment::reverse((int)$pid, trim($_POST['reason'] ?? ''));
-            flash('success', 'تم عكس التحصيل مع الاحتفاظ بسجله.');
-        } catch (\Throwable $e) { flash('error',$e->getMessage()); }
-        redirect($back);
     }
 
     public function company(string $id): void
@@ -275,7 +141,8 @@ class DirectoryController extends Controller
     {
         return match ($type) {
             'company' => 'directory/company/' . $id,
-            'agent'   => 'directory/agent/' . $id,
+            // ⚠️ العميل بقى في وحدته (v93) — رفع مستند من هناك لازم يرجع هناك.
+            'agent'   => 'clients/' . $id . '?tab=card',
             default   => 'directory?tab=owners',
         };
     }

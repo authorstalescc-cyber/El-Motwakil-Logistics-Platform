@@ -6462,3 +6462,138 @@ table.data th.col-primary{font-weight:var(--fw-bold)}
 /* الشرايح جوّه صندوق بارتفاع أقصى بيتمرّر — الكارت بيفضل بطول معقول مهما كان العدد */
 .st-lk-chips{max-height:210px;overflow:auto;margin:10px 0;padding-inline-end:2px}
 .st-lk-empty{color:var(--grey);font-size:var(--fs-2);padding:6px 0}
+
+/* ══════════════════════════════════════════════════════════════════════
+   حسابات العملاء `/clients` — الوحدة اللي اتفصلت عن «دليل الأطراف» (v93)
+   ─────────────────────────────────────────────────────────────────────
+   ⚠️ الكلاسات هنا **مش في `<style>` محلي** (قانون التصميم، بند ٧): البروفايل
+      القديم كان فيه بلوك `<style>` جوّه الشاشة، فأي تعديل في التوكنز كان
+      بيعدّي عليه من غير ما يطوله.
+   ⚠️ **كل الألوان توكنز** فالوضع الليلي بيشتغل من طبقة التوكنز بلا مُحدِّد
+      إضافي هنا (`verify_dark_mode` بيرفض أي لون بالإيد).
+   ⚠️ **عرض شريط السداد بكلاس مش `style=`** (`.cl-w-0` … `.cl-w-100` كل ٥):
+      الـinline كان بيدهس نقاط الكسر المتجاوبة — نفس مصيدة `visa_card_select`.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── شريط البحث والفرز ─────────────────────────────────────────────── */
+.cl-bar{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin:var(--space-4) 0 var(--space-3)}
+.cl-search{position:relative;flex:1;min-width:210px;max-width:400px}
+.cl-search input{width:100%;border:1px solid var(--line2);border-radius:var(--radius-4);
+  padding:9px 40px 9px 14px;background:var(--input);font-family:inherit;color:var(--ink)}
+.cl-search input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,162,39,.15)}
+.cl-search-ic{position:absolute;inset-inline-start:14px;top:50%;transform:translateY(-50%);color:var(--grey);pointer-events:none}
+.cl-sorts{display:flex;gap:4px;flex-wrap:wrap}
+.cl-sort{padding:6px 12px;border-radius:var(--radius-pill);border:1px solid var(--line);
+  background:var(--card);color:var(--grey);font-size:var(--fs-2);font-weight:500;text-decoration:none}
+.cl-sort:hover{border-color:var(--navy-line);color:var(--accent)}
+.cl-sort.active{background:var(--navy);border-color:var(--navy);color:var(--white)}
+
+/* ── كارت العميل في القائمة ────────────────────────────────────────── */
+.cl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(370px,1fr));gap:var(--space-3)}
+.cl-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-3);
+  box-shadow:var(--shadow);overflow:hidden;transition:.16s}
+.cl-card:hover{border-color:var(--navy-line);box-shadow:0 12px 28px rgba(21,53,91,.14)}
+.cl-card.is-late{border-inline-start:3px solid var(--red)}
+.cl-card-main{display:flex;align-items:center;gap:var(--space-3);padding:14px 16px;
+  color:inherit;text-decoration:none;min-width:0}
+.cl-ava{width:44px;height:44px;flex:none;border-radius:var(--radius-2);display:flex;align-items:center;justify-content:center;
+  font-weight:600;font-size:var(--fs-3);background:linear-gradient(135deg,var(--navy),var(--navy-mid));color:var(--gold)}
+.cl-id{min-width:0;flex:1}
+.cl-id b{display:block;font-size:var(--fs-4);font-weight:600;color:var(--accent);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-sub{display:flex;align-items:center;gap:5px;color:var(--grey);font-size:var(--fs-1);font-weight:500;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-nums{display:flex;align-items:center;gap:var(--space-3);flex:none}
+.cl-num{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.cl-num i{font-style:normal;font-size:var(--fs-1);color:var(--grey);font-weight:500}
+.cl-num b{font-size:var(--fs-3);font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
+.cl-num.big b{font-size:var(--fs-5)}
+.cl-num b.pos{color:var(--green-fg)} .cl-num b.ex{color:var(--red-fg)}
+.cl-card-foot{display:flex;align-items:center;gap:var(--space-2);padding:9px 16px;
+  border-top:1px solid var(--line);background:var(--zebra);flex-wrap:wrap}
+.cl-prog{flex:1;min-width:70px;height:6px;border-radius:var(--radius-pill);background:var(--line2);overflow:hidden}
+.cl-prog-fill{display:block;height:100%;background:var(--green);border-radius:inherit}
+.cl-prog-n{font-size:var(--fs-1);color:var(--grey);font-weight:600;font-variant-numeric:tabular-nums}
+.cl-acts{margin-inline-start:auto;display:flex;gap:6px}
+.cl-act{width:30px;height:30px;border-radius:var(--radius-1);display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);background:var(--card);color:var(--grey)}
+.cl-act:hover{border-color:var(--gold);color:var(--gold-fg)}
+/* عرض شريط السداد — درجات ٥٪ (كلاس بدل `style=`) */
+.cl-w-0{width:0}.cl-w-5{width:5%}.cl-w-10{width:10%}.cl-w-15{width:15%}.cl-w-20{width:20%}
+.cl-w-25{width:25%}.cl-w-30{width:30%}.cl-w-35{width:35%}.cl-w-40{width:40%}.cl-w-45{width:45%}
+.cl-w-50{width:50%}.cl-w-55{width:55%}.cl-w-60{width:60%}.cl-w-65{width:65%}.cl-w-70{width:70%}
+.cl-w-75{width:75%}.cl-w-80{width:80%}.cl-w-85{width:85%}.cl-w-90{width:90%}.cl-w-95{width:95%}
+.cl-w-100{width:100%}
+
+/* ── ترويسة حساب العميل ────────────────────────────────────────────── */
+.cl-head{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3)}
+.cl-meta{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;color:var(--grey);font-size:var(--fs-2)}
+.cl-meta span{display:inline-flex;align-items:center;gap:5px}
+.cl-quick{margin-inline-start:auto;display:flex;gap:6px;flex-wrap:wrap}
+.cl-alert{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:var(--space-3);
+  padding:11px 15px;border-radius:var(--radius-2);background:var(--red-lt);
+  border:1px solid var(--red-line);border-inline-start:4px solid var(--red);color:var(--red-fg);font-weight:500}
+.cl-alert b{font-size:var(--fs-4);font-weight:600}
+.cl-alert-go{margin-inline-start:auto;color:var(--red-fg);font-weight:600;text-decoration:none}
+
+/* ── أعمار الدين ───────────────────────────────────────────────────── */
+.cl-aging{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-2);margin-bottom:var(--space-3)}
+.cl-age{display:flex;flex-direction:column;gap:2px;padding:11px 13px;border-radius:var(--radius-2);
+  border:1px solid var(--line);background:var(--card);color:inherit;text-decoration:none;cursor:pointer}
+.cl-age i{font-style:normal;font-size:var(--fs-1);color:var(--grey);font-weight:500}
+.cl-age b{font-size:var(--fs-5);font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
+.cl-age span{font-size:var(--fs-1);color:var(--grey)}
+.cl-age:hover{border-color:var(--navy-line)}
+.cl-age.teal.has{background:var(--tint-teal);border-color:var(--teal-line)}
+.cl-age.gold.has{background:var(--gold-light);border-color:var(--gold-line)}
+.cl-age.purple.has{background:var(--tint-purple);border-color:var(--purple-line)}
+.cl-age.red.has{background:var(--red-lt);border-color:var(--red-line)}
+.cl-age.red.has b{color:var(--red-fg)}
+
+/* ── التبويبات: عناصر مشتركة ───────────────────────────────────────── */
+.cl-mut{color:var(--grey);font-size:var(--fs-2);font-weight:500}
+.cl-spacer{margin-inline-start:auto}
+.cl-void td{opacity:.55}
+/* أرقام كشف الحساب بأرقام جدولية — الرصيد التراكمي بيتقرا عمودًا مستقيمًا */
+table.data.cl-ledger td{font-variant-numeric:tabular-nums}
+table.data td.ex{color:var(--red-fg);font-weight:500}
+table.data tr.cl-late td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+
+/* ── نموذج التحصيل ─────────────────────────────────────────────────── */
+.cl-pay{padding:14px 16px 16px;border-bottom:1px solid var(--line);background:var(--zebra)}
+.cl-pay-row{display:flex;gap:var(--space-3);flex-wrap:wrap;align-items:flex-end;margin-bottom:var(--space-3)}
+.cl-pay-row select{padding:8px 10px;border:1px solid var(--line2);border-radius:var(--radius-1);
+  background:var(--input);font-family:inherit;color:var(--ink);width:100%}
+.cl-pay-foot{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap}
+.cl-check{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2);color:var(--ink);cursor:pointer}
+.cl-rev{display:flex;gap:5px;align-items:center}
+.cl-form{padding:16px}
+
+/* ── تبويب البيانات ────────────────────────────────────────────────── */
+.cl-two{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:var(--space-3);align-items:start}
+.cl-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--space-2);padding:14px 16px}
+.cl-fact{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;
+  background:var(--bg);border:1px solid var(--line2);border-radius:var(--radius-1)}
+.cl-fact-l{display:inline-flex;align-items:center;gap:6px;color:var(--grey);font-size:var(--fs-2);font-weight:500}
+.cl-fact-v{color:var(--accent);font-weight:600;font-size:var(--fs-2);text-align:left;min-width:0;word-break:break-word}
+.cl-aliases{display:flex;flex-wrap:wrap;gap:6px;padding:14px 16px}
+.cl-cos{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:var(--space-2);padding:14px 16px}
+.cl-co{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:var(--radius-2);background:var(--card);color:inherit;text-decoration:none}
+.cl-co:hover{border-color:var(--navy-line)}
+.cl-co b{flex:1;min-width:0;font-size:var(--fs-3);font-weight:600;color:var(--accent);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-co-ava{width:32px;height:32px;flex:none;border-radius:var(--radius-1);display:flex;align-items:center;justify-content:center;
+  font-size:var(--fs-1);font-weight:600;background:var(--tint-teal);color:var(--teal-fg)}
+
+@media (max-width:900px){
+  .cl-two{grid-template-columns:1fr}
+  .cl-aging{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:640px){
+  .cl-grid{grid-template-columns:1fr}
+  .cl-card-main{flex-wrap:wrap}
+  .cl-nums{width:100%;justify-content:space-between}
+  .cl-quick{margin-inline-start:0;width:100%}
+  .cl-pay-row .field{width:100%;flex:1 1 100%}
+}

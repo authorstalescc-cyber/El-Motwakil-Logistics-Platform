@@ -52,7 +52,7 @@
 > الإصدار/الطباعة/الحذف نفسها تبقى في `PermitController` (تحت `/permits/{id}/invoice` و`/permits/invoice/{invId}`) — لا تكرار للمنطق.
 
 **الموديلات:** `PermitInvoice`, `Database`. **الـ views:** `invoices/index.php` (السجل)، `invoices/pick.php` (اختيار الإذن).
-> **صفحة الوكيل/الشركة** (`directory/agent.php` و`company.php`) تعرض قسم «🧾 فواتير الأذونات» عبر `PermitInvoice::forName` + `summaryFor`.
+> **حساب العميل** (`clients/_tab_invoices.php`) و**بروفايل الشركة** (`directory/company.php`) بيعرضوا فواتير الأذونات عبر `PermitInvoice::forName` + `summaryFor`.
 
 ---
 
@@ -257,12 +257,23 @@
 
 ---
 
-## دليل الوكلاء والشركات — `DirectoryController`
+## حسابات العملاء — `ClientController` (v93)
 
-**المسؤولية:** دليل **عرض فقط** للوكلاء والشركات، مع بروفايلات تُظهر الكيانات المرتبطة وملخّصات النشاط والأذونات والفواتير والأرصدة.
-- `index` (تبويبات وكلاء/شركات), `agent`, `company`.
+**المسؤولية:** الوحدة المستقلة لحساب العميل (الوكيل) — **اتفصلت عن «دليل الأطراف»** لأن العميل عنده حساب مالي مش مجرد كارت في دليل.
+- `index` (قائمة بحث/فرز + ٥ أرقام مجمّعة), `show` (بروفايل بـ٥ تبويبات `?tab=`), `drill` (تفاصيل أي رقم), `statement` (كشف A4 بفترة اختيارية), `edit`/`save` (بيانات العميل بقفل تفاؤلي), `pay`/`reversePayment` (التحصيل — اتنقل من `DirectoryController` بلا تغيير في المنطق), `legacyProfile` (تحويل الرابط القديم).
 
-**الموديلات:** `Party`. **الـ views:** `directory/index.php`, `directory/agent.php`, `directory/company.php`.
+**الموديل:** `ClientAccount` — **عدسة قراءة بحتة** (ولا كلمة كتابة فيها؛ `verify_clients` بيفشل لو دخلت): `list`/`listTotals` · `head` (٥ أرقام) · `aging` (أعمار الدين، حدود الشرايح في `ClientAccount::AGING`) · `ledger` (كشف زمني برصيد تراكمي + رصيد أول المدة) · `invoices`/`payments`/`work`/`card`/`billable`. كل رقم بيتجاب من الموديل صاحبه (`PermitInvoice` · `ClientPayment` · `Party`) لا باستعلام موازٍ.
+
+**الـ views:** `clients/index.php`, `show.php`, `_tab_{ledger,invoices,payments,work,card}.php`, `_drill.php`, `form.php`, `statement_print.php`. **CSS:** كلاسات `cl-*` في `app.css` (صفر `<style>` محلي).
+
+---
+
+## دليل الأطراف — `DirectoryController`
+
+**المسؤولية:** دليل **عرض فقط** للشركات وأصحاب البيان + إدارة البيانات الأساسية (إضافة/تعديل/alias/دمج) + مستندات الأطراف.
+- `index` (تبويبا شركات/أصحاب بيان — **تبويب الوكلاء اتشال في v93 و`?tab=agents` بيحوّل لـ`/clients`**), `company`, `createParty`/`updateParty`/`addAlias`/`mergeParty`, `addDoc`/`updateDoc`/`deleteDoc`.
+
+**الموديلات:** `Party` · `PartyMaster` · `PartyDoc`. **الـ views:** `directory/index.php`, `directory/company.php`, `directory/_docs.php` (جزء مشترك بيستعمله تبويب «البيانات» في حساب العميل كمان).
 
 > الوكيل = العميل / الشركة = لصالحها. راجع [02](02-domain-glossary.md) §3.
 

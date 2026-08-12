@@ -102,7 +102,7 @@ const MONEY_WRITES = [
     'POST /statements'               => ['OwnerStatementController','store',        'claim',        'كشف حساب صاحب البيان'],
     'POST /reps/{id}/entry'          => ['RepController',           'addEntry',     'claim',        'بند استحقاق/خصم لمندوب'],
     'POST /reps/{id}/settle'         => ['RepController',           'settle',       'claim',        'تسوية حساب مندوب'],
-    'POST /directory/agent/{id}/pay' => ['DirectoryController',     'addPayment',   'claim',        'دفعة سداد عميل'],
+    'POST /clients/{id}/pay'         => ['ClientController',        'pay',          'claim',        'دفعة سداد عميل'],
     // v60: «تسليم عهدة لسائق» اتشالت ومكانها «بوليصة جديدة» — نفس الحماية بالظبط
     // (claimForm)، لأن الضغط مرتين كان هيسجّل بوليصة تانية ويخصم العهدة تاني.
     'POST /m/bill/new'               => ['RepPortalController',     'billStore',    'claim',        'بوليصة مندوب بعهدة سائق'],

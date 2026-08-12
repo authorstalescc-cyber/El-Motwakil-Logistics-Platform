@@ -154,7 +154,7 @@ $appJs = $read('public/assets/js/app.js');
 yes('⚠️ خطّاف js-pdoc-edit له تنفيذ في app.js العام (مش سكربت محلي)',
     str_contains($appJs, 'js-pdoc-edit') && str_contains($appJs, 'js-pdoc-cancel'));
 yes('  › ومفيش نسخة محلية منه في أي view',
-    !str_contains($read('app/Views/directory/company.php') . $read('app/Views/directory/agent.php'), 'js-pdoc-edit'));
+    !str_contains($read('app/Views/directory/company.php') . $read('app/Views/clients/_tab_card.php'), 'js-pdoc-edit'));
 
 // ═══════════════════════════════════════════════════ ٥) قاعدة أمنية قائمة
 sec('٥) قواعد قائمة: js_json + e() في الـviews');

@@ -415,10 +415,20 @@ $r->post('/directory/master/{type}/{id}/merge',       'DirectoryController@merge
 $r->post('/directory/doc/add/{type}/{id}', 'DirectoryController@addDoc');
 $r->post('/directory/doc/{docId}/delete',  'DirectoryController@deleteDoc');
 $r->post('/directory/doc/{docId}/update',  'DirectoryController@updateDoc');
-$r->post('/directory/agent/{id}/pay',                  'DirectoryController@addPayment');
-$r->post('/directory/agent/{id}/payment/{pid}/delete', 'DirectoryController@deletePayment');
-$r->get('/directory/agent/{id}',     'DirectoryController@agent');
+// ⚠️ بروفايل الوكيل اتنقل لوحدة «حسابات العملاء» (v93) — الرابط القديم
+//    بيحوّل هناك (روابط محفوظة + نتايج البحث القديمة).
+$r->get('/directory/agent/{id}',     'ClientController@legacyProfile');
 $r->get('/directory/company/{id}',   'DirectoryController@company');
+
+// ══ حسابات العملاء (v93) — المسارات الأخصّ قبل الجشعة /{id} ══
+$r->get('/clients',                             'ClientController@index');
+$r->post('/clients/{id}/pay',                   'ClientController@pay');
+$r->post('/clients/{id}/edit',                  'ClientController@save');
+$r->post('/clients/{id}/payment/{pid}/reverse', 'ClientController@reversePayment');
+$r->get('/clients/{id}/drill/{what}',           'ClientController@drill');
+$r->get('/clients/{id}/statement',              'ClientController@statement');
+$r->get('/clients/{id}/edit',                   'ClientController@edit');
+$r->get('/clients/{id}',                        'ClientController@show');
 
 // التقارير
 $r->get('/reports',        'ReportsController@index');

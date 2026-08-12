@@ -1,22 +1,29 @@
 <?php
-/** @var string $tab @var string $q @var array $agents @var array $companies @var array $owners */
-$isA = $tab === 'agents';
-$isC = $tab === 'companies';
-$type = $isA ? 'agent' : ($isC ? 'company' : 'owner');
-$rows = $isA ? $agents : ($isC ? $companies : $owners);
-$label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
+/**
+ * دليل الأطراف — الشركات وأصحاب البيان.
+ *
+ * ⚠️ **العملاء (الوكلاء) مش هنا من v93** — بقى ليهم وحدة «حسابات العملاء»
+ *    (`/clients`) لأن العميل عنده حساب مالي مش مجرد كارت. التبويب اتشال،
+ *    والرابط القديم `?tab=agents` بيحوّل هناك من الكنترولر.
+ *
+ * @var string $tab @var string $q @var array $companies @var array $owners
+ */
+$isC   = $tab === 'companies';
+$type  = $isC ? 'company' : 'owner';
+$rows  = $isC ? $companies : $owners;
+$label = $isC ? 'شركة' : 'صاحب بيان';
 ?>
 <nav class="tabs" aria-label="أقسام الدليل">
-  <a class="tab <?= $isA?'active':'' ?>" href="<?= url('directory?tab=agents') ?>"><?= icon('user', 14) ?> الوكلاء (عملاؤنا) <span class="count-badge"><?= intf(count($agents)) ?></span></a>
   <a class="tab <?= $isC?'active':'' ?>" href="<?= url('directory?tab=companies') ?>"><?= icon('building', 14) ?> الشركات <span class="count-badge"><?= intf(count($companies)) ?></span></a>
   <a class="tab <?= $tab==='owners'?'active':'' ?>" href="<?= url('directory?tab=owners') ?>"><?= icon('file-text', 14) ?> أصحاب البيان <span class="count-badge"><?= intf(count($owners)) ?></span></a>
+  <?php /* الطريق للعملاء — مش تبويب هنا، ده لينك للوحدة بتاعتهم */ ?>
+  <a class="tab" href="<?= url('clients') ?>"><?= icon('user', 14) ?> حسابات العملاء <span aria-hidden="true">←</span></a>
 </nav>
 
 <form method="post" action="<?= url('directory/master/'.$type) ?>" class="card mb" class="p5-pad p5-row end">
   <?= csrfField() ?>
   <div class="field flush mw220"><label>إضافة <?= e($label) ?> إلى البيانات الأساسية</label><input name="name" required placeholder="الاسم القانوني المعتمد"></div>
   <div class="field flush mw150"><label>الهاتف</label><input name="phone"></div>
-  <?php if($isA): ?><div class="field flush w130"><label>مهلة السداد</label><input type="number" name="payment_terms_days" value="30" min="0" max="365"></div><?php endif; ?>
   <button class="btn gold" type="submit">إضافة</button>
 </form>
 
@@ -32,17 +39,17 @@ $label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
 </div>
 
 <?php if(!$rows): ?>
-  <div class="card"><div class="empty empty-mv-in p5-pad-44"><div class="ic"><?= $isA?'👤':'🏢' ?></div><?= $q!==''?'لا نتائج مطابقة للبحث.':'لا بيانات.' ?></div></div>
+  <div class="card"><div class="empty empty-mv-in p5-pad-44"><div class="ic">🏢</div><?= $q!==''?'لا نتائج مطابقة للبحث.':'لا بيانات.' ?></div></div>
 <?php else: ?>
   <div class="dir-grid">
     <?php foreach($rows as $r):
-      $url   = $isA ? url('directory/agent/'.$r['id']) : ($isC ? url('directory/company/'.$r['id']) : '');
-      $cnt   = (int)($isA ? $r['companies'] : ($isC ? $r['agents'] : ($r['bills'] ?? 0)));
+      $url   = $isC ? url('directory/company/'.$r['id']) : '';
+      $cnt   = (int)($isC ? $r['agents'] : ($r['bills'] ?? 0));
       $names = !empty($r['preview']) ? explode('|', $r['preview']) : [];
       $shown = array_slice($names, 0, 3);
       $extra = count($names) - count($shown);
     ?>
-      <div class="dir-card <?= $isA?'':'company' ?>">
+      <div class="dir-card company">
         <?php if($url): ?>
         <a class="dir-card-profile" href="<?= $url ?>" aria-label="فتح ملف <?= e($label) ?> <?= e($r['name']) ?>">
         <?php else: ?>
@@ -54,23 +61,17 @@ $label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
             <b title="<?= e($r['name']) ?>"><?= e($r['name']) ?></b>
             <span><?= e($label) ?> — سجل أساسي</span>
           </div>
-          <div class="dir-count"><b><?= intf($cnt) ?></b><?= $isA?'شركة':($isC?'وكيل':'بوليصة') ?></div>
+          <div class="dir-count"><b><?= intf($cnt) ?></b><?= $isC?'وكيل':'بوليصة' ?></div>
         </div>
-        <?php if($isA||$isC): ?><div class="dir-chips">
+        <?php if($isC): ?><div class="dir-chips">
           <?php if($shown): foreach($shown as $n): ?>
             <span class="dir-chip"><?= e($n) ?></span>
           <?php endforeach; if($extra>0): ?>
             <span class="dir-chip more">+<?= intf($extra) ?></span>
           <?php endif; else: ?>
-            <span class="dir-chip none"><?= $isA?'عميل مباشر (بدون شركات)':'بدون وكيل مرتبط' ?></span>
+            <span class="dir-chip none">بدون وكيل مرتبط</span>
           <?php endif; ?>
         </div><?php endif; ?>
-        <?php if($isA && (($r['charges'] ?? 0) > 0.005 || ($r['paid'] ?? 0) > 0.005)): $rem=(float)($r['remaining']??0); ?>
-        <div class="dir-bal">
-          <span class="dir-bal-lbl">المتبقّي عليه</span>
-          <span class="dir-bal-val <?= $rem>0.005?'due':($rem<-0.005?'credit':'') ?>"><?= money($rem,false) ?></span>
-        </div>
-        <?php endif; ?>
         <?php if($url): ?>
           <div class="dir-card-foot"><span>فتح الملف</span><span aria-hidden="true">←</span></div>
         </a>
@@ -85,7 +86,6 @@ $label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
             <input name="phone" value="<?= e($r['phone'] ?? '') ?>" placeholder="الهاتف">
             <input name="email" value="<?= e($r['email'] ?? '') ?>" placeholder="البريد">
             <input name="tax_id" value="<?= e($r['tax_id'] ?? '') ?>" placeholder="الرقم الضريبي">
-            <?php if($isA): ?><input type="number" name="payment_terms_days" value="<?= (int)($r['payment_terms_days'] ?? 30) ?>" min="0" max="365" aria-label="مهلة السداد بالأيام"><?php endif; ?>
             <button class="btn sm" type="submit">حفظ البيانات</button>
           </form>
           <form method="post" action="<?= url('directory/master/'.$type.'/'.$r['id'].'/alias') ?>" class="master-line">
@@ -103,11 +103,6 @@ $label = $isA ? 'وكيل' : ($isC ? 'شركة' : 'صاحب بيان');
 <?php endif; ?>
 
 <style>
-.dir-bal{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:0 0 2px;
-  background:var(--bg);border-radius:var(--radius-1);border:1px solid var(--line2)}
-.dir-bal-lbl{font-size:var(--fs-1);color:var(--grey);font-weight:500}
-.dir-bal-val{font-size:var(--fs-4);font-weight:600;color:var(--accent)}
-.dir-bal-val.due{color:var(--red-fg)}.dir-bal-val.credit{color:var(--green-fg)}
 .master-edit{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}.master-edit summary{cursor:pointer;font-weight:500;color:var(--accent)}
 .master-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.master-grid input,.master-line input,.master-line select{padding:7px;border:1px solid var(--line);border-radius:var(--radius-1);min-width:0}
 .master-line{display:flex;gap:7px;margin-top:8px}.master-line input,.master-line select{flex:1}

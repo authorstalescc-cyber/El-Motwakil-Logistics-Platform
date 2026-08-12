@@ -2843,6 +2843,27 @@
   })();
 
   /* ═════════════════════════════════════════════════════════════════════
+     إظهار خانة كارت الفيزا حسب التوجيه (v93) — `select[data-toggle-visa]`
+     ─────────────────────────────────────────────────────────────────────
+     ⚠️ **سمة `hidden` مش `style.display`**: `[hidden]{display:none!important}`
+        في app.css بتغلب أي `display` بيتحط من الجافاسكريبت، فالخانة كانت
+        هتفضل مخفية للأبد (مصيدة موثَّقة).
+     ⚠️ الحالة الأولى بترندر **من الخادم** (`hidden` أو لأ حسب اللي المستخدم
+        اختاره قبل الرفض)، فالفورم شغّال حتى لو الملف ده ما اتحمّلش.
+     ═════════════════════════════════════════════════════════════════════ */
+  (function visaRouteToggle() {
+    function sync(sel) {
+      const box = document.getElementById(sel.getAttribute('data-toggle-visa'));
+      if (box) box.hidden = sel.value !== 'visa';
+    }
+    document.querySelectorAll('select[data-toggle-visa]').forEach(sync);
+    document.addEventListener('change', (e) => {
+      const sel = e.target.closest('select[data-toggle-visa]');
+      if (sel) sync(sel);
+    });
+  })();
+
+  /* ═════════════════════════════════════════════════════════════════════
      درج تعديل مستند طرف (v56) — `.js-pdoc-edit` / `.js-pdoc-cancel`
      ─────────────────────────────────────────────────────────────────────
      ⚠️ عايش في `app.js` **العام** مش في <style>/<script> محلي: نفس الماركب
