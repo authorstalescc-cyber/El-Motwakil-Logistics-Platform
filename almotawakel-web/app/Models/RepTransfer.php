@@ -126,7 +126,7 @@ class RepTransfer
     }
 
     /**
-     * **تعديل تحويل قايم** — المبلغ · التاريخ · المستقبِل · الملاحظة.
+     * **تعديل تحويل قايم** — المُرسِل · المُستقبِل · المبلغ · التاريخ · الملاحظة.
      *
      * ⚠️⚠️ **التعديل بينقل الفلوس مش بيكرّرها.** الصف واحد بيوصف الاتجاهين
      *    (−من المُرسِل · +للمُستقبِل)، فـ`UPDATE` واحدة بتحرّك الطرفين مع بعض —
@@ -134,15 +134,25 @@ class RepTransfer
      *    وإنشاء: بينهم لحظة رصيد المُستقبِل فيها ناقص، وأي فحص متزامن بيقرا رقمًا
      *    غلط، وسجل التدقيق بيبان كأنه عمليتين.
      *
-     * ⚠️ **تلات حُرّاس لازم يفضلوا مع بعض:**
-     *   ① المُرسِل لازم يكفي **بعد** رجوع التحويل القديم لرصيده — وإلا يبعت
-     *      أكتر مما معاه (بنقيس `balance + old − new`).
-     *   ② المُستقبِل القديم ما يقعش تحت الصفر لما نسحب منه (يعني ما صرفهاش) —
-     *      نفس حارس `delete()` بالظبط.
-     *   ③ **اليومان** (القديم والجديد) لازم يكونوا مفتوحين: التعديل بيغيّر عهدة
-     *      اليومين، فقفل أي واحد فيهم بيمنع (قاعدة v49).
+     * ⚠️ **إعادة التوجيه من الطرفين مسموحة:** `from_rep_id` **و**`to_rep_id`
+     *    الاتنين قابلين للتغيير في نفس التعديل (المالك سجّل التحويل على مندوب
+     *    غلط أصلاً). فالتعديل الواحد ممكن يمسّ **٤ محافظ**: المُرسِل القديم
+     *    والجديد والمُستقبِل القديم والجديد. لو الحقل مش مبعوت في `$d` بيفضل
+     *    على قيمته القديمة (تعديل الملاحظة لوحدها ما بيلمسش حد).
      *
-     * ⚠️ الحُرّاس هنا في **الموديل** مش في الكنترولر — الفورم مش مصدر ثقة.
+     * ⚠️ **حارس واحد موحَّد بدل حارسين منفصلين للطرفين:** بنحسب **صافي التغيّر
+     *    على كل محفظة** (`رجوع الصف القديم` + `تطبيق الصف الجديد`)، وأي محفظة
+     *    هتقع تحت الصفر بترفض التعديل باسم صاحبها. الطريقة دي بتغطّي الحالات
+     *    اللي حارسان منفصلان بيفوّتوها — زي تحويل المُرسِل يبقى هو المُستقبِل
+     *    القديم (الرجوع والتطبيق بيتقاصّوا على نفس المحفظة).
+     *    والحُرّاس الباقية معاه: **اليومان** (القديم والجديد) لازم يكونوا
+     *    مفتوحين، لأن التعديل بيغيّر عهدة اليومين (قاعدة v49).
+     *
+     * ⚠️ القفل بيتاخد على المناديب **بترتيب الـid تصاعديًّا** — تعديلان متزامنان
+     *    على نفس المحفظتين بترتيب معكوس = deadlock.
+     *
+     * ⚠️ الحُرّاس هنا في **الموديل** مش في الكنترولر — الفورم مش مصدر ثقة،
+     *    و`from_rep_id` الجاي من `<select>` ممكن يتزوّر زي أي قيمة تانية.
      *
      * @throws RepSubmissionValidationException رسايل عربية لكل حقل
      */
@@ -158,13 +168,15 @@ class RepTransfer
             $old = Database::row('SELECT * FROM rep_custody_transfers WHERE id = ? FOR UPDATE', [$id]);
             if (!$old) { throw new RuntimeException('التحويل ده مش موجود.'); }
 
-            $fromRepId = (int) $old['from_rep_id'];
+            $oldFrom   = (int) $old['from_rep_id'];
             $oldTo     = (int) $old['to_rep_id'];
             $oldAmount = round((float) $old['amount'], 2);
             $oldDate   = (string) $old['transfer_date'];
 
-            $toRepId = (int) ($d['to_rep_id'] ?? $oldTo);
-            $errors  = [];
+            /* الحقل الغايب = «ما اتغيّرش» — تعديل الملاحظة لوحدها ما يحرّكش قرشًا. */
+            $fromRepId = self::pickRep($d, 'from_rep_id', $oldFrom);
+            $toRepId   = self::pickRep($d, 'to_rep_id', $oldTo);
+            $errors    = [];
 
             if ($toRepId <= 0) {
                 $errors['to_rep_id'] = 'اختر المندوب اللي بتحوّل له.';
@@ -172,6 +184,19 @@ class RepTransfer
                 $errors['to_rep_id'] = 'ما ينفعش تحوّل لنفسك.';
             } elseif (Database::scalar("SELECT status FROM reps WHERE id = ?", [$toRepId]) !== 'active') {
                 $errors['to_rep_id'] = 'المندوب ده مش موجود أو متوقف.';
+            }
+
+            /* ⚠️ المُرسِل: **الموقوف مرفوض بس لو اتغيّر**. تحويل قديم صاحبه اتوقف
+               لازم يفضل قابل لتصليح مبلغه وتاريخه — الشرط الصارم كان هيقفل
+               تعديله للأبد بلا سبب مفهوم. */
+            if ($fromRepId <= 0) {
+                $errors['from_rep_id'] = 'اختر المندوب اللي حوّل من عهدته.';
+            } elseif ($fromRepId !== $oldFrom
+                      && Database::scalar("SELECT status FROM reps WHERE id = ?", [$fromRepId]) !== 'active') {
+                $errors['from_rep_id'] = 'المندوب ده مش موجود أو متوقف.';
+            } elseif ($fromRepId === $oldFrom
+                      && !Database::scalar("SELECT id FROM reps WHERE id = ?", [$fromRepId])) {
+                $errors['from_rep_id'] = 'المندوب ده مش موجود.';
             }
 
             $raw = strtr(ar2en_digits(trim((string) ($d['amount'] ?? ''))), [
@@ -198,40 +223,53 @@ class RepTransfer
 
             if ($errors) { throw new RepSubmissionValidationException($errors); }
 
-            // ── الحارس ①: رصيد المُرسِل بعد رجوع القديم ──
-            Database::row('SELECT id FROM reps WHERE id = ? FOR UPDATE', [$fromRepId]);
-            $avail = round(RepCustody::balance($fromRepId) + $oldAmount, 2);
-            if ($amount > $avail + 0.005) {
-                throw new RepSubmissionValidationException([
-                    'amount' => 'المبلغ أكبر من اللي معاه (' . number_format(max(0, $avail), 2) . ' ج).',
-                ]);
-            }
+            /* ── الحارس الموحَّد: مفيش محفظة تقع تحت الصفر ──
+               صافي التغيّر على كل محفظة = رجوع الصف القديم + تطبيق الصف الجديد.
+               المحفظة اللي صافيها موجب أو صفر مستحيل تقع، فالفحص على السالب بس. */
+            $delta = [];
+            $bump = function (int $rep, float $v) use (&$delta): void {
+                if ($rep > 0) { $delta[$rep] = round(($delta[$rep] ?? 0.0) + $v, 2); }
+            };
+            $bump($oldFrom, $oldAmount);      // رجوع القديم: المُرسِل القديم بيسترد
+            $bump($oldTo, -$oldAmount);       //              والمُستقبِل القديم بيردّ
+            $bump($fromRepId, -$amount);      // تطبيق الجديد: المُرسِل الجديد بيدفع
+            $bump($toRepId, $amount);         //               والمُستقبِل الجديد بياخد
 
-            /* ── الحارس ②: المُستقبِل القديم ما يقعش تحت الصفر ──
-               بنسحب منه `oldAmount` وبنرجّع له `amount` لو هو نفسه المستقبِل
-               الجديد. لو صرف الفرق، التعديل بيترفض بنفس منطق `delete()`. */
-            $pull = $toRepId === $oldTo ? round($oldAmount - $amount, 2) : $oldAmount;
-            if ($pull > 0.005) {
-                Database::row('SELECT id FROM reps WHERE id = ? FOR UPDATE', [$oldTo]);
-                if (RepCustody::balance($oldTo) - $pull < -0.005) {
+            ksort($delta);   // ⚠️ ترتيب القفل تصاعديًّا — حماية من الـdeadlock
+            foreach ($delta as $rep => $diff) {
+                if ($diff >= -0.005) { continue; }
+                Database::row('SELECT id FROM reps WHERE id = ? FOR UPDATE', [$rep]);
+                $after = round(RepCustody::balance($rep) + $diff, 2);
+                if ($after >= -0.005) { continue; }
+                if ($rep === $fromRepId) {
+                    // اللي معاه = رصيده الحالي بعد ما نرجّع له تأثير الصف القديم
+                    $avail = round($after + $amount, 2);
                     throw new RepSubmissionValidationException([
-                        'amount' => 'المندوب المستقبِل صرف المبلغ ده — مش هينفع تقلّله ولا تغيّره.',
+                        'amount' => 'المبلغ أكبر من اللي معاه (' . number_format(max(0, $avail), 2) . ' ج).',
                     ]);
                 }
+                throw new RepSubmissionValidationException([
+                    'amount' => (RepCustody::repName($rep) ?: 'المندوب') . ' صرف المبلغ ده — '
+                        . 'مش هينفع تقلّله ولا تنقله لحد تاني.',
+                ]);
             }
 
             Database::exec(
                 "UPDATE rep_custody_transfers
-                    SET to_rep_id = ?, amount = ?, transfer_date = ?, note = ?
+                    SET from_rep_id = ?, to_rep_id = ?, amount = ?, transfer_date = ?, note = ?
                   WHERE id = ?",
-                [$toRepId, $amount, $date, $note !== '' ? $note : null, $id]);
+                [$fromRepId, $toRepId, $amount, $date, $note !== '' ? $note : null, $id]);
 
             $saved = self::find($id);
+            $moved = $fromRepId !== $oldFrom || $toRepId !== $oldTo
+                ? ' (اتحوّل من «' . (RepCustody::repName($oldFrom) ?: '#' . $oldFrom) . ' ← '
+                  . (RepCustody::repName($oldTo) ?: '#' . $oldTo) . '»)'
+                : '';
             Audit::log('update', 'rep_custody_transfers', $id, $old, $saved,
                 'تعديل تحويل عهدة ' . number_format($oldAmount, 2, '.', ',') . ' ← '
                 . number_format($amount, 2, '.', ',') . ' من '
                 . (RepCustody::repName($fromRepId) ?: '#' . $fromRepId) . ' لـ '
-                . (RepCustody::repName($toRepId) ?: '#' . $toRepId),
+                . (RepCustody::repName($toRepId) ?: '#' . $toRepId) . $moved,
                 ['rep_id' => $fromRepId, 'to_rep_id' => $toRepId, 'record_date' => $date]);
 
             if ($own) { $pdo->commit(); }
@@ -401,6 +439,21 @@ class RepTransfer
             "SELECT t.*, r.name AS other_name
              FROM rep_custody_transfers t JOIN reps r ON r.id = t.from_rep_id
              WHERE t.to_rep_id = ?" . RepCustody::epochSql('t.transfer_date') . " ORDER BY t.transfer_date DESC, t.id DESC$lim", [$repId]);
+    }
+
+    /**
+     * قيمة مندوب من الفورم، أو القديمة لو الحقل غايب/فاضي.
+     *
+     * ⚠️ **الفرق بين «غايب» و«صفر» مهم:** `(int)($d['k'] ?? $old)` بتدّي صفرًا
+     *    لو الحقل موجود وفاضي فتترفض العملية برسالة «اختر المندوب» وسط تعديل
+     *    ملاحظة بريء. الفاضي هنا = ما اتغيّرش، والصفر الحقيقي (قيمة مزوّرة أو
+     *    غير رقمية) بيفضل صفرًا عشان الحارس يمسكه.
+     */
+    private static function pickRep(array $d, string $key, int $fallback): int
+    {
+        if (!array_key_exists($key, $d)) { return $fallback; }
+        $raw = trim((string) ($d[$key] ?? ''));
+        return $raw === '' ? $fallback : (int) ar2en_digits($raw);
     }
 
     private static function validDate(string $v): bool

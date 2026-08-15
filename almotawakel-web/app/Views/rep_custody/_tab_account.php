@@ -303,49 +303,8 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
             </button>
           <?php },
         ]);
-        ?>
-        <details class="rc-trf-edit" id="trf-<?= $tid ?>">
-          <summary class="rc-trf-sum">تعديل التحويل</summary>
-          <form method="post" action="<?= url('rep-custody/transfer/' . $tid . '/update') ?>" class="rc-trf-form">
-            <?= csrfField() ?>
-            <?= formStateFields(FormState::token(), $back . '#transfers-out') ?>
-            <label class="field">
-              <span>المندوب المستقبِل</span>
-              <select name="to_rep_id">
-                <?php foreach ($activeReps as $rid2 => $rname): ?>
-                  <?php if ((int) $rid2 === (int) $repId) { continue; } ?>
-                  <option value="<?= (int) $rid2 ?>" <?= (int) $rid2 === (int) $t['to_rep_id'] ? 'selected' : '' ?>>
-                    <?= e((string) $rname) ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </label>
-            <label class="field">
-              <span>المبلغ</span>
-              <input data-money type="number" step="0.01" min="0" name="amount" value="<?= e((string) (float) $t['amount']) ?>">
-            </label>
-            <label class="field">
-              <span>التاريخ</span>
-              <input type="date" name="transfer_date" value="<?= e((string) $t['transfer_date']) ?>">
-            </label>
-            <label class="field">
-              <span>ملاحظة</span>
-              <input type="text" name="note" maxlength="255" value="<?= e((string) ($t['note'] ?? '')) ?>">
-            </label>
-            <div class="rc-trf-acts">
-              <button class="btn sm" type="submit"><?= icon('check', 14) ?> احفظ</button>
-            </div>
-          </form>
-          <?php /* ⚠️ فورم الإلغاء **برّه فورم التعديل** — فورم جوّه فورم ماركب
-                   غير صالح والمتصفح بيفكّه بصمت فالزرار يبعت على المسار الغلط. */ ?>
-          <form method="post" action="<?= url('rep-custody/transfer/' . $tid . '/delete') ?>"
-                class="confirm-delete rc-trf-del" data-confirm="إلغاء التحويل ده؟ هيرجع لعهدة المُرسِل.">
-            <?= csrfField() ?>
-            <?= formStateFields(FormState::token(), $back . '#transfers-out') ?>
-            <button class="btn ghost sm danger" type="submit"><?= icon('trash', 14) ?> ألغي التحويل</button>
-          </form>
-        </details>
-        <?php
+        partial('rep_transfer_edit',
+          ['t' => $t, 'reps' => $activeReps, 'back' => $back, 'anchor' => 'transfers-out']);
       }
     },
   ]); ?>
@@ -359,8 +318,10 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
       'icon'   => 'shuffle',
       'badge'  => ['text' => intf(count($transfersIn)), 'tone' => 'navy'],
       'scroll' => true,
-      'body'   => function () use ($transfersIn, $back) {
+      'id'     => 'transfers-in',
+      'body'   => function () use ($transfersIn, $back, $activeReps) {
         foreach ($transfersIn as $t) {
+          $tid = (int) $t['id'];
           partial('row_item', [
             'title'  => $t['note'] ?: 'تحويل من زميل',
             'icon'   => 'shuffle',
@@ -368,15 +329,19 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
                          ['icon' => 'calendar', 'text' => dfmt($t['transfer_date'])]],
             'amount' => money($t['amount'], false),
             'amount_tone' => 'pos',
-            'extra'  => function () use ($t, $back) { ?>
-              <form method="post" action="<?= url('rep-custody/transfer/' . (int) $t['id'] . '/delete') ?>"
-                    class="confirm-delete" data-confirm="إلغاء التحويل ده؟ هيرجع لعهدة المُرسِل.">
-                <?= csrfField() ?>
-                <?= formStateFields(FormState::token(), $back) ?>
-                <button class="edit" type="submit" title="إلغاء التحويل"><?= icon('trash', 13) ?></button>
-              </form>
+            /* ⚠️ **الوارد كان زر حذف بس** — المالك اللي فاتح كارت المُستقبِل
+               مكانش قدامه غير الإلغاء، فأي غلط في التاريخ أو المبلغ أو حتى في
+               اسم المُرسِل نفسه كان لازمه يمسح ويعيد التسجيل من كارت تاني.
+               نفس درج التعديل الكامل هنا بالظبط. */
+            'extra'  => function () use ($tid) { ?>
+              <button class="edit" type="button" title="عدّل التحويل"
+                      onclick="var d=document.getElementById('trf-<?= $tid ?>');d.open=!d.open;d.open&&d.scrollIntoView({block:'nearest'})">
+                <?= icon('edit', 13) ?>
+              </button>
             <?php },
           ]);
+          partial('rep_transfer_edit',
+            ['t' => $t, 'reps' => $activeReps, 'back' => $back, 'anchor' => 'transfers-in']);
         }
       },
     ]); ?>

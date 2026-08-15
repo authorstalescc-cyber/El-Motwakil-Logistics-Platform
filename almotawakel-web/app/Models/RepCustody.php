@@ -1766,6 +1766,37 @@ class RepCustody
         return $out;
     }
 
+    /**
+     * قايمة المناديب اللي ينفعوا يتحطّوا في خانتَي «حوّل من / وصلت لـ» في درج
+     * تعديل التحويل — **النشطون + أي مندوب موقوف مسجَّل عليه تحويل فعلاً**.
+     *
+     * ⚠️ **الموقوف لازم يفضل في القايمة.** لو التحويل مسجَّل على مندوب اتوقف
+     *    وغاب من `<select>`، المتصفح بيختار **أول اسم في القايمة** بالسكوت —
+     *    فالمالك يفتح الدرج يصلّح ملاحظة، ويحفظ، فينتقل المبلغ لمندوب مالوش
+     *    دعوة بلا أي رسالة. الموقوف بيتعلّم `(متوقف)` عشان الاختيار يبقى واعيًا،
+     *    و`RepTransfer::update()` بيرفض **نقل** تحويل لمندوب موقوف برضه.
+     *
+     * @param int[] $must مناديب لازم يظهروا مهما كانت حالتهم (أطراف الصفوف المعروضة)
+     * @return array<int,string> [id => اسم]
+     */
+    public static function transferParties(array $must = []): array
+    {
+        $out = self::activeReps();
+        $extra = [];
+        foreach ($must as $rid) {
+            $rid = (int) $rid;
+            if ($rid > 0 && !isset($out[$rid])) { $extra[$rid] = true; }
+        }
+        if ($extra) {
+            $ids = array_keys($extra);
+            $in  = implode(',', array_fill(0, count($ids), '?'));
+            foreach (Database::all("SELECT id, name FROM reps WHERE id IN ($in)", $ids) as $r) {
+                $out[(int) $r['id']] = $r['name'] . ' (متوقف)';
+            }
+        }
+        return $out;
+    }
+
     /** اسم المندوب (للعرض) أو '' لو مش موجود. */
     public static function repName(?int $repId): string
     {

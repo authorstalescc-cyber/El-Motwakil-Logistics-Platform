@@ -384,7 +384,15 @@ class RepCustodyController extends Controller
                اللوح المستقل ده هو مكان الإجراء الطبيعي (التحويل حركة من عهدة
                المُرسِل). القايمة بتفضل في الكشف كمان عشان الكشف ما ينقصش بند. */
             $data['transfersOut'] = \App\Models\RepTransfer::outgoingFor($repId);
-            $data['activeReps']   = RepCustody::activeReps();
+            /* ⚠️ القايمة لازم تشمل **أطراف الصفوف المعروضة** حتى لو اتوقفوا —
+               الاسم الغايب من `<select>` بيخلّي المتصفح يختار أول اسم تاني
+               بالسكوت، فحفظ ملاحظة بينقل الفلوس لمندوب مالوش دعوة. */
+            $parties = [];
+            foreach ([...$data['transfersOut'], ...$data['transfersIn']] as $t) {
+                $parties[] = (int) $t['from_rep_id'];
+                $parties[] = (int) $t['to_rep_id'];
+            }
+            $data['activeReps'] = RepCustody::transferParties($parties);
         } else {   // settings
             $data['canAddPermit']   = Rep::canCreatePermit($repId);   // v44
             $data['permPermReady']  = Rep::permitPermReady();
@@ -911,12 +919,18 @@ class RepCustodyController extends Controller
     }
 
     /**
-     * المالك بيعدّل تحويل عهدة بين مندوبين — المبلغ · التاريخ · المستقبِل · الملاحظة.
+     * المالك بيعدّل تحويل عهدة بين مندوبين — **المُرسِل · المُستقبِل** · المبلغ ·
+     * التاريخ · الملاحظة. تحكّم كامل: التحويل المسجَّل على مندوب غلط يتعاد
+     * توجيهه من الطرفين بدل ما يتلغي ويتسجّل من أول وجديد.
      *
-     * ⚠️ **كل الحُرّاس في `RepTransfer::update()`** (رصيد المُرسِل · المُستقبِل ما
-     *    صرفهاش · اليومان مفتوحان) — الكنترولر بيمرّر وبيعرض الرسالة بس، والفورم
-     *    مش مصدر ثقة.
-     * ⚠️ الرجوع **لكارت المُرسِل** لأن التحويل حركة خارجة من عهدته.
+     * ⚠️ **كل الحُرّاس في `RepTransfer::update()`** (مفيش محفظة تقع تحت الصفر ·
+     *    اليومان مفتوحان) — الكنترولر بيمرّر وبيعرض الرسالة بس، والفورم مش
+     *    مصدر ثقة.
+     * ⚠️ **الحقل الغايب من `$_POST` بيتشال من المصفوفة خالص** (مش `null`): الغايب
+     *    عند الموديل معناه «ما اتغيّرش»، فتمرير `null` كان هيحوّل تعديل جزئي
+     *    لتصفير المندوب.
+     * ⚠️ الرجوع للكارت اللي الطلب جه منه (`_back`)، وإلا **كارت المُرسِل بعد
+     *    التعديل** — لأن التحويل حركة خارجة من عهدته.
      */
     public function updateTransfer(string $tid): void
     {
@@ -926,13 +940,13 @@ class RepCustodyController extends Controller
         if (!$row) { $this->notFound('التحويل ده مش موجود.'); }
         $back = self::cardUrl((int) $row['from_rep_id'], self::TAB_ACCOUNT, 'transfers-out');
 
+        $in = [];
+        foreach (['from_rep_id', 'to_rep_id', 'amount', 'transfer_date', 'note'] as $f) {
+            if (array_key_exists($f, $_POST)) { $in[$f] = $_POST[$f]; }
+        }
+
         try {
-            \App\Models\RepTransfer::update((int) $tid, [
-                'to_rep_id'     => $_POST['to_rep_id']     ?? null,
-                'amount'        => $_POST['amount']        ?? null,
-                'transfer_date' => $_POST['transfer_date'] ?? null,
-                'note'          => $_POST['note']          ?? null,
-            ]);
+            \App\Models\RepTransfer::update((int) $tid, $in);
         } catch (\App\Models\RepSubmissionValidationException $e) {
             // ⚠️ رسالة الحقل نفسها للمالك — «حصل خطأ» ما بتقولش إيه اللي يتصلّح.
             $this->fail(implode(' · ', $e->errors()), $back);

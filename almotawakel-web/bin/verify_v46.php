@@ -154,6 +154,21 @@ try {
         near('والخزنة لسه ثابتة', Closing::currentBalance(), $safe6);
     }
 
+    /* ⚠️ **الحقل الغايب = ما اتغيّرش.** تعديل الملاحظة لوحدها ما ينفعش يصفّر
+       المندوبين ولا يحرّك قرشًا — `(int)(null)` كان هيدّي صفرًا ويرفض العملية
+       برسالة «اختر المندوب» وسط تعديل بريء. */
+    $curAll   = Database::row("SELECT * FROM rep_custody_transfers WHERE id = ?", [$t6]);
+    $noteFrom = RepCustody::balance((int) $curAll['from_rep_id']);
+    $noteTo   = RepCustody::balance((int) $curAll['to_rep_id']);
+    RepTransfer::update($t6, ['amount' => $curAll['amount'], 'transfer_date' => $curAll['transfer_date'],
+                              'note' => 'ملاحظة لوحدها']);
+    $afterNote = Database::row("SELECT * FROM rep_custody_transfers WHERE id = ?", [$t6]);
+    same('تعديل الملاحظة لوحدها ما غيّرش المُرسِل',
+         (int) $afterNote['from_rep_id'], (int) $curAll['from_rep_id']);
+    same('ولا المُستقبِل', (int) $afterNote['to_rep_id'], (int) $curAll['to_rep_id']);
+    near('ولا حرّك رصيد المُرسِل', RepCustody::balance((int) $curAll['from_rep_id']), $noteFrom);
+    near('ولا رصيد المُستقبِل', RepCustody::balance((int) $curAll['to_rep_id']), $noteTo);
+
     // الحُرّاس التلاتة
     try { RepTransfer::update($t6, ['to_rep_id' => $c > 0 ? $c : $b, 'amount' => 99999999,
             'transfer_date' => $day6, 'note' => '']); bad('✗ اتقبل مبلغ أكبر من رصيد المُرسِل'); }
@@ -171,6 +186,47 @@ try {
             'transfer_date' => $day6, 'note' => '']); bad('✗ اتقبل تقليل بعد ما المستقبِل صرف'); }
     catch (\Throwable $e) { ok('اترفض التقليل بعد ما المستقبِل صرف'); }
 
+    /* ═══ 7) إعادة توجيه المُرسِل نفسه (تحكم كامل) ═══
+       ⚠️ **ليه مناديب جداد:** الأرصدة هنا لازم تكون **معلومة بالظبط** عشان
+          نقيس الحارس على حافته. الاعتماد على مندوب حقيقي من القاعدة بيدّي
+          فحصًا بيعدّي أو يفشل حسب رصيد اليوم — إنذار كاذب متكرر. */
+    sec('7) ⚠️ إعادة توجيه المُرسِل — الفلوس بتتنقل من محفظة لمحفظة');
+    Database::exec("INSERT INTO reps (name, status) VALUES ('__v46_D','active')"); $dRep = Database::lastId();
+    Database::exec("INSERT INTO reps (name, status) VALUES ('__v46_E','active')"); $eRep = Database::lastId();
+    RepCustody::createDeposit($dRep, 4000, $day6, '');
+    RepCustody::createDeposit($eRep, 200, $day6, '');
+    $safe7 = Closing::currentBalance();
+    $rows7 = (int) Database::scalar("SELECT COUNT(*) FROM rep_custody_transfers");
+
+    $t7 = RepTransfer::create($dRep, ['to_rep_id' => $eRep, 'amount' => 1000, 'transfer_date' => $day6]);
+    near('قبل التوجيه: D=3000', RepCustody::balance($dRep), 3000);
+    near('و E=1200', RepCustody::balance($eRep), 1200);
+
+    /* ⚠️ **الحالة اللي حارسان منفصلان بيفوّتوها:** المُرسِل الجديد هو المُستقبِل
+       القديم. رصيد E الظاهر 1200، لكن 1000 منهم هُمّ التحويل نفسه اللي بيترجع.
+       فاللي معاه فعلاً 200 — وحارس بيبصّ للمُرسِل القديم بس كان هيسمح بـ800. */
+    try {
+        RepTransfer::update($t7, ['from_rep_id' => $eRep, 'to_rep_id' => $dRep,
+                                  'amount' => 800, 'transfer_date' => $day6, 'note' => '']);
+        bad('✗✗ اتقبل توجيه من محفظة رصيدها الحقيقي أقل — الحارس الموحَّد مشيل');
+    } catch (RepSubmissionValidationException $e) {
+        ok('⚠️ اترفض التوجيه لما المُرسِل الجديد (= المُستقبِل القديم) مش معاه المبلغ فعلاً');
+    }
+    near('والرفض ما غيّرش رصيد D', RepCustody::balance($dRep), 3000);
+    near('ولا رصيد E', RepCustody::balance($eRep), 1200);
+
+    RepTransfer::update($t7, ['from_rep_id' => $eRep, 'to_rep_id' => $dRep,
+                              'amount' => 150, 'transfer_date' => $day6, 'note' => 'اتوجّه']);
+    near('بعد التوجيه: D استرد الألف وأخد الـ150', RepCustody::balance($dRep), 4150);
+    near('و E دفع الـ150 من الـ200 اللي معاه فعلاً', RepCustody::balance($eRep), 50);
+    same('from_rep_id اتغيّر فعلاً في الصف',
+         (int) Database::scalar("SELECT from_rep_id FROM rep_custody_transfers WHERE id = ?", [$t7]), $eRep);
+    near('⚠️⚠️ صف واحد مش اتنين — التوجيه نقل مش حذف وإنشاء',
+         (int) Database::scalar("SELECT COUNT(*) FROM rep_custody_transfers"), $rows7 + 1);
+    near('⚠️ الخزنة ما اتغيّرتش', Closing::currentBalance(), $safe7);
+    near('⚠️ ومجموع الفلوس مع الاتنين ثابت (4200)',
+         RepCustody::balance($dRep) + RepCustody::balance($eRep), 4200);
+
     // المسار والواجهة
     $idx = (string) file_get_contents(dirname(__DIR__) . '/public/index.php');
     str_contains($idx, "'/rep-custody/transfer/{tid}/update'")
@@ -182,10 +238,23 @@ try {
     str_contains($ctl, 'function updateTransfer') ? ok('الأكشن موجود') : bad('الأكشن ناقص');
     str_contains($ctl, "RepTransfer::outgoingFor(\$repId)")
         ? ok('الكارت بيمرّر التحويلات الصادرة') : bad('الصادرة مش بتتمرّر للشاشة');
+    str_contains($ctl, "'from_rep_id'")
+        ? ok('الأكشن بيمرّر المُرسِل كمان (إعادة توجيه)') : bad('المُرسِل مش بيتمرّر — التوجيه مقفول من الشاشة');
     $tabSrc = (string) file_get_contents(dirname(__DIR__) . '/app/Views/rep_custody/_tab_account.php');
     str_contains($tabSrc, 'transfers-out') ? ok('لوح الصادر في الشاشة') : bad('لوح الصادر ناقص');
-    str_contains($tabSrc, 'transfer/\' . $tid . \'/update')
+    /* ⚠️ **الدرج بارشيال واحد للوحين** — الوارد كان زر حذف بس. الفحص بيتأكد إن
+       اللوحين **الاتنين** بينادوه، فأي رجوع للنسخ اليدوي بيبان فورًا. */
+    $trfSrc = dirname(__DIR__) . '/app/Views/partials/rep_transfer_edit.php';
+    is_file($trfSrc) ? ok('بارشيال درج التعديل موجود') : bad('بارشيال درج التعديل ناقص');
+    $trf = is_file($trfSrc) ? (string) file_get_contents($trfSrc) : '';
+    str_contains($trf, "transfer/' . \$tid . '/update")
         ? ok('وفورم التعديل بيبعت على مساره') : bad('فورم التعديل ناقص');
+    str_contains($trf, 'name="from_rep_id"') && str_contains($trf, 'name="to_rep_id"')
+        ? ok('والدرج فيه الطرفين — تحكم كامل مش المستقبِل بس')
+        : bad('الدرج ناقصه أحد الطرفين');
+    substr_count($tabSrc, "partial('rep_transfer_edit'") === 2
+        ? ok('⚠️ اللوحان (صادر + وارد) بينادوا نفس الدرج')
+        : bad('⚠️ لوح من الاتنين بلا درج تعديل — الوارد يرجع حذف بس');
 
 } catch (\Throwable $e) {
     bad('استثناء غير متوقّع: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
