@@ -941,7 +941,7 @@ class RepCustodyController extends Controller
         $back = self::cardUrl((int) $row['from_rep_id'], self::TAB_ACCOUNT, 'transfers-out');
 
         $in = [];
-        foreach (['from_rep_id', 'to_rep_id', 'amount', 'transfer_date', 'note'] as $f) {
+        foreach (['from_rep_id', 'to_rep_id', 'amount', 'transfer_date', 'to_date', 'note'] as $f) {
             if (array_key_exists($f, $_POST)) { $in[$f] = $_POST[$f]; }
         }
 

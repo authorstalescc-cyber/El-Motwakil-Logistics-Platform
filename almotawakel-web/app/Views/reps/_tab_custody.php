@@ -81,7 +81,7 @@ $b = $custody['breakdown'];
       'rows'  => function () use ($custody) {
         foreach ($custody['out'] as $t): ?>
           <tr>
-            <td><?= e(dfmt((string) ($t['transfer_date'] ?? ''))) ?></td>
+            <td><?= e(dfmt((string) ($t['wallet_date'] ?? $t['transfer_date'] ?? ''))) ?></td>
             <td><span class="chip"><?= icon('trending-down', 12) ?> طالع</span></td>
             <td><?= e((string) ($t['other_name'] ?? '—')) ?></td>
             <td class="neg"><?= money((float) $t['amount'], false) ?></td>
@@ -90,7 +90,7 @@ $b = $custody['breakdown'];
         <?php endforeach;
         foreach ($custody['in'] as $t): ?>
           <tr>
-            <td><?= e(dfmt((string) ($t['transfer_date'] ?? ''))) ?></td>
+            <td><?= e(dfmt((string) ($t['wallet_date'] ?? $t['transfer_date'] ?? ''))) ?></td>
             <td><span class="chip"><?= icon('trending-up', 12) ?> جاي</span></td>
             <td><?= e((string) ($t['other_name'] ?? '—')) ?></td>
             <td class="pos"><?= money((float) $t['amount'], false) ?></td>

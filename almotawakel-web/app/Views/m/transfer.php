@@ -109,7 +109,7 @@ $num = fn($v) => number_format((float) $v, 0);
           <div class="hm-slip-mid">
             <b><?= e($t['other_name']) ?></b>
             <div class="hm-slip-meta">
-              <span><?= e(dfmt($t['transfer_date'])) ?></span>
+              <span><?= e(dfmt($t['wallet_date'] ?? $t['transfer_date'])) ?></span>
               <?php if (!empty($t['note'])): ?><span>· <?= e($t['note']) ?></span><?php endif; ?>
             </div>
           </div>

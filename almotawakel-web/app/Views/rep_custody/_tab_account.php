@@ -10,6 +10,19 @@
  */
 use App\Core\FormState;
 $back = 'rep-custody/' . $repId . '?tab=account';
+
+/* v94 — تاريخ التحويل في اللوحين: **يوم محفظة المندوب اللي إحنا في كارته**
+   (`wallet_date`)، وبس لما يختلف يوم الطرف التاني بنقوله. المصدر واحد للوحين
+   عشان الصادر والوارد ما يقولوش نفس الصف بيومين بصيغتين مختلفتين. */
+$trfDay = static function (array $t, string $side): string {
+    $mine  = (string) ($t['wallet_date'] ?? $t['transfer_date'] ?? '');
+    $from  = (string) ($t['transfer_date'] ?? '');
+    $to    = (string) ($t['to_date'] ?? $from);
+    if ($from === $to || $from === '' || $to === '') { return dfmt($mine); }
+    return $side === 'out'
+        ? dfmt($mine) . ' · وصلت ' . dfmt($to)
+        : dfmt($mine) . ' · خرجت ' . dfmt($from);
+};
 $arch = App\Models\RepCustody::archiveBefore($repId);
 ?>
 
@@ -283,14 +296,14 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
     'id'     => 'transfers-out',
     'badge'  => ['text' => intf(count($transfersOut)), 'tone' => 'navy'],
     'scroll' => true,
-    'body'   => function () use ($transfersOut, $back, $activeReps, $repId) {
+    'body'   => function () use ($transfersOut, $back, $activeReps, $trfDay) {
       foreach ($transfersOut as $t) {
         $tid = (int) $t['id'];
         partial('row_item', [
           'title'  => $t['note'] ?: 'تحويل لزميل',
           'icon'   => 'shuffle',
           'meta'   => [['icon' => 'user', 'text' => 'لـ ' . ($t['other_name'] ?? '—')],
-                       ['icon' => 'calendar', 'text' => dfmt($t['transfer_date'])]],
+                       ['icon' => 'calendar', 'text' => $trfDay($t, 'out')]],
           'amount' => money($t['amount'], false),
           'amount_tone' => 'ex',
           'extra'  => function () use ($tid) { ?>
@@ -319,14 +332,14 @@ $arch = App\Models\RepCustody::archiveBefore($repId);
       'badge'  => ['text' => intf(count($transfersIn)), 'tone' => 'navy'],
       'scroll' => true,
       'id'     => 'transfers-in',
-      'body'   => function () use ($transfersIn, $back, $activeReps) {
+      'body'   => function () use ($transfersIn, $back, $activeReps, $trfDay) {
         foreach ($transfersIn as $t) {
           $tid = (int) $t['id'];
           partial('row_item', [
             'title'  => $t['note'] ?: 'تحويل من زميل',
             'icon'   => 'shuffle',
             'meta'   => [['icon' => 'user', 'text' => 'من ' . ($t['other_name'] ?? '—')],
-                         ['icon' => 'calendar', 'text' => dfmt($t['transfer_date'])]],
+                         ['icon' => 'calendar', 'text' => $trfDay($t, 'in')]],
             'amount' => money($t['amount'], false),
             'amount_tone' => 'pos',
             /* ⚠️ **الوارد كان زر حذف بس** — المالك اللي فاتح كارت المُستقبِل

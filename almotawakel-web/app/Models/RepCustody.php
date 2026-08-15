@@ -1166,7 +1166,7 @@ class RepCustody
         // التحويلات الصادرة لمناديب تانية (v46) — بتخصم من عهدته زي الصرف.
         foreach (RepTransfer::outgoingFor($repId) as $t) {
             $rows[] = [
-                'id' => (int) $t['id'], 'src' => 'transfer', 'd' => $t['transfer_date'],
+                'id' => (int) $t['id'], 'src' => 'transfer', 'd' => $t['wallet_date'] ?? $t['transfer_date'],
                 'note' => $t['note'], 'qty' => 1, 'amount' => $t['amount'],
                 'ref_no' => null, 'stage_key' => 'custom', 'direction' => 'expense',
                 'category' => 'تحويل لمندوب',

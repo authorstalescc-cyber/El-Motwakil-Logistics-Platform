@@ -65,9 +65,17 @@ $backTo = $back . ($anchor !== '' ? '#' . $anchor : '');
       <input data-money type="number" step="0.01" min="0" name="amount"
              value="<?= e((string) (float) $t['amount']) ?>">
     </label>
+    <?php /* ⚠️ **يومان مش يوم واحد** (v94): الفلوس ممكن تخرج من عهدة المُرسِل يوم
+             وتدخل عهدة المُستقبِل يوم بعده. اليوم الواحد كان بيجبر المالك يغلّط
+             في طرف عشان يظبط التاني — الرصيد التراكمي يفضل صح واليوميّة تبوظ. */ ?>
     <label class="field">
-      <span>التاريخ</span>
+      <span>خرجت من عهدته يوم</span>
       <input type="date" name="transfer_date" value="<?= e((string) $t['transfer_date']) ?>">
+    </label>
+    <label class="field">
+      <span>دخلت عهدته يوم</span>
+      <input type="date" name="to_date"
+             value="<?= e((string) ($t['to_date'] ?? $t['transfer_date'])) ?>">
     </label>
     <label class="field">
       <span>ملاحظة</span>

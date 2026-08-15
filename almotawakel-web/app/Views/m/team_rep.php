@@ -246,7 +246,7 @@ $spendRow = function (array $s) use ($num) {
           <div class="hm-slip-mid">
             <b>من <?= e($t['other_name'] ?? '—') ?></b>
             <div class="hm-slip-meta">
-              <span><?= e(dfmt($t['transfer_date'])) ?></span>
+              <span><?= e(dfmt($t['wallet_date'] ?? $t['transfer_date'])) ?></span>
               <?php if (!empty($t['note'])): ?><span>· <?= e($t['note']) ?></span><?php endif; ?>
             </div>
           </div>

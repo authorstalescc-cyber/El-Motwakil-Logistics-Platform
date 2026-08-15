@@ -217,7 +217,7 @@ class RepWatch
         if (RepTransfer::available()) {
             $transfersIn = array_values(array_filter(
                 RepTransfer::incomingFor($repId, 60),
-                static fn (array $t): bool => (string) ($t['transfer_date'] ?? '') === $day));
+                static fn (array $t): bool => (string) ($t['wallet_date'] ?? '') === $day));
         }
         $settlements = array_values(array_filter(
             RepCustody::settlements($repId),
