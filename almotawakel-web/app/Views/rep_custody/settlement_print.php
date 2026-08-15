@@ -275,7 +275,12 @@ $eq[] = ['اتقفل واتسلّم', $back2, '−'];
             };
             // ⚠️ الفيزا و«غير مدفوع» بيتعرضوا للعلم وما بيتحسبوش في الإجمالي
             //    (نفس شرط `RepCustody::spentTotal` بالظبط).
-            $cash = empty($r['is_visa']) && empty($r['unpaid']);
+            // ⚠️⚠️ **والتحويل لزميل زيّهم بالظبط** — بيتخصم من العهدة في المعادلة
+            //    فوق («حوّله لزملاء») مش من `spentTotal`، فلو اتعرض هنا كأنه محسوب
+            //    يبقى مجموع أعمدة الجدول ≠ إجمالي الجدول نفسه، والقارئ يجمع بإيده
+            //    ويلاقي فرقًا بلا تفسير (اتصاد فعليًّا: إيصال #366 — الأعمدة
+            //    109,925 والإجمالي 94,925، والفرق هو تحويل 15,000).
+            $cash = $src !== 'transfer' && empty($r['is_visa']) && empty($r['unpaid']);
           ?>
             <tr>
               <td><?= $i + 1 ?></td>
@@ -283,6 +288,7 @@ $eq[] = ['اتقفل واتسلّم', $back2, '−'];
               <td class="r"><?= e($r['note'] ?: $kind) ?>
                 <?php if (!empty($r['is_visa'])): ?><span class="tag">فيزا — مش من العهدة</span><?php endif; ?>
                 <?php if (!empty($r['unpaid'])): ?><span class="tag">غير مدفوع</span><?php endif; ?>
+                <?php if ($src === 'transfer'): ?><span class="tag">محسوب في «حوّله لزملاء»</span><?php endif; ?>
               </td>
               <td><?= e($ref) ?><?php if (!empty($r['ref_no'])): ?>
                   <span class="tag">إيصال <?= e($r['ref_no']) ?></span><?php endif; ?></td>
