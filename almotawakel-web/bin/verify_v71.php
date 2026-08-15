@@ -405,7 +405,10 @@ chk(!str_contains($misc, '<style'), 'وصفر `<style>` محلي في شاشة �
 chk(str_contains($misc, 'RepMiscKind::all()'), 'شاشة النثرية بتلفّ على الكتالوج مش على أسماء مكتوبة');
 
 $inbox = src71('app/Views/rep_custody/inbox.php');
-chk(str_contains($inbox, 'name="misc_kind"'), 'ودرج تعديل المكتب فيه خانة الوسم');
+/* ⚠️ **الخانة في البارشيال مش في الشاشة** (v95): درج التعديل بقى مكوّنًا واحدًا
+   لتبويبَي «مستني» و«معتمد». الشارة وCSS بتاعتها لسه في الشاشة (صف البند). */
+chk(str_contains(src71('app/Views/partials/rep_submission_edit.php'), 'name="misc_kind"'),
+    'ودرج تعديل المكتب فيه خانة الوسم');
 chk(str_contains($inbox, 'ib-mkind') && str_contains($inbox, '.pill.ib-mkind'),
     'وشارة الوسم في صندوق الوارد ليها CSS');
 

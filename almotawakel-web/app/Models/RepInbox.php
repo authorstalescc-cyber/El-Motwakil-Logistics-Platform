@@ -235,9 +235,36 @@ class RepInbox
         $s = self::find($subId);
         if (!$s) { throw new RuntimeException('البند مش موجود.'); }
         if ($s['status'] !== 'pending') {
-            throw new RuntimeException('البند اتراجع خلاص — عدّله من تايم لاين الإذن.');
+            throw new RuntimeException($s['status'] === 'approved'
+                ? 'البند ده اتعتمد خلاص — عدّله من تبويب «معتمد» بزرار «عدّل المعتمد».'
+                : 'البند ده اتراجع خلاص.');
         }
 
+        $v = self::validated($s, $d);
+        self::writeSubmission($subId, 'pending', $v);
+
+        Audit::log('update', 'rep_submissions', $subId, $s, self::find($subId),
+            'تعديل بند مندوب قبل الاعتماد «' . $v['note'] . '» — ' . number_format($v['amount'], 2, '.', ','),
+            ['rep_id' => (int) $s['rep_id'], 'record_date' => $v['date']]);
+    }
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد للتحقّق من حقول بند المندوب** — بيتنادى من
+     * `update()` (البند المستني) ومن `updateApproved()` (البند المعتمد).
+     *
+     * من غيرها كانت الـ١٢ قاعدة اللي تحت هتتكتب مرتين، ونسيان واحدة معناها إن
+     * الشاشتين بيقبلوا حاجتين مختلفتين على **نفس البند** — يعني بند يعدّي من
+     * تبويب ويترفض من التاني بلا سبب مفهوم.
+     *
+     * `$d` فيها مفاتيح موجودة بس = تتعدّل؛ الباقي يفضل زي ما هو في `$s`.
+     *
+     * @param array $s صف البند الحالي (من `find()`)
+     * @return array{note:string,kind:string,is_misc:bool,qty:int,unit:float,actual:?float,
+     *               amount:float,date:string,ref:?string,movement_id:?int,misc_kind:?string,
+     *               is_visa:bool,visa_card_id:?int,unpaid:bool}
+     */
+    private static function validated(array $s, array $d): array
+    {
         $note = array_key_exists('note', $d) ? trim((string) $d['note']) : (string) $s['note'];
         if ($note === '') { throw new RuntimeException('اكتب البيان.'); }
         if (mb_strlen($note) > 255) { throw new RuntimeException('البيان أطول من 255 حرفًا.'); }
@@ -339,23 +366,219 @@ class RepInbox
             throw new RuntimeException('اختار واحدة بس: يا «مدفوع بالفيزا» يا «غير مدفوع».');
         }
 
+        return [
+            'note'         => $note,
+            'kind'         => $kind,
+            'is_misc'      => $wasMisc,
+            'qty'          => $qty,
+            'unit'         => $unit,
+            'actual'       => $actual,
+            'amount'       => round($unit * $qty, 2),
+            'date'         => $date,
+            'ref'          => $ref !== '' ? $ref : null,
+            'movement_id'  => $movementId,
+            'misc_kind'    => $miscKind,
+            'is_visa'      => $isVisa,
+            'visa_card_id' => $cardId,
+            'unpaid'       => $unpaid,
+        ];
+    }
+
+    /**
+     * كتابة القيم المتحقَّقة في `rep_submissions`.
+     *
+     * ⚠️ `$status` في شرط `WHERE` **مش زينة**: هو اللي بيضمن إن التعديل ما
+     *    يتنفّذش على بند غيّر حالته من طلب تاني بين القراءة والكتابة.
+     */
+    private static function writeSubmission(int $subId, string $status, array $v): void
+    {
         $kindCol = RepPortal::miscKindReady();   // v71
-        $set = [$note, $kind, $qty, $unit, $actual, round($unit * $qty, 2),
-                $date, $ref !== '' ? $ref : null, $movementId, $isVisa ? 1 : 0, $cardId,
-                $unpaid ? 1 : 0];
-        if ($kindCol) { $set[] = $miscKind; }
+        $set = [$v['note'], $v['kind'], $v['qty'], $v['unit'], $v['actual'], $v['amount'],
+                $v['date'], $v['ref'], $v['movement_id'], $v['is_visa'] ? 1 : 0, $v['visa_card_id'],
+                $v['unpaid'] ? 1 : 0];
+        if ($kindCol) { $set[] = $v['misc_kind']; }
         Database::exec(
             "UPDATE rep_submissions
              SET note=?, kind=?, qty=?, unit_amount=?, actual_unit=?, amount=?,
                  entry_date=?, ref_no=?, movement_id=?, is_visa=?, visa_card_id=?, unpaid=?"
                  . ($kindCol ? ', misc_kind=?' : '') . ",
                  edited_by=?, edited_at=NOW()
-             WHERE id=? AND status='pending'",
-            array_merge($set, [Auth::user(), $subId]));
+             WHERE id=? AND status=?",
+            array_merge($set, [Auth::user(), $subId, $status]));
+    }
 
-        Audit::log('update', 'rep_submissions', $subId, $s, self::find($subId),
-            'تعديل بند مندوب قبل الاعتماد «' . $note . '» — ' . number_format($unit * $qty, 2, '.', ','),
-            ['rep_id' => (int) $s['rep_id'], 'record_date' => $date]);
+    // ─────────────────────────────────────────── التعديل بعد الاعتماد (v95)
+
+    /**
+     * تعديل بند **معتمد** من صندوق المراجعة — تحكّم كامل بعد الاعتماد
+     * (قرار المالك 2026-08-15).
+     *
+     * كان الطريق الوحيد لتصحيح بند معتمد إنك تفتح تايم لاين الإذن وتدوّر عليه،
+     * والنثرية مكانش ليها طريق أصلاً. دلوقتي البند بيتعدّل من مكانه.
+     *
+     * ⚠️⚠️ **الفرق الجوهري عن `update()`: البند ده ليه أثر مالي قايم.** الاعتماد
+     *    ولّد صفًّا حقيقيًّا (`permit_stages` أو `rep_misc_expenses`) بيتخصم من
+     *    الخزنة يوم صرفه ومن عهدة المندوب ويدخل فاتورة العميل. فالتعديل هنا
+     *    **لازم يمسّ الصفّين مع بعض جوّه معاملة واحدة** — تعديل سجل المراجعة
+     *    لوحده بيدّي «الصندوق يقول رقم والإذن يقول رقم تاني» بلا أي خطأ ظاهر.
+     *
+     * الحُرّاس (كلها في الموديل — الشاشة مش مصدر ثقة):
+     *   ① البند لازم يكون `approved` **وله صفّه الفعلي لسه موجود**. لو الصف
+     *     اتمسح من الإذن قبل كده، السجل بيفضل **شاهدًا على الاعتماد** وما
+     *     بيتعدّلش (نفس قاعدة `delete()` بالحرف).
+     *   ② **اليومان مع بعض**: البند بيخرج من رصيد يومه القديم ويدخل رصيد يومه
+     *     الجديد — فالاتنين لازم يكونوا مفتوحين، وإلا التعديل بيغيّر رصيدًا
+     *     مثبَّتًا في الخفا. والفيزا مستثناة بنفس شرط `approve()` بالحرف
+     *     (بتتخصم من الكارت مش من الخزنة).
+     *   ③ **ممنوع التاريخ الجديد يبقى قبل خط الفصل** — `epochSql` بتستثني اللي
+     *     قبله من كل حسابات العهدة، فنقل بند معتمد لهناك بيخفيه من رصيد
+     *     المندوب بلا أي رسالة.
+     *   ④ الإيصال المربوط ببيان سائق سيارة المكتب ما ينفعش مبلغه ينزل تحت
+     *     الجزء المربوط (نفس حارس `PermitController::saveStage`).
+     *
+     * ⚠️ **اللي ما بيتغيّرش هنا خالص:** المندوب صاحب العهدة (`paid_by_rep_id`)،
+     *    والإذن، وصورة الإيصال، وحالة البند. تغيير المندوب = نقل فلوس من محفظة
+     *    لمحفظة، وده قرار تاني له مساره (`rep_custody_transfers`).
+     */
+    public static function updateApproved(int $subId, array $d): void
+    {
+        $pdo = Database::conn();
+        $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            $s = self::lockSubmission($subId);
+            if (!$s) { throw new RuntimeException('البند مش موجود.'); }
+            if ($s['status'] !== 'approved') {
+                throw new RuntimeException($s['status'] === 'pending'
+                    ? 'البند ده لسه مستني اعتمادك — عدّله من تبويب «مستني».'
+                    : 'البند ده مرفوض — مالوش بند فعلي يتعدّل.');
+            }
+
+            $stageId = $s['stage_id'] !== null ? (int) $s['stage_id'] : 0;
+            $miscId  = $s['misc_id']  !== null ? (int) $s['misc_id']  : 0;
+            if ($stageId === 0 && $miscId === 0) {
+                throw new RuntimeException(
+                    'البند الفعلي اتمسح من الإذن قبل كده — السجل ده شاهد على إن الاعتماد حصل وما بيتعدّلش.');
+            }
+
+            // صف المندوب هو mutex كل مصادر عهدته (اعتماد/تنزيل/تسوية/تعديل).
+            Database::row('SELECT id FROM reps WHERE id=? FOR UPDATE', [(int) $s['rep_id']]);
+
+            $before = $stageId
+                ? Database::row('SELECT * FROM permit_stages WHERE id=? FOR UPDATE', [$stageId])
+                : Database::row('SELECT * FROM rep_misc_expenses WHERE id=? FOR UPDATE', [$miscId]);
+            if (!$before) {
+                throw new RuntimeException(
+                    'البند الفعلي مش موجود في الإذن/المصروفات — يمكن اتمسح. السجل بيفضل شاهدًا على الاعتماد.');
+            }
+
+            $v = self::validated($s, $d);
+
+            /* ② اليوم القديم واليوم الجديد. بنقرا اليوم القديم من **الصف
+               الفعلي** مش من سجل المراجعة: هو اللي بيدخل الخزنة فعلاً، ولو
+               الاتنين افترقوا لأي سبب فالحقيقة عنده. */
+            $oldDate = (string) ($stageId ? $before['entry_date'] : $before['exp_date']);
+            if (empty($before['is_visa']) && ($err = Closing::guard($oldDate))) {
+                throw new RuntimeException('البند مسجَّل في يوم متقفل (' . dfmt($oldDate) . ') — ' . $err);
+            }
+            if (!$v['is_visa'] && ($err = Closing::guard($v['date']))) {
+                throw new RuntimeException($err);
+            }
+
+            /* ③ خط فصل العهد — النقل لما قبله بيخفي البند من رصيد المندوب.
+               ⚠️ الشرط على **النقل** مش على الحالة: البند اللي أصلاً قبل الخط
+                  (اتعتمد قبل ما الخط يتحطّ) لازم يفضل قابلًا للتصحيح، وإلا
+                  الحارس بيقفل تعديل بنود قديمة بلا أي فايدة. */
+            if (self::isPreEpoch($v['date']) && !self::isPreEpoch($oldDate)) {
+                throw new RuntimeException('التاريخ الجديد قبل بداية النظام الجديد ('
+                    . dfmt(RepCustody::epoch()) . ') — البند هيختفي من عهدة المندوب. اختر تاريخًا بعده.');
+            }
+
+            // ④ الإيصال المربوط ببيان سائق سيارة المكتب
+            if ($stageId) {
+                $allocated = OfficeDriverStatement::stageAllocationTotal($stageId);
+                if ($v['amount'] + 0.005 < $allocated) {
+                    throw new RuntimeException('المبلغ الجديد أقل من الجزء (' . money0($allocated)
+                        . ') المربوط ببيان سائق سيارة المكتب. فكّ الربط من بيان السائق الأول.');
+                }
+            }
+
+            self::writeSubmission($subId, 'approved', $v);
+
+            if ($stageId) {
+                /* نفس اشتقاق `approve()` بالحرف — مصدر واحد للسؤال «البند ده
+                   بيتكتب على أنهي مرحلة وباتجاه إيه؟». */
+                Database::exec(
+                    "UPDATE permit_stages
+                        SET stage_key=?, direction=?, movement_id=?, amount=?, qty=?, actual_amount=?,
+                            entry_date=?, ref_no=?, note=?, is_visa=?, visa_card_id=?, unpaid=?
+                      WHERE id=?",
+                    [
+                        $v['kind'] === 'receipt' ? 'receipts' : 'custom',
+                        $v['kind'] === 'expense' ? 'expense' : null,
+                        $v['movement_id'],
+                        $v['amount'],
+                        $v['qty'],
+                        $v['actual'] === null ? null : round($v['actual'] * $v['qty'], 2),
+                        $v['date'],
+                        $v['ref'],
+                        $v['note'],
+                        $v['is_visa'] ? 1 : 0,
+                        $v['visa_card_id'],
+                        $v['unpaid'] ? 1 : 0,
+                        $stageId,
+                    ]);
+                $after = Database::row('SELECT * FROM permit_stages WHERE id=?', [$stageId]);
+                Audit::log('update', 'permit_stages', $stageId, $before, $after,
+                    'تعديل بند مندوب **بعد اعتماده** «' . $v['note'] . '» — '
+                    . number_format($v['amount'], 2, '.', ',')
+                    . ' — ' . Permit::noLabel($s['permit_type'] ?? 'sader')
+                    . ' ' . ($s['permit_no'] ?: '#' . $s['permit_id'])
+                    . ' — من عهدة ' . $s['rep_name'],
+                    [
+                        'permit_id'     => (int) $s['permit_id'],
+                        'permit_no'     => $s['permit_no'],
+                        'movement_id'   => $v['movement_id'],
+                        'record_date'   => $v['date'],
+                        'rep_id'        => (int) $s['rep_id'],
+                        'submission_id' => $subId,
+                    ]);
+                Lookup::add($v['kind'] === 'receipt' ? 'mv_receipt' : 'mv_expense', $v['note']);
+            } else {
+                /* ⚠️ التطبيع (الوسم → التصنيف، والسلفة بتلغي الفيزا) عايش في
+                   `RepMiscExpense` نفسه — مش متكرر هنا. */
+                RepMiscExpense::update($miscId, [
+                    'exp_date'     => $v['date'],
+                    'note'         => $v['note'],
+                    'qty'          => $v['qty'],
+                    'unit_amount'  => $v['unit'],
+                    'ref_no'       => $v['ref'],
+                    'is_visa'      => $v['is_visa'],
+                    'visa_card_id' => $v['visa_card_id'],
+                    'misc_kind'    => $v['misc_kind'],
+                ]);
+                $after = RepMiscExpense::find($miscId);
+                Audit::log('update', 'rep_misc_expenses', $miscId, $before, $after,
+                    'تعديل نثرية مندوب **بعد اعتمادها** «' . $v['note'] . '» — '
+                    . number_format($v['amount'], 2, '.', ',') . ' — من عهدة ' . $s['rep_name'],
+                    [
+                        'record_date'   => $v['date'],
+                        'rep_id'        => (int) $s['rep_id'],
+                        'submission_id' => $subId,
+                    ]);
+                Lookup::add('mv_misc', $v['note']);
+            }
+
+            Audit::log('update', 'rep_submissions', $subId, $s, self::find($subId),
+                'تعديل سجل بند مندوب معتمد «' . $v['note'] . '» — '
+                . number_format($v['amount'], 2, '.', ','),
+                ['rep_id' => (int) $s['rep_id'], 'record_date' => $v['date']]);
+
+            if ($own) { $pdo->commit(); }
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $e;
+        }
     }
 
     /**

@@ -104,6 +104,51 @@ class RepMiscExpense
     }
 
     /**
+     * تعديل نثرية معتمدة (v95) — بيتنادى من `RepInbox::updateApproved()` بس،
+     * بعد ما يكون قفل الصف وشغّل `Closing::guard` على اليوم القديم والجديد.
+     *
+     * ⚠️ **نفس تطبيع `create()` بالحرف** — الوسم بيتطبّع، والتصنيف المعروض
+     *    بيتولّد منه، والسلفة بتلغي الفيزا. لو التطبيع اتكتب في المستدعي بدل
+     *    هنا، النثرية المعدَّلة كانت هتتعرض في `/expenses` بتصنيف مخالف
+     *    للمتولَّدة من الاعتماد وهي نفس النثرية.
+     *
+     * ⚠️ **ما بيلمسش** `rep_id` ولا `submission_id` ولا المرفق — دول هوية
+     *    النثرية مش بياناتها.
+     */
+    public static function update(int $id, array $d): void
+    {
+        $qty  = max(1, (int) ($d['qty'] ?? 1));
+        $unit = round((float) ($d['unit_amount'] ?? 0), 2);
+        $kind = RepMiscKind::normalize($d['misc_kind'] ?? null);
+        $isVisa = (!empty($d['is_visa']) && !RepMiscKind::isCashOnly($kind)) ? 1 : 0;
+        $category = RepMiscKind::category($kind);
+
+        $kindReady = self::kindReady();
+        $args = [
+            $d['exp_date'],
+            $category,
+            (string) $d['note'],
+            $qty,
+            $unit,
+            round($unit * $qty, 2),
+            ($d['ref_no'] ?? '') !== '' ? $d['ref_no'] : null,
+            $isVisa,
+            $isVisa && !empty($d['visa_card_id']) ? (int) $d['visa_card_id'] : null,
+        ];
+        if ($kindReady) { $args[] = $kind; }
+        $args[] = $id;
+
+        Database::exec(
+            "UPDATE rep_misc_expenses
+                SET exp_date=?, category=?, note=?, qty=?, unit_amount=?, amount=?,
+                    ref_no=?, is_visa=?, visa_card_id=?"
+                    . ($kindReady ? ', misc_kind=?' : '') . "
+              WHERE id=?",
+            $args
+        );
+    }
+
+    /**
      * ⚠️ **خاصية ساكنة على الكلاس** مش `static` جوّه الدالة — دي الصيغة الوحيدة
      *    اللي `refreshKindReady()` تقدر تصفّرها (مصيدة v57 الموثَّقة).
      */

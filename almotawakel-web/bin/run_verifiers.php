@@ -75,6 +75,7 @@ $catalog = [
     //    والرانر بيرفض تشغيل الكل. (مصيدة الجلستين — CLAUDE.md.)
     'verify_v92.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'المستند الأرشيفي واستيراد كشوف العملاء (v92) — صفر أثر على الخزنة وحارس التحسيب المزدوج برقم الإذن وحارس تكرار الاستيراد في القاعدة نفسها، fixtures داخل rollback'],
     'verify_v94.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'يوم عهدة المُستقبِل منفصل عن يوم المُرسِل في تحويل المناديب (v94) — الحركة بتقع في يوم كل طرف والتراكمي والخزنة ما بيتأثروش، fixtures داخل rollback'],
+    'verify_v95.php'              => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'تعديل بند المندوب بعد اعتماده (v95) — سجل المراجعة والبند الفعلي بيتعدّلوا مع بعض، والعهدة والخزنة بيتحرّكوا بالفرق بالظبط، وحُرّاس اليوم المتقفل وخط الفصل والبند اليتيم، fixtures داخل rollback'],
     'verify_payroll.php'          => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'رواتب المناديب (v87) — حارس التحسيب المزدوج (ولا نوع بند في CASH_KINDS) والقسمة بلا فقد قرش واللقطة الثابتة، fixtures داخل rollback'],
     'verify_design_system.php'    => ['impact' => 'read',       'self_guard' => false, 'note' => 'لغة تصميم النظام + قاعدة «ممنوع رقم أصمّ» + نافذة التفاصيل الواحدة'],
     'verify_density.php'          => ['impact' => 'read',       'self_guard' => false, 'note' => 'قانون التصميم: صفر جملة تعليمية — الشرح يتشال والتحذير الوظيفي يفضل'],

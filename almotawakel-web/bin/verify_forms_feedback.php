@@ -143,7 +143,11 @@ try {
     // على **السلوك** (كل كتابة بتاخد رمز محاولة) مش على شكل السلسلة النصّية.
     chk(substr_count($repCustodyController, 'claimForm(self::cardUrl($repId') >= 4,
         'كتابات كارت عهدة المندوب المالية محمية من تكرار الطلب');
-    $repInbox = (string) file_get_contents(dirname(__DIR__) . '/app/Views/rep_custody/inbox.php');
+    /* ⚠️ **الشاشة + بارشيال الدرج مع بعض** (v95): ماركب درج التعديل اتنقل
+       لـ`partials/rep_submission_edit` عشان تبويبَي «مستني» و«معتمد» يستخدموا
+       نفس الحقول. السلوك المفحوص هو هو — بس مقسوم على ملفين. */
+    $repInbox = (string) file_get_contents(dirname(__DIR__) . '/app/Views/rep_custody/inbox.php')
+              . (string) file_get_contents(dirname(__DIR__) . '/app/Views/partials/rep_submission_edit.php');
     // ⚠️ الفحص على **السلوك** مش على أسماء المتغيّرات: إعادة بناء الصندوق
     //    (2026-07-25) شالت رمز اليوم `$dayToken` لأن الصفحة بقت فورمًا واحدًا،
     //    والسلوك المطلوب زي ما هو — رمز إعادة المحاولة بيرجع للفورم المتعثر،

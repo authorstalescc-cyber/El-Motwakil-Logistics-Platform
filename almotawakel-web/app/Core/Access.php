@@ -60,6 +60,10 @@ class Access
         //    للمحاسب): اللي يقدر **يسترجع** من `/audit` هو بس اللي يقدر يحذف.
         'RepCustodyController@deleteSubmission',
         'RepCustodyController@deleteMany',
+        /* تعديل بند **معتمد** (v95): بيغيّر صفًّا خلاص دخل الخزنة وعهدة المندوب
+           وفاتورة العميل — فمقصور على نفس الدايرة اللي بتحذف، مش على كل اللي
+           بيعتمد. (الحُرّاس المالية نفسها في `RepInbox::updateApproved`.) */
+        'RepCustodyController@editApproved',
         'PushController@index',
         'PushController@send',
         'PushController@test',

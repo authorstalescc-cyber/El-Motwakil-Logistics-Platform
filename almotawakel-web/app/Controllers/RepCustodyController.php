@@ -515,6 +515,9 @@ class RepCustodyController extends Controller
             // ⚠️ إخفاء الزرار **مش حماية** — المنع الحقيقي في Access::OWNER_MANAGER_ONLY.
             //    ده بس عشان الدور اللي هيترفض ما يشوفش زرارًا بيدّي 403.
             'canDelete'     => \App\Core\Access::allows(Auth::role(), 'RepCustodyController@deleteSubmission', 'POST'),
+            // v95 — نفس المبدأ: إخفاء زرار «عدّل المعتمد» مش حماية، المنع في
+            // `Access::OWNER_MANAGER_ONLY` وفي `RepInbox::updateApproved`.
+            'canEditApproved' => \App\Core\Access::allows(Auth::role(), 'RepCustodyController@editApproved', 'POST'),
         ]);
     }
 
@@ -758,6 +761,82 @@ class RepCustodyController extends Controller
             }
         } catch (\Throwable $e) {
             $this->inboxFailure('edit', $old, ['_form' => $e->getMessage()], 'edit-' . $id);
+        }
+        redirect($this->inboxBack());
+    }
+
+    // ═══════════════════════════════════════════ تعديل البند بعد الاعتماد (v95)
+
+    /**
+     * تعديل بند **معتمد** — تحكّم كامل بعد الاعتماد (قرار المالك 2026-08-15).
+     *
+     * ⚠️ **نفس حقول درج التعديل بالحرف** (بارشيال واحد للاتنين) ماعدا
+     *    `approve_now` — البند معتمد أصلاً.
+     * ⚠️ الحُرّاس الحقيقية كلها في `RepInbox::updateApproved` (اليوم المتقفل ·
+     *    خط الفصل · البند الفعلي موجود · بيان السائق)، والصلاحية في
+     *    `Access::OWNER_MANAGER_ONLY` — اللي يقدر يحذف بس هو اللي يقدر يعدّل
+     *    بندًا خلاص دخل الخزنة وفاتورة العميل.
+     */
+    public function editApproved(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $id = (int) $sid;
+        /* ⚠️ **قايمة بيضا زي `editSubmission`**: الحقل اللي مش مذكور هنا بالاسم
+           ما بيوصلش الموديل خالص — وده وقع مرتين قبل كده على نفس السطر. */
+        $old = [
+            'submission_id' => $id,
+            'note' => trim((string) ($_POST['note'] ?? '')),
+            'kind' => (string) ($_POST['kind'] ?? ''),
+            'qty' => (string) ($_POST['qty'] ?? ''),
+            'unit_amount' => (string) ($_POST['unit_amount'] ?? ''),
+            'actual_unit' => (string) ($_POST['actual_unit'] ?? ''),
+            'entry_date' => trim((string) ($_POST['entry_date'] ?? '')),
+            'ref_no' => trim((string) ($_POST['ref_no'] ?? '')),
+            'movement_id' => (string) ($_POST['movement_id'] ?? ''),
+            'is_visa' => !empty($_POST['is_visa']) ? '1' : '',
+            'visa_card_id' => (string) ($_POST['visa_card_id'] ?? ''),
+            'unpaid' => !empty($_POST['unpaid']) ? '1' : '',
+            'misc_kind' => (string) ($_POST['misc_kind'] ?? ''),
+        ];
+        $errors = [];
+        if ($old['note'] === '') { $errors['note'] = 'اكتب البيان.'; }
+        elseif (mb_strlen($old['note']) > 255) { $errors['note'] = 'البيان أطول من 255 حرفًا.'; }
+        if (!preg_match('/^\d+$/', $old['qty']) || (int) $old['qty'] < 1 || (int) $old['qty'] > 10000) {
+            $errors['qty'] = 'الكمية لازم تكون عددًا صحيحًا من 1 لـ10000.';
+        }
+        if (!is_numeric($old['unit_amount']) || (float) $old['unit_amount'] <= 0) {
+            $errors['unit_amount'] = 'المبلغ لازم يكون رقمًا أكبر من صفر.';
+        }
+        if ($old['actual_unit'] !== '' && (!is_numeric($old['actual_unit']) || (float) $old['actual_unit'] < 0)) {
+            $errors['actual_unit'] = 'السعر الفعلي لازم يكون رقمًا صفرًا أو أكبر.';
+        }
+        if (!self::validDate($old['entry_date'])) { $errors['entry_date'] = 'التاريخ غير صحيح.'; }
+        if ($errors) { $this->inboxFailure('edit-approved', $old, $errors, 'edit-approved-' . $id); }
+        $this->claimForm($this->inboxBack());
+        try {
+            $data = [
+                'note'         => $old['note'],
+                'kind'         => $old['kind'],
+                'qty'          => $old['qty'],
+                'unit_amount'  => $old['unit_amount'],
+                'actual_unit'  => $old['actual_unit'],
+                'entry_date'   => $old['entry_date'],
+                'ref_no'       => $old['ref_no'],
+                'movement_id'  => $old['movement_id'],
+                'is_visa'      => $old['is_visa'] !== '',
+                'visa_card_id' => $old['visa_card_id'],
+                'unpaid'       => $old['unpaid'] !== '',
+            ];
+            // النثرية بس هي اللي عندها الخانة دي — وبعتها فاضية على بند إذن
+            // كان هيرفض بلا سبب (نفس فرق «مبعوت وفاضي» × «مش مبعوت»).
+            if (array_key_exists('misc_kind', $_POST)) {
+                $data['misc_kind'] = $old['misc_kind'];
+            }
+            RepInbox::updateApproved($id, $data);
+            flash('success', 'اتعدّل البند المعتمد — التعديل اتحط على الإذن/المصروفات وعلى عهدة المندوب مع بعض.');
+        } catch (\Throwable $e) {
+            $this->inboxFailure('edit-approved', $old, ['_form' => $e->getMessage()], 'edit-approved-' . $id);
         }
         redirect($this->inboxBack());
     }
