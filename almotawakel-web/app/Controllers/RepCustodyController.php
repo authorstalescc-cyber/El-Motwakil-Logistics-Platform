@@ -841,6 +841,48 @@ class RepCustodyController extends Controller
         redirect($this->inboxBack());
     }
 
+    /**
+     * إلغاء اعتماد بند — بيشيل الأثر المالي ويرجّعه «مستني» (v95).
+     * ⚠️ الحُرّاس في `RepInbox::unapprove` (اليوم المتقفل · بيان السائق · البند اليتيم).
+     */
+    public function unapprove(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $id = (int) $sid;
+        $this->claimForm($this->inboxBack());
+        try {
+            RepInbox::unapprove($id);
+            flash('success', 'اتلغى الاعتماد — البند رجع «مستني»، والمبلغ رجع للخزنة ولعهدة المندوب.');
+        } catch (\Throwable $e) {
+            $this->inboxFailure('unapprove', ['submission_id' => $id], ['_form' => $e->getMessage()], 'submission-' . $id);
+        }
+        redirect($this->inboxBack());
+    }
+
+    /**
+     * حذف بند **معتمد** نهائيًّا — إلغاء الاعتماد ثم النقل لسلة المحذوفات (v95).
+     * ⚠️ الترتيب ده هو اللي بيخلّي الحذف قابلًا للاسترجاع؛ التفاصيل في
+     *    `RepInbox::deleteApproved`.
+     */
+    public function deleteApproved(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $id = (int) $sid;
+        $this->claimForm($this->inboxBack());
+        // بنقرا البند **قبل** الحذف — بعده مفيش بيان ولا مبلغ للإشعار.
+        try {
+            $gone = RepInbox::deleteApproved($id);
+            $this->notifyDeleted($gone);
+            flash('success', 'اتشال البند المعتمد — المبلغ رجع للخزنة ولعهدة المندوب، '
+                . 'وتلاقيه في سلة المحذوفات لو عايز ترجّعه.');
+        } catch (\Throwable $e) {
+            $this->inboxFailure('delete-approved', ['submission_id' => $id], ['_form' => $e->getMessage()], 'submission-' . $id);
+        }
+        redirect($this->inboxBack());
+    }
+
     /** تعديل جماعي — تاريخ/نوع/سعر فعلي لكل البنود المعلَّمة مرة واحدة. */
     public function bulkEdit(): void
     {

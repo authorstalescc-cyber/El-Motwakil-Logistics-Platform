@@ -351,7 +351,9 @@ $r->post('/rep-custody/{sid}/review-start',        'RepCustodyController@startRe
 $r->post('/rep-custody/{sid}/approve',             'RepCustodyController@approve');
 $r->post('/rep-custody/{sid}/reject',              'RepCustodyController@reject');
 $r->post('/rep-custody/{sid}/edit',                'RepCustodyController@editSubmission');
-$r->post('/rep-custody/{sid}/edit-approved',       'RepCustodyController@editApproved');   // v95 — تعديل بند معتمد
+$r->post('/rep-custody/{sid}/edit-approved',       'RepCustodyController@editApproved');    // v95 — تعديل بند معتمد
+$r->post('/rep-custody/{sid}/unapprove',           'RepCustodyController@unapprove');       // v95 — إلغاء الاعتماد
+$r->post('/rep-custody/{sid}/delete-approved',     'RepCustodyController@deleteApproved');  // v95 — حذف بند معتمد
 $r->post('/rep-custody/{sid}/delete',              'RepCustodyController@deleteSubmission');   // حذف نهائي من الصندوق
 $r->post('/rep-custody/transfer/{tid}/delete',     'RepCustodyController@deleteTransfer');     // v46 — حرفي قبل /{id}
 $r->post('/rep-custody/transfer/{tid}/update',     'RepCustodyController@updateTransfer');     // تعديل تحويل — حرفي قبل /{id}

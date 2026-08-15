@@ -630,14 +630,26 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
             </td>
             <td style="font-size:var(--fs-2);color:var(--grey)"><?= e($r['reviewed_by'] ?: '—') ?></td>
             <?php if ($hasActs): ?>
-              <td>
-                <?php /* ⚠️ المعتمد ما بيتحذفش من هنا: له بند فعلي على الإذن، والحذف
-                         بيمرّ من تايم لاين الإذن (RepInbox::delete بترفضه على
-                         الخادم كمان). لكنه **بيتعدّل** من v95 — الدرج تحت. */ ?>
+              <td class="ib-acts-cell">
+                <?php /* ⚠️ **تلات إجراءات على البند المعتمد** (v95): تعديل ·
+                         إلغاء اعتماد (بيشيل الأثر المالي ويرجّعه «مستني») ·
+                         حذف نهائي (إلغاء اعتماد + سلة المحذوفات). التلاتة
+                         بيمرّوا من `RepInbox` وحُرّاسه — الأزرار عرض بس. */ ?>
                 <?php if ($r['status'] === 'approved'): ?>
-                  <?php if ($canEditApproved && $approvedEditable($r)): ?>
-                    <button class="ib-btn" type="button" title="عدّل البند المعتمد"
-                            onclick="ibToggle('ea<?= (int) $r['id'] ?>')"><?= icon('edit', 14) ?></button>
+                  <?php if ($canEditApproved && $approvedEditable($r)): $asid = (int) $r['id']; ?>
+                    <span class="ib-acts">
+                      <button class="ib-btn" type="button" title="عدّل البند المعتمد"
+                              onclick="ibToggle('ea<?= $asid ?>')"><?= icon('edit', 14) ?></button>
+                      <?php /* ⚠️ البيان والمبلغ في `data-` مش مقروءين من خلية
+                               الجدول: أدوات الجداول بتخفي أعمدة، فالقراءة من
+                               الخلية بتدّي تأكيدًا فاضيًا لما العمود يبقى مخفي. */ ?>
+                      <button class="ib-btn" type="button" title="ألغِ الاعتماد — يرجع «مستني»"
+                              data-note="<?= e($r['note']) ?>" data-amount="<?= e(money($r['amount'], false)) ?>"
+                              onclick="ibUnapprove(this, <?= $asid ?>)"><?= icon('undo', 14) ?></button>
+                      <button class="ib-btn del" type="button" title="احذف البند نهائيًّا"
+                              data-note="<?= e($r['note']) ?>" data-amount="<?= e(money($r['amount'], false)) ?>"
+                              onclick="ibDeleteApproved(this, <?= $asid ?>)"><?= icon('trash', 14) ?></button>
+                    </span>
                   <?php elseif ($canEditApproved): ?>
                     <span class="ib-del-na" title="بنده الفعلي اتمسح من الإذن — السجل بيفضل شاهدًا على الاعتماد">—</span>
                   <?php else: ?>
@@ -661,36 +673,39 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
               سبب الرفض: <?= e($r['review_note']) ?>
             </td></tr>
           <?php endif; ?>
-          <?php /* ─── درج تعديل البند المعتمد — نفس بارشيال تبويب «مستني» ───
-                   ⚠️ صف كامل بـ`colspan` مش خلية في الصف: الدرج شبكة حقول،
-                      وحشره جوّه خلية بيكسر أعمدة الجدول على الموبايل. */ ?>
-          <?php if ($r['status'] === 'approved' && $canEditApproved && $approvedEditable($r)):
-                  $asid = (int) $r['id'];
-                  $aEditFailed = $failedAction === 'edit-approved' && $failedSid === $asid; ?>
-            <tr class="ib-edit-tr" id="approved-<?= $asid ?>">
-              <td colspan="<?= $cols ?>">
-                <?php partial('rep_submission_edit', [
-                  'r' => $r, 'eid' => 'ea' . $asid, 'approved' => true,
-                  'editFailed' => $aEditFailed, 'inboxOld' => $inboxOld,
-                  'inboxErrors' => $inboxErrors,
-                  'movs' => $movsByPermit[(int) $r['permit_id']] ?? [],
-                  'today' => $today, 'yesterday' => $yesterday, 'workDate' => $workDate,
-                ]); ?>
-              </td>
-            </tr>
-          <?php endif; ?>
         <?php endforeach; endif; ?>
       </tbody>
     </table></div>
   </div>
 
-  <?php /* فورمات الحفظ — **برّه الجدول**: `<form>` جوّه `<table>` ماركب غير صالح
-           والمتصفح بيفكّه بصمت، فالحقول بتتربط بفورمها بسمة `form` بدل التداخل. */ ?>
+  <?php /* ══ لوحات التعديل وفورمات الإجراءات — **كلها برّه الجدول** ══
+           ⚠️ سببان مستقلان، كل واحد منهم لوحده كافٍ:
+           ① `<form>` جوّه `<table>` ماركب غير صالح والمتصفح بيفكّه بصمت،
+              فالزرار يبعت على المسار الغلط.
+           ② الدرج جوّه `<td>` **ديزاينه بيتكسر**: `.ib-grid` شبكة `auto-fit`
+              وعرض الخلية بيتحدّد بخوارزمية الجدول مش بعرض الصفحة، فالحقول
+              كلها بتقع في سطر واحد وبتطلع برّه الحافة. (متحقَّق بلقطة.)
+           الحقول بتتربط بفورمها بسمة `form=` فمفيش داعي لأي تداخل. */ ?>
   <?php if ($canEditApproved): ?>
     <?php foreach ($rows as $r): ?>
-      <?php if ($r['status'] === 'approved' && $approvedEditable($r)): $asid = (int) $r['id']; ?>
+      <?php if ($r['status'] === 'approved' && $approvedEditable($r)):
+              $asid = (int) $r['id'];
+              $aEditFailed = $failedAction === 'edit-approved' && $failedSid === $asid; ?>
+        <?php partial('rep_submission_edit', [
+          'r' => $r, 'eid' => 'ea' . $asid, 'approved' => true, 'panel' => true,
+          'editFailed' => $aEditFailed, 'inboxOld' => $inboxOld,
+          'inboxErrors' => $inboxErrors,
+          'movs' => $movsByPermit[(int) $r['permit_id']] ?? [],
+          'today' => $today, 'yesterday' => $yesterday, 'workDate' => $workDate,
+        ]); ?>
         <form method="post" id="ea<?= $asid ?>f" action="<?= url('rep-custody/' . $asid . '/edit-approved') ?>" hidden>
           <?= csrfField() ?><?= formStateFields($rowToken('edit-approved', $asid), $inboxState['back']) ?>
+        </form>
+        <form method="post" id="ua<?= $asid ?>f" action="<?= url('rep-custody/' . $asid . '/unapprove') ?>" hidden>
+          <?= csrfField() ?><?= formStateFields($rowToken('unapprove', $asid), $inboxState['back']) ?>
+        </form>
+        <form method="post" id="da<?= $asid ?>f" action="<?= url('rep-custody/' . $asid . '/delete-approved') ?>" hidden>
+          <?= csrfField() ?><?= formStateFields($rowToken('delete-approved', $asid), $inboxState['back']) ?>
         </form>
       <?php endif; ?>
     <?php endforeach; ?>
@@ -825,9 +840,24 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
 /* سبب الرفض تحت صف الجدول (كان `style=` inline) */
 .ib-reject-why{text-align:right;font-size:var(--fs-2);color:var(--red-fg);background:var(--red-lt)}
 
-/* صف درج تعديل البند المعتمد جوّه جدول «معتمد» (v95) — الخلية بلا حشو عشان
-   الدرج نفسه هو اللي بيحدّد حشوه، والصف ما بيتلوّنش زبرة فيتلخبط مع صفّه. */
-.ib-edit-tr>td{padding:0;background:var(--card)}
+/* ══ لوحة تعديل البند المعتمد (v95) ══
+   ⚠️ **لوحة مش صف في الجدول**: `.ib-grid` شبكة `auto-fit`، وجوّه `<td>` عرض
+      الخلية بيتحدّد بخوارزمية الجدول مش بعرض الصفحة — فالحقول كانت بتقع في
+      سطر واحد وتطلع برّه الحافة والعناوين تقف جنب خاناتها. اللوحة بتدّي
+      الشبكة عرضًا محدَّدًا فبترجع تشتغل صح على الشاشتين. */
+/* ⚠️ **الصنفان مع بعض إجباري**: `.ib-panel-box` معرَّف تحت في نفس الملف
+   بعرض 420 ونفس الوزن، فالانتقاء بصنف واحد كان بيتغلب عليه بالترتيب —
+   واللوحة بتطلع ضيقة والشبكة ترجع عمودًا واحدًا على الشاشة الكبيرة. */
+.ib-panel-box.ib-edit-box{width:min(720px,100%);max-height:88vh;overflow-y:auto;padding:0}
+.ib-edit-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:var(--card);z-index:1}
+.ib-edit-head h3{margin:0;flex:1;font-size:var(--fs-4);display:flex;align-items:center;gap:7px}
+.ib-edit-panel .ib-edit{background:var(--card);border-top:0;padding:0 18px 18px}
+.ib-edit-panel .ib-edit-acts{position:sticky;bottom:0;background:var(--card);
+  padding:12px 0 2px;border-top:1px solid var(--line)}
+
+/* خلية إجراءات البند المعتمد — التلات أزرار جنب بعض بلا لفّ */
+.ib-acts-cell .ib-acts{display:inline-flex;gap:5px;justify-content:center}
 
 /* درج التعديل */
 .ib-edit{padding:6px 18px 16px;background:var(--zebra);border-top:1px dashed var(--line2)}
@@ -919,6 +949,43 @@ body.ib-has-bar{padding-bottom:78px}
   document.querySelectorAll('.js-ib-edit-date').forEach(function (el) {
     el.dispatchEvent(new Event('input', { bubbles: true }));
   });
+
+  // ── لوحة تعديل البند المعتمد: تقفل بالخلفية · بزرار × · بـEsc
+  function closeEditPanels() {
+    document.querySelectorAll('.ib-edit-panel').forEach(function (p) { p.hidden = true; });
+  }
+  document.addEventListener('click', function (ev) {
+    if (ev.target.classList && ev.target.classList.contains('ib-edit-panel')) { closeEditPanels(); return; }
+    if (ev.target.closest && ev.target.closest('[data-ib-close-edit]')) { closeEditPanels(); }
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { closeEditPanels(); }
+  });
+
+  // ── إجراءات البند المعتمد (v95)
+  function submitById(id) {
+    var f = document.getElementById(id);
+    if (!f) { return; }
+    if (f.requestSubmit) { f.requestSubmit(); } else { f.submit(); }
+  }
+  /* ⚠️ التأكيد بيقول **الفلوس رايحة فين** مش «متأكد؟»: الفرق بين الاتنين إن
+     المالك يعرف إن المبلغ بيرجع للخزنة والعهدة قبل ما يدوس، مش بعدها. */
+  window.ibUnapprove = function (btn, sid) {
+    var d = btn.dataset;
+    window.AppUI.confirm(
+      'البند «' + d.note + '» (' + d.amount + ' ج) هيرجع «مستني» في الصندوق، '
+      + 'وهيتشال من الإذن، والمبلغ هيرجع للخزنة ولعهدة المندوب. تقدر تراجعه وتعتمده تاني.',
+      function () { submitById('ua' + sid + 'f'); },
+      { title: 'إلغاء اعتماد البند', okText: 'ألغِ الاعتماد' });
+  };
+  window.ibDeleteApproved = function (btn, sid) {
+    var d = btn.dataset;
+    window.AppUI.confirm(
+      'البند «' + d.note + '» (' + d.amount + ' ج) هيتشال خالص: هيخرج من الإذن، '
+      + 'والمبلغ هيرجع للخزنة ولعهدة المندوب. وتلاقيه في سلة المحذوفات لو عايز ترجّعه.',
+      function () { submitById('da' + sid + 'f'); },
+      { title: 'حذف بند معتمد', okText: 'احذف', danger: true });
+  };
 
   var form = document.getElementById('ibForm');
   if (!form) { return; }

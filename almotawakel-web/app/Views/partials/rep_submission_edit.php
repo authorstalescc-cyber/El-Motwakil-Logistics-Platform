@@ -21,9 +21,18 @@
  * ⚠️ `approve_now` **حقل مخفي بيتملّى بالـJS** — مش `name/value` على الزرار.
  *    الزرار المربوط بفورم بيبعت قيمته **حتى لو مدوستش عليه** (متحقَّق في v37).
  *
+ * ⚠️⚠️ **وضع اللوحة (`$panel`) مش رفاهية — الدرج جوّه خلية جدول ديزاينه بيتكسر.**
+ *    `.ib-grid` شبكة `auto-fit` بـ`minmax(170px,1fr)`، وعرض خلية الجدول
+ *    بيتحدّد بخوارزمية الجدول (shrink-to-fit) **مش بعرض الصفحة** — فالشبكة
+ *    بتتحسب على عرض غير محدَّد، كل الحقول بتقع في سطر واحد وبتطلّع برّه حافة
+ *    الجدول، والعناوين بتقف جنب خاناتها بدل ما تكون فوقها. متحقَّق بلقطة فعلية.
+ *    عشان كده تبويب «معتمد» بيرندر الدرج **جوّه لوحة برّه الجدول** (`$panel`)،
+ *    وتبويب «مستني» بيرنده inline لأنه أصلاً جوّه كارت مش جوّه جدول.
+ *
  * @var array  $r            صف البند (من `RepInbox::listing`/`find`)
  * @var string $eid          بادئة معرّفات الدرج؛ الفورم اسمه "{$eid}f"
  * @var bool   $approved     البند معتمد؟ (بيغيّر أزرار الحفظ وبس)
+ * @var bool   $panel        الدرج جوّه لوحة منبثقة؟ (الغلاف واللي بيتطوى بيتغيّروا)
  * @var bool   $editFailed   محاولة سابقة فشلت على البند ده؟
  * @var array  $inboxOld     القيم المرتجعة من المحاولة الفاشلة
  * @var array  $inboxErrors  أخطاء الحقول
@@ -34,6 +43,7 @@ use App\Models\RepMiscKind;
 use App\Models\RepPortal;   // ⚠️ الـ`use` بتاع الشاشة الأم ما بيوصلش هنا
 
 $approved   = $approved ?? false;
+$panel      = $panel ?? false;
 $editFailed = $editFailed ?? false;
 $inboxOld   = $inboxOld ?? [];
 $inboxErrors = $inboxErrors ?? [];
@@ -42,7 +52,17 @@ $movs       = $movs ?? [];
 $isMisc    = RepPortal::isMisc((string) $r['kind']);
 $hasActual = $r['actual_unit'] !== null && $r['actual_unit'] !== '';
 ?>
-<div class="ib-edit" id="<?= $eid ?>" <?= $editFailed ? '' : 'hidden' ?>>
+<?php if ($panel): ?>
+  <?php /* اللوحة هي اللي بتتطوى — والدرج جوّاها دايمًا مفتوح. */ ?>
+  <div class="ib-panel ib-edit-panel" id="<?= $eid ?>" <?= $editFailed ? '' : 'hidden' ?>
+       role="dialog" aria-modal="true" aria-labelledby="<?= $eid ?>t">
+    <div class="ib-panel-box ib-edit-box">
+      <div class="ib-edit-head">
+        <h3 id="<?= $eid ?>t"><?= icon('edit', 16) ?> تعديل بند معتمد</h3>
+        <button type="button" class="ib-btn" title="اقفل" data-ib-close-edit><?= icon('x', 14) ?></button>
+      </div>
+<?php endif; ?>
+<div class="ib-edit"<?= $panel ? '' : ' id="' . $eid . '"' ?> <?= $panel || $editFailed ? '' : 'hidden' ?>>
   <?php if ($editFailed): ?><?= formErrorSummary($inboxErrors) ?><?php endif; ?>
 
   <?php if ($approved): ?>
@@ -162,7 +182,7 @@ $hasActual = $r['actual_unit'] !== null && $r['actual_unit'] !== '';
   <?php if ($approved): ?>
     <div class="ib-edit-acts">
       <button class="btn gold" type="submit" form="<?= $eid ?>f"><?= icon('download', 14) ?> احفظ التعديل</button>
-      <button class="btn ghost" type="button" onclick="ibToggle('<?= $eid ?>')">إلغاء</button>
+      <button class="btn ghost" type="button" <?= $panel ? 'data-ib-close-edit' : 'onclick="ibToggle(\'' . $eid . '\')"' ?>>إلغاء</button>
     </div>
   <?php else: ?>
     <input type="hidden" name="approve_now" form="<?= $eid ?>f" id="<?= $eid ?>ap"
@@ -176,3 +196,7 @@ $hasActual = $r['actual_unit'] !== null && $r['actual_unit'] !== '';
     </div>
   <?php endif; ?>
 </div>
+<?php if ($panel): ?>
+    </div>
+  </div>
+<?php endif; ?>

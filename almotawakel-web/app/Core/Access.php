@@ -64,6 +64,9 @@ class Access
            وفاتورة العميل — فمقصور على نفس الدايرة اللي بتحذف، مش على كل اللي
            بيعتمد. (الحُرّاس المالية نفسها في `RepInbox::updateApproved`.) */
         'RepCustodyController@editApproved',
+        // وإلغاء الاعتماد وحذف المعتمد — الاتنين بيشيلوا الأثر المالي فعلاً.
+        'RepCustodyController@unapprove',
+        'RepCustodyController@deleteApproved',
         'PushController@index',
         'PushController@send',
         'PushController@test',

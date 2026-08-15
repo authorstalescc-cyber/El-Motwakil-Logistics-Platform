@@ -238,16 +238,28 @@ try {
     str_contains($html, 'id="ea' . $sub . '"')
         ? ok('⚠️ ودرج تعديل البند المعتمد موجود في الصفحة')
         : bad('الدرج ما اترسمش — زرار التعديل هيدوس على العدم');
-    str_contains($html, 'rep-custody/' . $sub . '/edit-approved')
-        ? ok('وفورم الحفظ بيوَدّي على مسار التعديل المعتمد')
-        : bad('فورم الحفظ مش موجود');
-    /* ⚠️ الفورم لازم يبقى **برّه الجدول**: `<form>` جوّه `<table>` المتصفح
-       بيفكّه بصمت فالحفظ بيروح على المسار الغلط. */
+    foreach (['edit-approved' => 'التعديل', 'unapprove' => 'إلغاء الاعتماد',
+              'delete-approved' => 'الحذف'] as $path => $lbl) {
+        str_contains($html, 'rep-custody/' . $sub . '/' . $path)
+            ? ok("وفورم $lbl موجود بمساره") : bad("فورم $lbl مش موجود");
+    }
+    /* ⚠️⚠️ **الدرج والفورمات لازم يبقوا برّه الجدول** — سببان مستقلان:
+       ① `<form>` جوّه `<table>` المتصفح بيفكّه بصمت فالزرار يبعت غلط.
+       ② `.ib-grid` شبكة `auto-fit`، وجوّه `<td>` عرض الخلية بيتحدّد بخوارزمية
+          الجدول مش بعرض الصفحة — فالحقول بتقع في سطر واحد وتطلع برّه الحافة.
+          ده هو الكسر اللي المالك شافه بالظبط (متحقَّق بلقطة). */
     $tableEnd = strrpos($html, '</table>');
-    $formPos  = strpos($html, 'id="ea' . $sub . 'f"');
-    ($tableEnd !== false && $formPos !== false && $formPos > $tableEnd)
-        ? ok('⚠️ وفورم الحفظ برّه الجدول (الماركب صالح)')
-        : bad('فورم الحفظ جوّه الجدول — المتصفح هيفكّه بصمت');
+    foreach ([['id="ea' . $sub . 'f"', 'فورم الحفظ'],
+              ['id="ea' . $sub . '"', 'لوحة التعديل']] as [$needle, $lbl]) {
+        $pos = strpos($html, $needle);
+        ($tableEnd !== false && $pos !== false && $pos > $tableEnd)
+            ? ok("⚠️ و$lbl برّه الجدول")
+            : bad("$lbl جوّه الجدول — الماركب بيتفكّ والشبكة بتتكسر");
+    }
+    /* واللوحة لازم تكون **لوحة فعلاً** (`.ib-panel`) مش صف مطوي في الجدول. */
+    str_contains($html, 'class="ib-panel ib-edit-panel" id="ea' . $sub . '"')
+        ? ok('والدرج جوّه لوحة بعرض محدَّد — الشبكة بتشتغل صح')
+        : bad('الدرج مش جوّه لوحة — الشبكة هترجع تتكسر');
     /* اليتيم ما بيتعرضش له درج — الشاشة بتقول نفس اللي الخادم بيقوله. */
     !str_contains($html, 'id="ea' . $orphan . '"')
         ? ok('والبند اليتيم مالوش درج (نفس رفض الخادم)')
@@ -272,6 +284,64 @@ try {
     /* والقيم وصلت فعلاً — عشان «ما اتغيّرش» ما تبقاش لأن التعديل ما اشتغلش أصلاً */
     near('والكمية الجديدة اتنقلت للبند الفعلي',
          Database::scalar('SELECT amount FROM permit_stages WHERE id=?', [$stage]), 4500);
+
+    sec('9) ⚠️ إلغاء الاعتماد — الفلوس بترجع والبند يرجع «مستني»');
+    $safeB = Closing::currentBalance();
+    $balB  = RepCustody::balance($rep);
+    RepInbox::unapprove($sub);
+    near('الخزنة رجع لها 4,500', Closing::currentBalance() - $safeB, 4500);
+    near('وعهدة المندوب رجع لها 4,500', RepCustody::balance($rep) - $balB, 4500);
+    same('والبند بقى «مستني»',
+         (string) Database::scalar('SELECT status FROM rep_submissions WHERE id=?', [$sub]), 'pending');
+    /* ⚠️ الربط لازم يتفكّ: `stage_id` مليان معناه إن `approve()` و`delete()`
+       الاتنين هيرفضوه، فالبند يفضل عالقًا لا بيتعتمد ولا بيتحذف. */
+    same('وربط البند الفعلي اتفكّ',
+         Database::scalar('SELECT stage_id FROM rep_submissions WHERE id=?', [$sub]), null);
+    same('والبند الفعلي اتشال من الإذن',
+         (int) Database::scalar('SELECT COUNT(*) FROM permit_stages WHERE id=?', [$stage]), 0);
+    /* والدليل إنه رجع صالح للاعتماد فعلاً — مش مجرّد حالة مكتوبة */
+    $again = RepInbox::approve($sub);
+    near('واعتماده تاني بيرجّع الخصم', $safeB - Closing::currentBalance(), 0.0);
+    same('وبيولّد بندًا فعليًّا جديدًا', $again > 0, true);
+
+    sec('10) ⚠️ حذف البند المعتمد — بيشيل الأثر المالي وينزل السلة');
+    $safeC = Closing::currentBalance();
+    $balC  = RepCustody::balance($rep);
+    $trash0 = (int) Database::scalar("SELECT COUNT(*) FROM deleted_records WHERE entity='rep_submissions'");
+    $gone = RepInbox::deleteApproved($sub);
+    same('بيرجّع صف البند للإشعار', isset($gone['note']), true);
+    near('الخزنة رجع لها المبلغ', Closing::currentBalance() - $safeC, 4500);
+    near('وعهدة المندوب كمان', RepCustody::balance($rep) - $balC, 4500);
+    same('والسجل اتشال من الصندوق',
+         (int) Database::scalar('SELECT COUNT(*) FROM rep_submissions WHERE id=?', [$sub]), 0);
+    /* ⚠️ **قابل للاسترجاع**: ده اللي الترتيب (unapprove ← delete) بيضمنه.
+       الحذف المباشر كان هيبقى محوًا بلا رجعة أو هيكسر قاعدة السلة. */
+    same('⚠️ وموجود في سلة المحذوفات',
+         (int) Database::scalar("SELECT COUNT(*) FROM deleted_records WHERE entity='rep_submissions'"),
+         $trash0 + 1);
+    same('واللي في السلة **مستني** مش معتمد (شرط السلة)',
+         (string) json_decode((string) Database::scalar(
+             "SELECT data_json FROM deleted_records WHERE entity='rep_submissions' ORDER BY id DESC LIMIT 1"),
+             true)['status'], 'pending');
+
+    sec('11) حُرّاس الإلغاء والحذف');
+    refused('إلغاء اعتماد بند مستني بيترفض', static fn () => RepInbox::unapprove($seed()));
+    refused('وإلغاء اعتماد بند يتيم بيترفض', static fn () => RepInbox::unapprove($orphan));
+    refused('وحذف بند يتيم من مسار المعتمد بيترفض',
+            static fn () => RepInbox::deleteApproved($orphan));
+    $mBody = substr($model, (int) strpos($model, 'function unapprove'));
+    $mBody = substr($mBody, 0, (int) strpos($mBody, 'public static function deleteApproved') ?: null);
+    str_contains($mBody, 'Closing::guard')
+        ? ok('⚠️ والإلغاء بيحرس اليوم المتقفل (بيغيّر رصيدًا مثبَّتًا)')
+        : bad('مفيش حارس يوم متقفل في الإلغاء');
+    str_contains($mBody, 'stageAllocationTotal')
+        ? ok('وبيحرس الإيصال المربوط ببيان سائق المكتب')
+        : bad('مفيش حارس بيان السائق في الإلغاء');
+    /* ⚠️ **الصورة ما تتمسحش**: نفس الملف مربوط بـ`rep_submissions.photo`،
+       ومسحه كان هيسيب البند بلا صورته بعد الإلغاء. */
+    !str_contains($mBody, 'deleteFile') && !str_contains($mBody, 'unlink')
+        ? ok('⚠️ والصورة ما بتتمسحش من القرص (نفس ملف البند)')
+        : bad('الإلغاء بيمسح الصورة — البند هيفضل بلا صورته');
 
 } catch (\Throwable $e) {
     if ($e->getMessage() !== '__skip__') {

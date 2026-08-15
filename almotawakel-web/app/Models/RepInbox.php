@@ -916,6 +916,133 @@ class RepInbox
         }
     }
 
+    /**
+     * **إلغاء اعتماد بند** (v95) — بيشيل الأثر المالي ويرجّع البند «مستني».
+     *
+     * ⚠️ **ده الميكانيكا اللي كل تحكّم بعد الاعتماد بيقف عليها:** البند الفعلي
+     *    (`permit_stages`/`rep_misc_expenses`) بيتمسح فبيرجع المبلغ للخزنة
+     *    ولعهدة المندوب وبيخرج من فاتورة العميل، والسجل بيرجع للصندوق فيقدر
+     *    يتعدّل أو يترفض أو يتحذف بمساره العادي.
+     *
+     * ⚠️ **وده كمان اللي بيخلّي `deleteApproved` تحترم قاعدة السلة:** السلة
+     *    (`Audit::RESTORABLE`) بتفترض إن سجل `rep_submissions` اللي فيها
+     *    **مستني أو مرفوض** — يعني بلا بند فعلي. فالحذف بيمرّ من هنا الأول،
+     *    وبعدين `delete()` العادية بتشتغل على بند مستني زي أي بند.
+     *
+     * ⚠️ **الصورة ما بتتمسحش من القرص** — نفس الملف مربوط بـ`rep_submissions.photo`
+     *    (الاعتماد بينسخ المسار مش الملف)، ومسحه كان هيسيب البند بلا صورته.
+     *
+     * الحُرّاس: اليوم المتقفل (بلا فيزا) · الإيصال المربوط ببيان سائق المكتب ·
+     * البند اللي بنده الفعلي اتمسح خلاص (السجل شاهد وما بيتلمسش).
+     */
+    public static function unapprove(int $subId): void
+    {
+        $pdo = Database::conn();
+        $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            $s = self::lockSubmission($subId);
+            if (!$s) { throw new RuntimeException('البند مش موجود.'); }
+            if ($s['status'] !== 'approved') {
+                throw new RuntimeException('البند ده مش معتمد أصلاً.');
+            }
+            $stageId = $s['stage_id'] !== null ? (int) $s['stage_id'] : 0;
+            $miscId  = $s['misc_id']  !== null ? (int) $s['misc_id']  : 0;
+            if ($stageId === 0 && $miscId === 0) {
+                throw new RuntimeException(
+                    'البند الفعلي اتمسح من الإذن قبل كده — السجل ده شاهد على إن الاعتماد حصل وما بيتلمسش.');
+            }
+
+            Database::row('SELECT id FROM reps WHERE id=? FOR UPDATE', [(int) $s['rep_id']]);
+
+            $before = $stageId
+                ? Database::row('SELECT * FROM permit_stages WHERE id=? FOR UPDATE', [$stageId])
+                : Database::row('SELECT * FROM rep_misc_expenses WHERE id=? FOR UPDATE', [$miscId]);
+            if (!$before) {
+                throw new RuntimeException('البند الفعلي مش موجود — السجل بيفضل شاهدًا على الاعتماد.');
+            }
+
+            $day = (string) ($stageId ? $before['entry_date'] : $before['exp_date']);
+            if (empty($before['is_visa']) && ($err = Closing::guard($day))) {
+                throw new RuntimeException('البند مسجَّل في يوم متقفل (' . dfmt($day) . ') — ' . $err);
+            }
+            if ($stageId && OfficeDriverStatement::stageAllocationTotal($stageId) > 0.005) {
+                throw new RuntimeException(
+                    'الإيصال مربوط ببيان سائق سيارة المكتب. فكّ الربط من بيان السائق الأول.');
+            }
+
+            $label = ' «' . $s['note'] . '» بقيمة ' . number_format((float) $s['amount'], 2, '.', ',')
+                   . ' — من عهدة ' . $s['rep_name'];
+
+            /* ⚠️⚠️ **فكّ الربط قبل الحذف — مش بعده.** `rep_submissions.stage_id`
+               عليه مفتاح أجنبي بـ`ON DELETE RESTRICT`، فحذف صف `permit_stages`
+               والسجل لسه بيشاور عليه بيرمي 1451 وبيرجّع المعاملة كلها.
+               (مسكها `verify_v95` — الترتيب العكسي كان بيفشل بالكامل.)
+               و`stage_id`/`misc_id` **لازم يرجعوا NULL** لأنهم شرط `approve()`
+               و`delete()` مع بعض: لو فضلوا مليانين، البند يرجع «مستني» وهو
+               «معتمد» في نظر الحُرّاس فلا بيتعتمد ولا بيتحذف. */
+            $changed = Database::exec(
+                "UPDATE rep_submissions
+                    SET status='pending', stage_id=NULL, misc_id=NULL,
+                        reviewed_by=NULL, reviewed_at=NULL, review_note=NULL,
+                        review_started_at=NULL, review_started_by=NULL
+                  WHERE id=? AND status='approved'",
+                [$subId]);
+            if ($changed !== 1) { throw new RuntimeException('اتغيّرت حالة البند من طلب تاني — حدّث الصفحة.'); }
+
+            if ($stageId) {
+                Database::exec('DELETE FROM permit_stages WHERE id=?', [$stageId]);
+                Audit::log('delete', 'permit_stages', $stageId, $before, null,
+                    'إلغاء اعتماد بند مندوب' . $label . ' — ' . Permit::noLabel($s['permit_type'] ?? 'sader')
+                    . ' ' . ($s['permit_no'] ?: '#' . $s['permit_id']),
+                    ['permit_id' => (int) $s['permit_id'], 'permit_no' => $s['permit_no'],
+                     'record_date' => $day, 'rep_id' => (int) $s['rep_id'], 'submission_id' => $subId]);
+            } else {
+                Database::exec('DELETE FROM rep_misc_expenses WHERE id=?', [$miscId]);
+                Audit::log('delete', 'rep_misc_expenses', $miscId, $before, null,
+                    'إلغاء اعتماد نثرية مندوب' . $label,
+                    ['record_date' => $day, 'rep_id' => (int) $s['rep_id'], 'submission_id' => $subId]);
+            }
+
+            Audit::log('update', 'rep_submissions', $subId, $s, self::find($subId),
+                'إلغاء اعتماد بند مندوب' . $label . ' — رجع لصندوق المراجعة',
+                ['rep_id' => (int) $s['rep_id'], 'record_date' => $day]);
+
+            if ($own) { $pdo->commit(); }
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $e;
+        }
+    }
+
+    /**
+     * حذف بند **معتمد** نهائيًّا (v95) — خطوتان في معاملة واحدة:
+     * `unapprove()` بتشيل الأثر المالي، وبعدين `delete()` العادية بتنقل السجل
+     * لسلة المحذوفات.
+     *
+     * ⚠️ **الترتيب ده مش تفصيلة**: `delete()` بترفض المعتمد عن قصد، والسلة
+     *    بتفترض إن اللي جوّاها بلا بند فعلي. فالمرور من `unapprove()` هو اللي
+     *    بيخلّي الحذف **قابلًا للاسترجاع** بدل ما يبقى محوًا بلا رجعة — واللي
+     *    بيرجع من السلة بيرجع **مستني** فالمالك بيراجعه من أول وجديد.
+     *
+     * بيرجع صف البند قبل الحذف (الكنترولر محتاجه للإشعار).
+     */
+    public static function deleteApproved(int $subId): array
+    {
+        $pdo = Database::conn();
+        $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            self::unapprove($subId);
+            $gone = self::delete($subId);
+            if ($own) { $pdo->commit(); }
+            return $gone;
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            throw $e;
+        }
+    }
+
     // ─────────────────────────────────────────── الحذف النهائي
 
     /**
