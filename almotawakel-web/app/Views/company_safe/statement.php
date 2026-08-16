@@ -44,8 +44,12 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5;
     direction:rtl;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  /* ⚠️ **الهامش الرأسي ١٥مم لا ١٨مم**: الكشف النموذجي (٣ داخل + ٥ خارج) كان
+     بيطلع **1144px** والصفحة **1122px** — يعني بيفيض بـ٢٢px فالتذييل لوحده
+     بينزل صفحة تانية شبه فاضية. الإيقاع الرأسي اتضبط لحد ما فيه فسحة ~17px،
+     والقياس اتاخد من ارتفاع `.sheet` الفعلي مش بالتقدير. */
   .sheet{width:210mm;min-height:297mm;margin:16px auto;background:#fff;position:relative;
-    box-shadow:0 10px 40px rgba(21,53,91,.15);overflow:hidden;padding:18mm 14mm}
+    box-shadow:0 10px 40px rgba(21,53,91,.15);overflow:hidden;padding:15mm 14mm}
   .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.05;pointer-events:none;z-index:0}
   .wm img{width:60%}
   .content{position:relative;z-index:1}
@@ -56,50 +60,96 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
   .doc-title{margin-inline-start:auto;text-align:left}
   .doc-title .t{font-size:13.5pt;font-weight:700;color:var(--gold)}
   .doc-title .d{color:var(--muted);font-size:8.8pt}
-  .totals{display:flex;gap:10px;margin:16px 0}
+  .totals{display:flex;gap:10px;margin:13px 0}
   .tt{flex:1;border:1px solid var(--line);border-radius:6px;padding:11px 12px;text-align:center}
   .tt .l{color:var(--muted);font-size:8.6pt}
-  .tt .v{font-weight:700;font-size:12pt;margin-top:2px}
+  .tt .v{font-weight:700;font-size:12pt;margin-top:2px;font-variant-numeric:tabular-nums}
   .tt.op{background:var(--bg)}
   .tt.cl{background:var(--navy);color:#fff;border-color:var(--navy)}
   .tt.cl .l{color:#cfdcec}
   /* ⚠️ سطر الميتا على السطح الغامق **لازم يقلب لونه** — `--muted` على `--navy`
      بيدّي تباينًا ٢:١ يعني غير مقروء مطبوعًا (قاعدة: اللون له دور تعبئة ودور نص). */
   .tt.cl .n{color:#cfdcec}
-  .extra{margin-top:18px;border-top:1px solid var(--line);padding-top:12px;break-inside:avoid}
+  .extra{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;break-inside:avoid}
   .extra h3{font-size:10pt;font-weight:700;color:var(--navy);margin-bottom:8px}
   .extra .totals{margin:0}
   .tt .n{color:var(--muted);font-size:7.8pt;margin-top:3px}
-  .kinds{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-  .kx{border:1px solid var(--line);border-radius:5px;padding:5px 9px;font-size:8.6pt;background:var(--bg)}
-  .kx b{font-weight:700}
-  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:8.6pt}
+  .kx{border:1px solid var(--line);border-radius:20px;padding:3px 9px;font-size:8pt;background:#fff}
+  .kx b{font-weight:700;font-variant-numeric:tabular-nums}
+  table{width:100%;border-collapse:collapse;font-size:8.6pt}
   th,td{border:1px solid var(--line);padding:6px 7px;text-align:center}
-  th{background:var(--navy);color:#fff;font-weight:500}
+  th{background:var(--navy);color:#fff;font-weight:500;font-size:8.2pt}
   td.r{text-align:right}
   /* ⚠️ الجدول الطويل بيتقسم على صفحتين — من غير `table-header-group` بتلاقي
      صفحة ٢ أرقامًا بلا عناوين أعمدة، والقارئ ما يعرفش الداخل من الخارج. */
   thead{display:table-header-group}
-  /* عنوان الجدول لازم يفضل ملزوقًا بأول صف من جدوله لا آخر الصفحة السابقة. */
-  .tbl-h{display:flex;align-items:baseline;gap:9px;margin-top:16px;break-after:avoid;page-break-after:avoid}
-  /* ⚠️ اللون بيتحدّد بالاتجاه (`.pos`/`.neg`) واللي من غير اتجاه بيقع على
-     الأزرق — و`.tbl-h .t` أقوى في الترجيح من `.pos`، فالاتجاه لازم ينكتب
-     بمنتقٍ بنفس القوة وإلا الجدولين يطلعوا بلون واحد بالسكوت. */
-  .tbl-h .t{font-size:10.5pt;font-weight:700;color:var(--navy)}
-  .tbl-h .t.pos{color:var(--green)} .tbl-h .t.neg{color:var(--red)}
-  .tbl-h .m{color:var(--muted);font-size:8.4pt}
-  .tbl-h .s{margin-inline-start:auto;font-weight:700;font-size:11pt;color:var(--navy)}
-  .tbl-h .s.pos{color:var(--green)} .tbl-h .s.neg{color:var(--red)}
-  .pos{color:var(--green);font-weight:600}
-  .neg{color:var(--red);font-weight:600}
+  /* ⚠️⚠️ **وعكسها في التذييل بالظبط**: المتصفح بيكرّر `tfoot` في آخر **كل**
+     صفحة بالإجمالي **الكامل** — فصفحة فيها ١١ صف كانت بتقفل بإجمالي الـ٢٢
+     صفًّا وكأنه مجموعهم. اتصاد في PDF فعلي (٤ صفحات)، مش بالقراءة.
+     `table-row-group` بيخلّيه صفًّا عاديًا يظهر مرة واحدة في مكانه الصح. */
+  tfoot{display:table-row-group}
+
+  /* ═══ قسم الجدول: شريط عنوان ملزوق فوق جدوله ═══
+     ⚠️ **الشريط والجدول جسم واحد بصريًّا** — الشريط بياخد حواف علوية مدوّرة
+     و`border-bottom:0`، والجدول تحته `margin-top:0`. أي فراغ بينهم بيخلّي
+     الشريط يقرا كعنوان طايح مش كرأس للجدول. */
+  .tsec{margin-top:15px}
+  .tsec .hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:9px;
+    border:1px solid var(--line);border-bottom:0;border-top:3px solid var(--navy);
+    border-radius:6px 6px 0 0;background:var(--bg);padding:8px 11px;
+    break-inside:avoid;break-after:avoid;page-break-after:avoid}
+  /* ⚠️ الاتجاه بيتكتب بمنتقٍ بنفس قوة `.tsec .hd` — `.pos` لوحدها (0,1,0)
+     بتخسر أمام (0,2,0) فالجدولين كانوا هيطلعوا بلون واحد **بالسكوت**. */
+  .tsec.in  .hd{border-top-color:var(--green)}
+  .tsec.out .hd{border-top-color:var(--red)}
+  .tsec .hd .t{font-size:11pt;font-weight:700;color:var(--navy)}
+  .tsec.in  .hd .t{color:var(--green)}
+  .tsec.out .hd .t{color:var(--red)}
+  .tsec .hd .m{color:var(--muted);font-size:8.2pt}
+  .tsec .hd .s{margin-inline-start:auto;font-weight:700;font-size:12pt;color:var(--navy);
+    font-variant-numeric:tabular-nums}
+  .tsec.in  .hd .s{color:var(--green)}
+  .tsec.out .hd .s{color:var(--red)}
+  .tsec .hd .kk{flex-basis:100%;display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+  .tsec table{margin-top:0;border-top-left-radius:0;border-top-right-radius:0}
+  .tsec td:first-child{color:var(--muted)}
+  /* ⚠️ **عمود النوع بيوسّع نفسه بـ`nowrap` بدل نسبة مظبوطة بالإيد**: أطول
+     تسمية («مصروف من خزنة الشركة») كانت بتتلفّ على سطرين مع أي نسبة قدّرناها،
+     وأي تسمية جديدة كانت هتكسرها من تاني. القيم محصورة في `CompanySafe::labels()`
+     فمفيش خطر فيضان، والجدول auto-layout بيوزّع الباقي على «الجهة / البيان». */
+  .tsec td.ty{white-space:nowrap}
+  /* التظليل المتبادل بيخلّي عين القارئ تمشي على السطر في جدول عريض. */
+  .tsec tbody tr:nth-child(even) td{background:var(--bg)}
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .amt{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .cum{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .empty-row td{padding:20px;color:var(--muted)}
+
+  /* ═══ شريط القفل: الافتتاحي + الداخل − الخارج = الختامي ═══ */
+  .closing{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-top:15px;
+    border:1px solid var(--navy);border-top-width:3px;border-radius:6px;
+    background:var(--bg);padding:9px 12px;break-inside:avoid}
+  .closing .t{font-size:10.5pt;font-weight:700;color:var(--navy)}
+  .closing .m{color:var(--muted);font-size:8.2pt;font-variant-numeric:tabular-nums}
+  .closing .s{margin-inline-start:auto;font-weight:700;font-size:14pt;color:var(--navy);
+    font-variant-numeric:tabular-nums}
+
+  .pos{color:var(--green)}
+  .neg{color:var(--red)}
   tfoot td{background:var(--gold-l);font-weight:700}
-  .foot{margin-top:20px;color:var(--muted);font-size:8.6pt;display:flex;justify-content:space-between;
-    border-top:1px solid var(--line);padding-top:10px}
+  .foot{margin-top:14px;color:var(--muted);font-size:8.2pt;display:flex;justify-content:space-between;
+    border-top:1px solid var(--line);padding-top:9px}
   .noprint{margin:14px auto;width:210mm;display:flex;gap:10px;justify-content:center}
   .btn{padding:9px 18px;border-radius:5px;border:1px solid var(--navy);background:var(--navy);color:#fff;
     font-weight:500;cursor:pointer;text-decoration:none;font-family:inherit;font-size:9.5pt}
   .btn.g{background:#fff;color:var(--navy)}
-  @media print{ body{background:#fff} .sheet{box-shadow:none;margin:0} .noprint{display:none} }
+  /* ⚠️ **`@page{margin:0}` إجبارية** — من غيرها المتصفح بيحطّ هامشه الافتراضي
+     (١سم) **فوق** الـ297مم بتاعة `.sheet`، فالورقة بتفيض بمقدار الهامش
+     و**كل طبعة بتطلع صفحة تانية شبه فاضية**. كل مستندات A4 في المشروع بتكتبها
+     والكشف ده كان الوحيد اللي ناسيها (عيب سابق لتقسيم الجدولين — اتأكّد
+     بطبع نسخة ما-قبل-التعديل: طلعت صفحتين هي كمان). */
+  @media print{ @page{size:A4 portrait;margin:0}
+    body{background:#fff} .sheet{box-shadow:none;margin:0} .noprint{display:none} }
 </style>
 </head>
 <body>
@@ -148,17 +198,6 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
         <?php endif; ?></div>
     </div>
 
-    <?php if ($st['by_kind']): ?>
-      <div class="kinds">
-        <?php foreach ($st['by_kind'] as $k => $v): ?>
-          <span class="kx"><?= e($labels[$k] ?? $k) ?>:
-            <b class="<?= CompanySafe::isIn($k) ? 'pos' : 'neg' ?>">
-              <?= money(CompanySafe::isIn($k) ? $v['in'] : $v['out'], false) ?></b>
-            (<?= intf($v['count']) ?>)</span>
-        <?php endforeach; ?>
-      </div>
-    <?php endif; ?>
-
     <?php
       /* ⚠️ **جدولان منفصلان — قرار مالك صريح**: الداخل في جدول والخارج في جدول،
          مش الاتنين في نفس الجدول بعمودين. اللي اتشال هو عمود «الرصيد» التراكمي
@@ -194,60 +233,87 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
           return $parts ? implode(' — ', $parts) : '—';
       };
 
+      /* ⚠️ **تفكيك الأنواع نزل تحت جدوله بدل ما يعوم فوق الورقة**: صف الشرايط
+         القديم (`.kinds`) كان بيخلط أنواع الداخل بأنواع الخارج في سطر واحد،
+         فالقارئ بيقرا «مصروف ١٥٬٥٠٠» جنب «تحصيل ٢٥٠٬٠٠٠» بلا ما يعرف مين
+         بيطرح من مين. دلوقتي كل نوع بيقعد في شريط عنوان جدوله. */
       $TABLES = [
-        ['rows' => $inRows,  'title' => 'الأموال الداخلة',  'cls' => 'pos',
+        ['rows' => $inRows,  'title' => 'الأموال الداخلة',  'dir' => 'in',  'cls' => 'pos',
          'sum' => $st['in'],  'unit' => 'حركة داخلة', 'empty' => 'مفيش حركات داخلة في الفترة'],
-        ['rows' => $outRows, 'title' => 'الأموال الخارجة', 'cls' => 'neg',
+        ['rows' => $outRows, 'title' => 'الأموال الخارجة', 'dir' => 'out', 'cls' => 'neg',
          'sum' => $st['out'], 'unit' => 'حركة خارجة', 'empty' => 'مفيش حركات خارجة في الفترة'],
       ];
     ?>
     <?php foreach ($TABLES as $t): ?>
-      <div class="tbl-h">
-        <span class="t <?= $t['cls'] ?>"><?= e($t['title']) ?></span>
+      <?php $isInSec = $t['dir'] === 'in'; ?>
+      <div class="tsec <?= $t['dir'] ?>">
+      <div class="hd">
+        <span class="t"><?= e($t['title']) ?></span>
         <span class="m"><?= intf(count($t['rows'])) ?> <?= e($t['unit']) ?></span>
-        <span class="s <?= $t['cls'] ?>"><?= money($t['sum'], false) ?> <?= e($currency) ?></span>
+        <span class="s"><?= money($t['sum'], false) ?> <?= e($currency) ?></span>
+        <?php
+          $mine = array_filter($st['by_kind'], static fn ($k) => CompanySafe::isIn((string) $k) === $isInSec,
+                               ARRAY_FILTER_USE_KEY);
+        ?>
+        <?php if ($mine): ?>
+          <span class="kk">
+            <?php foreach ($mine as $k => $v): ?>
+              <span class="kx"><?= e($labels[$k] ?? $k) ?>
+                <b class="<?= $t['cls'] ?>"><?= money($isInSec ? $v['in'] : $v['out'], false) ?></b>
+                <span class="cum">×<?= intf($v['count']) ?></span></span>
+            <?php endforeach; ?>
+          </span>
+        <?php endif; ?>
       </div>
       <table>
         <thead>
           <tr>
-            <th style="width:7%">م</th>
-            <th style="width:14%">التاريخ</th>
-            <th style="width:22%">النوع</th>
+            <?php /* ⚠️ **«الجهة / البيان» بياخد الباقي** — لمّا كان ٢٥٪ كان كل
+                     بيان بيتلفّ على سطرين ورقم البوليصة بينزل لوحده في سطر
+                     تاني (اتشاف في PDF فعلي). الأعمدة الرقمية اتضيّقت لصالحه. */ ?>
+            <th style="width:5%">م</th>
+            <th style="width:12%">التاريخ</th>
+            <th>النوع</th>
             <th>الجهة / البيان</th>
-            <th style="width:16%">المبلغ</th>
-            <th style="width:16%">المجمّع</th>
+            <th style="width:14%">المبلغ</th>
+            <th style="width:13%">المجمّع</th>
           </tr>
         </thead>
         <tbody>
           <?php if (!$t['rows']): ?>
-            <tr><td colspan="6" style="padding:22px;color:var(--muted)"><?= e($t['empty']) ?></td></tr>
+            <tr class="empty-row"><td colspan="6"><?= e($t['empty']) ?></td></tr>
           <?php else: ?>
             <?php $run = 0.0; ?>
             <?php foreach ($t['rows'] as $i => $r): ?>
               <?php $run = round($run + (float) $r['amount'], 2); ?>
               <tr>
-                <td><?= intf($i + 1) ?></td>
-                <td><?= e(dfmt((string) $r['entry_date'])) ?></td>
-                <td class="r"><?= e((string) $r['label']) ?></td>
+                <td class="num"><?= intf($i + 1) ?></td>
+                <td class="num"><?= e(dfmt((string) $r['entry_date'])) ?></td>
+                <td class="r ty"><?= e((string) $r['label']) ?></td>
                 <td class="r"><?= e($descOf($r)) ?></td>
-                <td class="<?= $t['cls'] ?>"><?= money((float) $r['amount'], false) ?></td>
-                <td><?= money($run, false) ?></td>
+                <td class="amt <?= $t['cls'] ?>"><?= money((float) $r['amount'], false) ?></td>
+                <td class="cum"><?= money($run, false) ?></td>
               </tr>
             <?php endforeach; ?>
           <?php endif; ?>
         </tbody>
+        <?php /* ⚠️ إجمالي التذييل تحت عمود «المبلغ» بالظبط — دمجه مع «المجمّع»
+                 بـcolspan كان بيوسّطه بين عمودين فيقرا كأنه رقم تالت، والعملة
+                 لوحدها في خانة «المجمّع» كانت بتقرا كأنها قيمة العمود. */ ?>
         <tfoot>
           <tr>
-            <td colspan="4">إجمالي <?= e($t['title']) ?></td>
-            <td colspan="2"><?= money($t['sum'], false) ?> <?= e($currency) ?></td>
+            <td colspan="4" class="r">إجمالي <?= e($t['title']) ?></td>
+            <td class="amt <?= $t['cls'] ?>"><?= money($t['sum'], false) ?></td>
+            <td></td>
           </tr>
         </tfoot>
       </table>
+      </div>
     <?php endforeach; ?>
 
-    <?php /* ⚠️ سطر القفل بعد الجدولين — بعد ما عمود «الرصيد» المختلط اتشال،
+    <?php /* ⚠️ شريط القفل بعد الجدولين — بعد ما عمود «الرصيد» المختلط اتشال،
              ده بقى المكان الوحيد اللي بيربط الداخل بالخارج بالختامي. */ ?>
-    <div class="tbl-h">
+    <div class="closing">
       <span class="t">رصيد آخر المدة</span>
       <span class="m">رصيد أول المدة <?= money($st['opening'], false) ?>
         + داخل <?= money($st['in'], false) ?> − خارج <?= money($st['out'], false) ?></span>
