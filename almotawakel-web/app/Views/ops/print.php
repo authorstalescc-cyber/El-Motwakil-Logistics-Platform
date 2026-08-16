@@ -102,9 +102,11 @@ $secNo = 0;
   .idbox div:first-child{border-inline-start:0}
   .idbox em{font-style:normal;color:var(--muted);display:block;font-size:9px}
   .idbox b{font-size:12px;font-variant-numeric:tabular-nums}
+  .idbox b.warn{color:var(--sader)}
 
   /* ═══ أرقام الفترة ═══ */
   .nums{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  /* الأقسام بتبدأ بـmargin-top خاص بيها فمفيش حاجة تحت الكروت. */
   .num{border:1px solid var(--line);border-top:3px solid var(--navy);border-radius:6px;
        padding:9px 8px;text-align:center}
   .num em{font-style:normal;display:block;color:var(--muted);font-size:9px;margin-bottom:3px}
@@ -115,18 +117,6 @@ $secNo = 0;
      مش بالضرورة، فالتقرير بيقول الاتجاه ويسيب الحكم للقارئ — لون واحد محايد. */
   .num i{font-style:normal;display:block;font-size:8.5px;color:var(--muted);margin-top:3px;
          font-variant-numeric:tabular-nums}
-
-  /* ═══ المعدلات ═══ */
-  .rates{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:9px}
-  .rate{border:1px solid var(--line);border-radius:6px;padding:7px 10px;background:var(--bg)}
-  .rate em{font-style:normal;color:var(--muted);font-size:9px;display:block}
-  .rate b{font-size:13px;color:var(--navy);font-variant-numeric:tabular-nums}
-  .rate span{color:var(--muted);font-size:9px}
-
-  /* ═══ تعريف الأرقام ═══ */
-  .legend{border:1px solid var(--line);border-inline-start:4px solid var(--gold);border-radius:6px;
-          padding:9px 12px;margin-top:12px;font-size:10px;color:var(--muted);line-height:1.75}
-  .legend b{color:var(--ink)}
 
   /* ═══ الأقسام ═══ */
   /* ⚠️ العنوان لازم يفضل ملزوقًا بجدوله — `break-after:avoid` بيمنع «عنوان
@@ -201,7 +191,7 @@ $secNo = 0;
      كروت الأرقام لعمودين على الورق. اتصاد في PDF مطبوع: الخمس كروت طلعت
      ٢+٢+١ بدل صف واحد. أي نقطة كسر في مستند A4 لازم تتقيّد بـ`screen`. */
   @media screen and (max-width:760px){ .nums{grid-template-columns:repeat(2,1fr)}
-    .rates,.gaps{grid-template-columns:repeat(2,1fr)} }
+    .gaps{grid-template-columns:repeat(2,1fr)} }
 </style>
 </head>
 <body>
@@ -251,6 +241,10 @@ $secNo = 0;
       <?php if ($prev !== null): ?>
         <div><em>مقارنة بـ</em><b><?= e($period['prev_label']) ?></b></div>
       <?php endif; ?>
+      <?php /* تحذير وظيفي مش شرح: بيبان لما يكون فيه بوالص برّه الأرقام فعلاً. */ ?>
+      <?php if ($undated > 0): ?>
+        <div><em>بوالص بلا تاريخ</em><b class="warn"><?= e(intf($undated)) ?></b></div>
+      <?php endif; ?>
     </div>
 
     <?php
@@ -284,40 +278,15 @@ $secNo = 0;
       <?php endforeach; ?>
     </div>
 
-    <?php
-      /* ⚠️ **أي معدل مقامه صفر بيرجع `null` من الموديل** — الورقة بتكتب «—»
-         بدل ما تخترع صفرًا («مفيش بيانات» غير «صفر»، قاعدة موثَّقة). */
-      $RATES = [
-        ['متوسط الحاويات في اليوم',  $rates['per_day'],       'حاوية/يوم'],
-        ['متوسط الحاويات في البوليصة', $rates['per_trip'],    'حاوية/بوليصة'],
-        ['متوسط الحاويات في الإذن',  $rates['per_permit'],    'حاوية/إذن'],
-        ['متوسط العهدة للحاوية',     $rates['per_container'], 'جنيه/حاوية'],
-      ];
-    ?>
-    <div class="rates">
-      <?php foreach ($RATES as [$lbl, $val, $unit]): ?>
-        <div class="rate"><em><?= e($lbl) ?></em>
-          <b><?= $val === null ? '—' : e(number_format((float) $val, 2)) ?></b>
-          <span><?= e($unit) ?></span></div>
-      <?php endforeach; ?>
-      <div class="rate"><em>أنشط يوم</em>
-        <b><?= $rates['busiest'] ? e(dfmt((string) $rates['busiest']['date'])) : '—' ?></b>
-        <span><?= $rates['busiest']
-            ? e(intf((int) $rates['busiest']['containers'])) . ' حاوية · '
-              . e(intf((int) $rates['busiest']['trips'])) . ' بوليصة'
-            : 'مفيش شغل في الفترة' ?></span></div>
-      <div class="rate"><em>بوالص بلا تاريخ</em>
-        <b><?= e(intf($undated)) ?></b>
-        <span><?= $undated > 0 ? 'مستبعدة من كل الأرقام' : 'مفيش' ?></span></div>
-    </div>
-
-    <div class="legend">
-      <b>«عهد اتدفعت»</b> = الفلوس اللي خرجت من إيد الشركة للسواقين كاملة ·
-      <b>«المخصوم من الخزنة»</b> أقل منها لأن كل بوليصة بيتطرح منها ١٠٠
-      (والسيارة المستثناة بتتخصم كاملة) — نفس حساب رصيد خزنة المكتب.<br>
-      <b>النولون مش داخل في التقرير ده</b>، والبوالص المُرحَّلة من الأرشيف
-      والبوالص بلا تاريخ مستبعدة من كل رقم فوق.
-    </div>
+    <?php /* ⚠️ **مفيش متوسطات ومفيش صندوق شرح** (قرار المالك 2026-08-16:
+             «مش عاوز متوسطات — انت عامل متوسطات كتير وشروحات»). اتشال
+             ٤ متوسطات (حاوية/يوم · حاوية/بوليصة · حاوية/إذن · جنيه/حاوية)
+             و«أنشط يوم» وفقرة تعريف الأرقام. التقرير بيعرض **الأرقام
+             الحقيقية والتوزيعات** وبس، والقارئ يقسم بنفسه لو عايز.
+             ⚠️ اللي فضل مش متوسط: «أيام فيها شغل» **عدّ** أيام، و«بوالص بلا
+             تاريخ» **تحذير وظيفي** (بيقول إن فيه بوالص برّه كل الأرقام دي)
+             فبيبان لما يكون أكبر من صفر بس — الصفر مالوش لازمة على الورق.
+             و`OpsReport::rates()` لسه بتتنادى للعدّين دول، فمحدش خسر مصدرًا. */ ?>
 
     <?php
     /**
