@@ -77,6 +77,19 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
   th,td{border:1px solid var(--line);padding:6px 7px;text-align:center}
   th{background:var(--navy);color:#fff;font-weight:500}
   td.r{text-align:right}
+  /* ⚠️ الجدول الطويل بيتقسم على صفحتين — من غير `table-header-group` بتلاقي
+     صفحة ٢ أرقامًا بلا عناوين أعمدة، والقارئ ما يعرفش الداخل من الخارج. */
+  thead{display:table-header-group}
+  /* عنوان الجدول لازم يفضل ملزوقًا بأول صف من جدوله لا آخر الصفحة السابقة. */
+  .tbl-h{display:flex;align-items:baseline;gap:9px;margin-top:16px;break-after:avoid;page-break-after:avoid}
+  /* ⚠️ اللون بيتحدّد بالاتجاه (`.pos`/`.neg`) واللي من غير اتجاه بيقع على
+     الأزرق — و`.tbl-h .t` أقوى في الترجيح من `.pos`، فالاتجاه لازم ينكتب
+     بمنتقٍ بنفس القوة وإلا الجدولين يطلعوا بلون واحد بالسكوت. */
+  .tbl-h .t{font-size:10.5pt;font-weight:700;color:var(--navy)}
+  .tbl-h .t.pos{color:var(--green)} .tbl-h .t.neg{color:var(--red)}
+  .tbl-h .m{color:var(--muted);font-size:8.4pt}
+  .tbl-h .s{margin-inline-start:auto;font-weight:700;font-size:11pt;color:var(--navy)}
+  .tbl-h .s.pos{color:var(--green)} .tbl-h .s.neg{color:var(--red)}
   .pos{color:var(--green);font-weight:600}
   .neg{color:var(--red);font-weight:600}
   tfoot td{background:var(--gold-l);font-weight:700}
@@ -146,63 +159,100 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
       </div>
     <?php endif; ?>
 
-    <table>
-      <thead>
-        <tr>
-          <th style="width:8%">م</th>
-          <th style="width:14%">التاريخ</th>
-          <th style="width:20%">النوع</th>
-          <th>الجهة / البيان</th>
-          <th style="width:14%">داخل</th>
-          <th style="width:14%">خارج</th>
-          <th style="width:15%">الرصيد</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php if (!$st['rows']): ?>
-          <tr><td colspan="7" style="padding:22px;color:var(--muted)">مفيش حركات في الفترة دي</td></tr>
-        <?php else: ?>
-          <?php foreach ($st['rows'] as $i => $r): ?>
-            <?php
-              $isIn = $r['signed'] >= 0;
-              /* ⚠️ **اسم المحفظة قبل أي شرح** (طلب المالك: «يتم ذكر اسم الفيزا
-                 اللي خرج منها المال»). الاسم بيتوسم بمصدره — «كارت» لحركات
-                 الفيزا و«مندوب» للعهدة — عشان قارئ الورقة ما يخلطش بين
-                 اسم كارت واسم شخص. والصف المتفلَّت (كارت اتمسح) بيعدّي بلا وسم
-                 بدل ما نخترع اسمًا. */
-              $wallet = trim((string) ($r['wallet'] ?? ''));
-              if ($wallet !== '') {
-                  $wallet = (in_array((string) $r['kind'], CompanySafe::VISA_KINDS, true)
-                      ? 'كارت: ' : 'مندوب: ') . $wallet;
-              }
-              $desc = array_filter([
-                  $wallet !== '' ? $wallet : null,
-                  $r['cat_label'] ?? null,
-                  $r['source'] ?: null,
-                  $r['note'] ?: null,
-              ]);
-            ?>
-            <tr>
-              <td><?= intf($i + 1) ?></td>
-              <td><?= e(dfmt((string) $r['entry_date'])) ?></td>
-              <td class="r"><?= e((string) $r['label']) ?></td>
-              <td class="r"><?= $desc ? e(implode(' — ', $desc)) : '—' ?></td>
-              <td class="pos"><?= $isIn ? money((float) $r['amount'], false) : '—' ?></td>
-              <td class="neg"><?= $isIn ? '—' : money((float) $r['amount'], false) ?></td>
-              <td><?= money((float) $r['running'], false) ?></td>
-            </tr>
-          <?php endforeach; ?>
-        <?php endif; ?>
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="4">الإجمالي</td>
-          <td><?= money($st['in'], false) ?></td>
-          <td><?= money($st['out'], false) ?></td>
-          <td><?= money($st['closing'], false) ?> <?= e($currency) ?></td>
-        </tr>
-      </tfoot>
-    </table>
+    <?php
+      /* ⚠️ **جدولان منفصلان — قرار مالك صريح**: الداخل في جدول والخارج في جدول،
+         مش الاتنين في نفس الجدول بعمودين. اللي اتشال هو عمود «الرصيد» التراكمي
+         المختلط (ما بقاش له معنى لمّا الصفوف اتقسمت)، وبدله كل جدول له
+         **مجمّعه هو** — فمجموع آخر صف في كل جدول = إجمالي الجدول بالظبط.
+         ⚠️ **ولا قرش بيضيع في القسمة**: مجموع الجدولين لازم يساوي in/out
+         الجايين من الموديل — محروس بفحص في `verify_v67`.
+         ⚠️ **الاتجاه بيتقرّر من `CompanySafe::isIn()` لا من إشارة الرقم** —
+         هي المصدر الوحيد لتصنيف النوع، وإشارة `signed` مشتقّة منها أصلاً. */
+      $inRows = $outRows = [];
+      foreach ($st['rows'] as $r) {
+          if (CompanySafe::isIn((string) $r['kind'])) { $inRows[] = $r; } else { $outRows[] = $r; }
+      }
+
+      /* ⚠️ **اسم المحفظة قبل أي شرح** (طلب المالك: «يتم ذكر اسم الفيزا اللي خرج
+         منها المال»). الاسم بيتوسم بمصدره — «كارت» لحركات الفيزا و«مندوب»
+         للعهدة — عشان قارئ الورقة ما يخلطش بين اسم كارت واسم شخص. والصف
+         المتفلَّت (كارت اتمسح) بيعدّي بلا وسم بدل ما نخترع اسمًا.
+         ⚠️ **دالة واحدة للجدولين** — نسخها مرتين كان بيدّي بيانًا مختلفًا في
+         كل جدول أول ما حد يعدّل واحدة وينسى التانية. */
+      $descOf = static function (array $r): string {
+          $wallet = trim((string) ($r['wallet'] ?? ''));
+          if ($wallet !== '') {
+              $wallet = (in_array((string) $r['kind'], CompanySafe::VISA_KINDS, true)
+                  ? 'كارت: ' : 'مندوب: ') . $wallet;
+          }
+          $parts = array_filter([
+              $wallet !== '' ? $wallet : null,
+              $r['cat_label'] ?? null,
+              $r['source'] ?: null,
+              $r['note'] ?: null,
+          ]);
+          return $parts ? implode(' — ', $parts) : '—';
+      };
+
+      $TABLES = [
+        ['rows' => $inRows,  'title' => 'الأموال الداخلة',  'cls' => 'pos',
+         'sum' => $st['in'],  'unit' => 'حركة داخلة', 'empty' => 'مفيش حركات داخلة في الفترة'],
+        ['rows' => $outRows, 'title' => 'الأموال الخارجة', 'cls' => 'neg',
+         'sum' => $st['out'], 'unit' => 'حركة خارجة', 'empty' => 'مفيش حركات خارجة في الفترة'],
+      ];
+    ?>
+    <?php foreach ($TABLES as $t): ?>
+      <div class="tbl-h">
+        <span class="t <?= $t['cls'] ?>"><?= e($t['title']) ?></span>
+        <span class="m"><?= intf(count($t['rows'])) ?> <?= e($t['unit']) ?></span>
+        <span class="s <?= $t['cls'] ?>"><?= money($t['sum'], false) ?> <?= e($currency) ?></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:7%">م</th>
+            <th style="width:14%">التاريخ</th>
+            <th style="width:22%">النوع</th>
+            <th>الجهة / البيان</th>
+            <th style="width:16%">المبلغ</th>
+            <th style="width:16%">المجمّع</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php if (!$t['rows']): ?>
+            <tr><td colspan="6" style="padding:22px;color:var(--muted)"><?= e($t['empty']) ?></td></tr>
+          <?php else: ?>
+            <?php $run = 0.0; ?>
+            <?php foreach ($t['rows'] as $i => $r): ?>
+              <?php $run = round($run + (float) $r['amount'], 2); ?>
+              <tr>
+                <td><?= intf($i + 1) ?></td>
+                <td><?= e(dfmt((string) $r['entry_date'])) ?></td>
+                <td class="r"><?= e((string) $r['label']) ?></td>
+                <td class="r"><?= e($descOf($r)) ?></td>
+                <td class="<?= $t['cls'] ?>"><?= money((float) $r['amount'], false) ?></td>
+                <td><?= money($run, false) ?></td>
+              </tr>
+            <?php endforeach; ?>
+          <?php endif; ?>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4">إجمالي <?= e($t['title']) ?></td>
+            <td colspan="2"><?= money($t['sum'], false) ?> <?= e($currency) ?></td>
+          </tr>
+        </tfoot>
+      </table>
+    <?php endforeach; ?>
+
+    <?php /* ⚠️ سطر القفل بعد الجدولين — بعد ما عمود «الرصيد» المختلط اتشال،
+             ده بقى المكان الوحيد اللي بيربط الداخل بالخارج بالختامي. */ ?>
+    <div class="tbl-h">
+      <span class="t">رصيد آخر المدة</span>
+      <span class="m">رصيد أول المدة <?= money($st['opening'], false) ?>
+        + داخل <?= money($st['in'], false) ?> − خارج <?= money($st['out'], false) ?></span>
+      <span class="s"><?= money($st['closing'], false) ?> <?= e($currency) ?></span>
+    </div>
 
     <?php /* ⚠️ **محافظ تانية مش جزء من كشف الشركة** — الدرج وجيوب المناديب
              فلوس خرجت من خزنة الشركة خلاص، فجمعها على الختامي تحسيب مزدوج.
@@ -222,10 +272,11 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
       </div>
     </div>
 
+    <?php /* ⚠️ معادلة القفل اتنقلت لسطر «رصيد آخر المدة» فوق الجدولين مباشرةً —
+             تكرارها هنا كان هيدّي نفس الرقم مرتين في نفس الورقة. التذييل بقى
+             مدى الفترة وتاريخ الطبع بس. */ ?>
     <div class="foot">
-      <span>رصيد أول المدة <?= money($st['opening'], false) ?>
-            + صافي الفترة <?= money(round($st['in'] - $st['out'], 2), false) ?>
-            = رصيد آخر المدة <?= money($st['closing'], false) ?></span>
+      <span><?= e($company) ?> — الفترة من <?= e(dfmt($st['from'])) ?> إلى <?= e(dfmt($st['to'])) ?></span>
       <span>اتطبع <?= e(dfmt(date('Y-m-d'))) ?></span>
     </div>
 

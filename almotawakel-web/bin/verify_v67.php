@@ -467,6 +467,27 @@ try {
         ? ok('باقي الخارج مش سالب (ولا نوع اتعدّ مرتين)')
         : bad('other_out سالب — نوع اتحسب في كارت وفي الباقي');
     near('ختامي الكشف = رصيد الشركة (الشهر الحالي)', $stm['closing'], CompanySafe::balance());
+    /* ⚠️⚠️ **قسمة الورقة لجدولين ما بتفقدش صفًّا ولا قرشًا** (قرار المالك: الداخل
+       في جدول والخارج في جدول). الورقة بتقسم بـ`CompanySafe::isIn()` — نفس
+       الدالة اللي الموديل بيحسب بيها `in`/`out` — فلو حد قسم في الـview بشرط
+       مكتوب بإيده (إشارة `signed` مثلاً أو قايمة أنواع منسوخة)، نوع جديد
+       بيقع في الناحية الغلط والجدولين يقولوا إجماليًّا يخالف الكروت فوقهم. */
+    $splitIn = $splitOut = 0.0; $nIn = $nOut = 0;
+    foreach ($stm['rows'] as $__r) {
+        if (CompanySafe::isIn((string) $__r['kind'])) { $splitIn += (float) $__r['amount']; $nIn++; }
+        else { $splitOut += (float) $__r['amount']; $nOut++; }
+    }
+    near('جدول الداخل = إجمالي الداخل', $splitIn, $stm['in']);
+    near('جدول الخارج = إجمالي الخارج', $splitOut, $stm['out']);
+    (($nIn + $nOut) === count($stm['rows']))
+        ? ok('كل صف وقع في جدول واحد (' . $nIn . ' داخل · ' . $nOut . ' خارج)')
+        : bad('صفوف ضاعت في قسمة الجدولين');
+    /* والورقة نفسها لازم تكون بتقسم بالدالة دي بالذات لا بإشارة الرقم. */
+    $__stv = code_only('app/Views/company_safe/statement.php');
+    (str_contains($__stv, 'CompanySafe::isIn((string) $r[\'kind\'])')
+        && !str_contains($__stv, "\$r['signed'] >= 0"))
+        ? ok('الورقة بتقسم الجدولين بـisIn (المصدر الوحيد) لا بإشارة الرقم')
+        : bad('الورقة بتقسم الجدولين بشرط مكتوب بالإيد');
     // مجموع الفئات = مصروفات الشهر في `budgetProgress` (مصدرين لنفس الرقم).
     $bp   = CompanySafe::budgetProgress($day);
     $cats = CompanySafe::byCategory(date('Y-m-01'), date('Y-m-t'));
