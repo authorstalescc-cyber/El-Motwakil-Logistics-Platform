@@ -43,6 +43,7 @@ if (is_array($old['item_label'] ?? null)) {
    بالحرف. التجميع من الحركات بيسقّط أي بوليصة مربوطة بالإذن بلا حركة. */
 $bills = $bills ?? [];
 $expenseRows = $expenseRows ?? [];
+$ctBreakdown = $ctBreakdown ?? [];
 
 /* ═══ عدد السيارات — وحدة التسعير الحقيقية (v96) ═══
    النولون بيتحسب **للسيارة** مش للحاوية: الـ٢٠ قدم بتركب اتنين في السيارة
@@ -52,14 +53,7 @@ $expenseRows = $expenseRows ?? [];
       إدخال البوالص)، و`$carsActual` = عدد البوالص وهو **اليقين** (البوليصة =
       سيارة — متحقَّق على كل فواتير النظام). لما يختلفوا، الاختلاف نفسه معلومة
       تستاهل تتقال: يا إما حاوية اتشالت من سيارة، يا إما بوليصة ناقصة. */
-$carsGuess  = Freight::carsFor($ctBreakdown ?? [], (int) ($p['containers'] ?? 0), $p['container_type'] ?? null);
-$carsActual = count($bills);
-if ($carsActual > 0) {
-    $carsChip = Freight::label($carsActual)
-        . ($carsGuess !== null && $carsGuess !== $carsActual ? ' — المتوقّع ' . intf($carsGuess) : '');
-} else {
-    $carsChip = $carsGuess !== null ? Freight::label($carsGuess) . ' متوقّعة' : '';
-}
+$carsChip = Freight::summary($ctBreakdown, count($bills), (int) ($p['containers'] ?? 0), $p['container_type'] ?? null);
 ?>
 <div class="permit-bar">
   <a class="btn ghost sm" href="<?= url('permits/'.$pid) ?>">‹ رجوع للإذن</a>

@@ -128,6 +128,27 @@ final class Freight
         return $countPerCar . '×' . $norm;
     }
 
+    /**
+     * **النص الوحيد اللي أي شاشة بتعرضه عن السيارات** — الاشتقاق واليقين مع بعض.
+     *
+     * ⚠️ الدالة دي موجودة عشان **المنطق ما يتكتبش مرتين**. لو فورم الفوترة
+     *    حسب «٥ (الواقع)» وكارت الإذن حسب «٤ (المشتق)»، الشاشتان بيقولوا رقمين
+     *    لنفس الإذن ومحدّش هيعرف مين الصح — وده بالظبط اللي قاعدة «المصدر
+     *    الوحيد» موجودة عشانه. `verify_v96` بيعدّ نقاط استدعائها.
+     *
+     * @param int $billCount عدد بوالص الإذن — **صفر معناه لسه ما اتسجّلتش**،
+     *                       وساعتها بنعرض الاشتقاق موسومًا إنه متوقّع لا واقع.
+     */
+    public static function summary(array $breakdown, int $billCount, int $fallbackCount = 0, ?string $fallbackType = null): string
+    {
+        $derived = self::carsFor($breakdown, $fallbackCount, $fallbackType);
+        if ($billCount > 0) {
+            return self::label($billCount)
+                . ($derived !== null && $derived !== $billCount ? ' — المتوقّع ' . intf($derived) : '');
+        }
+        return $derived !== null ? self::label($derived) . ' متوقّعة' : '';
+    }
+
     /** «٤ سيارات» — نص جاهز للعرض، وسلسلة فاضية لو العدد مش معروف. */
     public static function label(?int $cars): string
     {

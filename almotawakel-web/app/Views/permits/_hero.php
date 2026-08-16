@@ -21,6 +21,7 @@
  *   $p $pid $th $noLabel $progress $done $tot $movements $totals
  *   $billRows $moneyRows (لنوافذ التفاصيل) · $ctBreakdown (اختياري)
  */
+use App\Models\Freight;
 use App\Models\Permit;
 
 // نحسبه هنا لو الشاشة ما حسبتهوش — الشاشتان كانتا بتعملاها بطريقتين مختلفتين
@@ -29,6 +30,11 @@ if (!isset($ctLbl)) {
 }
 
 $heroBills = $billRows  ?? [];
+
+/* عدد السيارات — **نفس دالة فورم الفوترة بالحرف** (`Freight::summary`)، عشان
+   الكارت والفاتورة يقولوا نفس الرقم لنفس الإذن. وضع الإدارة ما بيبعتش
+   `$ctBreakdown` أصلاً، فالدالة بتقع على بيانات الإذن نفسه وبتشتغل في الوضعين. */
+$carsLbl = Freight::summary($ctBreakdown ?? [], count($heroBills), (int) ($p['containers'] ?? 0), $p['container_type'] ?? null);
 $heroMoney = $moneyRows ?? [];
 $heroMargin = (float) ($totals['margin'] ?? 0);
 
@@ -86,7 +92,10 @@ $heroMoneyRow = static function (array $r, string $amount, string $tone, array $
         <?php if($p['destination']): ?><span class="hm-pill"><span class="hm-ic"><?= icon('map-pin',16) ?></span><span class="hm-tx"><small>الجهة</small><b><?= e($p['destination']) ?></b></span></span><?php endif; ?>
         <?php if(!empty($p['port'])): ?><span class="hm-pill"><span class="hm-ic"><?= icon('anchor',16) ?></span><span class="hm-tx"><small>الميناء</small><b><?= e($p['port']) ?></b></span></span><?php endif; ?>
         <span class="hm-pill"><span class="hm-ic"><?= icon('calendar',16) ?></span><span class="hm-tx"><small>التاريخ</small><b><?= dfmt($p['permit_date']) ?: '—' ?></b></span></span>
-        <?php if($ctLbl!==''): ?><span class="hm-pill"><span class="hm-ic"><?= icon('package',16) ?></span><span class="hm-tx"><small>الحاويات (عدد×تصنيف)</small><b><?= e($ctLbl) ?></b></span></span><?php endif; ?>
+        <?php /* ⚠️ السيارات جوّه **نفس البلاطة** مش بلاطة جديدة: العدد مشتقّ من
+                 الحاويات اللي جنبه بالظبط، وبلاطة زيادة كانت هتزوّد الصف لخمسة
+                 وتكسر «سطر واحد + meta واحد». */ ?>
+        <?php if($ctLbl!=='' || $carsLbl!==''): ?><span class="hm-pill"><span class="hm-ic"><?= icon('package',16) ?></span><span class="hm-tx"><small>الحاويات (عدد×تصنيف)</small><b><?= e(trim($ctLbl . ($ctLbl!=='' && $carsLbl!=='' ? ' · ' : '') . $carsLbl)) ?></b></span></span><?php endif; ?>
       </div>
     </div>
     <div class="hero-ring">

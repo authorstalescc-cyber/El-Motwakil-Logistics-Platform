@@ -98,6 +98,9 @@ $permitCard = function (array $p) use ($num, $portMark, $isReefer) {
     $drivers = $p['drivers'] ?? [];
     $bills   = (int) ($p['bills'] ?? 0);
     $cars    = (int) ($p['cars'] ?? 0);
+    /* المتوقّع بيظهر **بس** لما مفيش ولا بوليصة لسه — الموديل بيرجّعه `null`
+       بعد أول بوليصة، فمستحيل رقم متوقّع يقف جنب رقم واقعي في نفس السطر. */
+    $carsExp = (int) ($p['cars_expected'] ?? 0);
     $movs    = count($p['movements']);
     ?>
     <article class="hm-stub <?= $p['type'] === 'warid' ? 'is-warid' : 'is-sader' ?><?= !empty($p['pinned']) ? ' is-pinned' : '' ?><?= !empty($p['track']['finished']) ? ' is-done' : '' ?><?= $cold ? ' is-cold' : '' ?>"
@@ -190,10 +193,12 @@ $permitCard = function (array $p) use ($num, $portMark, $isReefer) {
           </div>
         <?php endif; ?>
 
-        <?php if ($bills || $movs > 1 || $cars): ?>
+        <?php if ($bills || $movs > 1 || $cars || $carsExp): ?>
           <div class="hm-metrics">
             <?php if ($bills): ?><span><b><?= $num($bills) ?></b> بوليصة</span><?php endif; ?>
             <?php if ($cars): ?><span><b><?= $num($cars) ?></b> عربية</span><?php endif; ?>
+            <?php /* تحذير وظيفي في كلمتين: العدد ده مشتقّ من الحاويات لا مسجَّل. */ ?>
+            <?php if ($carsExp): ?><span><b><?= $num($carsExp) ?></b> عربية متوقّعة</span><?php endif; ?>
             <?php if (count($drivers)): ?><span><b><?= $num(count($drivers)) ?></b> سائق</span><?php endif; ?>
             <?php if ($movs > 1): ?><span><b><?= $num($movs) ?></b> حركات</span><?php endif; ?>
           </div>
