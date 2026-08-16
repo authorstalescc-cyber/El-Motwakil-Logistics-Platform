@@ -429,7 +429,7 @@ foreach ($cmdCreate as [$label, $seg, $ic, $kw]) {
     <div class="d-modal-body" id="uiDrillBody"></div>
   </div>
 </div>
-<script>window.__SEARCH_API = <?= js_json(url('search/api')) ?>; window.__SEARCH_PAGE = <?= js_json(url('search')) ?>; window.__CMD_NAV = <?= js_json($cmdNav) ?>; window.__NAME_SUGGEST_API = <?= js_json(url('suggest/names')) ?>; window.__BILL_NUMBER_CHECK_API = <?= js_json(url('bawalis/check-number')) ?>; window.__OFFICE_CAR_CHECK_API = <?= js_json(url('cars/is-office')) ?>; window.__TOASTS = <?= js_json($__toasts) ?>; window.__NOTIF_PING = <?= js_json(url('notifications/ping')) ?>; window.__NOTIF_READ = <?= js_json(url('notifications/read/__ID__')) ?>; window.__NOTIF_READ_ALL = <?= js_json(url('notifications/read-all')) ?>; window.__NOTIF_SNOOZE = <?= js_json(url('notifications/snooze/__ID__')) ?>; window.__NOTIF_PREFS = <?= js_json(url('notifications/prefs')) ?>; window.__CSRF = <?= js_json(Auth::csrf()) ?>; /* تفضيلات العرض (v75) — بتتحقن مرة واحدة بدل استعلام لكل جدول في الشاشة. */ window.__PREFS = <?= js_json(\App\Models\UserPref::allFor()) ?>; window.__PREFS_API = <?= js_json(url('prefs')) ?>; window.__PREFS_ADOPT = <?= js_json(url('prefs/adopt')) ?>; window.__PREFS_COMPANY = <?= js_json(url('settings/prefs/company')) ?>; window.__PREFS_OWNER = <?= Auth::isOwner() ? 'true' : 'false' ?>;</script>
+<script>window.__SEARCH_API = <?= js_json(url('search/api')) ?>; window.__SEARCH_PAGE = <?= js_json(url('search')) ?>; window.__CMD_NAV = <?= js_json($cmdNav) ?>; window.__NAME_SUGGEST_API = <?= js_json(url('suggest/names')) ?>; window.__HABIT_SUGGEST_API = <?= js_json(url('suggest/habits')) ?>; window.__BILL_NUMBER_CHECK_API = <?= js_json(url('bawalis/check-number')) ?>; window.__OFFICE_CAR_CHECK_API = <?= js_json(url('cars/is-office')) ?>; window.__TOASTS = <?= js_json($__toasts) ?>; window.__NOTIF_PING = <?= js_json(url('notifications/ping')) ?>; window.__NOTIF_READ = <?= js_json(url('notifications/read/__ID__')) ?>; window.__NOTIF_READ_ALL = <?= js_json(url('notifications/read-all')) ?>; window.__NOTIF_SNOOZE = <?= js_json(url('notifications/snooze/__ID__')) ?>; window.__NOTIF_PREFS = <?= js_json(url('notifications/prefs')) ?>; window.__CSRF = <?= js_json(Auth::csrf()) ?>; /* تفضيلات العرض (v75) — بتتحقن مرة واحدة بدل استعلام لكل جدول في الشاشة. */ window.__PREFS = <?= js_json(\App\Models\UserPref::allFor()) ?>; window.__PREFS_API = <?= js_json(url('prefs')) ?>; window.__PREFS_ADOPT = <?= js_json(url('prefs/adopt')) ?>; window.__PREFS_COMPANY = <?= js_json(url('settings/prefs/company')) ?>; window.__PREFS_OWNER = <?= Auth::isOwner() ? 'true' : 'false' ?>;</script>
 <?php $appJs = \App\Core\App::basePath('public/assets/js/app.js'); $appJsV = is_file($appJs) ? filemtime($appJs) : 1; ?>
 <?php $rsJs = \App\Core\App::basePath('public/assets/js/resume-scroll.js'); $rsJsV = is_file($rsJs) ? filemtime($rsJs) : 1; ?>
 <?php /* الرجوع لنفس المكان بعد الحفظ — ملف مشترك مع بوابة المندوب (مش جوّه app.js
@@ -439,6 +439,13 @@ foreach ($cmdCreate as [$label, $seg, $ic, $kw]) {
 <?php /* شركة الشحن = العميل تلقائيًا — ملف مشترك بين المكتب وبوابة المندوب
          (`/m` ما بتحمّلش app.js — نفس سبب `resume-scroll.js`). */ ?>
 <script defer src="<?= url('assets/js/lookup-autofill.js') ?>?v=<?= is_file($laJs) ? filemtime($laJs) : 1 ?>"></script>
+<?php $hsJs = \App\Core\App::basePath('public/assets/js/habit-suggest.js'); ?>
+<?php /* اقتراح من عادات العميل (v97) — الجهة والتوكيل والميناء وتصنيف الحاويات.
+         ⚠️ **مش متحمّل في `/m`**: البوابة ما بتحمّلش `app.css` وكلاسات السطر
+         (`.smart-name-note`) مالهاش تعريف هناك — كلاس بلا CSS بيقع على الشكل
+         الافتراضي بالسكوت. الملف مستقل عن `app.js` عشان يبقى جاهز للتحميل
+         هناك أول ما `m.css` تاخد نفس الكلاسات. */ ?>
+<script defer src="<?= url('assets/js/habit-suggest.js') ?>?v=<?= is_file($hsJs) ? filemtime($hsJs) : 1 ?>"></script>
 <?php $miJs = \App\Core\App::basePath('public/assets/js/money-input.js'); ?>
 <?php /* فواصل الآلاف في خانات المبالغ — ملف مشترك مع بوابة المندوب (`/m` ما
          بتحمّلش app.js). ⚠️ **قبل app.js** عن قصد: الاتنين بيمسكوا `beforeinput`

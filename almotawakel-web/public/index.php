@@ -499,6 +499,11 @@ $r->post('/assistant/ask', 'AssistantController@ask');
 
 // البحث والنسخ الاحتياطي
 $r->get('/suggest/names', 'SuggestionController@names');
+// ⚠️ الحرفي **قبل** الجشع: `/suggest/habits/{field}` لازم يسبق `/suggest/habits`؟
+//    لأ — الاتنين مختلفين في عدد المقاطع فالراوتر بيفرّق بينهم، بس الترتيب ده
+//    بيفضل الأوضح للقارئ (المسار الأطول فوق) وبيحمي من أي تعميم جاي.
+$r->get('/suggest/habits/{field}', 'SuggestionController@habitDrill');
+$r->get('/suggest/habits', 'SuggestionController@habits');
 $r->get('/search/api', 'SearchController@api');
 $r->get('/search',  'SearchController@index');
 $r->post('/backup', 'BackupController@download');

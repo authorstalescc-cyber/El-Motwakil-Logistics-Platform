@@ -400,4 +400,4 @@ habit_events   habit_key · shown_at · outcome(accepted|overridden|ignored) · 
 
 ---
 
-*آخر تحديث: 2026-08-16 — خطة معتمدة، التنفيذ لسه ما ابتداش.*
+*آخر تحديث: 2026-08-16 — **v96 و v97 اتنفّذوا واترفعوا**؛ v98 و v99 لسه.*

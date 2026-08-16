@@ -177,15 +177,17 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
               <label><?= e($noLabel) ?><input name="permit_no" value="<?= e($p['permit_no']) ?>" autocomplete="off"<?= fieldErrorAttrs('permit_no', $permitFormState['errors']) ?>><?= fieldError('permit_no', $permitFormState['errors']) ?></label>
               <label>التاريخ<input type="date" name="permit_date" value="<?= e($p['permit_date']) ?>"></label>
               <label>عدد الحاويات (الإجمالي)<input type="number" min="0" name="containers" value="<?= e($p['containers'] ?? 0) ?>"></label>
-              <?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','value'=>$p['container_type'] ?? '','label'=>'تصنيف الحاويات']); ?>
+              <?php /* `data-habit` — اقتراح من عادات العميل (v97). العرض بس:
+                       الخادم عمره ما بيملا الحقول دي. */ ?>
+              <?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','value'=>$p['container_type'] ?? '','label'=>'تصنيف الحاويات','attrs'=>'data-habit="container_type"']); ?>
               <label>سعر الكشف لكل حاوية<input data-money type="number" step="0.01" min="0" name="inspection_rate" value="<?= e($p['inspection_rate'] ?? '') ?>" placeholder="0"></label>
               <label>سعر الضمان لكل حاوية<input data-money type="number" step="0.01" min="0" name="guarantee_rate" value="<?= e($p['guarantee_rate'] ?? '') ?>" placeholder="0"></label>
               <label>الوكيل (العميل)<input list="dl_client" id="permit_client" name="client" value="<?= e($p['client']) ?>" autocomplete="off"></label>
               <label>لصالح شركة<input list="dl_company" id="permit_company" name="company" value="<?= e($p['company']) ?>" autocomplete="off"></label>
-              <label>الجهة<input list="dl_dest" name="destination" value="<?= e($p['destination']) ?>" autocomplete="off"></label>
+              <label>الجهة<input list="dl_dest" data-habit="destination" name="destination" value="<?= e($p['destination']) ?>" autocomplete="off"></label>
               <?php partial('lookup_select', ['name'=>'shipping_co','type'=>'shipping_co','value'=>$p['shipping_co'] ?? '','labelHtml'=>icon('ship', 14).' شركة الشحن','attrs'=>'data-autofill-from="client" title="بتتملى تلقائيًا من العميل — غيّرها لو شركة الشحن مختلفة"']); ?>
-              <?php partial('lookup_select', ['name'=>'agency','type'=>'agency','value'=>$p['agency'] ?? '','labelHtml'=>icon('receipt', 14).' التوكيل']); ?>
-              <?php partial('lookup_select', ['name'=>'port','type'=>'port','value'=>$p['port'] ?? '','labelHtml'=>icon('anchor', 14).' الميناء']); ?>
+              <?php partial('lookup_select', ['name'=>'agency','type'=>'agency','value'=>$p['agency'] ?? '','labelHtml'=>icon('receipt', 14).' التوكيل','attrs'=>'data-habit="agency"']); ?>
+              <?php partial('lookup_select', ['name'=>'port','type'=>'port','value'=>$p['port'] ?? '','labelHtml'=>icon('anchor', 14).' الميناء','attrs'=>'data-habit="port"']); ?>
               <label class="wide">ملاحظة<input name="note" value="<?= e($p['note']) ?>"></label>
             </div>
             <div class="tl-form-actions"><button class="btn gold sm" type="submit" data-primary-submit><?= icon('download', 14) ?> حفظ بيانات الإذن</button></div>

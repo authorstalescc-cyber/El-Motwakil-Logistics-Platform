@@ -27,12 +27,18 @@
     <div class="field"><label>التاريخ</label><input type="date" name="permit_date" value="<?= e($p['permit_date']) ?>"></div>
     <div class="field"><label>الوكيل (العميل)</label><input list="dl_client" data-smart-name="client" id="permit_client" name="client" value="<?= e($p['client']) ?>" autocomplete="off"></div>
     <div class="field"><label>لصالح شركة</label><input list="dl_company" data-smart-name="company" id="permit_company" name="company" value="<?= e($p['company']) ?>" autocomplete="off"></div>
-    <div class="field"><label>الجهة</label><input list="dl_dest" data-smart-name="destination" name="destination" value="<?= e($p['destination']) ?>" autocomplete="off"></div>
+    <?php /* ⚠️ `data-habit` = «اقترح دي من عادات العميل» (v97 — `habit-suggest.js`).
+             الوسم **على الشاشة بس**: الخادم عمره ما بيملا الحقول دي، فلو
+             الجافاسكريبت ما اشتغلش الفورم بيفضل فاضي زي الأول بالحرف.
+             و`shipping_co` **مستثناة** لأن عندها قاعدة ثابتة مقيسة
+             (`data-autofill-from="client"`) — نظامين على نفس الخانة = واحد
+             بيدهس التاني والمالك ما يعرفش مين. */ ?>
+    <div class="field"><label>الجهة</label><input list="dl_dest" data-smart-name="destination" data-habit="destination" name="destination" value="<?= e($p['destination']) ?>" autocomplete="off"></div>
     <div class="field"><label><?= icon('ship', 14) ?> شركة الشحن</label><?php partial('lookup_select', ['name'=>'shipping_co','type'=>'shipping_co','value'=>$p['shipping_co'] ?? '','attrs'=>'data-autofill-from="client" title="بتتملى تلقائيًا من العميل — غيّرها لو شركة الشحن مختلفة"']); ?></div>
-    <div class="field"><label><?= icon('receipt', 14) ?> التوكيل</label><?php partial('lookup_select', ['name'=>'agency','type'=>'agency','value'=>$p['agency'] ?? '']); ?></div>
-    <div class="field"><label><?= icon('anchor', 14) ?> الميناء</label><?php partial('lookup_select', ['name'=>'port','type'=>'port','value'=>$p['port'] ?? '']); ?></div>
+    <div class="field"><label><?= icon('receipt', 14) ?> التوكيل</label><?php partial('lookup_select', ['name'=>'agency','type'=>'agency','value'=>$p['agency'] ?? '','attrs'=>'data-habit="agency"']); ?></div>
+    <div class="field"><label><?= icon('anchor', 14) ?> الميناء</label><?php partial('lookup_select', ['name'=>'port','type'=>'port','value'=>$p['port'] ?? '','attrs'=>'data-habit="port"']); ?></div>
     <div class="field"><label>عدد الحاويات</label><input type="number" min="0" name="containers" value="<?= e($p['containers'] ?? 0) ?>" placeholder="0"></div>
-    <div class="field"><label>تصنيف الحاويات</label><?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','value'=>$p['container_type'] ?? '']); ?></div>
+    <div class="field"><label>تصنيف الحاويات</label><?php partial('lookup_select', ['name'=>'container_type','type'=>'container_type','value'=>$p['container_type'] ?? '','attrs'=>'data-habit="container_type"']); ?></div>
     <div class="field"><label>سعر الكشف لكل حاوية <span style="color:var(--grey);font-weight:400">(لهذا الإذن)</span></label><input data-money type="number" step="0.01" min="0" name="inspection_rate" value="<?= e($p['inspection_rate'] ?? '') ?>" placeholder="يُدخَل يدوياً"></div>
     <div class="field"><label>سعر الضمان لكل حاوية <span style="color:var(--grey);font-weight:400">(لهذا الإذن)</span></label><input data-money type="number" step="0.01" min="0" name="guarantee_rate" value="<?= e($p['guarantee_rate'] ?? '') ?>" placeholder="يُدخَل يدوياً"></div>
     <div class="field"><label>ملاحظة</label><input name="note" value="<?= e($p['note']) ?>"></div>
