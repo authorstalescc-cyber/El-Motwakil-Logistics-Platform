@@ -1,4 +1,5 @@
 <?php
+use App\Models\Freight;
 use App\Models\Permit;
 use App\Models\PermitInvoice;
 use App\Core\FormState;
@@ -42,6 +43,23 @@ if (is_array($old['item_label'] ?? null)) {
    بالحرف. التجميع من الحركات بيسقّط أي بوليصة مربوطة بالإذن بلا حركة. */
 $bills = $bills ?? [];
 $expenseRows = $expenseRows ?? [];
+
+/* ═══ عدد السيارات — وحدة التسعير الحقيقية (v96) ═══
+   النولون بيتحسب **للسيارة** مش للحاوية: الـ٢٠ قدم بتركب اتنين في السيارة
+   والـ٤٠ بتركب لوحدها. فـ٨ حاويات ٢٠ قدم = ٤ سيارات = ٤ نولون لا ٨.
+
+   ⚠️ **الرقمين مختلفين عن قصد:** `$carsGuess` اشتقاق من الحاويات (لازم **قبل**
+      إدخال البوالص)، و`$carsActual` = عدد البوالص وهو **اليقين** (البوليصة =
+      سيارة — متحقَّق على كل فواتير النظام). لما يختلفوا، الاختلاف نفسه معلومة
+      تستاهل تتقال: يا إما حاوية اتشالت من سيارة، يا إما بوليصة ناقصة. */
+$carsGuess  = Freight::carsFor($ctBreakdown ?? [], (int) ($p['containers'] ?? 0), $p['container_type'] ?? null);
+$carsActual = count($bills);
+if ($carsActual > 0) {
+    $carsChip = Freight::label($carsActual)
+        . ($carsGuess !== null && $carsGuess !== $carsActual ? ' — المتوقّع ' . intf($carsGuess) : '');
+} else {
+    $carsChip = $carsGuess !== null ? Freight::label($carsGuess) . ' متوقّعة' : '';
+}
 ?>
 <div class="permit-bar">
   <a class="btn ghost sm" href="<?= url('permits/'.$pid) ?>">‹ رجوع للإذن</a>
@@ -99,9 +117,15 @@ $issuedDocs = array_values(array_filter($invoices, fn($iv) => ($iv['status'] ?? 
       <div class="inv-fact"><span class="inv-fact-l"><?= e($lbl) ?></span><span class="inv-fact-v"><?= e($val) ?></span></div>
     <?php endforeach; ?>
   </div>
-  <?php if ($ctBreakdown): ?>
+  <?php /* ⚠️ شارة السيارات جنب شارات التصنيف عن قصد: العدد **مشتقّ منها**
+           (`Freight::carsFor`)، وفصله في خانة تانية بيخلّي رقمين مرتبطين
+           في مكانين. والسهم بيقول إنه ناتج مش بيان مستقل.
+           والشرط بقى يشمل الحالة اللي مفيش فيها بوالص لسه — وهي بالظبط
+           الحالة اللي التخمين لازم فيها. */ ?>
+  <?php if ($ctBreakdown || $carsChip !== ''): ?>
     <div class="inv-ct"><span class="inv-ct-l"><?= icon('package', 13) ?> تصنيف الحاويات</span>
       <?php foreach ($ctBreakdown as $ct): ?><span class="ct-chip"><?= intf($ct['cnt']) ?>×<?= e($ct['type']) ?></span><?php endforeach; ?>
+      <?php if ($carsChip !== ''): ?><span class="ct-chip">← <?= e($carsChip) ?></span><?php endif; ?>
     </div>
   <?php endif; ?>
 </div>

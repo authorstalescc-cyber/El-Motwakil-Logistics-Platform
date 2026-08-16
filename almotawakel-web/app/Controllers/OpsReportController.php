@@ -104,23 +104,45 @@ class OpsReportController extends Controller
         $this->render('ops/_drill', $data, false);
     }
 
-    /** تقرير A4 للطباعة أو الحفظ PDF — صفحة مستقلة بلا القائمة الجانبية. */
+    /**
+     * تقرير A4 للطباعة أو الحفظ PDF — صفحة مستقلة بلا القائمة الجانبية.
+     *
+     * ⚠️ **التوزيعات بتتولّد من `OpsReport::DIMS` مش مكتوبة بالإيد** — النسخة
+     *    القديمة كانت بتطبع **٥ أبعاد من ٩**، فالسواقين والسيارات وشركات
+     *    الشحن وأصحاب البيان كانوا **بيختفوا من الورقة بالسكوت** وهُمّ
+     *    موجودين على الشاشة. أي بُعد جديد يتضاف للثابت بيطلع في المطبوع
+     *    تلقائيًّا، ومستحيل يتنسي. (`verify_ops_report` بيعدّهم.)
+     *
+     * ⚠️ **الطباعة بتعرض نفس أرقام الشاشة كاملة** (قرار المالك: «تعرض كافة
+     *    المعلومات»): المقارنة بالفترة السابقة والمعدلات و«محتاج انتباهك»
+     *    والبوالص بلا تاريخ — كلها كانت على الشاشة وبس.
+     */
     public function printable(): void
     {
         $this->requireAuth();
         $p = $this->period();
 
+        $totals = OpsReport::totals($p['from'], $p['to']);
+        $daily  = OpsReport::daily($p['from'], $p['to']);
+
+        $dims = [];
+        foreach (OpsReport::DIMS as $key => $def) {
+            $dims[$key] = ['label' => $def[0],
+                           'rows'  => OpsReport::breakdown($key, $p['from'], $p['to'])];
+        }
+
         $this->render('ops/print', [
             'title'     => 'تقرير التشغيل — ' . $p['label'],
             'period'    => $p,
-            'totals'    => OpsReport::totals($p['from'], $p['to']),
-            'ports'     => OpsReport::breakdown('port',        $p['from'], $p['to']),
-            'companies' => OpsReport::breakdown('company',     $p['from'], $p['to']),
-            'agencies'  => OpsReport::breakdown('agency',      $p['from'], $p['to']),
-            'dests'     => OpsReport::breakdown('destination', $p['from'], $p['to']),
-            'clients'   => OpsReport::breakdown('client',      $p['from'], $p['to']),
+            'totals'    => $totals,
+            'prev'      => $p['prev_from'] === null ? null
+                            : OpsReport::totals($p['prev_from'], $p['prev_to']),
+            'rates'     => OpsReport::rates($totals, $daily),
+            'dims'      => $dims,
             'mix'       => OpsReport::containerMix($p['from'], $p['to']),
             'permits'   => OpsReport::permits($p['from'], $p['to']),
+            'attention' => OpsReport::attention($p['from'], $p['to']),
+            'undated'   => OpsReport::undatedCount(),
             'detail'    => !empty($_GET['detail']),
             'trips'     => !empty($_GET['detail']) ? OpsReport::trips($p['from'], $p['to']) : [],
         ], false);
