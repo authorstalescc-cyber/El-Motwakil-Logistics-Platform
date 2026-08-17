@@ -95,8 +95,14 @@ $v100Verify = static function () use ($v100Say, $v100HasCol, $v100Cols): bool {
             $v100Say("  ✗ agents.$col لازم يقبل NULL — NULL = «المالك ما قالش»");
             $ok = false;
         }
-        if ($meta['column_default'] !== null) {
-            $v100Say("  ✗ agents.$col ليه افتراضي ({$meta['column_default']}) — الافتراضي لازم NULL");
+        /* ⚠️ **MariaDB بترجّع الافتراضي كنص `'NULL'` لا كقيمة فاضية** (من 10.2)،
+           و MySQL بترجّع `null` حقيقي. الفحص على `!== null` لوحده بيعدّي محليًّا
+           (MySQL) **ويفشل على الإنتاج** (MariaDB) فيوقف النشر بعد ما الأعمدة
+           اتعملت فعلاً — وده اللي حصل بالحرف أول محاولة نشر لـv100.
+           تحذير CLAUDE.md: «الإنتاج MariaDB مش MySQL». */
+        $def = $meta['column_default'];
+        if ($def !== null && strcasecmp(trim((string) $def), 'NULL') !== 0) {
+            $v100Say("  ✗ agents.$col ليه افتراضي ({$def}) — الافتراضي لازم NULL");
             $ok = false;
         }
     }

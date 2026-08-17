@@ -57,14 +57,21 @@ sec100('⓪ البنية — التلاتة موجودة وبتقبل NULL وب�
 /* ⚠️ **أسماء مستعارة إجبارية**: MySQL 8 بيرجّع أعمدة `information_schema`
    بحروف كابيتال، فالقراءة بالحروف الصغيرة بتدّي مفتاحًا غير معرَّف — والفحص
    يفشل بإنذار كاذب على عمود سليم (اتصاد فعليًّا أول تشغيل للترحيل). */
+/* ⚠️ **MariaDB بترجّع الافتراضي كنص `'NULL'` لا كقيمة فاضية** (من 10.2) و MySQL
+   بترجّع `null` حقيقي. المقارنة بـ`=== null` لوحدها بتعدّي محليًّا وتفشل على
+   الإنتاج — وده اللي وقّف نشر v100 أول مرة بعد ما الأعمدة اتعملت فعلاً. */
+$noDefault = static fn ($d): bool => $d === null || strcasecmp(trim((string) $d), 'NULL') === 0;
+
 foreach (['default_doc_kind', 'default_taxable', 'default_vat_rate'] as $col) {
     $meta = Database::row(
         'SELECT IS_NULLABLE AS n, COLUMN_DEFAULT AS d FROM information_schema.columns
           WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', ['agents', $col]);
-    chk100($meta !== null && ($meta['n'] ?? '') === 'YES' && $meta['d'] === null,
+    chk100($meta !== null && ($meta['n'] ?? '') === 'YES' && $noDefault($meta['d']),
         "`agents.{$col}` موجود، بيقبل NULL، وبلا افتراضي",
         $meta === null ? 'العمود ناقص' : "nullable={$meta['n']} default=" . var_export($meta['d'], true));
 }
+chk100($noDefault('NULL') && $noDefault(null) && !$noDefault('invoice'),
+    'وقارن الافتراضي بيفهم صيغتَي MySQL وMariaDB — والقيمة الحقيقية لسه بتترفض');
 
 $pdo = Database::conn();
 $pdo->beginTransaction();
