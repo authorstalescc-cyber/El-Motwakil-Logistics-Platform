@@ -24,10 +24,8 @@ $r->post('/work-date', 'WorkDateController@save');
 
 // لوحة التحكم
 $r->get('/', 'DashboardController@index');
-$r->get('/dashboard/quick-options','DashboardController@quickOptions');
 // تفاصيل أي رقم في الداشبورد (قاعدة «ممنوع رقم أصمّ») — نوع محصور في قائمة بيضا
 $r->get('/dashboard/drill/{what}', 'DashboardController@drill');
-$r->post('/dashboard/quick-entries','DashboardController@quickEntries');
 // مركز الإشعارات (v52 + المرحلة ٢) — الجرس وصفحة السجل.
 // ⚠️ المسارات الحرفية **قبل** أي مسار جشع (تحذير ٤). الكتابة الوحيدة هنا هي
 //    «مقروء» وبتخصّ صاحب الجلسة نفسه (الهوية من الجلسة لا من الفورم).
@@ -123,6 +121,7 @@ $r->post('/permits/{id}/close',       'PermitController@close');
 $r->post('/permits/{id}/checklist',   'PermitController@saveChecklist');    // حفظ إجابات مرشد الإيصالات (v32)
 $r->post('/permits/{id}/rcp-dismiss',  'PermitController@receiptDismiss');   // «مش محتاجه في الإذن ده» (v32)
 $r->get('/permits/{id}/rcp-why',       'SuggestionController@receiptWhy');   // «التوقّع ده جاي منين؟» (v101)
+$r->get('/permits/{id}/freight-why',   'SuggestionController@freightWhy');   // «النولون المتوقّع جاي منين؟» (v102)
 // رحلة الشحنة (v62) — تحديث الحالة التشغيلية. وصفي بحت بلا أي أثر مالي.
 $r->post('/permits/{id}/track',        'PermitController@trackStage');
 $r->post('/permits/{id}/track-undo',   'PermitController@trackUndo');
@@ -509,6 +508,9 @@ $r->get('/suggest/habits', 'SuggestionController@habits');
 // سعر السيارة المعتاد (v98) — **الحرفي `/drill` قبل الجشع `/{permit}`**
 $r->get('/suggest/price/{permit}/drill', 'SuggestionController@carPriceDrill');
 $r->get('/suggest/price/{permit}', 'SuggestionController@carPrice');
+// قائمة أسعار النولون (v102)
+$r->get('/tariffs',       'TariffController@index');
+$r->post('/tariffs/save', 'TariffController@save');
 // موديل الإيصالات المدرَّب (v101) — الاستعراض والتدريب بضغطة
 $r->get('/receipt-model',        'ReceiptModelController@index');
 $r->post('/receipt-model/train', 'ReceiptModelController@train');

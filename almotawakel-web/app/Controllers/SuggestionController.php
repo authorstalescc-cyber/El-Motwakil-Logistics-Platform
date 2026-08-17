@@ -160,6 +160,40 @@ class SuggestionController extends Controller
         ], false);
     }
 
+    /**
+     * نافذة «النولون المتوقّع جاي منين؟» (v102) — سطر التعريفة + الفواتير السابقة.
+     *
+     * ⚠️ السياق كله بيتقرا من الإذن في الموديل — مفيش قيمة جاية من الشاشة
+     *    تتزوّر (القاعدة ③).
+     */
+    public function freightWhy(string $permitId): void
+    {
+        $this->requireAuth();
+        $pid = (int) $permitId;
+        $p   = Permit::find($pid);
+        if (!$p) { $this->notFound('الإذن ده مش موجود.'); }
+
+        $q = \App\Models\FreightQuote::forPermit($pid);
+        /* عيّنة الفواتير: بالعميل لو موجود، وإلا بالشركة — **نفس ترتيب**
+           `FreightQuote::fromHistory` عشان العيّنة تبقى هي اللي الرقم اتحسب
+           منها فعلاً، مش عيّنة تانية بتناقضه. */
+        $ctx = [
+            'destination'    => (string) ($p['destination'] ?? ''),
+            'container_type' => (string) ($p['container_type'] ?? ''),
+            'exclude_permit' => $pid,
+        ];
+        $client  = trim((string) ($p['client'] ?? ''));
+        $samples = $client !== ''
+            ? Habit::priceSamples($ctx + ['client' => $client])
+            : Habit::priceSamples($ctx + ['company' => (string) ($p['company'] ?? ''), 'by' => 'company']);
+
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: private, no-store, max-age=0');
+        }
+        $this->render('permits/_freight_why', ['q' => $q, 'samples' => $samples], false);
+    }
+
     public function names(): void
     {
         $this->requireAuth();

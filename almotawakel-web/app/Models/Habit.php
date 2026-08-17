@@ -269,17 +269,44 @@ final class Habit
      */
     public static function carPrice(array $ctx): ?array
     {
-        $rows = self::priceRows($ctx);
+        return self::priceFrom(self::priceRows($ctx), $ctx);
+    }
+
+    /**
+     * نفس الحساب بس بفواتير **الشركة** بدل العميل (v102).
+     *
+     * ⚠️ **ده إصلاح عطل مقيس مش إضافة.** `priceRows` بترجّع `[]` فورًا لو
+     *    العميل فاضي، و**٩ أذون في الإنتاج عميلها فاضي والشركة مليانة** —
+     *    منهم إذن «ميتاكيم للتوريد» اللي المالك فتح فاتورته فما لقاش ولا
+     *    اقتراح واحد، **بلا أي سبب ظاهر على الشاشة**. الشركة مصدر مشروع
+     *    للسابقة: هي الجهة اللي بتتحاسب فعلاً لما الوكيل مش متسجّل.
+     *
+     * ⚠️ **بتفضل تحت العميل في الترتيب** (`FreightQuote` بينده العميل الأول):
+     *    العميل أدقّ لأن نفس الشركة ممكن تتشحن لأكتر من وكيل بأسعار مختلفة.
+     */
+    public static function carPriceByCompany(array $ctx): ?array
+    {
+        return self::priceFrom(self::priceRows($ctx + ["by" => "company"]), $ctx + ["by" => "company"]);
+    }
+
+    /** الحساب المشترك بين المفتاحين — نقطة واحدة فمستحيل يفترقوا. */
+    private static function priceFrom(array $rows, array $ctx): ?array
+    {
         if (!$rows) { return null; }
+        $party = ($ctx['by'] ?? '') === 'company' ? 'الشركة' : 'العميل';
 
         $dest = trim((string) ($ctx['destination'] ?? ''));
         $type = trim((string) (container_norm((string) ($ctx['container_type'] ?? '')) ?? ''));
 
         $levels = [
-            ['label' => 'العميل والجهة والتصنيف', 'dest' => true,  'type' => true],
-            ['label' => 'العميل والتصنيف',        'dest' => false, 'type' => true],
-            ['label' => 'العميل والجهة',          'dest' => true,  'type' => false],
-            ['label' => 'العميل',                 'dest' => false, 'type' => false],
+            /* ⚠️ **اسم الطرف متغيّر مش ثابت** — نفس الحساب بيشتغل بالعميل أو
+               بالشركة، والوسم كان مكتوب «العميل» بالحرف فكان **بيكدب** لما
+               المطابقة تحصل بالشركة: الشاشة تقول «المعتاد لهذا العميل» والإذن
+               أصلاً عميله فاضي. */
+            ['label' => $party . ' والجهة والتصنيف', 'dest' => true,  'type' => true],
+            ['label' => $party . ' والتصنيف',        'dest' => false, 'type' => true],
+            ['label' => $party . ' والجهة',          'dest' => true,  'type' => false],
+            ['label' => $party,                      'dest' => false, 'type' => false],
         ];
 
         foreach ($levels as $lv) {
@@ -339,17 +366,23 @@ final class Habit
      */
     private static function priceRows(array $ctx): array
     {
-        $client = self::spellings('agent', (string) ($ctx['client'] ?? ''));
-        if (!$client) { return []; }
+        /* المفتاح: العميل (الافتراضي) أو الشركة — والعمود بيتحدّد من **قائمة
+           بيضا** لأنه بيتحطّ في `WHERE` مباشرةً. */
+        $byCompany = ($ctx['by'] ?? '') === 'company';
+        $col       = $byCompany ? 'i.company' : 'i.client';
+        $names     = $byCompany
+            ? self::spellings('company', (string) ($ctx['company'] ?? ''))
+            : self::spellings('agent',   (string) ($ctx['client']  ?? ''));
+        if (!$names) { return []; }
         $exclude = (int) ($ctx['exclude_permit'] ?? 0);
 
-        $params = $client;
+        $params = $names;
         $sql = "SELECT i.id, i.invoice_date, i.destination, i.items_json,
                        COALESCE(p.container_type, '') AS container_type,
                        i.permit_no, i.doc_no, i.company
                   FROM permit_invoices i
              LEFT JOIN permits p ON p.id = i.permit_id
-                 WHERE i.client IN (" . self::marks($client) . ")
+                 WHERE $col IN (" . self::marks($names) . ")
                    AND i.freight > 0
                    AND COALESCE(i.status, '') <> 'void'
                    AND (i.invoice_date IS NULL OR i.invoice_date >= DATE_SUB(CURDATE(), INTERVAL " . self::WINDOW_DAYS . " DAY))";

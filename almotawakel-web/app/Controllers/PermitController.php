@@ -950,6 +950,8 @@ class PermitController extends Controller
             'ctBreakdown'   => $ctMap[$pid] ?? [],
             'candidates'    => PermitInvoice::candidateItems($pid),
             'actualFreight' => PermitInvoice::actualFreight($pid),
+            // النولون المتوقّع للكارت الجانبي (v102) — تعريفة + تاريخ العميل/الشركة
+            'quote'         => \App\Models\FreightQuote::forPermit($pid),
             'vatRate'       => (float) App::setting('vat_rate', 0.14),
             'currency'      => App::setting('currency', 'ج.م'),
             'invoices'      => PermitInvoice::forPermit($pid),

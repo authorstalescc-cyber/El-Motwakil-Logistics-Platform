@@ -264,6 +264,10 @@ $billRow = function (array $b, string $amount, string $tone): void {
 </div>
 
 <?= formErrorSummary($errors) ?>
+<?php /* ⚠️ **الفورم والكارت الجانبي في شبكة واحدة** (v102): الكارت لازم يفضل
+         مشوف والمالك بيملا السعر، فهو `sticky` جنبه لا فوقه. على الموبايل
+         بيطلع **قبل** الفورم عن قصد — التوقّع قبل الكتابة لا بعدها. */ ?>
+<div class="inv-cols">
 <form class="js-dirty-form" method="post" action="<?= url('permits/'.$pid.'/invoice') ?>" id="invForm" data-draft-key="permit-invoice-<?= $pid ?>">
   <?= csrfField() ?>
   <?= formStateFields($formState['token'], $formState['back']) ?>
@@ -476,6 +480,10 @@ $billRow = function (array $b, string $amount, string $tone): void {
   </div>
 </form>
 
+  <?php /* الكارت الجانبي — «النولون المتوقّع وبناءً على إيه» (طلب المالك) */ ?>
+  <?php include __DIR__ . '/_freight_quote.php'; ?>
+</div>
+
 <!-- سجل الفواتير السابقة لهذا الإذن -->
 <?php if ($invoices): ?>
   <div class="sec-head"><span><?= icon('folder', 14) ?> مستندات صادرة سابقاً (<?= intf(count($invoices)) ?>)</span></div>
@@ -639,6 +647,22 @@ $billRow = function (array $b, string $amount, string $tone): void {
   if(ua){ ua.addEventListener('click', function(){
     document.querySelector('.freight-row .i-price').value = '<?= number_format($actualFreight,2,'.','') ?>'; recalc();
   }); }
+
+  /* ═══ «حطّه في الخانة» من الكارت الجانبي (v102) ═══
+     ⚠️ **الزرار هو اللي بيكتب، مش الخادم.** الرقم بيوصل الشاشة كاقتراح
+        والمالك شايفه قبل ما يضغط ويقدر يعدّله بعدها — نفس عقيدة v97/v98
+        («الفلوس اقتراح يتداس»). لو الجافاسكريبت ما اشتغلش، الخانة بتفضل
+        زي ما هي بالحرف والكارت بيفضل معلومة للقراءة. */
+  document.querySelectorAll('.js-fq-apply').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var cell = document.querySelector('.freight-row .i-price');
+      if(!cell) return;
+      cell.value = btn.getAttribute('data-price') || '';
+      recalc();
+      cell.focus();
+      btn.textContent = 'اتحطّ ✓';
+    });
+  });
 
   syncMode();
 })();

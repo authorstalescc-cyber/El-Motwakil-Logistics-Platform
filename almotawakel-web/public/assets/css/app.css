@@ -2138,7 +2138,7 @@ label.tl-visa input{width:18px;height:18px;accent-color:var(--gold)}
 .rm-tile i{font-style:normal;font-size:var(--fs-1);font-weight:500;color:var(--ink-mut)}
 /* الدقة هي الرقم اللي بيحدّد تثق في الباقي قد إيه — فهي البطل الوحيد */
 .rm-tile.big{flex:1 1 190px;background:var(--tint-navy);border-color:var(--navy-line)}
-.rm-tile.big b{font-size:var(--fs-8);font-weight:700}
+.rm-tile.big b{font-size:var(--fs-8)}
 .rm-tile.sep{margin-inline-start:14px}
 .rm-meta{display:flex;flex-wrap:wrap;align-items:center;gap:15px;margin:0 0 20px;
   font-size:var(--fs-1);font-weight:500;color:var(--ink-mut)}
@@ -2203,6 +2203,87 @@ label.tl-visa input{width:18px;height:18px;accent-color:var(--gold)}
   .rw-lvl{grid-template-columns:minmax(76px,auto) 1fr auto}
   .rw-lvl-hits{display:none}
 }
+
+/* ═══ توقّع النولون + قائمة الأسعار (v102) ════════════════════════════════
+   ⚠️ توكنز بس، ونصًّا مش تعبئة — و**قبل** مقطع الوضع الليلي (مصيدة موثّقة). */
+
+/* الفورم والكارت الجانبي جنب بعض — الكارت لاصق عشان يفضل مشوف والمالك بيكتب */
+.inv-cols{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.inv-side{position:sticky;top:calc(var(--topbar-h) + 14px);min-width:0}
+@media (max-width:900px){
+  /* على الموبايل الكارت **فوق** الفورم عن قصد: التوقّع قبل الكتابة لا بعدها */
+  .inv-cols{grid-template-columns:minmax(0,1fr)}
+  .inv-side{position:static;order:-1}
+}
+
+.fq-card{background:var(--card);border:1px solid var(--rule);border-radius:var(--radius-2);padding:14px 15px}
+.fq-card.quiet{background:var(--paper)}
+.fq-head{display:flex;align-items:center;gap:7px;margin-bottom:11px}
+.fq-head h3{margin:0;font-size:var(--fs-2);font-weight:600;color:var(--ink)}
+.fq-src{margin-inline-start:auto;font-size:var(--fs-1);font-weight:500;color:var(--ink-mut)}
+
+/* الرقم البطل — مضغوط ويفتح دليله */
+.fq-big{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;
+  border:none;background:transparent;padding:0;margin:0 0 9px;cursor:pointer;text-align:start}
+.fq-big b{font-size:var(--fs-8);line-height:1.05;letter-spacing:-1px;
+  color:var(--accent);font-variant-numeric:tabular-nums}
+.fq-big i{font-style:normal;font-size:var(--fs-1);font-weight:500;color:var(--ink-mut)}
+.fq-big:hover b{text-decoration:underline}
+
+.fq-total{display:flex;align-items:baseline;justify-content:space-between;gap:9px;
+  padding:8px 0;border-top:1px dashed var(--rule);border-bottom:1px dashed var(--rule);
+  font-size:var(--fs-1);font-weight:500;color:var(--ink-mut);margin-bottom:10px}
+.fq-total b{font-size:var(--fs-4);font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* التعريفة والمعتاد لما يختلفوا — الاتنين بيتعرضوا */
+.fq-gap{display:flex;align-items:flex-start;gap:6px;font-size:var(--fs-1);font-weight:500;
+  color:var(--ink-mut);background:var(--paper);border:1px solid var(--rule);
+  border-radius:var(--radius-1);padding:7px 9px;margin-bottom:10px}
+.fq-gap b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.fq-gap em{font-style:normal;font-weight:600;color:var(--gold-fg)}
+.fq-gap.wide{background:var(--gold-light);border-color:var(--gold-line)}
+.fq-gap.wide em{color:var(--gold-fg)}
+
+.fq-none{display:flex;align-items:flex-start;gap:7px;font-size:var(--fs-1);font-weight:500;
+  color:var(--ink-mut);line-height:1.55;margin-bottom:4px}
+
+.btn.block{display:flex;width:100%;justify-content:center;margin-bottom:11px}
+
+.fq-basis{display:flex;flex-direction:column;gap:1px;border-top:1px solid var(--rule);padding-top:9px}
+.fq-b{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;padding:4px 0;font-size:var(--fs-1)}
+.fq-b-l{display:inline-flex;align-items:center;gap:5px;font-weight:500;color:var(--ink-mut);min-width:86px}
+.fq-b-v{font-weight:600;color:var(--ink);flex:1;min-width:0;overflow-wrap:anywhere}
+.fq-b-n{flex:1 0 100%;font-size:var(--fs-1);color:var(--ink-mut);opacity:.85}
+.fq-b.miss .fq-b-v{color:var(--gold-fg);font-weight:500}
+
+.fq-warn{display:flex;align-items:flex-start;gap:6px;margin-top:9px;font-size:var(--fs-1);
+  font-weight:500;color:var(--gold-fg);line-height:1.5}
+.fq-more{display:inline-flex;align-items:center;gap:5px;margin-top:11px;font-size:var(--fs-1);
+  font-weight:600;color:var(--accent);text-decoration:none}
+.fq-more:hover{text-decoration:underline}
+
+/* ── نافذة «النولون جاي منين؟» ─────────────────────────────────────────── */
+.fw-top{display:flex;flex-wrap:wrap;gap:11px;margin-bottom:13px}
+.fw-box{flex:1 1 210px;display:flex;flex-direction:column;gap:3px;background:var(--paper);
+  border:1px solid var(--rule);border-radius:var(--radius-1);padding:11px 13px}
+.fw-box.on{background:var(--zebra);border-color:var(--navy-line)}
+.fw-box-h{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-1);font-weight:600;color:var(--ink-mut)}
+.fw-box b{font-size:var(--fs-6);font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums;line-height:1.15}
+.fw-box-m{font-size:var(--fs-1);font-weight:500;color:var(--ink-mut);overflow-wrap:anywhere}
+.fw-box-w{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-1);font-weight:600;color:var(--gold-fg)}
+.fw-gap{display:flex;align-items:center;gap:6px;font-size:var(--fs-1);font-weight:500;
+  color:var(--gold-fg);background:var(--gold-light);border-radius:var(--radius-1);
+  padding:8px 11px;margin-bottom:13px}
+.fw-gap b{font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ── شاشة قائمة الأسعار ────────────────────────────────────────────────── */
+.trf-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px}
+.trf-table thead th,.trf-table tbody td{text-align:start}
+.trf-table .trf-zone{font-weight:600;color:var(--ink);min-width:210px}
+.trf-in{width:106px;padding:5px 8px;border:1px solid var(--rule);border-radius:var(--radius-1);
+  font-size:var(--fs-2);font-weight:600;font-variant-numeric:tabular-nums;background:var(--card);color:var(--ink)}
+.trf-in:focus{outline:2px solid var(--gold);outline-offset:1px}
+.trf-na{color:var(--ink-mut);opacity:.6}
 
 /* تذييل مضغوط: المتبقّي + الحالة + أزرار أيقونية */
 .permits-v2 .dkt-money{display:inline-flex;align-items:baseline;gap:6px}
@@ -5798,6 +5879,53 @@ table.data tbody td.neg.dbt-tot,table.data tbody td.neg.mv-ref{background:transp
 .maint-bar span{opacity:.85}
 .maint-bar:hover{background:var(--sader-lt)}
 
+/* ══════════ سطر معادلة الخزنة (.d-eq) — إعادة بناء الداشبورد 2026-08-17 ══════════
+   المالك سأل «الخزنة دخلها كام ونزل كام للمكتب»، والشاشة كانت بتدّي رقمًا
+   واحدًا أصمّ. البديل **معادلة مقفولة** مش أربع كروت متجاورة:
+   `فتح + دخل − نزل للمكتب − مصروفات − عهدة سواقين = قفل`.
+
+   ⚠️ **علامة العملية (+/−/=) عنصر مستقل خارج الزرار** عن قصد: لو كانت جوّاه
+      كانت هتتقري جزءًا من نص الزرار للقارئ الصوتي («+ ١٢٬٠٠٠ دخلها»)، وهي
+      رمز بصري بحت — فهي `aria-hidden` وبرّه.
+
+   ⚠️ **كل جزء زرار حقيقي** لأنه بيفتح نافذة تفاصيل (ممنوع رقم أصمّ)، فلازم
+      ياخد `appearance:none` و`font:inherit` — الافتراضي بتاع المتصفح بيدهس
+      الخط العربي ويرجّع الأزرار لشكل النظام.
+
+   ⚠️ الألوان **نصًّا** فلازم `-fg` مش التوكن الأصلي (قاعدة اللون الحاكمة فوق):
+      `color:var(--navy)` على السطح الغامق تباينه 1.3:1. */
+.d-eq{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius-3);
+  box-shadow:var(--shadow);padding:12px 14px}
+.d-eq-part{flex:1 1 120px;min-width:96px;display:flex;flex-direction:column;gap:3px;
+  background:none;border:1px solid transparent;border-radius:var(--radius-2);
+  padding:8px 10px;font-family:inherit;font-size:inherit;appearance:none;
+  cursor:pointer;text-align:start;transition:.16s}
+.d-eq-part:hover{background:var(--zebra);border-color:var(--line)}
+.d-eq-part b{font-size:var(--fs-5);font-weight:var(--fw-black);line-height:1.15;
+  color:var(--accent);font-variant-numeric:tabular-nums}
+.d-eq-part span{font-size:var(--fs-2);color:var(--grey);font-weight:600}
+.d-eq-part.green b{color:var(--green-fg)} .d-eq-part.red b{color:var(--red-fg)}
+.d-eq-part.gold b{color:var(--gold-fg)}   .d-eq-part.purple b{color:var(--purple-fg)}
+/* الطرف التاني من المعادلة = **الرقم البطل**: أكبر وله سطح خافت يفصله بصريًّا
+   عن المدخلات، عشان العين تعرف فورًا إن ده الناتج مش بند تاني. */
+.d-eq-part.total{flex-basis:150px;background:var(--surface-3);border-color:var(--line)}
+.d-eq-part.total b{font-size:var(--fs-6)}
+.d-eq-part.total.neg b{color:var(--red-fg)}
+.d-eq-op{display:flex;align-items:center;font-size:var(--fs-4);font-weight:var(--fw-black);
+  color:var(--grey);flex:none;padding-inline:2px}
+.d-eq-op.eq{color:var(--accent)}
+/* الموبايل: المعادلة بتتحوّل لعمود، فالعلامة بتقف على الشمال قبل كل بند
+   بدل ما تفضل بينهم أفقيًّا وتكسر السطر في نص رقم. */
+@media (max-width:640px){
+  .d-eq{padding:10px}
+  .d-eq-part{flex:1 1 100%;flex-direction:row;align-items:baseline;
+    justify-content:space-between;gap:10px;padding:7px 8px}
+  .d-eq-part b{font-size:var(--fs-4)}
+  .d-eq-part.total{flex-basis:100%} .d-eq-part.total b{font-size:var(--fs-5)}
+  .d-eq-op{width:14px;justify-content:center}
+}
+
 /* ⚠️⚠️⚠️ **البلوكان دول لازم يفضلوا متطابقين حرفيًّا — ما عدا المُحدِّد.**
    CSS ما بتسمحش بجمع `@media` مع مُحدِّد في قاعدة واحدة، فالتكرار إجباري.
    `bin/verify_dark_mode.php` بيقارنهما سطرًا بسطر وبيفشل لو افترقوا — لو
@@ -6946,4 +7074,151 @@ table.data tr.cl-late td:first-child{box-shadow:inset 3px 0 0 var(--red)}
   .povw-it{flex-wrap:wrap}
   .povw-it-num{margin-inline-start:auto}
   .povw-foot .btn{margin-inline-start:0;flex:1}
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   شاشة الإذن — إعادة بناء وضع العرض (v103) · `.pv3`
+   ─────────────────────────────────────────────────────────────────────
+   طلب المالك: «إعادة بناء صفحة الإذن المنفرد بتصميم مختلف وتجربة أفضل بكتير».
+
+   القرار الحاكم: **صفوف بدل الجداول**. الجدول بـ٧←١١ عمودًا كان بياخد تلات
+   أشكال حسب عرض الشاشة (جدول · تمرير أفقي · كروت موبايل)، والصف الواحد شكله
+   واحد من ٣٢٠px لـ٢٥٦٠px.
+
+   ⚠️ كله بتوكنز فبيشتغل في الوضع الليلي بلا مُحدِّد إضافي.
+   ⚠️ النطاق مقفول تحت `.pv3` — ما بيلمسش وضع التعديل (`.mstage`/`.ms-*`)
+      ولا أي شاشة تانية.
+   ══════════════════════════════════════════════════════════════════════ */
+.pv3{--mono:ui-monospace,'SF Mono','Menlo','Cascadia Code','Consolas','Courier New',monospace}
+.pv3 .num{font-family:var(--mono);font-feature-settings:"tnum" 1,"lnum" 1;letter-spacing:-.2px}
+.pv3 .pv3-sp{flex:1}
+
+/* ── ① الشريط الملاصق: خريطة الصفحة ───────────────────────────────── */
+.pv3-nav{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:9px 12px;margin-bottom:14px;border-radius:var(--radius-2);
+  background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-1)}
+.pv3-nav-l{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--grey);
+  font-size:var(--fs-2);font-weight:500;padding:5px 10px;border-radius:999px;
+  border:1px solid transparent;transition:.15s}
+.pv3-nav-l:hover{background:var(--zebra);border-color:var(--line);color:var(--accent)}
+.pv3-nav-l b{color:var(--accent);font-weight:700}
+.pv3-nav-l svg{color:var(--gold)}
+.pv3-nav-b{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font:inherit;
+  font-size:var(--fs-2);font-weight:500;padding:5px 11px;border-radius:999px;
+  background:var(--card);border:1px dashed var(--line2);color:var(--grey);transition:.15s}
+.pv3-nav-b:hover{border-color:var(--gold);color:var(--accent)}
+
+/* ── ② الشبكة: الحركات | الثابت ───────────────────────────────────── */
+.pv3-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
+.pv3-main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pv3-side{display:flex;flex-direction:column;gap:12px;position:sticky;top:64px}
+
+/* ── ③ كارت الحركة ────────────────────────────────────────────────── */
+.pv3-mv{border:1px solid var(--line);border-radius:var(--radius-3);background:var(--card);overflow:hidden}
+.pv3-mv>summary{cursor:pointer;list-style:none}
+.pv3-mv>summary::-webkit-details-marker{display:none}
+.pv3-mv>summary::marker{content:''}
+.pv3-mv-h{display:flex;align-items:center;gap:11px;padding:11px 14px;background:var(--zebra);
+  border-bottom:1px solid transparent;transition:.15s}
+.pv3-mv[open]>.pv3-mv-h{border-bottom-color:var(--line);background:var(--tint-navy)}
+.pv3-mv-h:hover{background:var(--tint-navy)}
+.pv3-mv-seq{width:30px;height:30px;flex:none;border-radius:var(--radius-1);display:flex;align-items:center;justify-content:center;
+  background:var(--navy);color:var(--white);font-size:var(--fs-2);font-weight:700}
+.pv3-mv-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.pv3-mv-t>b{font-size:var(--fs-3);font-weight:600;color:var(--accent)}
+.pv3-mv-m{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:var(--fs-1);color:var(--grey)}
+.pv3-mv-m>span{display:inline-flex;align-items:center;gap:4px}
+.pv3-mv-m svg{color:var(--line2)}
+.pv3-mv-n{display:flex;gap:14px;flex:none}
+.pv3-n{display:flex;flex-direction:column;gap:1px;text-align:start}
+.pv3-n small{font-size:var(--fs-1);color:var(--grey)}
+.pv3-n b{font-size:var(--fs-3);font-weight:700;line-height:1.1}
+.pv3-n b.pos{color:var(--green-fg)} .pv3-n b.neg{color:var(--red-fg)}
+.pv3-chev{flex:none;color:var(--grey);display:flex;transition:transform .18s ease}
+.pv3-mv[open] .pv3-chev{transform:rotate(-90deg)}
+.pv3-mv-b{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0}
+.pv3-mv-b>.pv3-panel+.pv3-panel{border-inline-start:1px solid var(--line)}
+
+/* ── ④ اللوح والمجموعة والسطر ─────────────────────────────────────── */
+.pv3-panel{min-width:0;padding:0 0 8px}
+.pv3-card{border:1px solid var(--line);border-radius:var(--radius-3);background:var(--card);overflow:hidden}
+.pv3-panel-h{display:flex;align-items:center;gap:7px;padding:9px 13px;font-size:var(--fs-2);color:var(--accent);
+  border-bottom:1px solid var(--line)}
+.pv3-panel-h svg{color:var(--gold)}
+.pv3-panel-h b{font-weight:600}
+.pv3-grp{border-bottom:1px solid var(--line)}
+.pv3-grp:last-child{border-bottom:none}
+.pv3-grp-h{display:flex;align-items:center;gap:6px;padding:6px 13px;font-size:var(--fs-1);color:var(--grey);
+  background:var(--zebra)}
+.pv3-grp-h b{font-weight:600;color:var(--ink)}
+.pv3-grp-ic{display:flex;color:var(--line2)}
+.pv3-grp-c{min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--tint-navy);color:var(--accent);font-size:var(--fs-1);font-weight:700}
+.pv3-grp-t{font-weight:700;color:var(--ink)}
+.pv3-grp-a{display:flex;align-items:center;color:var(--grey);text-decoration:none;padding:2px;border-radius:var(--radius-1)}
+.pv3-grp-a:hover{background:var(--card);color:var(--accent)}
+
+.pv3-items{display:flex;flex-direction:column}
+.pv3-it,.pv3-bl{display:flex;align-items:center;gap:10px;padding:8px 13px;color:inherit;text-decoration:none;
+  border-bottom:1px solid var(--line);border-inline-start:3px solid transparent;transition:.13s}
+.pv3-it:last-child,.pv3-bl:last-child{border-bottom:none}
+.pv3-it:hover,.pv3-bl:hover{background:var(--zebra)}
+.pv3-it.ex{border-inline-start-color:var(--gold)}
+.pv3-it.rev{border-inline-start-color:var(--green)}
+.pv3-bl{border-inline-start-color:var(--navy-mid)}
+.pv3-it-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.pv3-it-b>b{font-size:var(--fs-2);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pv3-it-m{display:flex;flex-wrap:wrap;align-items:center;gap:3px 8px;font-size:var(--fs-1);color:var(--grey)}
+.pv3-it-m>span{display:inline-flex;align-items:center;gap:3px}
+.pv3-it-m svg{color:var(--line2)}
+.pv3-it-n{flex:none;text-align:start;display:flex;flex-direction:column;gap:1px}
+.pv3-it-n>b{font-size:var(--fs-3);font-weight:700;line-height:1.1}
+.pv3-it-n>b.pos{color:var(--green-fg)}
+.pv3-it.ex .pv3-it-n>b{color:var(--gold-fg)}
+.pv3-it.rev .pv3-it-n>b{color:var(--green-fg)}
+.pv3-it-n>span{font-size:var(--fs-1);color:var(--grey)}
+.pv3-it-n>span.neg{color:var(--red-fg)} .pv3-it-n>span.mut{opacity:.6}
+
+.pv3-tag{display:inline-flex;align-items:center;gap:3px;font-size:var(--fs-1);font-weight:600;
+  padding:1px 7px;border-radius:999px;background:var(--tint-navy);color:var(--accent);
+  border:1px solid var(--navy-line);text-decoration:none}
+.pv3-tag.warn{background:var(--red-lt);color:var(--red-fg);border-color:var(--red-line)}
+.pv3-tag.ct{background:var(--gold-light);color:var(--gold-fg);border-color:var(--gold-line)}
+.pv3-tag.link:hover{border-color:var(--gold)}
+.pv3-none{padding:10px 13px;font-size:var(--fs-1);color:var(--grey);display:flex;align-items:center;gap:6px}
+.pv3-auto{padding:6px 13px 10px}
+.pv3-auto-r{display:flex;align-items:center;gap:10px;padding:4px 0;font-size:var(--fs-1);color:var(--grey)}
+.pv3-auto-r span:first-child{min-width:52px;color:var(--ink)}
+.pv3-auto-r b{margin-inline-start:auto;font-weight:700;color:var(--ink);font-size:var(--fs-2)}
+.pv3-auto-r.tot{border-top:1px solid var(--line);margin-top:4px;padding-top:7px}
+.pv3-facts{display:flex;flex-direction:column}
+.pv3-fact{display:flex;align-items:center;gap:10px;padding:8px 13px;border-bottom:1px solid var(--line);font-size:var(--fs-2)}
+.pv3-fact:last-child{border-bottom:none}
+.pv3-fact-l{display:inline-flex;align-items:center;gap:5px;color:var(--grey);font-size:var(--fs-1)}
+.pv3-fact-l svg{color:var(--line2)}
+.pv3-fact b{margin-inline-start:auto;font-weight:600;color:var(--ink);text-align:start;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── شارة المندوب — مكوّن مشترك (`partials/rep_badge`) ─────────────
+   ⚠️ **عايشة برّه نطاق `.pv3`** عن قصد: نفس الشارة بتترسم في وضع التعديل
+      (`.ms-entry`) وفي نافذة النظرة العامة (`.povw-it-m`) — تعريف واحد. */
+.rep-badge{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-1);font-weight:600;
+  padding:1px 7px;border-radius:999px;background:var(--tint-teal);color:var(--teal-fg);
+  border:1px solid var(--teal-line);white-space:nowrap}
+.rep-badge svg{color:var(--teal-fg);flex:none}
+
+@media (max-width:1100px){
+  .pv3-grid{grid-template-columns:minmax(0,1fr)}
+  .pv3-side{position:static}
+}
+@media (max-width:820px){
+  .pv3-mv-b{grid-template-columns:minmax(0,1fr)}
+  .pv3-mv-b>.pv3-panel+.pv3-panel{border-inline-start:none;border-top:1px solid var(--line)}
+}
+@media (max-width:640px){
+  .pv3-nav{gap:6px;padding:8px}
+  .pv3-mv-h{flex-wrap:wrap}
+  .pv3-mv-n{width:100%;justify-content:space-between;gap:8px;order:3}
+  .pv3-it,.pv3-bl{flex-wrap:wrap}
+  .pv3-it-n{margin-inline-start:auto}
 }
