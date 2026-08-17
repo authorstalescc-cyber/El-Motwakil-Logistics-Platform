@@ -104,6 +104,7 @@ $r->post('/invoices/delete',          'InvoiceController@bulkDelete');   // حذ
 
 // الإصدارات (إذن للصادر / شهادة للوارد) — أكبر عملية في النظام، بتايم لاين
 $r->get('/permits',                   'PermitController@index');
+$r->get('/permits/overview',          'PermitController@overview');  // نافذة نظرة عامة على إيصالات اليوم (قبل الجشع /{id})
 $r->get('/permits/print-batch',       'PermitController@printBatch'); // طباعة عدة أذونات دفعة واحدة (قبل الجشع /{id})
 $r->post('/permits/bulk',             'PermitController@bulk');     // إجراءات جماعية على المحدَّد (قبل الجشع /{id})
 $r->get('/permits/new',               'PermitController@create');
@@ -504,6 +505,9 @@ $r->get('/suggest/names', 'SuggestionController@names');
 //    بيفضل الأوضح للقارئ (المسار الأطول فوق) وبيحمي من أي تعميم جاي.
 $r->get('/suggest/habits/{field}', 'SuggestionController@habitDrill');
 $r->get('/suggest/habits', 'SuggestionController@habits');
+// سعر السيارة المعتاد (v98) — **الحرفي `/drill` قبل الجشع `/{permit}`**
+$r->get('/suggest/price/{permit}/drill', 'SuggestionController@carPriceDrill');
+$r->get('/suggest/price/{permit}', 'SuggestionController@carPrice');
 $r->get('/search/api', 'SearchController@api');
 $r->get('/search',  'SearchController@index');
 $r->post('/backup', 'BackupController@download');

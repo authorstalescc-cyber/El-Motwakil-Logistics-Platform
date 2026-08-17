@@ -235,4 +235,164 @@ final class Habit
     {
         return implode(',', array_fill(0, count($values), '?'));
     }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       سعر السيارة للعميل (v98) — أكبر مكسب في الخطة
+       ═══════════════════════════════════════════════════════════════════════
+
+       ⚠️ **بنتعلّم من الرقم اللي المالك كتبه بإيده، مش من اشتقاق.** الفواتير
+          بتخزّن بند النولون في `items_json` كـ«كمية × سعر»، والمالك بيكتب
+          **الكمية = عدد السيارات والسعر = سعر السيارة**:
+            · اكما  ← qty 4 × 27,500  (٨ حاويات ٢٠ قدم = ٤ سيارات — حسبها بنفسه)
+            · فيرتكس ← qty 2 × 15,300 · qty 7 × 15,300
+            · فوكس  ← qty 2 × 20,500 · qty 1 × 20,500
+          فمفيش أي قسمة ولا تخمين هنا: الرقم المعروض هو **نفس** الرقم اللي
+          اتكتب قبل كده. ولاحظ إذن فيرتكس اللي فيه **٨ بوالص** والمالك فوتره
+          **٧ وحدات** — ولو كنا اشتقّينا السعر من عدد البوالص كنا هنقول
+          ١٣٬٣٨٧ بدل ١٥٬٣٠٠ **وهو غلط**.
+
+       ⚠️ **الفلوس اقتراح يتداس لا تعبئة.** الدالة دي بترجّع رقمًا للشاشة
+          تعرضه في زرار؛ ولا كنترولر بيكتب مبلغ في فورم.
+    */
+
+    /** أقل من كده مش سعر — بيحمي من صف نولون اتساب صفر بالغلط. */
+    private const MIN_PRICE = 1.0;
+
+    /**
+     * سعر السيارة المعتاد لعميل، أو `null` لو الدليل مش كافي.
+     *
+     * سلسلة المفاتيح من الأدق للأعم — نفس فلسفة `top()`:
+     *   (عميل + جهة + تصنيف) ← (عميل + تصنيف) ← (عميل + جهة) ← (عميل)
+     *
+     * @param array $ctx ['client'=>…, 'destination'=>…, 'container_type'=>…, 'exclude_permit'=>int]
+     * @return array{value:float,hits:int,total:int,share:float,last_seen:?string,scope:string}|null
+     */
+    public static function carPrice(array $ctx): ?array
+    {
+        $rows = self::priceRows($ctx);
+        if (!$rows) { return null; }
+
+        $dest = trim((string) ($ctx['destination'] ?? ''));
+        $type = trim((string) (container_norm((string) ($ctx['container_type'] ?? '')) ?? ''));
+
+        $levels = [
+            ['label' => 'العميل والجهة والتصنيف', 'dest' => true,  'type' => true],
+            ['label' => 'العميل والتصنيف',        'dest' => false, 'type' => true],
+            ['label' => 'العميل والجهة',          'dest' => true,  'type' => false],
+            ['label' => 'العميل',                 'dest' => false, 'type' => false],
+        ];
+
+        foreach ($levels as $lv) {
+            if ($lv['dest'] && $dest === '') { continue; }
+            if ($lv['type'] && $type === '') { continue; }
+            $pool = array_values(array_filter($rows, static function (array $r) use ($lv, $dest, $type) {
+                if ($lv['dest'] && $r['destination'] !== $dest) { return false; }
+                if ($lv['type'] && $r['container_type'] !== $type) { return false; }
+                return true;
+            }));
+            if (!$pool) { continue; }
+
+            $by = [];
+            foreach ($pool as $r) {
+                /* ⚠️ المفتاح **نص بمنزلتين عشرية** لا `float`: مفاتيح المصفوفة
+                   الرقمية بتتحوّل `int` في PHP فـ«١٥٣٠٠٫٥٠» و«١٥٣٠٠» كانوا
+                   هيبقوا مفتاحًا واحدًا (مصيدة موثَّقة في CLAUDE.md). */
+                $k = number_format($r['price'], 2, '.', '');
+                if (!isset($by[$k])) { $by[$k] = ['price' => $r['price'], 'hits' => 0, 'last' => null]; }
+                $by[$k]['hits']++;
+                if ($r['date'] !== null && ($by[$k]['last'] === null || $r['date'] > $by[$k]['last'])) {
+                    $by[$k]['last'] = $r['date'];
+                }
+            }
+            uasort($by, static fn ($a, $b) => [$b['hits'], $b['last']] <=> [$a['hits'], $a['last']]);
+            $best  = reset($by);
+            $total = count($pool);
+            if ($best['hits'] < self::MIN_HITS) { continue; }
+            $share = $best['hits'] / $total;
+            if ($share < self::MIN_SHARE) { continue; }
+            return [
+                'value'     => (float) $best['price'],
+                'hits'      => (int) $best['hits'],
+                'total'     => $total,
+                'share'     => round($share, 4),
+                'last_seen' => $best['last'],
+                'scope'     => $lv['label'],
+            ];
+        }
+        return null;
+    }
+
+    /** الفواتير اللي السعر اتعلّم منها — مادة نافذة التفاصيل. */
+    public static function priceSamples(array $ctx, int $limit = 20): array
+    {
+        $rows = self::priceRows($ctx);
+        usort($rows, static fn ($a, $b) => [$b['date'], $b['id']] <=> [$a['date'], $a['id']]);
+        return array_slice($rows, 0, max(1, min(100, $limit)));
+    }
+
+    /**
+     * بنود النولون المسجَّلة في فواتير العميل — سعر الوحدة وكميتها.
+     *
+     * ⚠️ **الفاتورة الملغاة مستبعدة** (`status='void'`): سعر اتلغى مش سابقة.
+     * ⚠️ **وإذن الفاتورة الحالية مستبعد** — وإلا الاقتراح بيتعلّم من نفسه
+     *    ويثبّت أول رقم اتكتب للأبد.
+     */
+    private static function priceRows(array $ctx): array
+    {
+        $client = self::spellings('agent', (string) ($ctx['client'] ?? ''));
+        if (!$client) { return []; }
+        $exclude = (int) ($ctx['exclude_permit'] ?? 0);
+
+        $params = $client;
+        $sql = "SELECT i.id, i.invoice_date, i.destination, i.items_json,
+                       COALESCE(p.container_type, '') AS container_type,
+                       i.permit_no, i.doc_no, i.company
+                  FROM permit_invoices i
+             LEFT JOIN permits p ON p.id = i.permit_id
+                 WHERE i.client IN (" . self::marks($client) . ")
+                   AND i.freight > 0
+                   AND COALESCE(i.status, '') <> 'void'
+                   AND (i.invoice_date IS NULL OR i.invoice_date >= DATE_SUB(CURDATE(), INTERVAL " . self::WINDOW_DAYS . " DAY))";
+        if ($exclude > 0) { $sql .= ' AND COALESCE(i.permit_id, 0) <> ?'; $params[] = $exclude; }
+        $sql .= ' ORDER BY i.invoice_date DESC, i.id DESC';
+
+        $out = [];
+        foreach (Database::all($sql, $params) as $r) {
+            $line = self::freightLine((string) ($r['items_json'] ?? ''));
+            if ($line === null) { continue; }
+            $out[] = [
+                'id'             => (int) $r['id'],
+                'doc_no'         => (string) ($r['doc_no'] ?? ''),
+                'permit_no'      => (string) ($r['permit_no'] ?? ''),
+                'company'        => (string) ($r['company'] ?? ''),
+                'date'           => $r['invoice_date'],
+                'destination'    => trim((string) ($r['destination'] ?? '')),
+                'container_type' => trim((string) (container_norm((string) $r['container_type']) ?? '')),
+                'price'          => $line['price'],
+                'qty'            => $line['qty'],
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * بند النولون جوّه لقطة الفاتورة — `['price'=>سعر الوحدة, 'qty'=>الكمية]`.
+     *
+     * ⚠️ **بنقرا `price` مش `total ÷ qty`**: القسمة بتدخّل قرشًا ضايعًا في
+     *    الرقم المعروض، والسعر مكتوب صريحًا أصلاً.
+     */
+    private static function freightLine(string $json): ?array
+    {
+        if (trim($json) === '') { return null; }
+        $items = json_decode($json, true);
+        if (!is_array($items)) { return null; }
+        foreach ($items as $ln) {
+            if (!is_array($ln) || empty($ln['freight'])) { continue; }
+            $price = (float) ($ln['price'] ?? 0);
+            $qty   = (float) ($ln['qty'] ?? 0);
+            if ($price < self::MIN_PRICE || $qty <= 0) { return null; }
+            return ['price' => $price, 'qty' => $qty];
+        }
+        return null;
+    }
 }

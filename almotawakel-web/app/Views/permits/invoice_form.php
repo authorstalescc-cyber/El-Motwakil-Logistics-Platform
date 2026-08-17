@@ -348,7 +348,10 @@ $billRow = function (array $b, string $amount, string $tone): void {
               <input type="text" name="item_label[]" value="<?= e($rr['label']) ?>" class="i-label" aria-label="بيان البند <?= (int)$rowIndex+1 ?>">
               <input type="hidden" name="item_freight[]" value="<?= $isFreightRow?'1':'0' ?>">
               <input type="hidden" name="item_src[]" value="<?= e($rr['src']) ?>">
-              <?php if ($isFreightRow): ?><div class="i-hint">النولون الفعلي: <b><?= money($actualFreight,false) ?></b>
+              <?php /* ⚠️ **سمتان بس** — كل منطق اقتراح السعر في `habit-suggest.js`
+                       و`Habit::carPrice()`. الشاشة بتقول «فين» و«الرقم الفعلي كام»
+                       وخلاص، فبصمة v98 في الملف ده سطر واحد. */ ?>
+              <?php if ($isFreightRow): ?><div class="i-hint" data-habit-price="<?= e(url('suggest/price/'.$pid)) ?>" data-actual-freight="<?= e(number_format((float)$actualFreight, 2, '.', '')) ?>">النولون الفعلي: <b><?= money($actualFreight,false) ?></b>
                 <?php if ($actualFreight>0): ?><button type="button" class="mini-btn" id="useActual">استخدم الفعلي</button><?php endif; ?></div><?php endif; ?>
             </td>
             <td><input type="number" step="0.01" name="item_qty[]" value="<?= e($rr['qty']) ?>" class="i-qty" aria-label="كمية البند <?= (int)$rowIndex+1 ?>"></td>

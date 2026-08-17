@@ -206,4 +206,115 @@
   } else {
     run();
   }
+
+  /* ═════════════════════════════════════════════════════════════════════════
+     سعر السيارة المعتاد + تنبيه الشذوذ + الهامش (v98)
+
+     المصدر: `Habit::carPrice()` — بيقرا **سعر الوحدة اللي المالك كتبه بإيده**
+     في فواتير سابقة (`items_json` ← بند النولون)، مش ناتج قسمة.
+
+     ⚠️ **الفلوس اقتراح يتداس — عمره ما يتكتب لوحده.** ده الفرق الحاكم بين
+        القسم ده والقسم اللي فوق: الجهة والميناء بيتملوا تلقائيًّا لأن غلطهم
+        بيتشاف ويتصلّح، والمبلغ غلطه بيتحوّل لفاتورة. زرار «استخدم» هو الوحيد
+        اللي بيكتب.
+
+     ⚠️ **السطر بيقول حاجة واحدة في كل لحظة**: قبل ما تكتب سعرًا بيعرض المعتاد،
+        وبعد ما تكتب بيتحوّل للهامش أو لتنبيه الشذوذ. تلات معلومات في سطر
+        واحد بتبقى ضجيج (قانون التصميم: سطر واحد + meta واحد).
+     ═════════════════════════════════════════════════════════════════════════ */
+  var PRICE_DEV = 0.20;   // أبعد من ٢٠٪ عن المعتاد = يستاهل تنبيه
+
+  /* المصدر الوحيد لفكّ فواصل الآلاف (`window.Money.raw` من `money-input.js`).
+     ⚠️ خانة المبلغ بتتحوّل لـ`type=text` بفواصل، فـ`parseFloat("27,500")`
+        بترجّع **27** — نسخة تانية من المنطق هنا كانت هتغلط بنفس الشكل. */
+  function num(v) {
+    if (window.Money && typeof window.Money.raw === 'function') {
+      return parseFloat(window.Money.raw(String(v == null ? '' : v))) || 0;
+    }
+    return parseFloat(String(v == null ? '' : v).replace(/,/g, '')) || 0;
+  }
+
+  function fmtMoney(n) {
+    return Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+
+  (function priceModule() {
+    var host = document.querySelector('[data-habit-price]');
+    if (!host) { return; }
+    var row = document.querySelector('.freight-row');
+    if (!row) { return; }
+    var qtyEl = row.querySelector('.i-qty');
+    var priceEl = row.querySelector('.i-price');
+    if (!priceEl) { return; }
+
+    var api = host.getAttribute('data-habit-price');
+    var actual = num(host.getAttribute('data-actual-freight'));
+    var note = document.createElement('div');
+    note.className = 'smart-name-note';
+    note.setAttribute('aria-live', 'polite');
+    host.insertAdjacentElement('afterend', note);
+
+    var usual = null, cars = 0;
+
+    function suggestion() {
+      if (usual === null) { note.innerHTML = ''; return; }
+      note.innerHTML =
+        '<span class="snn-hint">' + esc('سعر السيارة المعتاد ' + fmtMoney(usual.value)) + '</span>'
+        + '<span class="snn-btns">'
+        + '<button type="button" class="snn-use">استخدم</button>'
+        + '<button type="button" class="snn-new" data-drill="' + esc(api + '/drill')
+        + '" data-drill-title="سعر السيارة المعتاد">'
+        + esc(usual.hits + ' من ' + usual.total) + '</button>'
+        + '</span>';
+      note.querySelector('.snn-use').addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (qtyEl && cars > 0) {
+          qtyEl.value = String(cars);
+          qtyEl.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        priceEl.value = String(usual.value);
+        // بيشغّل `recalc()` بتاع فورم الفوترة — مفيش نسخة تانية من الحساب هنا
+        priceEl.dispatchEvent(new Event('input', { bubbles: true }));
+        verdict();
+      });
+    }
+
+    /* بعد ما المالك يكتب سعرًا: الهامش، أو تنبيه لو بعيد عن المعتاد. */
+    function verdict() {
+      var price = num(priceEl.value);
+      if (price <= 0) { suggestion(); return; }
+
+      if (usual !== null && usual.value > 0) {
+        var dev = (price - usual.value) / usual.value;
+        if (Math.abs(dev) > PRICE_DEV) {
+          note.innerHTML = '<span class="snn-warn">'
+            + esc((dev > 0 ? '⚠ أعلى من المعتاد ' : '⚠ أقل من المعتاد ')
+                  + Math.round(Math.abs(dev) * 100) + '٪') + '</span>';
+          return;
+        }
+      }
+      /* الهامش = اللي هتحاسب بيه العميل ناقص اللي اتسجّل في البوالص.
+         ⚠️ **عرض بس**: الهامش مقيس متذبذب ٧٪→٣٣٪ فممنوع يتحسب منه سعر. */
+      var qty = qtyEl ? (num(qtyEl.value) || 1) : 1;
+      if (actual > 0) {
+        var pct = Math.round(((qty * price) - actual) / actual * 100);
+        note.innerHTML = '<span class="snn-hint">' + esc('الهامش ' + pct + '٪') + '</span>';
+        return;
+      }
+      note.innerHTML = '';
+    }
+
+    fetch(api, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) { return; }
+        cars = parseInt(d.cars, 10) || 0;
+        usual = (d.price && d.price.value) ? d.price : null;
+        verdict();
+      })
+      .catch(function () { /* الشبكة وقعت — الفورم شغّال بلا اقتراح */ });
+
+    priceEl.addEventListener('input', verdict);
+    if (qtyEl) { qtyEl.addEventListener('input', verdict); }
+  })();
 })();
