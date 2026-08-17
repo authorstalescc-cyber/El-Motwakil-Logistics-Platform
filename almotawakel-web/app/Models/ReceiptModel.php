@@ -1002,6 +1002,10 @@ final class ReceiptModel
             'qty_expected' => $model['qty_expected'] ?? null,
             'qty_entered'  => $model['qty_entered']  ?? ($present ? 1 : 0),
             'qty_basis'    => $model['qty_basis']    ?? null,
+            /* ⚠️ `qty_rate` كانت ناقصة هنا — والنافذة بتقرا منها عشان تكتب
+               «لكل سيارة ×٢»، فكانت بتطبع تحذير PHP **جوّه الـHTML** بتاعها
+               (نفس عائلة مصيدة `json()` اللي بتتلوّث بتحذير سابق). */
+            'qty_rate'     => $model['qty_rate']     ?? 1.0,
             'qty_fit'      => $model['qty_fit']      ?? null,
             'qty_trusted'  => $model['qty_trusted']  ?? false,
             'qty_scope_label' => $model['qty_scope_label'] ?? null,
@@ -1123,8 +1127,16 @@ final class ReceiptModel
                 'fit'    => $c ? (float) $c['qty_fit'] : null,
                 'day'    => $c && $c['day_offset'] !== null ? (int) $c['day_offset'] : null,
                 'amount' => $c && $c['amount_med'] !== null ? (float) $c['amount_med'] : null,
-                'used'   => $c !== null && (int) $c['n_permits'] >= self::MIN_EVIDENCE,
+                'used'   => false,
             ];
+        }
+
+        /* ⚠️ **مستوى واحد بس هو اللي «اتاخد».** كان كل مستوى عنده دليل كافي
+           بيتوسم `used`، فالنافذة كانت بتعلّم خمسة من ستة وتقول ضمنًا إن
+           الرقم جاي منهم كلهم — وده غلط: السلسلة **بتقف عند أول** مستوى فيه
+           دليل كافي (الأخصّ)، والباقي معروض للمقارنة بس. */
+        foreach ($out['levels'] as $i => $l) {
+            if ($l['found'] && $l['n'] >= self::MIN_EVIDENCE) { $out['levels'][$i]['used'] = true; break; }
         }
 
         // الأذون المشابهة نفسها بالاسم — أقوى دليل ممكن يتعرض
