@@ -103,6 +103,9 @@ $r->post('/invoices/delete',          'InvoiceController@bulkDelete');   // حذ
 // الإصدارات (إذن للصادر / شهادة للوارد) — أكبر عملية في النظام، بتايم لاين
 $r->get('/permits',                   'PermitController@index');
 $r->get('/permits/overview',          'PermitController@overview');  // نافذة نظرة عامة على إيصالات اليوم (قبل الجشع /{id})
+// ⚠️ الإدخال السريع — اتنقل من الداشبورد (2026-08-17). **حرفي قبل الجشع** `/{id}`.
+$r->get('/permits/quick-options',     'PermitController@quickOptions');
+$r->post('/permits/quick-entries',    'PermitController@quickEntries');
 $r->get('/permits/print-batch',       'PermitController@printBatch'); // طباعة عدة أذونات دفعة واحدة (قبل الجشع /{id})
 $r->post('/permits/bulk',             'PermitController@bulk');     // إجراءات جماعية على المحدَّد (قبل الجشع /{id})
 $r->get('/permits/new',               'PermitController@create');

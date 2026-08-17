@@ -18,6 +18,8 @@ use App\Models\PartyMaster;
 use App\Models\DeletionPolicy;
 use App\Models\PermitTrack;
 use App\Models\ReceiptModel;
+use App\Models\PermitQuickEntry;
+use App\Models\VisaCard;
 
 /**
  * الإصدارات (إذن للصادر / شهادة للوارد) — أكبر عملية في النظام.
@@ -140,7 +142,7 @@ class PermitController extends Controller
             $ctMap = self::containerBreakdown('movement_id', array_map(fn($m)=>(int)$m['id'], $moves));
             foreach ($moves as &$mv) { $mv['ctype_breakdown'] = $ctMap[(int)$mv['id']] ?? []; }
             unset($mv);
-            $this->render('permits/index', [
+            $this->render('permits/index', self::quickPayload() + [
                 'title' => 'ملخص الحركات',
                 'mode'  => 'movements',
                 'moves' => $moves,
@@ -299,7 +301,7 @@ class PermitController extends Controller
             }
             unset($r);
 
-            $this->render('permits/index', [
+            $this->render('permits/index', self::quickPayload() + [
                 'title'      => 'متابعة الأذونات',
                 'mode'       => 'follow',
                 'rows'       => $rows,
@@ -385,7 +387,7 @@ class PermitController extends Controller
             );
         }
 
-        $this->render('permits/index', [
+        $this->render('permits/index', self::quickPayload() + [
             'title' => 'سجلات الأذونات والشهادات',
             'mode'  => 'records',
             'rows'  => $rows,
@@ -403,6 +405,99 @@ class PermitController extends Controller
             'agentOptions'   => array_column(PartyMaster::all('agent'), 'name'),
             'companyOptions' => array_column(PartyMaster::all('company'), 'name'),
         ]);
+    }
+
+
+    /**
+     * حمولة الإدخال السريع لشاشة الأذونات — **اتنقلت من الداشبورد (2026-08-17)**.
+     *
+     * ⚠️ الأداة كانت في لوحة التحكم وهي **أداة موظف إدخال**؛ المالكان طلبوا
+     *    تنضيف اللوحة، والوظيفة ما اتغيّرتش ولا سطر — المكان بس.
+     *
+     * ⚠️ **قائمة الأذونات مش هنا** — ممكن تكون مئات الصفوف، وبتتجاب عند فتح
+     *    الأداة من `quickOptions()` بلا ما تتحمّل مع كل فتحة للشاشة.
+     *
+     * ⚠️ **التوكن بيتولّد لكل عرض** وبيتحقّق منه في `quickEntries()` — حارس
+     *    التكرار (الضغط مرتين كان بيسجّل الدفعة تاني).
+     */
+    private static function quickPayload(): array
+    {
+        $old = $_SESSION['_quick_entry_old'] ?? [];
+        unset($_SESSION['_quick_entry_old']);
+        // إشارة النجاح لمرة واحدة (تُستهلك هنا) → الواجهة تمسح المسودة المحفوظة
+        $applied = !empty($_SESSION['_quick_entry_applied']);
+        unset($_SESSION['_quick_entry_applied']);
+        $token = bin2hex(random_bytes(24));
+        $_SESSION['_quick_entry_token'] = $token;
+
+        return [
+            'quickPermits'  => [],
+            'quickCards'    => [],
+            'quickReceipts' => [],
+            'quickExpenses' => [],
+            'quickOld'      => $old,
+            'quickApplied'  => $applied,
+            'quickToken'    => $token,
+        ];
+    }
+
+    /** خيارات الإدخال السريع الثقيلة — تُجلب عند فتح الأداة بدل تضخيم الشاشة. */
+    public function quickOptions(): void
+    {
+        $this->requireAuth();
+        header('Cache-Control: private, no-store, max-age=0');
+        $lookups = Lookup::ofTypes(['mv_receipt', 'mv_expense']);
+        $cards = array_map(
+            static fn(array $card): array => [
+                'id' => (int) $card['id'],
+                'label' => $card['name'] . ($card['owner'] ? ' — ' . $card['owner'] : ''),
+            ],
+            VisaCard::all(true)
+        );
+        $this->json([
+            'ok' => true,
+            'permits' => PermitQuickEntry::options(),
+            'cards' => $cards,
+            'receipts' => $lookups['mv_receipt'] ?? [],
+            'expenses' => $lookups['mv_expense'] ?? [],
+        ]);
+    }
+
+    /** تطبيق دفعة الإدخال السريع كاملة داخل الأذونات. */
+    public function quickEntries(): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $token = (string)($_POST['quick_token'] ?? '');
+        $sessionToken = (string)($_SESSION['_quick_entry_token'] ?? '');
+        if ($token === '' || $sessionToken === '' || !hash_equals($sessionToken, $token)) {
+            flash('error', 'انتهت صلاحية شاشة الإدخال السريع. افتحها من شاشة الأذونات مرة أخرى.');
+            redirect('permits?quick=1');
+        }
+        try {
+            $result = PermitQuickEntry::save($_POST);
+            unset($_SESSION['_quick_entry_token'], $_SESSION['_quick_entry_old']);
+            // إشارة نجاح لمرة واحدة → تُخبر الواجهة أن تمسح مسودة المتصفح المحفوظة
+            $_SESSION['_quick_entry_applied'] = 1;
+            $parts = [];
+            if ($result['totals']['receipt'] > 0) { $parts[] = 'إيصالات '.money($result['totals']['receipt'], false); }
+            if ($result['totals']['expense'] > 0) { $parts[] = 'مصاريف '.money($result['totals']['expense'], false); }
+            flash('success', 'تم تطبيق '.intf($result['count']).' بند داخل الأذونات بنجاح'.($parts ? ' — '.implode('، ', $parts) : '').'.');
+            redirect('permits');
+        } catch (\Throwable $e) {
+            $_SESSION['_quick_entry_old'] = self::quickInputOnly($_POST);
+            flash('error', 'لم يتم حفظ أي بند: '.$e->getMessage());
+            redirect('permits?quick=1');
+        }
+    }
+
+    /** لا نخزن CSRF/token في بيانات إعادة تعبئة النموذج. */
+    private static function quickInputOnly(array $post): array
+    {
+        return array_intersect_key($post, array_flip([
+            'permit_id','movement_id','kind','note','amount','actual_amount',
+            'entry_date','ref_no','payment_method','visa_card_id',
+        ]));
     }
 
     public function create(): void

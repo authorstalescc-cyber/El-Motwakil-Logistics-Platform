@@ -85,59 +85,94 @@ case 'custody':
     ]);
     break;
 
-case 'reps':
-    /* ⚠️ **اليوم ده بس** (قرار المالك): عهدة المناديب يومية بلا ترحيل (v49)،
-       فولا رقم تراكمي هنا. اللي مالوش حركة النهاردة مش بيظهر أصلاً. */
-    $rt = $reps['totals'];
+case 'safe_day':
+    /* ⚠️ **المعادلة بترسم بالترتيب اللي على الشاشة بالحرف** — النافذة بتشرح
+       سطر المعادلة مش بتقدّم حساب تاني. `office` جزء من `expenses` فبيتطرح
+       منها هنا زي ما بيتطرح فوق (وإلا الفلوس تتقري مرتين). */
+    $sExp = round((float) $day['expenses'] - (float) $office, 2);
     partial('drill', [
-        'how'   => 'عهدة يوم ' . dfmt($date) . ' بس — بلا ترحيل من أي يوم قبله. فاضل معاه = اللي نزل له النهاردة − اللي صرفه المعتمد − اللي دفعه ولسه مستني اعتمادك. التراكمي (كل الأيام) مكانه صفحة عهدة المناديب.',
-        'count' => count($reps['reps']),
-        'total' => ['label' => 'فاضل معاهم النهاردة', 'value' => money($rt['day_pocket'], false)],
-        'more'  => ['label' => 'عهدة المناديب', 'url' => url('rep-custody')],
-        'empty' => ['title' => 'مفيش حركة عهدة في اليوم ده'],
-        'body'  => function () use ($reps) {
-            foreach ($reps['reps'] as $c) {
-                $tags = [
-                    ['icon' => 'wallet', 'text' => 'نزل ' . money($c['day_deposits'], false)],
-                    ['icon' => 'trending-down', 'text' => 'صرف ' . money($c['day_spent'], false)],
-                ];
-                if (($c['day_transfer_in'] ?? 0) > 0) {
-                    $tags[] = ['icon' => 'shuffle', 'text' => 'من زميل ' . money($c['day_transfer_in'], false)];
-                }
-                if (($c['day_transfer_out'] ?? 0) > 0) {
-                    $tags[] = ['icon' => 'shuffle', 'text' => 'لزميل ' . money($c['day_transfer_out'], false)];
-                }
-                if (($c['day_pending_cnt'] ?? 0) > 0) {
-                    $tags[] = ['icon' => 'hourglass',
-                               'text' => intf($c['day_pending_cnt']) . ' مستنّي · ' . money($c['day_pending'], false)];
-                }
-                partial('row_item', [
-                    'title' => $c['name'],
-                    'icon'  => 'user',
-                    'url'   => url('rep-custody/' . (int) $c['id'] . '?tab=day'),
-                    'meta'  => $tags,
-                    'chips' => $c['low'] ? [['icon' => 'alert', 'text' => 'محتاج تنزيل']] : [],
-                    'amount' => money($c['day_pocket'], false),
-                    'amount_tone' => $c['day_pocket'] < 0 ? 'neg' : 'pos',
-                    'sub'   => 'فاضل معاه',
-                ]);
+        'how'   => 'خزنة المكتب في ' . $dayTxt . ': فتحت بـ' . money0($day['opening'], false)
+                 . ' · دخلها ' . money0($day['topups'], false)
+                 . ' · نزل للمكتب ' . money0($office, false)
+                 . ' · مصروفات ' . money0($sExp, false)
+                 . ' · عهدة سواقين ' . money0($day['driver'], false) . '.',
+        'total' => ['label' => $day['is_locked'] ? 'قفلنا على' : 'الرصيد دلوقتي',
+                    'value' => money($day['closing'], false)],
+        'more'  => ['label' => 'شاشة التقفيل', 'url' => url('closing')],
+        'empty' => ['title' => 'مفيش حركة خزنة في ' . $dayTxt],
+        'body'  => function () use ($day, $office, $sExp, $dayTxt, $cday) {
+            partial('row_item', ['title' => 'فتحنا اليوم بـ', 'icon' => 'briefcase',
+                'meta' => [['icon' => 'info', 'text' => 'المرحَّل من آخر إقفال']],
+                'amount' => money($day['opening'], false)]);
+            partial('row_item', ['title' => 'دخل الخزنة في ' . $dayTxt, 'icon' => 'wallet',
+                'meta' => [['icon' => 'info', 'text' => 'عهد مضافة للدرج']],
+                'amount' => '+ ' . money($day['topups'], false), 'amount_tone' => 'pos']);
+            if ($office > 0.005) {
+                partial('row_item', ['title' => 'نزل للمكتب (عهدة مناديب)', 'icon' => 'users',
+                    'meta' => [['icon' => 'info', 'text' => 'مسحوب من الدرج للمناديب']],
+                    'amount' => '- ' . money($office, false), 'amount_tone' => 'ex']);
+            }
+            partial('row_item', ['title' => 'مصروفات ' . $dayTxt, 'icon' => 'trending-down',
+                'meta' => [['icon' => 'info', 'text' => 'أذونات ومصروفات يدوية وكاش مناديب']],
+                'amount' => '- ' . money($sExp, false), 'amount_tone' => 'ex']);
+            partial('row_item', ['title' => 'عهد سائقين في ' . $dayTxt, 'icon' => 'truck',
+                'meta' => [['icon' => 'info', 'text' => 'المخصوم بعد خصم المستحق']],
+                'amount' => '- ' . money($day['driver'], false), 'amount_tone' => 'ex']);
+            // بنود العهد الفعلية — نفس مصدر نافذة «رصيد الخزنة» بالحرف
+            foreach ($cday['topups'] as $t) {
+                partial('row_item', ['title' => 'إضافة عهدة', 'icon' => 'wallet',
+                    'meta' => array_values(array_filter([
+                        $t['driver'] ? ['icon' => 'user', 'text' => $t['driver']] : null,
+                        ['icon' => 'file-text', 'text' => $t['note'] ?: 'بلا ملاحظة'],
+                    ])),
+                    'amount' => '+ ' . money($t['amount'], false), 'amount_tone' => 'pos',
+                    'sub' => dfmt($t['d'])]);
+            }
+            foreach ($cday['drivers'] as $t) {
+                partial('row_item', ['title' => 'عهدة سائق', 'icon' => 'truck',
+                    'meta' => [['icon' => 'user', 'text' => $t['driver'] ?: '—'],
+                               ['icon' => 'file-text', 'text' => $t['note'] ?: 'بلا ملاحظة']],
+                    'amount' => money($t['amount'], false), 'amount_tone' => 'ex',
+                    'sub' => dfmt($t['d'])]);
             }
         },
     ]);
     break;
 
-case 'touched':
-    /* الإجمالي بيجمع المعتمَد **والمستنّي** — عشان الرقم يطابق اللي في اللوح. */
-    $tSum = 0.0; $tPend = 0;
-    foreach ($rows as $r) { $tSum += $r['rc_val'] + $r['ex_val'] + $r['pend_val']; $tPend += $r['pend_cnt']; }
+case 'cars':
+    $cFreight = 0.0; $cConts = 0;
+    foreach ($rows as $c) { $cFreight += (float) $c['freight']; $cConts += (int) $c['container_count']; }
     partial('drill', [
-        'how'   => 'كل إذن اتضاف له إيصال أو مصروف على تاريخ العمل ' . $dayTxt
-                 . ($tPend > 0 ? ' — ومنهم ' . intf($tPend) . ' بند لسه مستنّي اعتمادك.' : '.'),
+        'how'   => 'كل بوليصة اتسجّلت على تاريخ العمل ' . $dayTxt . ' — البوليصة الواحدة = نقلة عربية واحدة.',
         'count' => count($rows),
-        'total' => ['label' => 'إجمالي اليوم', 'value' => money($tSum, false)],
-        'more'  => ['label' => 'الأذونات', 'url' => url('permits')],
-        'empty' => ['title' => 'مفيش إيصالات ولا مصروفات في ' . $dayTxt],
-        'body'  => function () use ($rows) { foreach ($rows as $t) { dash_touched_row($t); } },
+        'total' => ['label' => 'نولون اليوم', 'value' => money($cFreight, false)],
+        'more'  => ['label' => 'سجل البوالص', 'url' => url('bawalis')],
+        'empty' => ['title' => 'مفيش عربية خرجت في ' . $dayTxt],
+        'body'  => function () use ($rows) { foreach ($rows as $c) { dash_car_row($c); } },
+    ]);
+    break;
+
+case 'needs_closing':
+    /* ⚠️ التعريف قرار المالك: خرجت كل سياراته **و**إيصالاته مكتملة. النافذة
+       بتقرا من `PermitReadiness` نفسها اللي عدّت الكارت — بلا حساب تاني. */
+    partial('drill', [
+        'how'   => 'أذونات خرجت كل عربياتها وإيصالاتها مكتملة — يعني خلصت شغلها وفاضل تقفلها.',
+        'count' => count($rows),
+        'total' => ['label' => 'من أصل مفتوح', 'value' => intf($counts['open']) . ' إذن'],
+        'more'  => ['label' => 'كل الأذونات المفتوحة', 'url' => url('permits?view=records&st=open')],
+        'empty' => ['title' => 'مفيش إذن خلص شغله لسه'],
+        'body'  => function () use ($rows) { foreach ($rows as $r) { dash_readiness_row($r); } },
+    ]);
+    break;
+
+case 'receipt_gaps':
+    partial('drill', [
+        'how'   => 'أذونات خرجت كل عربياتها لكن مرشد الإيصالات شايف إن فيه بنود ناقصة — يا غايبة خالص يا عددها أقل من المتوقّع.',
+        'count' => count($rows),
+        'total' => ['label' => 'من أصل مفتوح', 'value' => intf($counts['open']) . ' إذن'],
+        'more'  => ['label' => 'موديل الإيصالات', 'url' => url('receipt-model')],
+        'empty' => ['title' => 'مفيش إذن ناقصه إيصالات'],
+        'body'  => function () use ($rows) { foreach ($rows as $r) { dash_readiness_row($r); } },
     ]);
     break;
 
@@ -181,7 +216,14 @@ case 'ready':
     ]);
     break;
 
-case 'permits_open':
+/* ⚠️ **`permits_open` هي الحالة الافتراضية عن قصد** — النوع محصور في قائمة
+   بيضا في `DashboardController::drill()`، فالوصول هنا بنوع مجهول مستحيل.
+   وخليها حالة حقيقية أأمن من `default` فاضية بترجّع HTML فاضي بلا سبب ظاهر.
+
+   ⚠️ **`activity` («آخر ما اتسجّل») اتشالت (2026-08-17)** — الزرار اللي كان
+      بيفتحها اتشال من الصفحة، والسجل الكامل موجود في `/audit` بفلاتر أكتر.
+      نافذة بلا نقطة استدعاء = كود ميت بيتصان مجانًا. */
+default:   // permits_open
     partial('drill', [
         'how'   => 'الأذونات والشهادات اللي لسه شغّالة — بيتسجّل عليها إيصالات ومصروفات، وما ينفعش تتفوتر قبل ما تتقفل.',
         'count' => $permits['open'],
@@ -189,43 +231,5 @@ case 'permits_open':
         'more'  => ['label' => 'متابعة كل الأذونات', 'url' => url('permits')],
         'empty' => ['title' => 'مفيش أذونات مفتوحة'],
         'body'  => function () use ($rows) { foreach ($rows as $p) { dash_permit_row($p, false); } },
-    ]);
-    break;
-
-default:   // activity — آخر ما اتسجّل في كل الوحدات (مش مربوط بتاريخ العمل)
-    $kindMeta = [
-        'bawalis'    => ['truck',     'بوليصة',         static fn ($r) => url('bawalis/' . $r['id'])],
-        /* أرشيف: مفيش صفحة لـshamil فالصف بيتعرض بلا رابط بدل ما يوصّل 404 */
-        'shamil'     => ['layers',    'فاتورة (أرشيف)',  static fn ($r) => null],
-        'takhlis'    => ['clipboard', 'شهادة تخليص',    static fn ($r) => url('takhlis/' . $r['id'] . '/edit')],
-        'generators' => ['cpu',       'مولدات',          static fn ($r) => url('generators/' . $r['id'] . '/edit')],
-        'permits'    => ['folder',    'إصدار',           static fn ($r) => url('permits/' . $r['id'])],
-        'payment'    => ['banknote',  'سداد',            static fn ($r) => url('settlements')],
-    ];
-    partial('drill', [
-        'how'   => 'أحدث السجلات من كل الوحدات — مش مربوط بتاريخ العمل. ده سؤال تاني غير «فلوس اليوم».',
-        'count' => count($rows),
-        'more'  => ['label' => 'سجل العمليات', 'url' => url('audit')],
-        'empty' => ['title' => 'لا توجد عمليات مسجّلة بعد'],
-        'body'  => function () use ($rows, $kindMeta) {
-            foreach ($rows as $a) {
-                [$ic, $lbl, $linkFn] = $kindMeta[$a['kind']] ?? ['file-text', 'عملية', static fn ($r) => null];
-                $amount = match ($a['kind']) {
-                    'permits' => intf($a['amount']) . ' حاوية',
-                    'payment' => '+ ' . money($a['amount'], false),
-                    default   => null,
-                };
-                partial('row_item', [
-                    'title'  => $lbl,
-                    'ref'    => ($a['ref'] && $a['ref'] !== '—') ? '#' . $a['ref'] : null,
-                    'icon'   => $ic,
-                    'url'    => $linkFn($a),
-                    'meta'   => [['icon' => 'user', 'text' => $a['party'] ?: 'بدون جهة']],
-                    'amount' => $amount,
-                    'amount_tone' => $a['kind'] === 'payment' ? 'pos' : '',
-                    'sub'    => dfmt($a['d']),
-                ]);
-            }
-        },
     ]);
 }

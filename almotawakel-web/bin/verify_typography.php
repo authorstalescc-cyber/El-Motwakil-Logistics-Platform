@@ -299,8 +299,20 @@ sec('⑤ باج العملة المكرّرة (اتصادف أثناء المر�
 /* `money0()` بترجّع العملة جوّه النص، ومكوّن `stat` بيعرض `unit` كمان —
    فالداشبورد كانت بتقول «0 ج.م ج.م» و«245,050 ج.م ج.م». */
 $dash = php_code($views['app/Views/dashboard/index.php'] ?? '');
-chk(!preg_match("/money0\([^)]*\)\s*,\s*'unit'/", $dash) || str_contains($dash, 'money0($daily[\'expenses\'], false)'),
-    '⚠️ الداشبورد بتستخدم `money0(..., false)` مع `unit` — وإلا العملة بتتكرر مرتين');
+/* ⚠️ **الفحص على السلوك مش على سطر بعينه (اتصلّح 2026-08-17).** الصيغة القديمة
+   كانت بتطابق **أي** `money0(...)` جنب `'unit'` — حتى الصح منها — وبتسمح
+   بمخرج هروب هو نص سطر واحد بالحرف (`money0($daily['expenses'], false)`).
+   أول ما اتشال الكارت ده في إعادة بناء الداشبورد، الفحص فشل **بإنذار كاذب**
+   على كود سليم. دلوقتي بيمسك الغلط نفسه: `money0()` **بلا** `false` جنب
+   `'unit'` — وهو اللي بيطبع «245,050 ج.م ج.م». */
+preg_match_all("/money0\(([^)]*)\)\s*,\s*'unit'/", $dash, $mMoney);
+$dupCurrency = array_values(array_filter(
+    $mMoney[1] ?? [],
+    static fn (string $args): bool => !str_contains($args, 'false')
+));
+chk($dupCurrency === [],
+    '⚠️ الداشبورد بتستخدم `money0(..., false)` مع `unit` — وإلا العملة بتتكرر مرتين'
+    . ($dupCurrency ? ' — الغلط في: ' . implode(' · ', $dupCurrency) : ''));
 chk(!str_contains($dash, "money0(\$custody) . ' ' . \$cur"),
     'وحقيقة الخزنة في شريط اليوم بلا عملة مضافة بالإيد');
 $hlp = (string) file_get_contents($root . '/app/Core/helpers.php');

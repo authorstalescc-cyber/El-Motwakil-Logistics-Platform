@@ -8,11 +8,9 @@ use App\Models\Closing;
 use App\Models\Custody;
 use App\Models\Metrics;
 use App\Models\Note;
-use App\Models\Lookup;
-use App\Models\PermitQuickEntry;
+use App\Models\PermitReadiness;
 use App\Models\Rep;
 use App\Models\RepCustody;
-use App\Models\VisaCard;
 
 class DashboardController extends Controller
 {
@@ -33,6 +31,13 @@ class DashboardController extends Controller
            للصفحة في `#popStore`. اللي اتشال من هنا: `recentActivity` و
            `custodyDay` وتصفية مصروفات/إيصالات اليوم — كلها بقت في المسار
            الكسول، فالصفحة ما بتدفعش تكلفتها إلا لو المالك فتح التفاصيل. */
+        /* ⚠️ **إعادة البناء (2026-08-17) — طلب المالكين بالحرف:**
+             «رصيد الخزنة دخلها كام ونزل كام للمكتب · خرج كام عربية اليوم ·
+              دخل كام إيصال · إيه الأذونات الجديدة اللي اتفتحت · الأذونات
+              اللي محتاجة تتقفل · كل مندوب نزله كام وصرف قد إيه وسوَى ولا
+              مسواش عهدته · الأذونات اللي فيها إيصالات محتملة ناقصة».
+           كلها بتقرا من مصادر قايمة — مفيش تعريف جديد لأي رقم غير تعريف
+           «الإذن خلص شغله» اللي عايش في `PermitReadiness` لوحده. */
         $custodyBalance = $profile('dashboard.custody', fn() => Custody::balance());
         /* ⚠️ `$date` = احترام يوم العمل: ما ينفعش المالك وهو على يوم ٢٦ يشوف إذنًا
    تاريخه ٢٨ (بلاغ المالك 2026-07-28). المتأخرات بتفضل، المستقبل بس بيتشال. */
@@ -41,13 +46,6 @@ class DashboardController extends Controller
    السجل التراكمي (`entry_date <= $date`) بلا فلترة، فكان بيعرض بنود ٢٦
    على إنها بتاعة ٢٧. التاريخ لازم يتحترم ١٠٠٪. */
         $timeline = $profile('dashboard.feed', fn() => Metrics::expenseReceiptFeed($date, 40, true));
-        $quickOld = $_SESSION['_quick_entry_old'] ?? [];
-        unset($_SESSION['_quick_entry_old']);
-        // إشارة النجاح لمرة واحدة (تُستهلك هنا) → الواجهة تمسح المسودة المحفوظة
-        $quickApplied = !empty($_SESSION['_quick_entry_applied']);
-        unset($_SESSION['_quick_entry_applied']);
-        $quickToken = bin2hex(random_bytes(24));
-        $_SESSION['_quick_entry_token'] = $quickToken;
 
         $this->render('dashboard/index', [
             'title'    => 'لوحة التحكم',
@@ -63,31 +61,35 @@ class DashboardController extends Controller
             'ctx'      => $profile('dashboard.context', fn() => Metrics::dashContext($date, $custodyBalance)),
             'ready'    => $readyData['rows'],
             'readySum' => $readyData['summary'],
-            'openList' => $profile('dashboard.open_permits', fn() => Metrics::openPermitsList(8, $date)),
             /* ⚠️ **طلب المالك (2026-07-27) — الداشبورد بعدسة اليوم بلا أي تراكمي:**
-                 ① الأذونات اللي اتضاف لها إيصال/مصروف النهاردة — **ومعاها اللي
-                    لسه مستنّي اعتماد** (المندوب بعته وما اتراجعش).
-                 ② الأذونات اللي اتفتحت النهاردة.
-                 ③ عهدة كل مندوب **في اليوم ده** (مش رصيده التراكمي).
-               التلاتة بيقروا من مصادر قايمة — مفيش تعريف جديد لأي رقم. */
-            'touched'  => $profile('dashboard.touched', fn() => Metrics::permitsTouched($date)),
+                 ① الأذونات اللي اتفتحت النهاردة.
+                 ② عهدة كل مندوب **في اليوم ده** (مش رصيده التراكمي).
+               الاتنين بيقروا من مصادر قايمة — مفيش تعريف جديد لأي رقم.
+               («الأذونات اللي اتحرّك عليها» اتشالت 2026-08-17: كانت بتكرّر
+                لوح «فلوس اليوم» اللي تحتها بالحرف.) */
             'opened'   => $profile('dashboard.opened',  fn() => Metrics::permitsOpened($date)),
             'repsDay'  => $profile('dashboard.reps_day', fn() => RepCustody::dayTotalsByRep($date)),
             'repNames' => $profile('dashboard.rep_names', fn() => Rep::all('', 'active')),
+            /* ⚠️ **«خرج كام عربية النهاردة»** — العدّ بس هنا (استعلام COUNT
+               واحد)، والقايمة بتتجاب عند الضغط من `drill('cars')`. */
+            'cars'     => $profile('dashboard.cars', fn() => Metrics::carsOutCount($date)),
+            /* ⚠️ **«محتاجة تتقفل» و«ناقصها إيصالات» من مسح واحد** — لو كل
+               واحد اتحسب لوحده كان ممكن الكارت يقول رقمًا واللوح يقول غيره.
+               (`PermitReadiness::scan` بتشرح التعريف ومصدره.) */
+            'readiness'=> $profile('dashboard.readiness', fn() => PermitReadiness::scan($date)),
+            /* ⚠️ **معادلة الخزنة** — `dayView` بترجّع فتح/دخل/مصروف/عهدة/قفل،
+               و`dayOfficeDeposits` بتفصل «اللي نزل للمكتب» **من جوّه**
+               `expenses` (مش رقم زيادة عليها — تحذير `Closing`). */
+            'safeDay'   => $profile('dashboard.safe_day', fn() => Closing::dayView($date)),
+            'safeOffice'=> $profile('dashboard.safe_office', fn() => Closing::dayOfficeDeposits($date)),
             'feed'     => array_slice($timeline, 0, 12),
             'locked'   => Closing::isLocked($date),
-            /* عهدة المناديب — الرقم بس؛ الكروت والمدخلات مكانها `/rep-custody`
-               (اللوحة المفصّلة اتشالت في المرحلة ١١ لأنها كانت بتكرّر الصفحة). */
-            'repsPanel'=> $profile('dashboard.reps', fn() => RepCustody::dashboard($date, 0, 0)),
+            /* عهدة المناديب — الكروت والمدخلات مكانها `/rep-custody`.
+               ⚠️ **`available()` مش `dashboard()`** (2026-08-17): الشاشة كانت
+                  بتنادي `RepCustody::dashboard()` — استعلام مجمَّع تقيل —
+                  عشان تقرا منه **مفتاح `available` وبس**، وترمي الباقي. */
+            'repsOn'   => $profile('dashboard.reps_on', fn() => RepCustody::available()),
             'notes'    => $profile('dashboard.notes', fn() => Note::all(20)),
-            // قائمة الأذونات قد تكون مئات الصفوف؛ تُحمّل فقط عند فتح الإدخال السريع.
-            'quickPermits' => [],
-            'quickCards' => [],
-            'quickReceipts' => [],
-            'quickExpenses' => [],
-            'quickOld' => $quickOld,
-            'quickApplied' => $quickApplied,
-            'quickToken' => $quickToken,
         ]);
     }
 
@@ -105,8 +107,9 @@ class DashboardController extends Controller
     public function drill(string $what): void
     {
         $this->requireAuth();
-        if (!in_array($what, ['expenses', 'receipts', 'custody', 'reps', 'ready', 'permits_open', 'activity',
-                              'touched', 'opened', 'reps_day'], true)) {
+        if (!in_array($what, ['expenses', 'receipts', 'custody', 'ready', 'permits_open',
+                              'opened', 'reps_day', 'cars', 'needs_closing', 'receipt_gaps',
+                              'safe_day'], true)) {
             $this->notFound('نوع التفاصيل ده مش موجود.');
         }
         $date = Auth::workDate();
@@ -122,9 +125,23 @@ class DashboardController extends Controller
                 ));
                 $data['daily'] = Metrics::dashDaily($date);
                 break;
-            case 'touched':
-                /* الأذونات اللي اتحرّك عليها فلوس النهاردة — معتمد ومستنّي. */
-                $data['rows'] = Metrics::permitsTouched($date);
+            case 'cars':
+                $data['rows'] = Metrics::carsOut($date, 200);
+                break;
+            case 'needs_closing':
+            case 'receipt_gaps':
+                /* ⚠️ **نفس المسح اللي عدّ الكارت** — النافذة بتاخد فرعًا منه
+                   مش بتعيد الحساب، فمستحيل الكارت والنافذة يفترقوا. */
+                $scan = PermitReadiness::scan($date);
+                $data['rows']   = $what === 'needs_closing' ? $scan['ready'] : $scan['gaps'];
+                $data['counts'] = $scan['counts'];
+                break;
+            case 'safe_day':
+                /* ⚠️ `cday` هي **نفس** مصدر نافذة «رصيد الخزنة» — البنود
+                   الفعلية بتتعرض تحت المعادلة بلا تعريف تاني. */
+                $data['day']    = Closing::dayView($date);
+                $data['office'] = Closing::dayOfficeDeposits($date);
+                $data['cday']   = Metrics::custodyDay($date, Custody::balance());
                 break;
             case 'opened':
                 $data['rows'] = Metrics::permitsOpened($date);
@@ -138,20 +155,14 @@ class DashboardController extends Controller
                 $data['balance'] = $balance;
                 $data['cday'] = Metrics::custodyDay($date, $balance);
                 break;
-            case 'reps':
-                $data['reps'] = RepCustody::dashboard($date, 1, 12);
-                break;
             case 'ready':
                 $ready = Metrics::readyToInvoiceDashboard(40, $date);
                 $data['rows'] = $ready['rows'];
                 $data['summary'] = $ready['summary'];
                 break;
-            case 'permits_open':
+            default:   // permits_open — النوع محصور في القائمة البيضا فوق
                 $data['rows'] = Metrics::openPermitsList(40, $date);
                 $data['permits'] = Metrics::permitsSummary();
-                break;
-            default:   // activity
-                $data['rows'] = Metrics::recentActivity(20);
         }
 
         // ⚠️ محروسة بـ`headers_sent()`: أي مخرَج سابق بيخلّي `header()` ترمي
@@ -161,65 +172,6 @@ class DashboardController extends Controller
             header('Cache-Control: private, no-store, max-age=0');
         }
         $this->render('dashboard/_drill', $data, false);
-    }
-
-    /** خيارات الإدخال السريع الثقيلة — تُجلب عند فتح الأداة بدل تضخيم الداشبورد. */
-    public function quickOptions(): void
-    {
-        $this->requireAuth();
-        header('Cache-Control: private, no-store, max-age=0');
-        $lookups = Lookup::ofTypes(['mv_receipt', 'mv_expense']);
-        $cards = array_map(
-            static fn(array $card): array => [
-                'id' => (int) $card['id'],
-                'label' => $card['name'] . ($card['owner'] ? ' — ' . $card['owner'] : ''),
-            ],
-            VisaCard::all(true)
-        );
-        $this->json([
-            'ok' => true,
-            'permits' => PermitQuickEntry::options(),
-            'cards' => $cards,
-            'receipts' => $lookups['mv_receipt'] ?? [],
-            'expenses' => $lookups['mv_expense'] ?? [],
-        ]);
-    }
-
-    /** تطبيق دفعة الإدخال السريع كاملة داخل الأذونات. */
-    public function quickEntries(): void
-    {
-        $this->requireAuth();
-        $this->requireCsrf();
-        $token = (string)($_POST['quick_token'] ?? '');
-        $sessionToken = (string)($_SESSION['_quick_entry_token'] ?? '');
-        if ($token === '' || $sessionToken === '' || !hash_equals($sessionToken, $token)) {
-            flash('error', 'انتهت صلاحية شاشة الإدخال السريع. افتحها من الداشبورد مرة أخرى.');
-            redirect('?quick=1');
-        }
-        try {
-            $result = PermitQuickEntry::save($_POST);
-            unset($_SESSION['_quick_entry_token'], $_SESSION['_quick_entry_old']);
-            // إشارة نجاح لمرة واحدة → تُخبر الواجهة أن تمسح مسودة المتصفح المحفوظة
-            $_SESSION['_quick_entry_applied'] = 1;
-            $parts = [];
-            if ($result['totals']['receipt'] > 0) { $parts[] = 'إيصالات '.money($result['totals']['receipt'], false); }
-            if ($result['totals']['expense'] > 0) { $parts[] = 'مصاريف '.money($result['totals']['expense'], false); }
-            flash('success', 'تم تطبيق '.intf($result['count']).' بند داخل الأذونات بنجاح'.($parts ? ' — '.implode('، ', $parts) : '').'.');
-            redirect('');
-        } catch (\Throwable $e) {
-            $_SESSION['_quick_entry_old'] = self::quickInputOnly($_POST);
-            flash('error', 'لم يتم حفظ أي بند: '.$e->getMessage());
-            redirect('?quick=1');
-        }
-    }
-
-    /** لا نخزن CSRF/token في بيانات إعادة تعبئة النموذج. */
-    private static function quickInputOnly(array $post): array
-    {
-        return array_intersect_key($post, array_flip([
-            'permit_id','movement_id','kind','note','amount','actual_amount',
-            'entry_date','ref_no','payment_method','visa_card_id',
-        ]));
     }
 
     /** إضافة ملاحظة سريعة */

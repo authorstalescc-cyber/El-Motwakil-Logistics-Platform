@@ -397,7 +397,10 @@ try {
        والقاعدة اليومية نفسها محروسة في `bin/verify_reps_day_scope.php`. */
     $renderCheck('لوحة التحكم',
         static fn() => (new \App\Controllers\DashboardController())->index(),
-        ['مع المناديب', 'dashboard/drill/reps']);
+        /* ⚠️ 2026-08-17: الكارت الواحد بقى ٣ كروت يومية وجدول بحكم لكل مندوب،
+           والنافذة بقت `reps_day`. الفحص على **المعنى** زي ما هو: الرقم اليومي
+           موجود وله طريق لتفاصيله. */
+        ['نزل عهدة', 'dashboard/drill/reps_day']);
 
     // شاشة المندوب نفسها — بجلسة مندوب مش جلسة مكتب.
     $renderHome = static function (string $workDay) use ($repA): string {

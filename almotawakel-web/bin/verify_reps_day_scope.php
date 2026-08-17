@@ -166,15 +166,21 @@ try {
     // ══════════════════════════════════════════════ ٥) الشاشة نفسها
     sec('٥) ماركب الشاشات');
 
-    has('الداشبورد بتعرض فاضل عهدة اليوم', 'app/Views/dashboard/index.php', "day_pocket");
-    has('وبعنوان يومي مش تراكمي', 'app/Views/dashboard/index.php', "'label' => 'فاضل مع المناديب'");
-    has('نافذة التفاصيل بتعرض «نزل» اليوم', 'app/Views/dashboard/_drill.php', "day_deposits");
-    has('ونافذة التفاصيل بتعرض فاضل اليوم', 'app/Views/dashboard/_drill.php', "day_pocket");
+    /* ⚠️ **الفحص على المعنى مش على التسمية (اتحدّث 2026-08-17).** إعادة بناء
+       الداشبورد شالت كارت «فاضل مع المناديب» الواحد وحطّت مكانه ٣ كروت يومية
+       (نزل عهدة · اللي اتصرف · لسه ما سوّاش) + جدول بحكم لكل مندوب. القاعدة
+       المحروسة **ما اتغيّرتش**: الشاشة بتعرض عهدة **اليوم** بلا أي تراكمي. */
+    has('الداشبورد بتعرض عهدة اليوم', 'app/Views/dashboard/index.php', "\$repsDay");
+    has('ومصدرها `dayTotalsByRep($day)` مش رقم تراكمي', 'app/Controllers/DashboardController.php',
+        "RepCustody::dayTotalsByRep(\$date)");
+    has('وبحكم يومي («سوّى ولا لأ») مش رقم خام', 'app/Views/dashboard/index.php', "dayVerdict");
+    has('وصف المندوب بيعرض فاضل اليوم', 'app/Views/dashboard/_rows.php', "pocket");
+    has('ونافذة التفاصيل يومية', 'app/Views/dashboard/_drill.php', "reps_day");
 
     // ⚠️ اللي بيمنع رجوع التراكمي للشاشة: مفيش أي مفتاح تراكمي في ماركب الداشبورد.
     $drill = (string) file_get_contents(dirname(__DIR__) . '/app/Views/dashboard/_drill.php');
     $repsBlock = '';
-    if (preg_match("~case 'reps':(.*?)\n    break;~s", $drill, $m)) { $repsBlock = $m[1]; }
+    if (preg_match("~case 'reps_day':(.*?)\n    break;~s", $drill, $m)) { $repsBlock = $m[1]; }
     $repsBlock !== '' ? ok('لقينا قسم المناديب في نافذة التفاصيل') : bad('قسم المناديب مش موجود');
     foreach (["\$c['deposits']", "\$c['spent']", "\$c['balance']", "outstanding"] as $needle) {
         !str_contains($repsBlock, $needle)
@@ -209,8 +215,9 @@ try {
     //    في جافاسكريبت الصفحة ويدّي **فشلًا كاذبًا** (اتصاد فعليًّا).
     !preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $html, $phpErr)
         ? ok('بلا أي تحذير PHP جوّه الصفحة') : bad('فيه تحذير PHP في الصفحة: ' . ($phpErr[0] ?? ''));
-    str_contains($html, 'فاضل مع المناديب')
-        ? ok('العنوان اليومي ظاهر للمالك') : bad('العنوان اليومي مش ظاهر');
+    /* الحكم اليومي هو اللي المالك بيقراه دلوقتي بدل الرقم الخام. */
+    (str_contains($html, 'لسه ما سوّاش') || str_contains($html, 'سوّى عهدته'))
+        ? ok('الحكم اليومي ظاهر للمالك') : bad('الحكم اليومي مش ظاهر');
     !str_contains($html, 'برّه مع المناديب')
         ? ok('★ العنوان التراكمي القديم اختفى من اللوحة')
         : bad('★ «برّه مع المناديب» التراكمي لسه في اللوحة');

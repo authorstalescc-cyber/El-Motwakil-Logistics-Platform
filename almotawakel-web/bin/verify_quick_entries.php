@@ -7,7 +7,7 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /** اختبار آمن داخل transaction للإدخال السريع والمراجعة وعدم الحفظ الجزئي. */
 require dirname(__DIR__) . '/app/bootstrap.php';
 
-use App\Controllers\DashboardController;
+use App\Controllers\PermitController;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Models\PermitQuickEntry;
@@ -98,7 +98,7 @@ try {
     // رندر الداشبورد الكامل: الزر، شاشة الإدخال، والمراجعة موجودون.
     $_SERVER['REQUEST_URI'] = '/';
     ob_start();
-    (new DashboardController())->index();
+    (new PermitController())->index();
     $html = ob_get_clean();
     foreach (['quickEntryOpen','quickEntryModal','qePermitBrowser','qeMovementBrowser','qe-kind-switch','data-kind="receipt"','data-kind="expense"','اختيار تلقائي','الشركة','الحاويات','name="qty[]"','مراجعة الإدخالات','تطبيق داخل الأذونات'] as $needle) {
         if (!str_contains($html, $needle)) { throw new RuntimeException('فشل رندر واجهة الإدخال السريع: '.$needle); }

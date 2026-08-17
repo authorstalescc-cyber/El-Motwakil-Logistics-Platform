@@ -28,6 +28,9 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
            بتفتح النافذة العامة (`#uiDrill`) بلا ما تنقل من الشاشة. */ ?>
   <button type="button" class="btn ghost" data-drill="<?= url('permits/overview') ?>"
           data-drill-title="نظرة عامة — إيصالات اليوم"><?= icon('sparkles', 15) ?> نظرة عامة</button>
+  <?php /* ⚠️ **الإدخال السريع اتنقل هنا من الداشبورد (2026-08-17)** — أداة
+           موظف إدخال مكانها شاشة الأذونات، مش لوحة الإدارة. */ ?>
+  <button type="button" class="btn ghost" id="quickEntryOpen"><?= icon('plus', 15) ?> إدخال سريع</button>
   <a class="btn gold pv-new" href="<?= url('permits/new') ?>"><?= icon('plus', 15) ?> إصدار جديد</a>
 </div>
 
@@ -658,5 +661,10 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
 })();
 </script>
 <?php endif; ?>
+
+
+<?php /* ⚠️ **الإدخال السريع** — اتنقل من الداشبورد (2026-08-17). الجزء بيتحمّل
+         في وضع المتابعة والسجلّات بس؛ شاشة «الحركات» مالهاش علاقة بالإدخال. */ ?>
+<?php if ($mode !== 'movements') { require __DIR__ . '/_quick_entry.php'; } ?>
 
 </div>

@@ -61,41 +61,68 @@ if (!function_exists('dash_feed_row')) {
     }
 }
 
-if (!function_exists('dash_touched_row')) {
+if (!function_exists('dash_car_row')) {
     /**
-     * صف «إذن اتحرّك عليه فلوس النهاردة».
+     * صف «عربية خرجت النهاردة» — بوليصة واحدة = نقلة سيارة واحدة.
      *
-     * ⚠️ **المستنّي بيتعرض لوحده بشارة صفرا** — طلب المالك إنه يشوف اللي اتضاف
-     *    «حتى لو لم يتم اعتماده»، وخلطه بالمعتمَد كان هيخلّيه يفتكر إن البند
-     *    اتراجع وخلص. الشارة هي اللي بتقول «ده لسه مستنّي قرارك».
+     * ⚠️ **البطل هو رقم العربية والسائق مش المبلغ.** سؤال المالك «خرج كام
+     *    عربية» سؤال تشغيلي: مين خرج وراح فين. النولون بيتعرض على الجنب
+     *    كسياق، مش كعنوان.
      */
-    function dash_touched_row(array $t): void
+    function dash_car_row(array $c): void
     {
-        $th   = Permit::theme($t['permit_type']);
         $meta = [];
-        if ($t['rc_cnt'] > 0) {
-            $meta[] = ['icon' => 'clipboard', 'text' => intf($t['rc_cnt']) . ' إيصال · ' . money0($t['rc_val'], false)];
-        }
-        if ($t['ex_cnt'] > 0) {
-            $meta[] = ['icon' => 'trending-down', 'text' => intf($t['ex_cnt']) . ' مصروف · ' . money0($t['ex_val'], false)];
-        }
-        if (($t['company'] ?? '') !== '') { $meta[] = ['icon' => 'building', 'text' => $t['company']]; }
+        if (($c['driver'] ?? '') !== '')     { $meta[] = ['icon' => 'user', 'text' => $c['driver']]; }
+        if (($c['party'] ?? '') !== '')      { $meta[] = ['icon' => 'building', 'text' => $c['party']]; }
+        if (($c['destination'] ?? '') !== '') { $meta[] = ['icon' => 'map-pin', 'text' => $c['destination']]; }
 
         $chips = [];
-        if ($t['pend_cnt'] > 0) {
-            $chips[] = ['text' => intf($t['pend_cnt']) . ' مستنّي اعتمادك · ' . money0($t['pend_val'], false), 'tone' => 'wait'];
+        $cnt = (int) ($c['container_count'] ?? 0);
+        if ($cnt > 0) {
+            $chips[] = ['text' => intf($cnt) . '×' . (($c['container_type'] ?? '') ?: 'حاوية')];
         }
-        if ($t['by_rep'] > 0) { $chips[] = ['text' => 'من مندوب', 'tone' => 'ex']; }
 
         partial('row_item', [
-            'title'  => ($t['permit_type'] === 'warid' ? 'شهادة ' : 'إذن ') . ($t['permit_no'] ?: '#' . $t['id']),
-            'icon'   => 'folder',
-            'tone'   => $th['tone'] ?? null,
-            'url'    => url('permits/' . $t['id']),
+            'title'  => ($c['car_no'] ?? '') !== '' ? $c['car_no'] : 'بلا رقم عربية',
+            'ref'    => ($c['bill_number'] ?? '') !== '' ? '#' . $c['bill_number'] : null,
+            'icon'   => 'truck',
+            'url'    => url('bawalis/' . (int) $c['id']),
             'meta'   => $meta,
             'chips'  => $chips,
-            'amount' => money0($t['rc_val'] + $t['ex_val'] + $t['pend_val'], false),
-            'sub'    => intf($t['items']) . ' بند',
+            'amount' => money0($c['freight'] ?? 0, false),
+            'sub'    => 'نولون',
+        ]);
+    }
+}
+
+if (!function_exists('dash_readiness_row')) {
+    /**
+     * صف جاهزية الإذن — «خلص شغله» أو «ناقصه إيصالات».
+     *
+     * ⚠️ **الحكم والسبب بيتقروا من `PermitReadiness` مش بيتحسبوا هنا.** لو
+     *    الشاشة كتبت الشرط بإيدها كانت هتفترق عن الكارت مع أول تعديل في
+     *    التعريف — وده عطل «كارت يقول رقم وكشف يقول رقم تاني».
+     */
+    function dash_readiness_row(array $r): void
+    {
+        $th   = Permit::theme($r['permit_type']);
+        $meta = [];
+        if (($r['party'] ?? '') !== '' && $r['party'] !== '—') {
+            $meta[] = ['icon' => 'building', 'text' => $r['party']];
+        }
+        $meta[] = ['icon' => 'truck', 'text' => intf((int) $r['cars']) . ' عربية'];
+        if (!empty($r['permit_date'])) { $meta[] = ['icon' => 'calendar', 'text' => dfmt($r['permit_date'])]; }
+
+        $ready = ($r['verdict'] ?? '') === \App\Models\PermitReadiness::READY;
+        partial('row_item', [
+            'title'  => ($r['permit_type'] === 'warid' ? 'شهادة ' : 'إذن ') . ($r['permit_no'] ?: '#' . (int) $r['id']),
+            'icon'   => 'folder',
+            'tone'   => $th['tone'] ?? null,
+            'url'    => url('permits/' . (int) $r['id']),
+            'meta'   => $meta,
+            'chips'  => [['icon' => $ready ? 'check-circle' : 'alert', 'text' => (string) $r['reason']]],
+            'amount' => intf((int) $r['conts_done']) . '/' . intf((int) $r['conts_need']),
+            'sub'    => 'حاويات خرجت',
         ]);
     }
 }
@@ -131,6 +158,12 @@ if (!function_exists('dash_rep_rows')) {
      *    البند المستنّي خرجت من إيده فعلاً، فعرض `balance` كان بيقول إن معاه
      *    فلوس هو أصلاً صرفها (القاعدة الموحَّدة في كل شاشات العهدة).
      * ⚠️ **ولا رقم تراكمي هنا** — التراكمي مكانه `/rep-custody`.
+     *
+     * ⚠️⚠️ **الحكم («سوّى» / «لسه معاه») بييجي من `RepCustody::dayVerdict()`
+     *    مش بيتكتب هنا** — طلب المالك (2026-08-17). الصف كان بيعرض
+     *    `نزل · صرف · فاضل` وبس، والمدير كان لازم يطرح في دماغه عشان يعرف
+     *    المندوب سوّى ولا لأ. لو الشاشة كتبت الشرط بإيدها كانت هتفترق عن
+     *    كارت الإجمالي ونافذة التفاصيل مع أول تعديل في التعريف.
      */
     function dash_rep_rows(array $rows, array $names): void
     {
@@ -141,22 +174,22 @@ if (!function_exists('dash_rep_rows')) {
             $rid  = (int) $rid;
             $dep  = (float) ($r['deposits'] ?? 0);
             $sp   = (float) ($r['spent'] ?? 0);
-            $pend = (float) ($r['pending'] ?? 0);
             $poc  = (float) ($r['pocket'] ?? 0);
+            $v    = \App\Models\RepCustody::dayVerdict($r);
 
             $meta = [['icon' => 'wallet', 'text' => 'نزل ' . money0($dep, false)],
                      ['icon' => 'trending-down', 'text' => 'صرف ' . money0($sp, false)]];
 
-            $chips = [];
-            if ($pend > 0) { $chips[] = ['text' => 'مستنّي ' . money0($pend, false), 'tone' => 'wait']; }
-            if ($poc < 0)  { $chips[] = ['text' => 'مدفوع من جيبه', 'tone' => 'ex']; }
+            /* الحكم بالكلمة **والمبلغ معاه** — «لسه معاه» لوحدها ما بتقولش كام. */
+            $chip = ['icon' => $v['key'] === 'settled' ? 'check-circle' : 'alert', 'text' => $v['text']];
+            if ($v['amount'] > 0.005) { $chip['text'] .= ' ' . money0($v['amount'], false); }
 
             partial('row_item', [
                 'title'  => $byId[$rid] ?? ('مندوب #' . $rid),
                 'icon'   => 'user',
                 'url'    => url('rep-custody/' . $rid),
                 'meta'   => $meta,
-                'chips'  => $chips,
+                'chips'  => [$chip],
                 'amount' => money0($poc, false),
                 'amount_tone' => $poc < 0 ? 'ex' : null,
                 'sub'    => 'فاضل معاه',

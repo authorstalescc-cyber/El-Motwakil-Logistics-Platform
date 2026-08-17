@@ -110,7 +110,8 @@ const MONEY_WRITES = [
     'POST /bawalis/bulk-paste'       => ['BawalisController',       'bulkPaste',    'claim',        'لصق دفعة بوالص'],
     'POST /m/misc'                   => ['RepPortalController',     'miscStore',    'client_token', 'نثرية مندوب'],
     'POST /m/permit/{id}'            => ['RepPortalController',     'entryStore',   'client_token', 'بند مندوب على إذن'],
-    'POST /dashboard/quick-entries'  => ['DashboardController',     'quickEntries', 'quick_token',  'دفعة إدخال سريع'],
+    // ⚠️ اتنقل من الداشبورد لشاشة الأذونات (2026-08-17) — الحماية زي ما هي
+    'POST /permits/quick-entries'    => ['PermitController',        'quickEntries', 'quick_token',  'دفعة إدخال سريع'],
 ];
 
 // ───────────────────────────────────────────────────────────────────────

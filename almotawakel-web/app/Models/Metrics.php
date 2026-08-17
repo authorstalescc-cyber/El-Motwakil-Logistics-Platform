@@ -942,6 +942,44 @@ class Metrics
     }
 
     /**
+     * **العربيات اللي خرجت في يوم واحد** — طلب المالك (2026-08-17):
+     * «خرج كام عربية اليوم».
+     *
+     * ⚠️ **البوليصة = عربية خرجت.** كل صف في `bawalis` هو نقلة سيارة واحدة
+     *    بسائقها ورقمها، فالعدّ بيتم على الصفوف مش على الحاويات (الحاوية
+     *    ممكن تتقسم على أكتر من نقلة). ده **نفس** مصدر `todayPulse()['bawalis']`
+     *    بالحرف — فمستحيل الكارت يقول رقمًا والقايمة تقول غيره.
+     *
+     * ⚠️ `is_legacy = 0` إجبارية: أرشيف البوالص القديمة (`legacy_bawalis`
+     *    والمعلَّم `is_legacy=1`) خارج كل الحسابات الحية.
+     *
+     * @return array<int,array> صفوف الخروج، الأحدث أولاً
+     */
+    public static function carsOut(string $day, int $limit = 60): array
+    {
+        if ($day === '') { return []; }
+        $limit = max(1, min(500, $limit));
+        return Database::all(
+            "SELECT b.id, b.bill_number, b.bill_date, b.car_no, b.driver, b.car_owner,
+                    b.container_no, b.container_type, b.container_count, b.freight,
+                    b.permit_id, b.permit_no,
+                    COALESCE(NULLIF(b.company,''), NULLIF(b.declaration_owner,''), '—') AS party,
+                    COALESCE(NULLIF(b.destination,''), '') AS destination
+               FROM bawalis b
+              WHERE b.is_legacy = 0 AND b.bill_date = ?
+              ORDER BY b.id DESC
+              LIMIT $limit", [$day]);
+    }
+
+    /** عدد العربيات اللي خرجت في يوم — نفس شرط `carsOut()` بالحرف. */
+    public static function carsOutCount(string $day): int
+    {
+        if ($day === '') { return 0; }
+        return (int) Database::scalar(
+            'SELECT COUNT(*) FROM bawalis WHERE is_legacy = 0 AND bill_date = ?', [$day]);
+    }
+
+    /**
      * آخر العمليات عبر كل الوحدات (بوالص/فواتير/تخليص/مولدات/أذونات/سداد).
      * يعرض ملخصاً تشغيلياً موحّداً بالترتيب الزمني.
      */
