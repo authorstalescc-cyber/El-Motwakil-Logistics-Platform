@@ -59,7 +59,7 @@ $chip = static function (string $key, string $label, string $icon, $count, strin
 <?php /* ⚠️ `data-wide` = **إشارة للنافذة تتوسّع** (`app.js` بيحط `.wide` على
          `.d-modal-card` لما المحتوى بيطلبها). الشاشة دي فيها ٥ أعمدة معلومات
          في السطر الواحد، وعرض ٦٤٠ الافتراضي كان بيلفّها. */ ?>
-<div class="povw" data-wide>
+<div class="povw" data-wide data-fold-scope>
 
   <?php /* ① اليوم والتنقّل — البند بيتحسب بيوم صرفه، فالنافذة عدسة يوم واحد.
            ⚠️ **قدّام وورا**: المالك ممكن يرجع ٣ أيام ويحتاج يمشي لقدّام تاني —
@@ -141,7 +141,7 @@ $chip = static function (string $key, string $label, string $icon, $count, strin
              طيّ الإذن الواحد `<details>` أصلية شغّالة من غيره. النص بيتقلب في
              `app.js` حسب حالة القوايم. */ ?>
     <?php if ($permits): ?>
-      <button type="button" class="povw-f fold" data-povw-fold>
+      <button type="button" class="povw-f fold" data-fold-all=".povw-g">
         <?= icon('layers', 14) ?><span><?= $openByDefault ? 'اطوي الكل' : 'افتح الكل' ?></span></button>
     <?php endif; ?>
   </div>
@@ -248,7 +248,9 @@ $chip = static function (string $key, string $label, string $icon, $count, strin
                       <span class="povw-b wait"><?= icon('hourglass', 11) ?> مستنّي اعتمادك</span>
                     <?php endif; ?>
                     <?php if ($it['by_rep']): ?>
-                      <span class="povw-b teal"><?= icon('user', 11) ?> <?= e($it['rep_name'] ?: 'مندوب') ?></span>
+                      <?php /* ⚠️ **نفس مكوّن الشارة** بتاع شاشة الإذن ووضع التعديل
+                               (`partials/rep_badge`) — شكل واحد لنفس المعلومة. */ ?>
+                      <?php partial('rep_badge', ['name' => $it['rep_name'] ?: 'مندوب', 'size' => 11]); ?>
                     <?php else: ?>
                       <span><?= icon('building', 11) ?> المكتب</span>
                     <?php endif; ?>

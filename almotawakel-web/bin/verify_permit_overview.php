@@ -318,8 +318,12 @@ chk(preg_match('~<details class="povw-g"~', $viewCode) === 1
     '⚠️ الطيّ بـ`<details>/<summary>` أصلية — بتشتغل بلا جافاسكريبت وبالكيبورد');
 chk(str_contains($viewCode, 'povw-g-go'),
     'ورابط الإذن **زرار مستقل** جوّه الترويسة — الضغط على السطر بيطوي مش بينقل');
-chk(str_contains($viewCode, 'data-povw-fold') && str_contains($appJs, "data-povw-fold"),
-    'وزرار «افتح/اطوي الكل» موصول بمعالج مفوَّض على `document` (الجسم بيتحقن بعد التحميل)');
+/* ⚠️ الآلية بقت **عامة** (v103): `data-fold-all="<محدِّد>"` + `data-fold-scope`
+   — نفس الزرار بيشتغل في نافذة النظرة العامة وفي شاشة الإذن المعاد بناؤها،
+   فمفيش نسختين من نفس المنطق. */
+chk(str_contains($viewCode, 'data-fold-all=".povw-g"') && str_contains($viewCode, 'data-fold-scope')
+    && str_contains($appJs, "closest('[data-fold-all]')") && str_contains($appJs, "data-fold-scope"),
+    'وزرار «افتح/اطوي الكل» على الآلية العامة، بمعالج مفوَّض على `document` (الجسم بيتحقن بعد التحميل)');
 chk(str_contains($viewCode, '$openByDefault = count($permits) <= 6'),
     'والطيّ الافتراضي بيتقرّر بعدد الأذونات — مش مفتوح دايمًا في يوم فيه ١٥ إذنًا');
 

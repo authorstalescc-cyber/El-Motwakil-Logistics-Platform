@@ -211,11 +211,26 @@ class Permit
     public static function movementStagesGrouped(int $movementId): array
     {
         $out = [];
-        foreach (Database::all('SELECT * FROM permit_stages WHERE movement_id = ? ORDER BY id', [$movementId]) as $s) {
+        foreach (Database::all(self::STAGE_SELECT . ' WHERE s.movement_id = ? ORDER BY s.id', [$movementId]) as $s) {
             $out[$s['stage_key']][] = $s;
         }
         return $out;
     }
+
+    /**
+     * ⚠️ **المصدر الوحيد لقراءة بنود التايم لاين** (بند الحركة وبند الإذن).
+     *
+     * `rep_name` جاي معاه دايمًا: البند اللي دفعه مندوب لازم يبان **جنب البند
+     * نفسه** في الشاشتين (طلب المالك 2026-08-17) — والاسم لو اتجاب في مكان
+     * والشارة اترسمت في مكان تاني، شاشة تفضل بتقول «مين دفع» وشاشة تسكت.
+     *
+     * ⚠️ `LEFT JOIN` مش `JOIN`: أغلب البنود من المكتب (`paid_by_rep_id = NULL`)،
+     *    و`JOIN` عادية كانت هتخفيهم كلهم **بالسكوت**.
+     */
+    private const STAGE_SELECT =
+        'SELECT s.*, r.name AS rep_name
+           FROM permit_stages s
+           LEFT JOIN reps r ON r.id = s.paid_by_rep_id';
 
     /** الحركات المتاحة لنقل إيصال إليها، مجمعة ضمنيًا ببيانات الإذن الهدف. */
     public static function receiptMoveTargets(int $excludePermitId): array
@@ -347,7 +362,9 @@ class Permit
     public static function permitStagesGrouped(int $permitId): array
     {
         $out = [];
-        foreach (Database::all('SELECT * FROM permit_stages WHERE permit_id = ? AND movement_id IS NULL ORDER BY id', [$permitId]) as $s) {
+        foreach (Database::all(
+            self::STAGE_SELECT . ' WHERE s.permit_id = ? AND s.movement_id IS NULL ORDER BY s.id',
+            [$permitId]) as $s) {
             $out[$s['stage_key']][] = $s;
         }
         return $out;

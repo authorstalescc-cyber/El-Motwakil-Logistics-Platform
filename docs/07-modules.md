@@ -40,6 +40,8 @@
 > ⚠️ **عرض بحت** — مفيش أي كتابة ولا أثر على خزنة ولا عهدة ولا تقفيل.
 
 **الموديلات:** `Permit`, `PermitInvoice`, `Bill`, `Lookup`, `Party`, `Movement`, `Calc`, `Database`, `App`, `Metrics`.
+**شاشة الإذن — وضع العرض معاد بناؤه (v103):** `_body_view.php` بقى **شريط ملاصق** (قفز للأقسام + «افتح/اطوي الكل» + «إضافة بند») + **عمودان**: الحركات | الثابت (رسوم الإذن + تفاصيله). **صفر جداول** — كل بند وكل بوليصة **سطر واحد** (`pv3-it`/`pv3-bl`) شكله واحد على كل العروض، والطيّ `<details>` أصلي. **شارة المندوب جنب كل بند** من `partials/rep_badge` (نفس المكوّن في وضع التعديل ونافذة النظرة العامة)، واسمه من `Permit::STAGE_SELECT` (استعلام واحد بـ`LEFT JOIN reps`) — مفيش استعلام لكل سطر. الفاحص: `bin/verify_permit_page.php`.
+
 **الـ views:** `permits/index.php` (hub بـ 3 أوضاع), `permits/_party_chips.php` (أزرار الشركات/الوكلاء المتكررين), `permits/form.php` (رأس الإصدار), `permits/view.php` (عرض للقراءة مع حلقة تقدّم SVG), `permits/manage.php` (مساحة العمل الكاملة القابلة للتعديل), `permits/invoice_form.php` (شاشة إعداد الفاتورة)، `permits/invoice_print.php` (فاتورة/كشف حساب A4 باللوجو والتفقيت)، `permits/_overview.php` (نافذة «نظرة عامة» — جسم نافذة بلا layout).
 
 ---

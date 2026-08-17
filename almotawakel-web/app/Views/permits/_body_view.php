@@ -1,306 +1,389 @@
 <?php
 /**
- * جسم شاشة الإذن — **وضع العرض** (قراءة فقط).
+ * جسم شاشة الإذن — **وضع العرض** · إعادة بناء كاملة (v103، 2026-08-17).
  *
- * ⚠️ الشاشة واحدة (`permits/show.php`) والوضعان جسمان: الهيرو وشريط الإجراءات
- *    ومرشد الإيصالات بيترسموا مرة واحدة في الغلاف، والملف ده بيرسم المراحل
- *    للقراءة بس. مُصيّرا المراحل مختلفان **فعلاً** (التحرير مربوط بعقد AJAX
- *    في `_movement.php`) فدمجهم في واحد كان هيعقّد بلا مكسب.
+ * طلب المالك: «محتاج نعيد بناء صفحة الإذن المنفرد بتصميم مختلف وشكل أفضل
+ * وتجربة مستخدم أفضل بكثير — مش مشكلة لو كسرت التصميم الحالي».
+ *
+ * ═══ اللي كان غلط في النسخة القديمة (وده اللي البناء ده بيحلّه) ═══
+ *   ① **جداول جوّه طيّات جوّه طيّات**: كل حركة فيها `<details>` لكل مرحلة،
+ *      وجوّه كل واحدة `<table>` بـ٧ أو ١١ عمودًا. على أي شاشة أقل من ١٤٠٠px
+ *      الجدول بيتمرّر أفقيًّا، وعلى الموبايل بيتحوّل كروت — يعني **تلات أشكال
+ *      لنفس المعلومة** حسب عرض الشاشة.
+ *   ② **صفحة طولها كيلومتر بلا خريطة**: هيرو ← رحلة ← مستندات ← مرشد ←
+ *      تفاصيل ← رسوم ← حركات، وكل ده تمرير رأسي واحد بلا أي وسيلة قفز.
+ *   ③ **البند ما كانش بيقول مين دخّله** — والمالك بيسأل السؤال ده كل يوم.
+ *
+ * ═══ البناء الجديد ═══
+ *   • **شريط ملاصق** (`pv3-nav`) فيه القفز للأقسام + طيّ الكل + الإجراء الأهم.
+ *   • **عمودان**: الحركات (المحتوى الحيّ) | جنبها الثابت (رسوم الإذن + تفاصيل).
+ *   • **صفوف بدل الجداول**: سطر واحد للبند وسطر واحد للبوليصة — نفس الشكل
+ *     بالظبط من ٣٢٠px لـ٢٥٦٠px، بلا تمرير أفقي ولا مُصيِّر تاني للموبايل.
+ *   • **شارة المندوب جنب كل بند** (`partials/rep_badge`) — نفس الشارة اللي في
+ *     وضع التعديل وفي نافذة النظرة العامة.
+ *
+ * ⚠️ الغلاف مشترك (`permits/show.php`): الشريط والهيرو والرحلة والمستندات
+ *    والمرشد بيترسموا **مرة واحدة** هناك — ممنوع أي واحد منهم يتضمّ هنا.
+ * ⚠️ **عرض بحت**: كل تعديل بيروح لوضع التعديل بمرساة (`#stage-...`).
+ * ⚠️ صفر `style=` وصفر `<style>` — كل الكلاسات `pv3-*` في `app.css`.
  */
 use App\Models\Permit;
 use App\Models\Bill;
 
-$pid  = (int)$p['id'];
+$pid  = (int) $p['id'];
 $type = $p['permit_type'];
-$th = Permit::theme($type);
-$noLabel = Permit::noLabel($type);
-$isClosed = ($p['status'] ?? 'open') === 'closed';
-$pStages = Permit::scopedStages('permit');
-$mStages = Permit::scopedStages('movement');
+$isClosed   = ($p['status'] ?? 'open') === 'closed';
+$pStages    = Permit::scopedStages('permit');
+$mStages    = Permit::scopedStages('movement');
 $primaryDef = Permit::primaryFeesDefault($pid);
 
-/* التقدّم بيتحسب في الغلاف `show.php` — الهيرو محتاجه قبل الجسم. */
+/** رابط التعديل على مرحلة بعينها — نقطة بناء واحدة. */
+$manageUrl = static fn (string $key, int $mid = 0): string
+    => url('permits/' . $pid . '/manage') . '#stage-' . $key . ($mid ? '-' . $mid : '');
 
-$statusBadge = fn(string $st) => $st === 'pending'
-    ? '<span class="tl-st pending">ناقصة</span>' : '<span class="tl-st done">تمّت</span>';
+/* ⚠️ **الطيّ الافتراضي بالعدد** (نفس قاعدة نافذة النظرة العامة): إذن بحركة أو
+   اتنين المالك عايز يشوفهم مفتوحين؛ إذن بـ٨ حركات القايمة المفتوحة بتبقى
+   أربع شاشات تمرير. */
+$mvOpenDefault = count($movements) <= 3;
 
-$manageUrl = fn(string $key, int $mid=0) => url('permits/'.$pid.'/manage').'#stage-'.$key.($mid?'-'.$mid:'');
+/* اسم المرحلة اللي البند تابع لها — بيتعرض كعنوان مجموعة صغير فوق بنودها. */
+$stageLabel = static fn (string $key): string => Permit::STAGES[$key]['label'] ?? $key;
 
-// عرض مرحلة مالية للقراءة فقط
-$roStage = function(string $key, array $st, array $entries, int $idx, int $mid=0) use ($statusBadge, $primaryDef, $manageUrl) {
-    // فصل علامة «لا يوجد» (بند بحالة none) عن البنود الحقيقية
-    $noneRow = null; $realEntries = [];
-    foreach ($entries as $en) { if (($en['status'] ?? '') === 'none') { $noneRow = $en; } else { $realEntries[] = $en; } }
-    $isNone = ($noneRow !== null && !$realEntries);
-
-    $stageTotal = array_sum(array_map(fn($x)=>(float)$x['amount'], $realEntries));
-    // الرسوم الأولية تُعرض تلقائيًا (الكشف + الضمان) طالما لا بنود مسجّلة وعدد الحاويات > 0 والسعر مُدخَل في الإذن
-    $autoPrimary = ($key === 'primary_fees' && !$realEntries && !$isNone && ($primaryDef['containers'] ?? 0) > 0 && !empty($primaryDef['rates_set']));
-    $headTotal   = $autoPrimary ? (float)$primaryDef['total'] : $stageTotal;
-    $hasData     = !empty($realEntries) || $autoPrimary || $isNone;
-    $showTotal   = $key!=='custom' && $headTotal > 0;
-    $entries     = $realEntries;
-    ob_start(); ?>
-    <details class="stage <?= $hasData?'has':'' ?>" <?= $hasData?'open':'' ?>>
-      <summary class="stage-sum">
-        <span class="ss-ic <?= $hasData?'ok':'' ?>"><?= icon($hasData ? 'check' : $st['icon'], 16) ?></span>
-        <span class="ss-num"><?= $idx ?></span>
-        <span class="ss-name"><?= e($st['label']) ?></span>
-        <?php if ($st['dir']===Permit::DIR_EXPENSE): ?><span class="tl-dir neg">مصروف</span>
-        <?php elseif ($st['dir']===Permit::DIR_REVENUE): ?><span class="tl-dir pos">محصّل</span><?php endif; ?>
-        <span class="ps-sp"></span>
-        <?php if ($isNone): ?><span class="ss-none" title="مُعلَّم: لا يوجد بند لهذه المرحلة"><?= icon('x', 14) ?> لا يوجد</span>
-        <?php elseif (count($entries)): ?><span class="ss-count"><?= intf(count($entries)) ?></span>
-        <?php elseif ($autoPrimary): ?><span class="ss-count" title="محسوبة تلقائيًا">تلقائي</span><?php endif; ?>
-        <?php if ($showTotal): ?><span class="ss-amt <?= $st['dir']===Permit::DIR_EXPENSE?'neg':'pos' ?>"><?= money($headTotal,false) ?></span><?php endif; ?>
-        <a class="ss-act" href="<?= $manageUrl($key,$mid) ?>" title="تعديل سريع" onclick="event.stopPropagation()"><?= icon('edit', 14) ?></a>
-        <a class="ss-act add" href="<?= $manageUrl($key,$mid) ?>" title="إضافة بند" onclick="event.stopPropagation()"><?= icon('plus', 14) ?></a>
-        <span class="ss-chev"><?= icon('chevron', 14) ?></span>
-      </summary>
-      <div class="stage-body">
-        <?php if ($isNone): ?>
-          <div class="tl-none"><span><?= icon('x', 14) ?> هذه المرحلة معلَّمة <b>«لا يوجد»</b> ومحسوبة كمكتملة.</span></div>
-        <?php elseif ($entries): ?>
-          <div class="table-wrap"><table class="data">
-            <thead><tr><th class="g-identity">التاريخ</th><th class="g-result">المبلغ</th>
-              <?php if($key!=='primary_fees'): ?><th class="g-result">السعر الفعلي</th><?php endif; ?>
-              <th class="g-identity">البيان</th><th class="g-identity">مرجع</th><th class="g-identity">الحالة</th><th class="g-identity">مرفق</th></tr></thead>
-            <tbody>
-            <?php foreach ($entries as $en):
-              $eDir = $key==='custom' ? ($en['direction'] ?: 'expense') : $st['dir'];
-              $amtCls = $eDir===Permit::DIR_EXPENSE ? 'neg' : ($eDir===Permit::DIR_REVENUE ? 'pos' : ''); ?>
-              <tr>
-                <td><?= dfmt($en['entry_date']) ?></td>
-                <td class="<?= $amtCls ?>"><?= money($en['amount'],false) ?>
-                  <?php $eqty=max(1,(int)($en['qty']??1)); if($eqty>1): ?><span class="te-qty" title="الكمية × سعر الوحدة"><?= intf($eqty) ?> × <?= money(round((float)$en['amount']/$eqty,2),false) ?></span><?php endif; ?>
-                  <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge"><?= icon('credit-card', 14) ?> فيزا</span><?php endif; ?></td>
-                <?php if($key!=='primary_fees'): ?><td class="mv-ref"><?= (isset($en['actual_amount'])&&$en['actual_amount']!==null&&$en['actual_amount']!=='') ? money($en['actual_amount'],false) : '—' ?></td><?php endif; ?>
-                <td class="txt"><?= e($en['note'] ?: '—') ?></td>
-                <td><?= e($en['ref_no'] ?: '—') ?></td>
-                <td><?= $statusBadge($en['status']) ?></td>
-                <td><?php if($en['attachment']): ?><a href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank"><?= icon('file-text', 14) ?></a><?php else: ?>—<?php endif; ?></td>
-              </tr>
-            <?php endforeach; ?>
-            </tbody>
-            <?php /* ⚠️ **صف إجمالي** — الجدول ممكن يبقى ١٥ صفًّا، والمجموع كان
-                     في الهيرو بس (على بُعد ١٥٠٠ بكسل تمرير لفوق). و`table.data
-                     tfoot` متنسَّق أصلاً، والـJS بتاع إخفاء الأعمدة بيعدّ
-                     `tFoot` فالصف بيتخفي مع عموده. */ ?>
-            <?php $tAmt = array_sum(array_map(fn($x)=>(float)$x['amount'], $entries));
-                  $tAct = 0; $hasAct = false;
-                  foreach ($entries as $en) {
-                      if (isset($en['actual_amount']) && $en['actual_amount']!==null && $en['actual_amount']!=='') {
-                          $tAct += (float)$en['actual_amount']; $hasAct = true;
-                      }
-                  } ?>
-            <tfoot><tr>
-              <td>الإجمالي (<?= intf(count($entries)) ?>)</td>
-              <td><?= money($tAmt,false) ?></td>
-              <?php if($key!=='primary_fees'): ?><td><?= $hasAct ? money($tAct,false) : '—' ?></td><?php endif; ?>
-              <td colspan="4"></td>
-            </tr></tfoot>
-            </table></div>
-        <?php elseif ($autoPrimary): ?>
-          <div class="tl-auto">
-            <div class="tl-auto-h"><?= icon('coins', 14) ?> رسوم أولية محسوبة تلقائيًا من حاويات الإذن (<?= intf($primaryDef['containers']) ?> حاوية):</div>
-            <div class="tl-auto-row"><span>الكشف</span><span><?= intf($primaryDef['containers']) ?> × <?= money($primaryDef['inspection_rate'],false) ?></span><b><?= money($primaryDef['inspection'],false) ?></b></div>
-            <div class="tl-auto-row"><span>الضمان</span><span><?= intf($primaryDef['containers']) ?> × <?= money($primaryDef['guarantee_rate'],false) ?></span><b><?= money($primaryDef['guarantee'],false) ?></b></div>
-            <div class="tl-auto-row tot"><span>الإجمالي</span><span></span><b><?= money($primaryDef['total'],false) ?></b></div>
-          </div>
+/**
+ * سطر بند واحد (إيصال · رسوم · مصروف إضافي · محصَّل) — **الشكل الوحيد للبند**
+ * في الشاشة دي، سواء كان بند إذن أو بند حركة.
+ */
+$itemRow = static function (array $en, string $key, array $st) use ($stageLabel): void {
+    $dir = $key === 'custom' ? (($en['direction'] ?? '') ?: 'expense') : ($st['dir'] ?? 'expense');
+    $isRevenue = $dir === Permit::DIR_REVENUE;
+    $qty    = max(1, (int) ($en['qty'] ?? 1));
+    $actual = (isset($en['actual_amount']) && $en['actual_amount'] !== null && $en['actual_amount'] !== '')
+        ? (float) $en['actual_amount'] : null;
+    ?>
+    <div class="pv3-it <?= $isRevenue ? 'rev' : 'ex' ?>">
+      <div class="pv3-it-b">
+        <b><?= e(trim((string) ($en['note'] ?? '')) !== '' ? $en['note'] : $stageLabel($key)) ?></b>
+        <div class="pv3-it-m">
+          <span><?= icon('calendar', 11) ?> <span class="num"><?= dfmt($en['entry_date']) ?></span></span>
+          <?php if ($qty > 1): ?>
+            <span title="الكمية × سعر الوحدة"><?= icon('package', 11) ?>
+              <span class="num"><?= intf($qty) ?> × <?= money(round((float) $en['amount'] / $qty, 2), false) ?></span></span>
+          <?php endif; ?>
+          <?php if (trim((string) ($en['ref_no'] ?? '')) !== ''): ?>
+            <span><?= icon('tag', 11) ?> <span class="num"><?= e($en['ref_no']) ?></span></span>
+          <?php endif; ?>
+          <?php /* ⚠️ **شارة المندوب** — طلب المالك المباشر. مكوّن واحد مشترك مع
+                   وضع التعديل ونافذة النظرة العامة. */ ?>
+          <?php partial('rep_badge', ['name' => $en['rep_name'] ?? '']); ?>
+          <?php if (!empty($en['is_visa'])): ?><span class="pv3-tag"><?= icon('credit-card', 11) ?> فيزا</span><?php endif; ?>
+          <?php if (!empty($en['unpaid'])): ?><span class="pv3-tag" title="اتحاسب من برّه الخزنة والعهدة">غير مدفوع</span><?php endif; ?>
+          <?php if (($en['status'] ?? 'done') === 'pending'): ?><span class="pv3-tag warn">ناقصة</span><?php endif; ?>
+          <?php if (!empty($en['attachment'])): ?>
+            <a class="pv3-tag link" href="<?= url('attachments/stage/' . (int) $en['id']) ?>" target="_blank"><?= icon('file-text', 11) ?> مرفق</a>
+          <?php endif; ?>
+        </div>
+      </div>
+      <div class="pv3-it-n">
+        <b class="num"><?= money((float) $en['amount'], false) ?></b>
+        <?php if ($actual !== null): ?>
+          <span title="السعر الفعلي للعميل">للعميل <span class="num"><?= money($actual, false) ?></span></span>
         <?php else: ?>
-          <div class="tl-hint">لا بنود مسجّلة.</div>
+          <span class="mut">بلا سعر للعميل</span>
         <?php endif; ?>
       </div>
-    </details>
-    <?php return ob_get_clean();
-};
-?>
-
-<!-- ===== تفاصيل إضافية (بلا تكرار لبيانات الهيرو) ===== -->
-<?php
-$rows = [
-  /* ⚠️ الأيقونة من `icon()` **لكل صف** — كانت إيموجي في تلاتة وبلا أيقونة
-     خالص في اتنين، فالعمود كان بيتقرا كأن نص صفوفه ناقصة. */
-  [icon('package', 14).' تصنيف الحاويات', ($p['container_type'] ?? '') !== '' ? $p['container_type'] : null],
-  [icon('search', 14).' سعر الكشف لكل حاوية', $p['inspection_rate']!==null ? money($p['inspection_rate'],false) : 'غير مُدخَل'],
-  [icon('shield', 14).' سعر الضمان لكل حاوية', $p['guarantee_rate']!==null ? money($p['guarantee_rate'],false) : 'غير مُدخَل'],
-  [icon('ship', 14).' شركة الشحن', ($p['shipping_co'] ?? '') !== '' ? $p['shipping_co'] : null],
-  /* ⚠️ «التوكيل» اتشال من هنا — بقى بلاطة بارزة في الهيرو (طلب المالك
-     2026-08-10). **متكرّرش المعلومة في المكانين**: كان مدفونًا هنا وهو
-     بيحدّد قواعد مرشد الإيصالات. «شركة الشحن» فوقه حاجة تانية خالص. */
-  [icon('edit', 14).' ملاحظة', ($p['note'] ?? '') !== '' ? $p['note'] : null],
-];
-$rows = array_values(array_filter($rows, fn($r)=>$r[1]!==null));
-if ($rows): ?>
-<div class="sec-head"><span><?= icon('file-text', 14) ?> تفاصيل إضافية</span></div>
-<div class="card mb detail-grid">
-  <?php foreach ($rows as [$lbl, $val]): ?>
-    <div class="detail-cell">
-      <div class="dc-lbl"><?= $lbl ?></div>
-      <div class="dc-val"><?= e($val) ?></div>
     </div>
-  <?php endforeach; ?>
-</div>
-<?php endif; ?>
+    <?php
+};
 
-<!-- رسوم الإذن (مراحل مستوى الإذن) -->
-<?php
-$permitMoney = array_filter($pStages, fn($k)=>$k!=='data' && $k!=='generators', ARRAY_FILTER_USE_KEY);
-if ($permitMoney):
-  /* ⚠️ **الترتيب ثابت — ممنوع يتعاد ترتيبه حسب الاكتمال.**
-     كان «المكتمل أولًا ثم غير المكتمل»، والنتيجة عطلان مع بعض:
-       ① الرقم بيتحسب بالترتيب الطبيعي والعرض بيتعاد ترتيبه، فالموظف
-          بيشوف ٢ ← ٣ ← ١ (خطوات مرقّمة برّه ترتيبها الرقمي).
-       ② نفس الإذن بيغيّر ترتيب أقسامه **كل ما بند يتسجّل**، فمستحيل حد
-          يحفظ مكان أي قسم في شاشة بيشتغل عليها كل يوم.
-     الاكتمال بيتقال **باللون والعلامة** (`.stage.has` + `✓`) مش بالمكان. */
-  $natNum=[]; $n=0;
-  foreach ($permitMoney as $key=>$st){ $natNum[$key]=++$n; }
-  $orderedPermit = $permitMoney; ?>
-  <div class="sec-head"><span><?= icon('coins', 14) ?> رسوم الإذن</span></div>
-  <div class="stages mb">
-    <?php foreach ($orderedPermit as $key=>$st){ echo $roStage($key, $st, $permitStages[$key] ?? [], $natNum[$key]); } ?>
-  </div>
-<?php endif; ?>
+/**
+ * مجموعة بنود مرحلة واحدة: عنوان صغير + إجمالي + بنودها.
+ * بترجع '' لو المرحلة فاضية — الفراغ ما بياخدش مساحة في الشاشة الجديدة.
+ */
+$stageGroup = static function (string $key, array $st, array $entries, int $mid, bool $isPermitLevel = false)
+        use ($itemRow, $manageUrl, $primaryDef): string {
+    $noneRow = null; $real = [];
+    foreach ($entries as $en) {
+        if (($en['status'] ?? '') === 'none') { $noneRow = $en; } else { $real[] = $en; }
+    }
+    $isNone = ($noneRow !== null && !$real);
+    $autoPrimary = ($key === 'primary_fees' && !$real && !$isNone
+        && ($primaryDef['containers'] ?? 0) > 0 && !empty($primaryDef['rates_set']));
+    if (!$real && !$isNone && !$autoPrimary) { return ''; }
 
-<!-- ===== الحركات (قراءة) ===== -->
-<div class="sec-head"><span><?= icon('shuffle', 14) ?> الحركات (<?= intf(count($movements)) ?>)</span></div>
-
-<?php if (!$movements): ?>
-  <div class="card"><div class="empty empty-mv-in"><div class="ic"><?= icon('shuffle', 14) ?></div>لا حركات مسجّلة على هذا الإذن.</div></div>
-<?php else: ?>
-  <?php $mvNo=0; foreach ($movements as $mv): $mid=(int)$mv['id']; $mvNo++;
-    $mvBills = $mv['bills']; $mvStagesG = $mv['stages'];
-    $mvExp = 0; $mvCust = 0; $mvCharged = 0;
-    foreach ($mvStagesG as $kk=>$es){ foreach ($es as $e){
-      if ($kk==='receipts' || ($kk==='custom' && ($e['direction']??'')==='expense')) $mvExp += (float)$e['amount'];
-      if (isset($e['actual_amount']) && $e['actual_amount']!==null && $e['actual_amount']!=='') $mvCharged += (float)$e['actual_amount'];
-    } }
-    foreach ($mvBills as $b){ $mvCust += (float)$b['custody']; }
-  ?>
-    <details class="movement card" id="movement-<?= $mid ?>" <?= $mvNo===1?'open':'' ?>>
-      <summary class="mv-head">
-        <span class="mv-seq"><?= icon('shuffle',16) ?> حركة #<?= intf($mv['seq']) ?></span>
-        <?php if($mv['note']): ?><span class="mv-note"><?= e($mv['note']) ?></span><?php endif; ?>
-        <span class="ps-sp"></span>
-        <span class="mv-stats">
-          <span title="عدد البوالص"><?= icon('truck', 14) ?> <?= intf(count($mvBills)) ?></span>
-          <span class="pos" title="العهدة"><?= icon('coins', 14) ?> <?= money($mvCust,false) ?></span>
-          <span class="neg" title="المصروفات"><?= icon('trending-down', 14) ?> <?= money($mvExp,false) ?></span>
-          <?php if($mvCharged>0): ?><span class="chg" title="إجمالي السعر الفعلي (للعميل)"><?= icon('user', 14) ?> <?= money($mvCharged,false) ?></span><?php endif; ?>
-        </span>
-        <span class="ss-chev"><?= icon('chevron', 14) ?></span>
-      </summary>
-      <div class="mv-body">
-        <!-- شريط المراحل الأفقي -->
-        <div class="stepper">
-          <?php $sn=0; foreach ($mStages as $sk => $sm): $sn++;
-            if ($sk==='bills')          { $shas = !empty($mvBills); }
-            elseif ($sk==='generators') { $shas = !empty($generators); }
-            else { $srows = array_filter($mvStagesG[$sk] ?? [], fn($x)=>($x['status']??'')!=='none');
-                   $shas = !empty($srows) || (empty($srows) && !empty($mvStagesG[$sk] ?? [])); } ?>
-            <span class="step-chip <?= $shas?'done':'' ?>"><span class="sc-dot"><?= $shas ? icon('check', 12) : $sn ?></span><span><?= e($sm['label']) ?></span></span>
-          <?php endforeach; ?>
-        </div>
-        <div class="stages">
-        <?php
-        $mvItems = []; $si=0;
-        foreach ($mStages as $key => $st): $si++;
-          ob_start(); $has=false;
-          if ($key === 'bills'):
-            $bills = $mvBills; $has = !empty($bills); ?>
-            <details class="stage <?= $bills?'has':'' ?>" <?= $bills?'open':'' ?>>
-              <summary class="stage-sum">
-                <span class="ss-ic <?= $bills?'ok':'' ?>"><?= icon($bills ? 'check' : 'truck', 16) ?></span>
-                <span class="ss-num"><?= $si ?></span><span class="ss-name">البوالص</span><span class="ps-sp"></span>
-                <?php if (count($bills)): ?><span class="ss-count"><?= intf(count($bills)) ?></span><?php endif; ?>
-                <a class="ss-act" href="<?= $manageUrl('bills',$mid) ?>" title="تعديل البوالص" onclick="event.stopPropagation()"><?= icon('edit', 14) ?></a>
-                <a class="ss-act add" href="<?= $manageUrl('bills',$mid) ?>" title="إضافة بوليصة" onclick="event.stopPropagation()"><?= icon('plus', 14) ?></a>
-                <span class="ss-chev"><?= icon('chevron', 14) ?></span>
-              </summary>
-              <div class="stage-body">
-                <?php if ($bills): ?>
-                  <div class="table-wrap"><table class="data">
-                    <thead><tr>
-                      <th class="g-identity">رقم البوليصة</th><th class="g-identity">التاريخ</th>
-                      <th class="g-vehicle">السائق</th><th class="g-vehicle">السيارة</th>
-                      <th class="g-identity">الحاوية</th><th class="g-vehicle">العدد</th><th class="g-revenue">العهدة</th>
-                      <th class="g-result">الدين</th><th class="g-result">المتبقي</th><th class="g-identity">الحالة</th><th class="g-identity"></th>
-                    </tr></thead><tbody>
-                    <?php foreach ($bills as $bl): ?>
-                      <tr>
-                        <td class="mv-ref"><?= e($bl['bill_number'] ?: '—') ?></td>
-                        <td><?= dfmt($bl['bill_date']) ?></td>
-                        <td><?= e($bl['driver']) ?></td>
-                        <td><?= e($bl['car_no']) ?></td>
-                        <td><?= e($bl['container_no'] ?: '—') ?><?php if($bl['container_type']??''): ?> <span class="ctype-chip"><?= e($bl['container_type']) ?></span><?php endif; ?></td>
-                        <td><?= intf($bl['container_count'] ?? 0) ?></td>
-                        <td class="pos"><?= money($bl['custody'],false) ?></td>
-                        <td><?= money($bl['debt'],false) ?></td>
-                        <td class="<?= $bl['remaining']>0?'neg':'pos' ?>"><?= money($bl['remaining'],false) ?></td>
-                        <td><span class="pill st-<?= e($bl['pay_status']) ?>"><?= e(Bill::STATUS_LABELS[$bl['pay_status']] ?? '') ?></span></td>
-                        <td><div class="actions">
-                          <a class="edit" href="<?= url('bawalis/'.$bl['id']) ?>" title="تفاصيل"><?= icon('search', 14) ?></a>
-                          <a class="edit" href="<?= url('settlements/'.$bl['id']) ?>" title="سداد"><?= icon('banknote', 14) ?></a>
-                        </div></td>
-                      </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                    <?php /* صف إجمالي — نفس سبب جدول البنود فوق */ ?>
-                    <tfoot><tr>
-                      <td colspan="5">الإجمالي (<?= intf(count($bills)) ?>)</td>
-                      <td><?= intf(array_sum(array_map(fn($b)=>(int)($b['container_count'] ?? 0), $bills))) ?></td>
-                      <td><?= money(array_sum(array_map(fn($b)=>(float)$b['custody'], $bills)),false) ?></td>
-                      <td><?= money(array_sum(array_map(fn($b)=>(float)$b['debt'], $bills)),false) ?></td>
-                      <td><?= money(array_sum(array_map(fn($b)=>(float)$b['remaining'], $bills)),false) ?></td>
-                      <td colspan="2"></td>
-                    </tr></tfoot>
-                    </table></div>
-                <?php else: ?><div class="tl-hint">لا بوالص في هذه الحركة.</div><?php endif; ?>
-              </div>
-            </details>
-          <?php elseif ($key === 'generators'):
-            $has = !empty($generators);
-            if ($has): ?>
-            <details class="stage has">
-              <summary class="stage-sum"><span class="ss-ic ok"><?= icon('check', 14) ?></span><span class="ss-num"><?= $si ?></span>
-                <span class="ss-name">المولدات</span><span class="ps-sp"></span>
-                <span class="ss-count"><?= intf(count($generators)) ?></span><span class="ss-chev"><?= icon('chevron', 14) ?></span></summary>
-              <div class="stage-body"><div class="table-wrap"><table class="data">
-                <thead><tr><th class="g-identity">التاريخ</th><th class="g-identity">الشركة</th>
-                  <th class="g-vehicle">العدد</th><th class="g-revenue">النولون</th><th class="g-result">المتبقي</th></tr></thead>
-                <tbody><?php foreach ($generators as $g): ?>
-                  <tr><td><?= dfmt($g['gen_date']) ?></td><td class="txt"><?= e($g['company']) ?></td>
-                    <td><?= intf($g['gen_count']) ?></td><td class="pos"><?= money($g['freight'],false) ?></td>
-                    <td class="<?= $g['remaining']>0?'neg':'pos' ?>"><?= money($g['remaining'],false) ?></td></tr>
-                <?php endforeach; ?></tbody></table></div></div>
-            </details>
-            <?php endif;
-          else:
-            $ents = $mvStagesG[$key] ?? [];
-            $real = array_filter($ents, fn($e)=>($e['status']??'')!=='none'); $none=(!$real && $ents);
-            $has = (bool)($real || $none);
-            echo $roStage($key, $st, $ents, $si, $mid);
-          endif;
-          $html = ob_get_clean();
-          if (trim($html) !== '') $mvItems[] = ['has'=>$has, 'html'=>$html];
-        endforeach;
-        /* ⚠️ الترتيب الطبيعي زي ما هو — نفس سبب مراحل الإذن فوق: الترقيم
-           (`$si`) بيمشي طبيعي، فإعادة الترتيب كانت بتطلّع خطوات مرقّمة
-           برّه ترتيبها، والمكان بيتغيّر مع كل بند بيتسجّل. */
-        foreach ($mvItems as $it) { echo $it['html']; }
-        ?>
-        </div>
+    $total = array_sum(array_map(static fn ($x) => (float) $x['amount'], $real));
+    if ($autoPrimary) { $total = (float) $primaryDef['total']; }
+    ob_start(); ?>
+    <div class="pv3-grp" id="stage-<?= e($key) ?><?= $mid ? '-' . $mid : '' ?>">
+      <div class="pv3-grp-h">
+        <span class="pv3-grp-ic"><?= icon($st['icon'] ?? 'receipt', 13) ?></span>
+        <b><?= e($st['label']) ?></b>
+        <?php if ($real): ?><span class="pv3-grp-c num"><?= intf(count($real)) ?></span><?php endif; ?>
+        <span class="pv3-sp"></span>
+        <?php if ($total > 0): ?><span class="pv3-grp-t num"><?= money($total, false) ?></span><?php endif; ?>
+        <a class="pv3-grp-a" href="<?= $manageUrl($key, $mid) ?>" title="تعديل / إضافة بند"><?= icon('edit', 13) ?></a>
       </div>
-    </details>
-  <?php endforeach; ?>
-<?php endif; ?>
+      <?php if ($isNone): ?>
+        <div class="pv3-none"><?= icon('x', 12) ?> معلَّمة «لا يوجد» — محسوبة مكتملة</div>
+      <?php elseif ($autoPrimary): ?>
+        <div class="pv3-auto">
+          <div class="pv3-auto-r"><span>الكشف</span>
+            <span class="num"><?= intf($primaryDef['containers']) ?> × <?= money($primaryDef['inspection_rate'], false) ?></span>
+            <b class="num"><?= money($primaryDef['inspection'], false) ?></b></div>
+          <div class="pv3-auto-r"><span>الضمان</span>
+            <span class="num"><?= intf($primaryDef['containers']) ?> × <?= money($primaryDef['guarantee_rate'], false) ?></span>
+            <b class="num"><?= money($primaryDef['guarantee'], false) ?></b></div>
+          <div class="pv3-auto-r tot"><span>محسوبة تلقائيًا</span><span></span>
+            <b class="num"><?= money($primaryDef['total'], false) ?></b></div>
+        </div>
+      <?php else: ?>
+        <div class="pv3-items"><?php foreach ($real as $en) { $itemRow($en, $key, $st); } ?></div>
+      <?php endif; ?>
+    </div>
+    <?php return (string) ob_get_clean();
+};
+
+/* أرقام الترويسة الثابتة للشريط الملاصق */
+$billsCount = 0; $itemsCount = 0;
+foreach ($movements as $mv) {
+    $billsCount += count($mv['bills']);
+    foreach ($mv['stages'] as $es) {
+        foreach ($es as $e) { if (($e['status'] ?? '') !== 'none') { $itemsCount++; } }
+    }
+}
+foreach ($permitStages as $es) {
+    foreach ($es as $e) { if (($e['status'] ?? '') !== 'none') { $itemsCount++; } }
+}
+?>
+<div class="pv3" data-fold-scope>
+
+  <?php /* ① الشريط الملاصق: خريطة الصفحة + الإجراء الأهم.
+           ⚠️ **الأرقام هنا مش زخرفة** — كل واحد بينقل لقسمه، والقفز ده هو
+              البديل للتمرير الطويل اللي كان مصيبة النسخة القديمة. */ ?>
+  <div class="pv3-nav">
+    <a class="pv3-nav-l" href="#pv3-movements"><?= icon('shuffle', 14) ?> الحركات <b class="num"><?= intf(count($movements)) ?></b></a>
+    <a class="pv3-nav-l" href="#pv3-movements"><?= icon('truck', 14) ?> البوالص <b class="num"><?= intf($billsCount) ?></b></a>
+    <a class="pv3-nav-l" href="#pv3-side"><?= icon('receipt', 14) ?> البنود <b class="num"><?= intf($itemsCount) ?></b></a>
+    <span class="pv3-sp"></span>
+    <?php if ($movements): ?>
+      <button type="button" class="pv3-nav-b" data-fold-all=".pv3-mv">
+        <?= icon('layers', 14) ?><span><?= $mvOpenDefault ? 'اطوي الكل' : 'افتح الكل' ?></span></button>
+    <?php endif; ?>
+    <?php if (!$isClosed): ?>
+      <a class="btn gold sm" href="<?= $manageUrl('receipts', (int) ($movements[0]['id'] ?? 0)) ?>"><?= icon('plus', 14) ?> إضافة بند</a>
+    <?php endif; ?>
+  </div>
+
+  <div class="pv3-grid">
+
+    <?php /* ② العمود الرئيسي — الحركات */ ?>
+    <div class="pv3-main" id="pv3-movements">
+      <?php if (!$movements): ?>
+        <?php partial('empty', ['emoji' => '🚚', 'title' => 'لا حركات على الإذن ده']); ?>
+      <?php else: ?>
+        <?php foreach ($movements as $mvIdx => $mv):
+          $mid = (int) $mv['id'];
+          $mvBills = $mv['bills']; $mvStagesG = $mv['stages'];
+          $mvExp = 0.0; $mvCust = 0.0; $mvCharged = 0.0; $mvCt = 0; $mvItems = 0; $mvReps = [];
+          foreach ($mvStagesG as $kk => $es) {
+            foreach ($es as $e) {
+              if (($e['status'] ?? '') === 'none') { continue; }
+              $mvItems++;
+              if ($kk === 'receipts' || $kk === 'primary_fees'
+                  || ($kk === 'custom' && (($e['direction'] ?? '') === 'expense'))) {
+                  $mvExp += (float) $e['amount'];
+              }
+              if (isset($e['actual_amount']) && $e['actual_amount'] !== null && $e['actual_amount'] !== '') {
+                  $mvCharged += (float) $e['actual_amount'];
+              }
+              if (trim((string) ($e['rep_name'] ?? '')) !== '') { $mvReps[$e['rep_name']] = true; }
+            }
+          }
+          foreach ($mvBills as $b) { $mvCust += (float) $b['custody']; $mvCt += (int) ($b['container_count'] ?? 0); }
+          $mvRem = array_sum(array_map(static fn ($b) => (float) $b['remaining'], $mvBills));
+        ?>
+        <details class="pv3-mv" id="movement-<?= $mid ?>"<?= $mvOpenDefault || $mvIdx === 0 ? ' open' : '' ?>>
+          <summary class="pv3-mv-h">
+            <span class="pv3-mv-seq num"><?= intf($mv['seq']) ?></span>
+            <span class="pv3-mv-t">
+              <b>حركة <span class="num"><?= intf($mv['seq']) ?></span></b>
+              <span class="pv3-mv-m">
+                <span><?= icon('truck', 11) ?> <span class="num"><?= intf(count($mvBills)) ?></span> بوليصة</span>
+                <?php if ($mvCt > 0): ?><span><?= icon('containers', 11) ?> <span class="num"><?= intf($mvCt) ?></span> حاوية</span><?php endif; ?>
+                <span><?= icon('receipt', 11) ?> <span class="num"><?= intf($mvItems) ?></span> بند</span>
+                <?php foreach (array_keys($mvReps) as $rn): ?>
+                  <?php partial('rep_badge', ['name' => $rn, 'short' => true]); ?>
+                <?php endforeach; ?>
+                <?php if (trim((string) ($mv['note'] ?? '')) !== ''): ?>
+                  <span><?= icon('edit', 11) ?> <?= e($mv['note']) ?></span>
+                <?php endif; ?>
+              </span>
+            </span>
+            <span class="pv3-mv-n">
+              <span class="pv3-n"><small>عهدة</small><b class="num pos"><?= money($mvCust, false) ?></b></span>
+              <span class="pv3-n"><small>اتصرف</small><b class="num neg"><?= money($mvExp, false) ?></b></span>
+              <span class="pv3-n"><small>للعميل</small><b class="num"><?= $mvCharged > 0 ? money($mvCharged, false) : '—' ?></b></span>
+            </span>
+            <span class="pv3-chev"><?= icon('chevron', 15) ?></span>
+          </summary>
+
+          <div class="pv3-mv-b">
+            <?php /* البوالص — صف لكل بوليصة بدل جدول ١١ عمودًا */ ?>
+            <section class="pv3-panel">
+              <div class="pv3-panel-h">
+                <?= icon('truck', 14) ?> <b>البوالص</b>
+                <span class="pv3-grp-c num"><?= intf(count($mvBills)) ?></span>
+                <span class="pv3-sp"></span>
+                <?php if ($mvRem != 0): ?><span class="pv3-tag warn">متبقّي <span class="num"><?= money($mvRem, false) ?></span></span><?php endif; ?>
+                <a class="pv3-grp-a" href="<?= $manageUrl('bills', $mid) ?>" title="تعديل البوالص"><?= icon('edit', 13) ?></a>
+              </div>
+              <?php if (!$mvBills): ?>
+                <div class="pv3-none"><?= icon('x', 12) ?> لا بوالص في الحركة دي</div>
+              <?php else: ?>
+                <div class="pv3-items">
+                  <?php foreach ($mvBills as $bl): ?>
+                    <a class="pv3-bl" href="<?= url('bawalis/' . (int) $bl['id']) ?>">
+                      <div class="pv3-it-b">
+                        <b class="num"><?= e($bl['bill_number'] ?: '#' . (int) $bl['id']) ?></b>
+                        <div class="pv3-it-m">
+                          <span><?= icon('calendar', 11) ?> <span class="num"><?= dfmt($bl['bill_date']) ?></span></span>
+                          <?php if (($bl['driver'] ?? '') !== ''): ?><span><?= icon('user', 11) ?> <?= e($bl['driver']) ?></span><?php endif; ?>
+                          <?php if (($bl['car_no'] ?? '') !== ''): ?><span><?= icon('truck', 11) ?> <span class="num"><?= e($bl['car_no']) ?></span></span><?php endif; ?>
+                          <?php if (($bl['container_no'] ?? '') !== ''): ?><span><?= icon('containers', 11) ?> <span class="num"><?= e($bl['container_no']) ?></span></span><?php endif; ?>
+                          <?php if (($bl['container_type'] ?? '') !== ''): ?><span class="pv3-tag ct"><span class="num"><?= intf($bl['container_count'] ?? 0) ?></span>×<?= e($bl['container_type']) ?></span><?php endif; ?>
+                          <span class="pill st-<?= e($bl['pay_status']) ?>"><?= e(Bill::STATUS_LABELS[$bl['pay_status']] ?? '') ?></span>
+                        </div>
+                      </div>
+                      <div class="pv3-it-n">
+                        <b class="num pos"><?= money((float) $bl['custody'], false) ?></b>
+                        <?php if ((float) $bl['remaining'] != 0): ?>
+                          <span class="neg">متبقّي <span class="num"><?= money((float) $bl['remaining'], false) ?></span></span>
+                        <?php elseif ((float) $bl['debt'] != 0): ?>
+                          <span>دين <span class="num"><?= money((float) $bl['debt'], false) ?></span></span>
+                        <?php else: ?>
+                          <span class="mut">مسدَّدة</span>
+                        <?php endif; ?>
+                      </div>
+                    </a>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </section>
+
+            <?php /* البنود — مجمّعة بالمرحلة، وكل بند سطر واحد بشارته */ ?>
+            <section class="pv3-panel">
+              <div class="pv3-panel-h">
+                <?= icon('receipt', 14) ?> <b>البنود</b>
+                <span class="pv3-grp-c num"><?= intf($mvItems) ?></span>
+                <span class="pv3-sp"></span>
+                <a class="pv3-grp-a" href="<?= $manageUrl('receipts', $mid) ?>" title="إضافة بند"><?= icon('plus', 13) ?></a>
+              </div>
+              <?php
+                $groups = '';
+                foreach ($mStages as $key => $st) {
+                    if ($key === 'bills' || $key === 'generators') { continue; }
+                    $groups .= $stageGroup($key, $st, $mvStagesG[$key] ?? [], $mid);
+                }
+              ?>
+              <?php if ($groups === ''): ?>
+                <div class="pv3-none"><?= icon('x', 12) ?> لا بنود في الحركة دي</div>
+              <?php else: ?>
+                <?= $groups ?>
+              <?php endif; ?>
+            </section>
+          </div>
+        </details>
+        <?php endforeach; ?>
+      <?php endif; ?>
+
+      <?php /* المولدات — بتظهر بس لو ليها سجل مطابق لرقم الإذن */ ?>
+      <?php if (!empty($generators)): ?>
+        <section class="pv3-panel pv3-card" id="pv3-generators">
+          <div class="pv3-panel-h">
+            <?= icon('settings', 14) ?> <b>المولدات</b>
+            <span class="pv3-grp-c num"><?= intf(count($generators)) ?></span>
+          </div>
+          <div class="pv3-items">
+            <?php foreach ($generators as $g): ?>
+              <div class="pv3-it">
+                <div class="pv3-it-b">
+                  <b><?= e($g['company'] ?: 'مولد') ?></b>
+                  <div class="pv3-it-m">
+                    <span><?= icon('calendar', 11) ?> <span class="num"><?= dfmt($g['gen_date']) ?></span></span>
+                    <span><?= icon('package', 11) ?> <span class="num"><?= intf($g['gen_count']) ?></span></span>
+                  </div>
+                </div>
+                <div class="pv3-it-n">
+                  <b class="num"><?= money((float) $g['freight'], false) ?></b>
+                  <?php if ((float) $g['remaining'] != 0): ?>
+                    <span class="neg">متبقّي <span class="num"><?= money((float) $g['remaining'], false) ?></span></span>
+                  <?php endif; ?>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        </section>
+      <?php endif; ?>
+    </div>
+
+    <?php /* ③ العمود الجانبي — الثابت: رسوم الإذن + تفاصيله */ ?>
+    <aside class="pv3-side" id="pv3-side">
+      <?php
+        $permitMoney = array_filter($pStages,
+            static fn ($k) => $k !== 'data' && $k !== 'generators', ARRAY_FILTER_USE_KEY);
+        $feeGroups = '';
+        foreach ($permitMoney as $key => $st) {
+            $feeGroups .= $stageGroup($key, $st, $permitStages[$key] ?? [], 0, true);
+        }
+      ?>
+      <section class="pv3-panel pv3-card">
+        <div class="pv3-panel-h">
+          <?= icon('coins', 14) ?> <b>رسوم الإذن</b>
+          <span class="pv3-sp"></span>
+          <a class="pv3-grp-a" href="<?= $manageUrl('primary_fees') ?>" title="تعديل الرسوم"><?= icon('edit', 13) ?></a>
+        </div>
+        <?php if ($feeGroups === ''): ?>
+          <div class="pv3-none"><?= icon('x', 12) ?> لا رسوم مسجّلة على الإذن</div>
+        <?php else: ?><?= $feeGroups ?><?php endif; ?>
+      </section>
+
+      <?php
+        /* تفاصيل ما بتتكرّرش مع الهيرو: الهيرو فيه الشركة والوكيل والتوكيل
+           والجهة والميناء والتاريخ والحاويات — فمحدّش منهم بيتكرّر هنا. */
+        $facts = array_values(array_filter([
+          ['package', 'تصنيف الحاويات', trim((string) ($p['container_type'] ?? ''))],
+          ['search',  'سعر الكشف/حاوية', $p['inspection_rate'] !== null ? money($p['inspection_rate'], false) : ''],
+          ['shield',  'سعر الضمان/حاوية', $p['guarantee_rate'] !== null ? money($p['guarantee_rate'], false) : ''],
+          ['ship',    'شركة الشحن', trim((string) ($p['shipping_co'] ?? ''))],
+          ['edit',    'ملاحظة', trim((string) ($p['note'] ?? ''))],
+        ], static fn ($r) => $r[2] !== ''));
+      ?>
+      <?php if ($facts): ?>
+        <section class="pv3-panel pv3-card" id="pv3-facts">
+          <div class="pv3-panel-h"><?= icon('file-text', 14) ?> <b>تفاصيل الإذن</b></div>
+          <div class="pv3-facts">
+            <?php foreach ($facts as [$ic, $lbl, $val]): ?>
+              <div class="pv3-fact">
+                <span class="pv3-fact-l"><?= icon($ic, 12) ?> <?= e($lbl) ?></span>
+                <b><?= e($val) ?></b>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        </section>
+      <?php endif; ?>
+    </aside>
+  </div>
+</div>
 
 <script>
+/* فتح القسم المقصود لما الرابط جاي بمرساة (`#stage-receipts-12`) — نفس سلوك
+   النسخة القديمة بالحرف، لأن كل أزرار «تعديل» في الشاشة بتعتمد عليه. */
 (function(){
-  if (location.hash){
-    var t = document.querySelector(location.hash);
-    if(t){ if(t.tagName==='DETAILS') t.open=true; setTimeout(function(){ t.scrollIntoView({block:'center'}); },60); }
-  }
+  if (!location.hash) return;
+  var t = document.querySelector(location.hash);
+  if (!t) return;
+  var d = t.closest ? t.closest('details') : null;
+  if (d) d.open = true;
+  if (t.tagName === 'DETAILS') t.open = true;
+  setTimeout(function(){ t.scrollIntoView({block:'center'}); }, 60);
 })();
 </script>

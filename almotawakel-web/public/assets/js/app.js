@@ -2855,20 +2855,22 @@
     });
   })();
 
-  /* ── «افتح/اطوي الكل» لقوايم النافذة ──────────────────────────────────────
+  /* ── «افتح/اطوي الكل» — آلية واحدة لكل الشاشات ────────────────────────────
+     `data-fold-all="<محدِّد>"` على الزرار · `data-fold-scope` على الحاوية.
+
      ⚠️ الطيّ نفسه `<details>` **أصلية** وشغّالة بلا جافاسكريبت خالص — الكود ده
         بيزوّد حاجة واحدة: زرار بيقلب كل القوايم مرة واحدة. لو الملف ده ما
-        اتحمّلش، النافذة تفضل شغّالة والزرار هو اللي ما يعملش حاجة.
-     ⚠️ **مفوَّض على `document`** لأن جسم النافذة بيتحقن بالـfetch بعد تحميل
-        الصفحة — أي `addEventListener` مباشر وقت التحميل ما كانش هيلاقي الزرار. */
+        اتحمّلش، الشاشة تفضل شغّالة والزرار هو اللي ما يعملش حاجة.
+     ⚠️ **مفوَّض على `document`** لأن نافذة التفاصيل بتتحقن بالـfetch بعد تحميل
+        الصفحة — أي `addEventListener` مباشر وقت التحميل ما كانش هيلاقي الزرار.
+     ⚠️ **مقصور على `data-fold-scope`** لا الصفحة كلها: لو نفس الجسم اتعرض
+        مرتين (نسخة مخفية + نسخة مرسومة) البحث العام بيقلب الاتنين فالعدّاد
+        يبان غلط. */
   document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-povw-fold]');
+    const btn = e.target.closest('[data-fold-all]');
     if (!btn) return;
-    // ⚠️ **مقصور على النافذة اللي الزرار جوّاها** (`btn.closest('.povw')`) لا
-    //    الصفحة كلها: لو الجسم اتعرض مرتين (نسخة مخفية + نسخة مرسومة) البحث
-    //    العام كان هيقلب الاتنين فالعدّاد يبان غلط.
-    const scope = btn.closest('.povw') || document;
-    const groups = [...scope.querySelectorAll('.povw-g')];
+    const scope = btn.closest('[data-fold-scope]') || document;
+    const groups = [...scope.querySelectorAll(btn.getAttribute('data-fold-all') || 'details')];
     if (!groups.length) return;
     const openAll = !groups.some((g) => g.open);   // كلهم مطويّين؟ يبقى نفتح
     groups.forEach((g) => { g.open = openAll; });

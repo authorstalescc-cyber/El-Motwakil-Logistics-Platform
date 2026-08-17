@@ -276,9 +276,20 @@ preg_match('/width:100%!important/', $mobileBlocks)
     ? ok("العروض الثابتة inline ($inlineW موضع) متحيَّدة في شرائط الأدوات والفلاتر")
     : bad("$inlineW عرض ثابت inline بلا تحييد — الفلاتر هتفضل متزنقة على الهاتف");
 
-/* الشبكات ذات العدد الثابت في الشاشات (مش الطباعة) */
-foreach (['set-figs', 'stat-row', 'hero-tiles', 'detail-grid'] as $cls) {
-    str_contains($mobileBlocks, '.' . $cls)
+/* الشبكات ذات العدد الثابت في الشاشات (مش الطباعة).
+   ⚠️ `.detail-grid` اتشالت من القايمة (v103): الكلاس نفسه **اتحذف** من `app.css`
+      لما جسم شاشة الإذن اتعاد بناؤه بصفوف `pv3-*` — فالفحص كان بيطلب قاعدة
+      متجاوبة لكلاس مش موجود أصلاً. وبديله `.pv3-grid` تحته. */
+/* ⚠️ **الفحص على السلوك مش على تهجئة الميديا-كويري:** `$mobileBlocks` بيقصّ
+   `@media(max-width:640px)` **بلا مسافة** بس. الشبكة ممكن تنزل عمودًا واحدًا
+   عند ٩٠٠ أو ١١٠٠ (وده أصحّ للتابلت)، والقاعدة المقصودة هي «ما تفضلش بعدد
+   أعمدة ثابت على شاشة ضيّقة» — فبنجمّع **كل** نقاط الكسر ≤١١٠٠ بأي تهجئة. */
+$narrowBlocks = '';
+if (preg_match_all('/@media\s*\(max-width:\s*(\d+)px\)\s*\{(.*?)\n\}/s', $cssCode, $nm, PREG_SET_ORDER)) {
+    foreach ($nm as $blk) { if ((int) $blk[1] <= 1100) { $narrowBlocks .= "\n" . $blk[2]; } }
+}
+foreach (['set-figs', 'stat-row', 'hero-tiles', 'pv3-grid'] as $cls) {
+    str_contains($narrowBlocks, '.' . $cls)
         ? ok("`.$cls` بينزل عمود واحد على الهاتف")
         : bad("`.$cls` لسه بعدد أعمدة ثابت على الهاتف");
 }
