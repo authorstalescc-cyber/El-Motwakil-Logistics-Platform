@@ -36,6 +36,7 @@ $catalog = [
     'verify_movement_capacity.php'=> ['impact' => 'rollback',   'self_guard' => false, 'note' => 'fixtures داخل transaction ثم rollback'],
     'verify_owner_hub.php'        => ['impact' => 'read',       'self_guard' => false, 'note' => 'دمج شاشات أصحاب البيان — رندر الشريط ويقرأ رصيد الخزنة للمقارنة'],
     'verify_permit_bulk.php'      => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'fixtures داخل transaction ثم rollback'],
+    'verify_permit_overview.php'  => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'نافذة «نظرة عامة» على يوم الأذونات (v99) — بند مندوب مستنّي ومعتمَد ورندر النافذة، fixtures داخل rollback'],
     'verify_performance_foundation.php' => ['impact' => 'none', 'self_guard' => false, 'note' => 'حارس قياس الأداء وredaction بلا قاعدة'],
     'verify_pwa.php'              => ['impact' => 'none',       'self_guard' => false, 'note' => 'تثبيت النظام على الهاتف وشاشة البدء — ملفات ورندر بلا قاعدة'],
     'verify_quick_entries.php'    => ['impact' => 'rollback',   'self_guard' => false, 'note' => 'fixtures داخل transaction ثم rollback'],

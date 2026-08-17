@@ -6597,3 +6597,174 @@ table.data tr.cl-late td:first-child{box-shadow:inset 3px 0 0 var(--red)}
   .cl-quick{margin-inline-start:0;width:100%}
   .cl-pay-row .field{width:100%;flex:1 1 100%}
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   نافذة «نظرة عامة» على يوم الأذونات (v99) — `.povw`
+   ─────────────────────────────────────────────────────────────────────
+   بتترسم جوّه النافذة العامة (`#uiDrill`) وبس، فالنطاق مغلق تحت `.povw`
+   وما بيلمسش أي شاشة.
+
+   ⚠️ **كله بتوكنز** — فبيشتغل في الوضع الليلي بلا ولا مُحدِّد إضافي
+      (قاعدة المرحلة ١٥). وأي `var(--توكن-مش-موجود)` بيبطّل الإعلان كله
+      **بالسكوت**، عشان كده `--mono` معرَّف هنا مش مستورَد من `.permits-v2`
+      (هو مقفول جوّه نطاقها).
+   ⚠️ الهيرو **سطح داكن**: النص عليه `--white`/`--gold-pale` — و`--navy`
+      نصًّا فوقه بيدّي ١٫٣:١ (قاعدة «اللون له دوران: تعبئة ونص»).
+   ══════════════════════════════════════════════════════════════════════ */
+.povw{
+  --mono:ui-monospace,'SF Mono','Menlo','Cascadia Code','Consolas','Courier New',monospace;
+  padding:14px 16px 16px;
+}
+.povw .num{font-family:var(--mono);font-feature-settings:"tnum" 1,"lnum" 1;letter-spacing:-.2px}
+
+/* ── ① اليوم والتنقّل ─────────────────────────────────────────────── */
+.povw-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.povw-when{display:flex;align-items:center;gap:7px;font-size:var(--fs-3);color:var(--grey)}
+.povw-when svg{color:var(--gold)}
+.povw-when b{font-size:var(--fs-4);font-weight:600;color:var(--accent)}
+.povw-tag{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-1);font-weight:600;
+  padding:2px 8px;border-radius:999px;background:var(--tint-navy);color:var(--accent);border:1px solid var(--navy-line)}
+.povw-tag.red{background:var(--red-lt);color:var(--red-fg);border-color:var(--red-line)}
+.povw-days{margin-inline-start:auto;display:flex;gap:6px}
+.povw-day-btn{display:inline-flex;align-items:center;gap:5px;cursor:pointer;font:inherit;
+  font-size:var(--fs-2);font-weight:500;padding:5px 11px;border-radius:999px;
+  background:var(--card);border:1px solid var(--line);color:var(--grey);transition:.15s}
+.povw-day-btn:hover{border-color:var(--gold);color:var(--accent)}
+.povw-day-btn svg{transform:rotate(180deg)}
+.povw-day-btn.on{background:var(--gold-light);border-color:var(--gold-line);color:var(--gold-fg)}
+.povw-day-btn.on svg{transform:none}
+
+/* ── ② الرقم البطل ────────────────────────────────────────────────── */
+.povw-hero{display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  background:linear-gradient(135deg,var(--navy-dark),var(--navy-mid));
+  border-radius:var(--radius-3);padding:16px 18px;color:var(--white);
+  box-shadow:0 10px 26px rgba(14,36,64,.25)}
+.povw-hero-main{flex:1;min-width:200px}
+.povw-hero-lbl{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2);opacity:.8}
+.povw-hero-lbl svg{color:var(--gold-pale)}
+.povw-hero-num{display:flex;align-items:baseline;gap:6px;font-size:var(--fs-8);font-weight:700;
+  line-height:1.05;letter-spacing:-1px;margin-top:4px}
+.povw-hero-num em{font-style:normal;font-size:var(--fs-2);font-weight:400;opacity:.65}
+.povw-hero-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.povw-t{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-1);font-weight:500;
+  padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18)}
+.povw-t b{font-weight:700}
+.povw-t.gold{background:rgba(201,162,39,.22);border-color:rgba(201,162,39,.45);color:var(--gold-pale)}
+.povw-hero-side{display:flex;gap:10px}
+.povw-mini{min-width:64px;text-align:center;background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.16);border-radius:var(--radius-2);padding:9px 11px}
+.povw-mini b{display:block;font-size:var(--fs-6);font-weight:700;line-height:1}
+.povw-mini span{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-1);opacity:.75;margin-top:4px}
+.povw-mini svg{color:var(--gold-pale)}
+
+/* ── ③ الشرايح = فلاتر (كل رقم مضغوط) ─────────────────────────────── */
+.povw-filters{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 4px}
+.povw-f{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font:inherit;
+  font-size:var(--fs-2);font-weight:500;padding:6px 11px;border-radius:999px;
+  background:var(--card);border:1px solid var(--line);color:var(--ink);transition:.15s}
+.povw-f:hover{border-color:var(--line2);background:var(--zebra)}
+.povw-f b{font-weight:700;color:var(--accent)}
+.povw-f svg{color:var(--grey)}
+.povw-f.on{background:var(--navy);border-color:var(--navy);color:var(--white)}
+.povw-f.on svg,.povw-f.on b{color:var(--white)}
+.povw-f.wait{background:var(--gold-light);border-color:var(--gold-line);color:var(--gold-fg)}
+.povw-f.wait svg,.povw-f.wait b{color:var(--gold-fg)}
+.povw-f.warn{background:var(--red-lt);border-color:var(--red-line);color:var(--red-fg)}
+.povw-f.warn svg,.povw-f.warn b{color:var(--red-fg)}
+.povw-f.teal{background:var(--tint-teal);border-color:var(--teal-line);color:var(--teal-fg)}
+.povw-f.teal svg,.povw-f.teal b{color:var(--teal-fg)}
+.povw-f.gold{background:var(--paper);border-color:var(--gold-line);color:var(--gold-fg)}
+.povw-f.gold svg,.povw-f.gold b{color:var(--gold-fg)}
+.povw-f.on.wait,.povw-f.on.warn,.povw-f.on.teal,.povw-f.on.gold{
+  background:var(--navy);border-color:var(--navy);color:var(--white)}
+.povw-f.on.wait svg,.povw-f.on.warn svg,.povw-f.on.teal svg,.povw-f.on.gold svg,
+.povw-f.on.wait b,.povw-f.on.warn b,.povw-f.on.teal b,.povw-f.on.gold b{color:var(--white)}
+
+/* ── ④ شريط المناديب ──────────────────────────────────────────────── */
+.povw-reps{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px}
+.povw-rep{display:inline-flex;align-items:center;gap:9px;cursor:pointer;font:inherit;text-align:start;
+  padding:7px 12px 7px 9px;border-radius:var(--radius-2);
+  background:var(--card);border:1px solid var(--line);transition:.15s}
+.povw-rep:hover{border-color:var(--teal);background:var(--zebra)}
+.povw-rep.on{border-color:var(--teal);background:var(--tint-teal)}
+.povw-rep-ava{width:28px;height:28px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:var(--tint-teal);color:var(--teal-fg);font-size:var(--fs-2);font-weight:700}
+.povw-rep.on .povw-rep-ava{background:var(--teal);color:var(--white)}
+.povw-rep-b{display:flex;flex-direction:column;gap:1px;min-width:0}
+.povw-rep-b b{font-size:var(--fs-2);font-weight:600;color:var(--accent);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:170px}
+.povw-rep-b span{font-size:var(--fs-1);color:var(--grey)}
+.povw-rep-w{flex:none;min-width:20px;height:20px;padding:0 6px;border-radius:999px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--gold);color:var(--navy-dark);font-size:var(--fs-1);font-weight:700}
+
+/* ── ⑤ الأذونات وبنودها ───────────────────────────────────────────── */
+.povw-groups{display:flex;flex-direction:column;gap:11px;margin-top:14px}
+.povw-g{border:1px solid var(--line);border-radius:var(--radius-3);overflow:hidden;background:var(--card)}
+.povw-g-h{display:flex;align-items:center;gap:11px;padding:11px 14px;text-decoration:none;color:inherit;
+  background:var(--zebra);border-bottom:1px solid var(--line);transition:.15s}
+.povw-g-h:hover{background:var(--tint-navy)}
+.povw-g-ic{width:34px;height:34px;flex:none;border-radius:var(--radius-2);display:flex;align-items:center;justify-content:center;
+  background:var(--tint-navy);color:var(--accent)}
+.povw-g-ic.sader{background:var(--sader-lt);color:var(--sader-fg)}
+.povw-g-ic.warid{background:var(--warid-lt);color:var(--warid-fg)}
+.povw-g-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.povw-g-t>b{font-size:var(--fs-3);font-weight:600;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.povw-g-m{display:flex;flex-wrap:wrap;gap:4px 11px;font-size:var(--fs-1);color:var(--grey)}
+.povw-g-m span{display:inline-flex;align-items:center;gap:4px;min-width:0}
+.povw-g-m svg{color:var(--line2);flex:none}
+.povw-g-badges{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end}
+.povw-g-num{flex:none;text-align:start;display:flex;flex-direction:column;gap:1px}
+.povw-g-num b{font-size:var(--fs-5);font-weight:700;color:var(--ink);line-height:1.1}
+.povw-g-num span{font-size:var(--fs-1);color:var(--grey)}
+
+.povw-b{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-1);font-weight:600;
+  padding:2px 7px;border-radius:999px;background:var(--tint-navy);color:var(--accent);border:1px solid var(--navy-line)}
+.povw-b.wait{background:var(--gold-light);color:var(--gold-fg);border-color:var(--gold-line)}
+.povw-b.warn{background:var(--red-lt);color:var(--red-fg);border-color:var(--red-line)}
+.povw-b.teal{background:var(--tint-teal);color:var(--teal-fg);border-color:var(--teal-line)}
+.povw-b.done{background:var(--green-lt);color:var(--green-fg);border-color:var(--green-line)}
+
+.povw-items{display:flex;flex-direction:column}
+.povw-it{display:flex;align-items:center;gap:11px;padding:9px 14px;text-decoration:none;color:inherit;
+  border-bottom:1px solid var(--line);border-inline-start:3px solid transparent;transition:.13s}
+.povw-it:last-child{border-bottom:none}
+.povw-it:hover{background:var(--zebra)}
+.povw-it.rc{border-inline-start-color:var(--gold)}
+.povw-it.ex{border-inline-start-color:var(--red)}
+.povw-it.rev{border-inline-start-color:var(--green)}
+.povw-it.wait{border-inline-start-color:var(--line2);background:var(--paper)}
+.povw-it-time{flex:none;width:40px;font-size:var(--fs-1);color:var(--grey)}
+.povw-it-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.povw-it-b>b{font-size:var(--fs-3);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.povw-it-m{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:var(--fs-1);color:var(--grey)}
+.povw-it-m>span{display:inline-flex;align-items:center;gap:4px}
+.povw-it-m svg{color:var(--line2)}
+.povw-it-num{flex:none;text-align:start;display:flex;flex-direction:column;gap:1px}
+.povw-it-num b{font-size:var(--fs-4);font-weight:700;line-height:1.1}
+.povw-it.rc .povw-it-num b{color:var(--gold-fg)}
+.povw-it.ex .povw-it-num b{color:var(--red-fg)}
+.povw-it.rev .povw-it-num b{color:var(--green-fg)}
+.povw-it-num span{font-size:var(--fs-1);color:var(--grey)}
+
+/* ── ⑥ التذييل ────────────────────────────────────────────────────── */
+.povw-foot{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:14px;padding-top:12px;
+  border-top:1px solid var(--line)}
+.povw-foot-t{font-size:var(--fs-2);color:var(--grey)}
+.povw-foot-t b{font-size:var(--fs-4);font-weight:700;color:var(--ink);margin-inline-end:6px}
+.povw-foot .btn{margin-inline-start:auto}
+.povw-foot .btn+.btn{margin-inline-start:0}
+
+@media (max-width:640px){
+  .povw{padding:12px}
+  .povw-hero{gap:12px;padding:14px}
+  .povw-hero-num{font-size:var(--fs-7)}
+  .povw-hero-side{width:100%;justify-content:space-between}
+  .povw-mini{flex:1}
+  .povw-g-h{flex-wrap:wrap}
+  .povw-g-badges{order:3;width:100%;justify-content:flex-start}
+  .povw-g-num{margin-inline-start:auto}
+  .povw-it{flex-wrap:wrap}
+  .povw-it-num{margin-inline-start:auto}
+  .povw-foot .btn{margin-inline-start:0;flex:1}
+}

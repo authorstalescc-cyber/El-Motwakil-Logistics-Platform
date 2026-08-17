@@ -1116,4 +1116,228 @@ class Metrics
             [$day]
         );
     }
+
+    // ═══════════════════════════════ نظرة عامة على يوم الأذونات (v99)
+
+    /**
+     * ⚠️ **بنود اليوم على الأذونات — سطر لكل بند، المعتمَد والمستنّي مع بعض.**
+     *
+     * طلب المالك: «عايز أشوف كل إذن جاله إيصالات إيه النهاردة، حتى لو لسه
+     * ما اتعمدتش». `permitsTouched()` بتجاوب على ده **مجمَّعًا** (كام بند وبكام)
+     * — والدالة دي بتجاوب عليه **بندًا بندًا**: مين دخّله، إمتى، بكام، وناقصه إيه.
+     *
+     * الاتحاد نفس اتحاد `permitsTouched()` بالظبط:
+     *   ① `permit_stages` — اللي اتسجّل فعلاً (مكتب أو بند مندوب معتمَد).
+     *   ② `rep_submissions` بحالة `pending` — لسه في صندوق المراجعة.
+     * البند المعتمَد بيختفي من ② ويظهر في ① تلقائيًّا، فمفيش عدّ مزدوج.
+     *
+     * ⚠️ **التاريخ `entry_date` مش `created_at`** — البند بيتحسب على **يوم صرفه**
+     *    لا يوم تسجيله (قاعدة v29)؛ المندوب بيسجّل بند إمبارح النهاردة.
+     * ⚠️ **`status='none'` بيتشال**: دي علامة «الإيصال ده مش محتاجه في الإذن»
+     *    (v32) — مش بند اتصرف، ونفس الاستثناء في `receiptsMissingData()`.
+     * ⚠️ **«طلّع كاش؟» من `Permit::cashOutSql()`** — ممنوع يتكتب بالإيد. وبتشتغل
+     *    على `rep_submissions` كمان لأن العمودين (`is_visa`/`unpaid`) هناك بنفس
+     *    المعنى بالحرف، و`RepInbox::approve()` بتنقلهم للبند المعتمَد زي ما هُمّ.
+     * ⚠️ **`actual_unit` سعر الوحدة** في بنود المناديب، و`actual_amount` **إجمالي**
+     *    في البند المعتمَد — فبنضرب في الكمية هنا زي `RepInbox::approve()` بالظبط،
+     *    وإلا بند كميته ٣ يبان ناقصًا للتلت.
+     */
+    public static function permitDayItems(string $day): array
+    {
+        if ($day === '') { return []; }
+
+        $repsReady = (int) Database::scalar(
+            "SELECT COUNT(*) FROM information_schema.tables
+              WHERE table_schema = DATABASE() AND table_name = 'rep_submissions'"
+        );
+
+        $parts = ["
+            SELECT 'stage' AS src, s.id, s.permit_id, s.movement_id, s.stage_key, s.direction,
+                   s.note, s.qty, s.amount, s.actual_amount, s.ref_no,
+                   s.is_visa, (" . Permit::cashOutSql('s') . ") AS is_cash,
+                   s.attachment AS photo, s.status, s.entry_date, s.created_at,
+                   s.paid_by_rep_id AS rep_id
+              FROM permit_stages s
+             WHERE s.entry_date = ? AND s.permit_id IS NOT NULL AND s.status <> 'none'"];
+        $params = [$day];
+
+        if ($repsReady > 0) {
+            $parts[] = "
+            SELECT 'pending', b.id, b.permit_id, b.movement_id,
+                   CASE WHEN b.kind = 'expense' THEN 'custom' ELSE 'receipts' END,
+                   CASE WHEN b.kind = 'expense' THEN 'expense' ELSE NULL END,
+                   b.note, b.qty, b.amount,
+                   CASE WHEN b.actual_unit IS NULL THEN NULL
+                        ELSE ROUND(b.actual_unit * b.qty, 2) END,
+                   b.ref_no,
+                   b.is_visa, (" . Permit::cashOutSql('b') . "),
+                   b.photo, b.status, b.entry_date, b.created_at, b.rep_id
+              FROM rep_submissions b
+             WHERE b.entry_date = ? AND b.status = 'pending' AND b.permit_id IS NOT NULL";
+            $params[] = $day;
+        }
+
+        $rows = Database::all(
+            "SELECT t.*, p.permit_no, p.permit_type, p.company, p.client, p.permit_date,
+                    p.status AS permit_status, m.seq AS movement_seq, r.name AS rep_name
+               FROM (" . implode(' UNION ALL ', $parts) . ") t
+               JOIN permits p ON p.id = t.permit_id
+               LEFT JOIN permit_movements m ON m.id = t.movement_id
+               LEFT JOIN reps r ON r.id = t.rep_id
+              ORDER BY t.created_at DESC, t.id DESC",
+            $params
+        );
+
+        foreach ($rows as &$r) {
+            $r['id']        = (int) $r['id'];
+            $r['permit_id'] = (int) $r['permit_id'];
+            $r['qty']       = (int) $r['qty'];
+            $r['rep_id']    = $r['rep_id'] !== null ? (int) $r['rep_id'] : 0;
+            $r['amount']    = (float) $r['amount'];
+            $r['actual_amount'] = $r['actual_amount'] !== null ? (float) $r['actual_amount'] : null;
+            $r['is_visa']   = (int) $r['is_visa'] === 1;
+            $r['is_cash']   = (int) $r['is_cash'] === 1;
+            $r['pending']   = $r['src'] === 'pending';
+            $r['by_rep']    = $r['rep_id'] > 0;
+            $r['has_photo'] = trim((string) ($r['photo'] ?? '')) !== '';
+
+            /* تصنيف البند من **تعريف المراحل نفسه** (`Permit::STAGES`) مش من
+               اسم مكتوب بالإيد: إيصال · رسوم أولية · محصَّل (إيراد) · مصروف. */
+            $key = (string) $r['stage_key'];
+            $r['kind'] = $key === 'receipts' ? 'receipt'
+                : ($key === 'primary_fees' ? 'fees'
+                : (((string) ($r['direction'] ?? '')) === Permit::DIR_REVENUE ? 'revenue' : 'expense'));
+
+            /* «ناقص بياناته» = **نفس تعريف `Permit::receiptsMissingData()`**:
+               الفعلي للعميل أو رقم الإيصال ناقص. والبند المستنّي مستثنى — المالك
+               بيكمّل بياناته وقت الاعتماد أصلاً، فوسمه «ناقص» إنذار كاذب. */
+            $r['missing'] = $r['kind'] === 'receipt' && !$r['pending']
+                && ($r['actual_amount'] === null || trim((string) ($r['ref_no'] ?? '')) === '');
+        }
+        unset($r);
+        return $rows;
+    }
+
+    /** فلاتر نافذة النظرة العامة — **المصدر الوحيد** لأسماء الفلاتر ومعناها. */
+    public const DAY_FILTERS = [
+        'all'      => 'الكل',
+        'reps'     => 'من المناديب',
+        'pending'  => 'مستنّي اعتمادك',
+        'office'   => 'من المكتب',
+        'receipts' => 'إيصالات',
+        'expense'  => 'مصروفات',
+        'missing'  => 'ناقص بياناته',
+        'visa'     => 'بالفيزا',
+    ];
+
+    /** هل البند ده داخل الفلتر المطلوب؟ — شرط واحد بيخدم العدّ والعرض معًا. */
+    private static function dayItemMatches(array $item, string $filter): bool
+    {
+        return match ($filter) {
+            'reps'     => (bool) $item['by_rep'],
+            'pending'  => (bool) $item['pending'],
+            'office'   => !$item['by_rep'],
+            'receipts' => $item['kind'] === 'receipt',
+            'expense'  => in_array($item['kind'], ['expense', 'fees'], true),
+            'missing'  => (bool) $item['missing'],
+            'visa'     => (bool) $item['is_visa'],
+            default    => true,
+        };
+    }
+
+    /**
+     * نظرة عامة على يوم الأذونات: الأرقام + البنود مجمّعة بالإذن + المناديب.
+     *
+     * ⚠️ **الأرقام بتتحسب على اليوم كله دايمًا**، والفلتر بيصفّي **العرض** بس —
+     *    وإلا الرقم اللي المالك دوس عليه بيتغيّر تحت إيده فيفتكره غلط.
+     *
+     * @param string $filter مفتاح من `DAY_FILTERS`
+     * @param int    $repId  >0 = بنود المندوب ده بس (شريحة المندوب في الشريط)
+     */
+    public static function permitDayOverview(string $day, string $filter = 'all', int $repId = 0): array
+    {
+        $filter = isset(self::DAY_FILTERS[$filter]) ? $filter : 'all';
+        $items  = self::permitDayItems($day);
+
+        $stats = ['items' => 0, 'permits' => 0, 'out_val' => 0.0, 'cash_val' => 0.0,
+                  'receipt_cnt' => 0, 'receipt_val' => 0.0, 'reps_cnt' => 0,
+                  'rep_cnt' => 0, 'rep_val' => 0.0, 'pending_cnt' => 0, 'pending_val' => 0.0,
+                  'office_cnt' => 0, 'office_val' => 0.0, 'expense_cnt' => 0, 'expense_val' => 0.0,
+                  'revenue_cnt' => 0, 'revenue_val' => 0.0, 'missing_cnt' => 0,
+                  'visa_cnt' => 0, 'visa_val' => 0.0, 'photo_cnt' => 0, 'client_val' => 0.0];
+
+        $permits = [];
+        $reps    = [];
+
+        foreach ($items as $it) {
+            $amount = (float) $it['amount'];
+            $stats['items']++;
+            if ($it['kind'] === 'revenue') {
+                $stats['revenue_cnt']++; $stats['revenue_val'] += $amount;
+            } else {
+                $stats['out_val'] += $amount;
+                if ($it['is_cash']) { $stats['cash_val'] += $amount; }
+            }
+            if ($it['kind'] === 'receipt') { $stats['receipt_cnt']++; $stats['receipt_val'] += $amount; }
+            if (in_array($it['kind'], ['expense', 'fees'], true)) {
+                $stats['expense_cnt']++; $stats['expense_val'] += $amount;
+            }
+            if ($it['by_rep'])  { $stats['rep_cnt']++;    $stats['rep_val'] += $amount; }
+            else                { $stats['office_cnt']++; $stats['office_val'] += $amount; }
+            if ($it['pending']) { $stats['pending_cnt']++; $stats['pending_val'] += $amount; }
+            if ($it['missing']) { $stats['missing_cnt']++; }
+            if ($it['is_visa']) { $stats['visa_cnt']++; $stats['visa_val'] += $amount; }
+            if ($it['has_photo']) { $stats['photo_cnt']++; }
+            if ($it['actual_amount'] !== null) { $stats['client_val'] += (float) $it['actual_amount']; }
+
+            if ($it['by_rep']) {
+                $rid = (int) $it['rep_id'];
+                $reps[$rid] ??= ['rep_id' => $rid, 'name' => (string) ($it['rep_name'] ?: 'مندوب #' . $rid),
+                                 'cnt' => 0, 'val' => 0.0, 'pending_cnt' => 0, 'permits' => []];
+                $reps[$rid]['cnt']++;
+                $reps[$rid]['val'] += $amount;
+                if ($it['pending']) { $reps[$rid]['pending_cnt']++; }
+                $reps[$rid]['permits'][(int) $it['permit_id']] = true;
+            }
+
+            if (!self::dayItemMatches($it, $filter)) { continue; }
+            if ($repId > 0 && (int) $it['rep_id'] !== $repId) { continue; }
+
+            $pid = (int) $it['permit_id'];
+            $permits[$pid] ??= [
+                'id' => $pid, 'permit_no' => $it['permit_no'], 'permit_type' => $it['permit_type'],
+                'company' => $it['company'], 'client' => $it['client'],
+                'permit_status' => $it['permit_status'], 'permit_date' => $it['permit_date'],
+                'cnt' => 0, 'val' => 0.0, 'receipt_cnt' => 0, 'pending_cnt' => 0,
+                'rep_cnt' => 0, 'missing_cnt' => 0, 'reps' => [], 'items' => [],
+            ];
+            $permits[$pid]['cnt']++;
+            $permits[$pid]['val'] += $amount;
+            if ($it['kind'] === 'receipt') { $permits[$pid]['receipt_cnt']++; }
+            if ($it['pending']) { $permits[$pid]['pending_cnt']++; }
+            if ($it['missing']) { $permits[$pid]['missing_cnt']++; }
+            if ($it['by_rep']) {
+                $permits[$pid]['rep_cnt']++;
+                $permits[$pid]['reps'][(string) ($it['rep_name'] ?: '—')] = true;
+            }
+            $permits[$pid]['items'][] = $it;
+        }
+
+        $stats['permits']  = count(array_unique(array_map(static fn ($i) => (int) $i['permit_id'], $items)));
+        $stats['reps_cnt'] = count($reps);
+
+        foreach ($permits as &$p) { $p['reps'] = array_keys($p['reps']); }
+        unset($p);
+        foreach ($reps as &$rp) { $rp['permits'] = count($rp['permits']); }
+        unset($rp);
+
+        /* الترتيب: الأكتر حركة الأول — الإذن اللي جاله ٦ إيصالات أهم من اللي جاله واحد. */
+        $permits = array_values($permits);
+        usort($permits, static fn ($a, $b) => [$b['cnt'], $b['val']] <=> [$a['cnt'], $a['val']]);
+        $reps = array_values($reps);
+        usort($reps, static fn ($a, $b) => [$b['cnt'], $b['val']] <=> [$a['cnt'], $a['val']]);
+
+        return ['day' => $day, 'filter' => $filter, 'rep_id' => $repId, 'stats' => $stats,
+                'permits' => $permits, 'reps' => $reps, 'shown' => count($permits)];
+    }
 }

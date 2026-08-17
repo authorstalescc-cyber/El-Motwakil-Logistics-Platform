@@ -28,6 +28,10 @@ $mode = $mode ?? 'view';
   </div>
 
   <span class="ps-sp"></span>
+  <?php /* «نظرة عامة» — إيصالات وبنود اليوم على **كل** الأذونات (مش الإذن ده
+           بس)، معتمدة ومستنّية. نفس الزرار في `permits/index.php` ونفس النافذة. */ ?>
+  <button type="button" class="btn ghost sm" data-drill="<?= url('permits/overview') ?>"
+          data-drill-title="نظرة عامة — إيصالات اليوم"><?= icon('sparkles', 14) ?> نظرة عامة</button>
   <a class="btn ghost sm" href="<?= url('permits/'.$pid.'/print') ?>" target="_blank"><?= icon('file-text', 14) ?> طباعة المراجعة</a>
   <a class="btn ghost sm" href="<?= url('permits/'.$pid.'/invoice') ?>"><?= icon('receipt', 14) ?> إصدار فاتورة</a>
   <?php if ($mode === 'manage'): ?>

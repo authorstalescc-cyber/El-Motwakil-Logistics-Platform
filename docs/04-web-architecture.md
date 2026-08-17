@@ -152,6 +152,7 @@
 | POST | `/permits/{id}/invoice` | PermitController@invoiceStore |
 | GET | `/permits/{id}/manage` | PermitController@manage |
 | GET | `/permits/print-batch?ids=1,2,3` | PermitController@printBatch — طباعة عدة أذونات دفعة واحدة (مسجّل قبل الجشع `/{id}`) |
+| GET | `/permits/overview?d=&f=&r=` | PermitController@overview — نافذة «نظرة عامة» على إيصالات وبنود اليوم (v99). ترندر **بلا layout** لنافذة `#uiDrill` (مسجّل قبل الجشع `/{id}`) |
 | GET | `/permits/{id}/print` | PermitController@printSheet — كشف مراجعة A4 كامل (بلا layout) |
 | GET | `/permits/{id}` | PermitController@view |
 

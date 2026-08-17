@@ -24,6 +24,10 @@ $stats      = $stats      ?? ['total' => 0, 'open_cnt' => 0, 'closed_cnt' => 0];
     <a class="pv-tab <?= $mode==='records'?'on':'' ?>"   href="<?= url('permits?view=records') ?>"><span class="pvt-ic"><?= icon('layers', 16) ?></span> السجلّات</a>
   </nav>
   <span class="pv-sp"></span>
+  <?php /* «نظرة عامة» — إيصالات وبنود اليوم على كل الأذونات، معتمدة ومستنّية.
+           بتفتح النافذة العامة (`#uiDrill`) بلا ما تنقل من الشاشة. */ ?>
+  <button type="button" class="btn ghost" data-drill="<?= url('permits/overview') ?>"
+          data-drill-title="نظرة عامة — إيصالات اليوم"><?= icon('sparkles', 15) ?> نظرة عامة</button>
   <a class="btn gold pv-new" href="<?= url('permits/new') ?>"><?= icon('plus', 15) ?> إصدار جديد</a>
 </div>
 

@@ -69,6 +69,45 @@ class PermitController extends Controller
         return array_map(static fn($r) => ['name' => (string)$r['name'], 'c' => (int)$r['c']], $rows);
     }
 
+    /**
+     * ⚠️ **نافذة «نظرة عامة» — إيصالات اليوم على الأذونات (v99).**
+     *
+     * طلب المالك بالحرف: «عايز أشوف كل إذن جاله إيصالات إيه النهاردة، حتى لو
+     * لم يتم اعتمادها، وإحصائية كام إيصال وهكذا».
+     *
+     * بترندر **بلا layout** وبترجّع HTML للنافذة العامة (`#uiDrill`) — نفس نمط
+     * `DashboardController::drill()`، فالشكل واحد ومفيش مُصيِّر تاني في الجافاسكريبت.
+     *
+     * ⚠️ **اليوم من `Auth::workDate()`** لا `date()` — المالك ممكن يكون شغّال
+     *    على يوم عمل فات (قاعدة v29)، والنافذة لازم تجاوب على «النهاردة» بتاعته هو.
+     * ⚠️ **`?d=` محدود بـ≤ يوم العمل**: التنقّل للورا مسموح (امبارح)، وقدّام لأ —
+     *    نفس قاعدة الداشبورد «ما ينفعش وانت على ٢٦ تشوف بنود ٢٨».
+     */
+    public function overview(): void
+    {
+        $this->requireAuth();
+
+        $work = \App\Core\Auth::workDate();
+        $day  = trim((string) ($_GET['d'] ?? ''));
+        if ($day === '' || !preg_match('~^\d{4}-\d{2}-\d{2}$~', $day) || $day > $work) {
+            $day = $work;
+        }
+        $filter = (string) ($_GET['f'] ?? 'all');
+        $repId  = (int) ($_GET['r'] ?? 0);
+
+        $data = \App\Models\Metrics::permitDayOverview($day, $filter, $repId);
+        $data['work'] = $work;
+        $data['locked'] = Closing::isLocked($day);
+
+        // ⚠️ محروسة بـ`headers_sent()`: أي مخرَج سابق بيخلّي `header()` ترمي
+        //    Warning **جوّه جسم الرد** فالنافذة تستقبل HTML متلوّث (باج v50).
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: private, no-store, max-age=0');
+        }
+        $this->render('permits/_overview', $data, false);
+    }
+
     public function index(): void
     {
         $this->requireAuth();
