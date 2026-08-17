@@ -816,6 +816,34 @@ class Permit
     }
 
     /**
+     * تفصيل الحاويات حسب التصنيف من البوالص، مجمّعًا باستعلام واحد لكل المعرّفات.
+     *
+     * ⚠️ **المصدر الوحيد** للتفصيل ده — كان عايشًا `private` جوّه
+     *    `PermitController` فما كانش ينفع يتنادى من موديل تاني، والنسخة التانية
+     *    كانت هتفترق مع أول تعديل. الكنترولر بينادي الدالة دي دلوقتي.
+     *
+     * $col: `permit_id` أو `movement_id` (قائمة بيضا) · $ids: المعرّفات.
+     * @return array<int,array<int,array{type:string,cnt:int}>>
+     */
+    public static function containerBreakdown(string $col, array $ids): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if (!$ids) { return []; }
+        $col = $col === 'movement_id' ? 'movement_id' : 'permit_id';   // قائمة بيضاء
+        $in  = implode(',', $ids);
+        $map = [];
+        foreach (Database::all(
+            "SELECT $col AS gid, container_type AS type, COALESCE(SUM(container_count),0) AS cnt
+               FROM bawalis
+              WHERE $col IN ($in) AND container_type IS NOT NULL AND container_type <> ''
+              GROUP BY $col, container_type
+              ORDER BY container_type") as $row) {
+            $map[(int) $row['gid']][] = ['type' => (string) $row['type'], 'cnt' => (int) $row['cnt']];
+        }
+        return $map;
+    }
+
+    /**
      * وصف الحاويات بصيغة «العدد×التصنيف» (مثل «2×20، 1×40»).
      * $breakdown = صفوف [['type'=>..,'cnt'=>..], ...] من البوالص (containerBreakdown).
      * يرجع لتصنيف/عدد الإذن نفسه إن لم توجد بوالص مصنّفة.

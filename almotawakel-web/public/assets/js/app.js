@@ -2792,12 +2792,25 @@
       if (modal.hidden) return;
       modal.hidden = true;
       body.innerHTML = '';
+      // ⚠️ العرض بيترجع لطبيعته مع القفل — وإلا النافذة اللي بعدها بتفتح عريضة
+      //    لجزء من الثانية قبل ما المحتوى يترسم.
+      const c = modal.querySelector('.d-modal-card');
+      if (c) { c.classList.remove('wide'); }
       document.body.style.overflow = '';
       deactivateDialog(modal);
     }
     // أي جدول بيتحقن هنا بياخد أدوات الجداول (ترتيب/إخفاء أعمدة/كروت الموبايل)
     // **تلقائيًّا** من الـMutationObserver القائم — ما تنادّيش حاجة بإيدك.
-    function paint(html) { body.innerHTML = html; }
+    //
+    // ⚠️ **عرض النافذة بيتقرّر من المحتوى لا من نوع التفاصيل:** أي جسم بيرندر
+    //    `[data-wide]` بياخد نافذة أعرض (`.d-modal-card.wide`). كده الشاشة
+    //    الجديدة بتطلب عرضها بنفسها، ومفيش قايمة أنواع في الجافاسكريبت لازم
+    //    تتحدّث مع كل نافذة جديدة (ونسيانها كان هيدّي لفّ صامت في السطور).
+    const card = modal.querySelector('.d-modal-card');
+    function paint(html) {
+      body.innerHTML = html;
+      if (card) { card.classList.toggle('wide', !!body.querySelector('[data-wide]')); }
+    }
     async function open(source, title) {
       titleEl.textContent = title || 'التفاصيل';
       modal.hidden = false;
@@ -2841,6 +2854,27 @@
       if (e.key === 'Escape' && !modal.hidden) { e.stopPropagation(); close(); }
     });
   })();
+
+  /* ── «افتح/اطوي الكل» لقوايم النافذة ──────────────────────────────────────
+     ⚠️ الطيّ نفسه `<details>` **أصلية** وشغّالة بلا جافاسكريبت خالص — الكود ده
+        بيزوّد حاجة واحدة: زرار بيقلب كل القوايم مرة واحدة. لو الملف ده ما
+        اتحمّلش، النافذة تفضل شغّالة والزرار هو اللي ما يعملش حاجة.
+     ⚠️ **مفوَّض على `document`** لأن جسم النافذة بيتحقن بالـfetch بعد تحميل
+        الصفحة — أي `addEventListener` مباشر وقت التحميل ما كانش هيلاقي الزرار. */
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-povw-fold]');
+    if (!btn) return;
+    // ⚠️ **مقصور على النافذة اللي الزرار جوّاها** (`btn.closest('.povw')`) لا
+    //    الصفحة كلها: لو الجسم اتعرض مرتين (نسخة مخفية + نسخة مرسومة) البحث
+    //    العام كان هيقلب الاتنين فالعدّاد يبان غلط.
+    const scope = btn.closest('.povw') || document;
+    const groups = [...scope.querySelectorAll('.povw-g')];
+    if (!groups.length) return;
+    const openAll = !groups.some((g) => g.open);   // كلهم مطويّين؟ يبقى نفتح
+    groups.forEach((g) => { g.open = openAll; });
+    const label = btn.querySelector('span');
+    if (label) { label.textContent = openAll ? 'اطوي الكل' : 'افتح الكل'; }
+  });
 
   /* ═════════════════════════════════════════════════════════════════════
      إظهار خانة كارت الفيزا حسب التوجيه (v93) — `select[data-toggle-visa]`

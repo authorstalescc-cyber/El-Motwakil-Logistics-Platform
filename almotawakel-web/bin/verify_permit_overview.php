@@ -300,7 +300,48 @@ chk(str_contains($view, "url('permits')") && str_contains($view, "url('rep-custo
     'والنافذة فيها طريق للشاشة الكاملة ولصندوق المراجعة');
 
 // ═══════════════════════════════════════════════════════════════════════
-sec('⑦ العزل — الشاشة عرض بحت');
+sec('⑦ التوسعة والطيّ والتنقّل بين الأيام (طلب المالك 2026-08-17)');
+
+$appJs = (string) file_get_contents($root . '/public/assets/js/app.js');
+
+/* ① النافذة بتتوسّع — والإشارة من **المحتوى** مش من قايمة أنواع في الجافاسكريبت. */
+chk(str_contains($view, 'data-wide'), 'الشاشة بتطلب نافذة عريضة بـ`data-wide`');
+chk(str_contains($appJs, "body.querySelector('[data-wide]')") && str_contains($appJs, "classList.toggle('wide'"),
+    'و`app.js` بيحط `.wide` على كارت النافذة لما المحتوى يطلبها');
+chk(str_contains($appJs, "c.classList.remove('wide')"),
+    'وبيشيلها عند القفل — النافذة اللي بعدها ما تفتحش عريضة غلط');
+chk(str_contains($css, '.d-modal-card.wide{'), 'والكلاس معرَّف في `app.css`');
+
+/* ② الطيّ **أصلي**: `<details>` بتشتغل حتى لو `app.js` ما اتحمّلش. */
+chk(preg_match('~<details class="povw-g"~', $viewCode) === 1
+    && str_contains($viewCode, '<summary class="povw-g-h"'),
+    '⚠️ الطيّ بـ`<details>/<summary>` أصلية — بتشتغل بلا جافاسكريبت وبالكيبورد');
+chk(str_contains($viewCode, 'povw-g-go'),
+    'ورابط الإذن **زرار مستقل** جوّه الترويسة — الضغط على السطر بيطوي مش بينقل');
+chk(str_contains($viewCode, 'data-povw-fold') && str_contains($appJs, "data-povw-fold"),
+    'وزرار «افتح/اطوي الكل» موصول بمعالج مفوَّض على `document` (الجسم بيتحقن بعد التحميل)');
+chk(str_contains($viewCode, '$openByDefault = count($permits) <= 6'),
+    'والطيّ الافتراضي بيتقرّر بعدد الأذونات — مش مفتوح دايمًا في يوم فيه ١٥ إذنًا');
+
+/* ③ التنقّل: قدّام **وورا** — والمستقبل مقفول. */
+chk(str_contains($viewCode, '$prevDay') && str_contains($viewCode, '$nextDay'),
+    'التنقّل بيوم قبله ويوم بعده مع بعض');
+chk(str_contains($viewCode, '$canNext = $nextDay <= (string) ($work ?? $day)'),
+    '⚠️ وزرار «بعده» بيختفي عند يوم العمل — المستقبل مرفوض في العرض زي ما هو مرفوض في الأكشن');
+
+/* ④ هوية الإذن: حاويات × تصنيف + توكيل + ميناء — **من نفس مصدر كروت الشاشة**. */
+chk(str_contains($metricsSrc, 'Permit::containerBreakdown(') && str_contains($metricsSrc, 'Permit::containerLabel('),
+    '⚠️ الحاويات وتصنيفها من `Permit::containerBreakdown()` + `containerLabel()` — نفس اللي بترسمه كروت الأذونات');
+chk(!preg_match('~permitDayOverview.*?FROM bawalis~s', $metricsSrc),
+    'ومفيش استعلام حاويات تاني مكتوب بالإيد جوّه النافذة');
+chk(str_contains($ctrl, 'return Permit::containerBreakdown($col, $ids);'),
+    'والكنترولر بينادي نفس الدالة — نسخة واحدة بس في النظام');
+chk(str_contains($viewCode, "\$p['containers_label']") && str_contains($viewCode, "\$p['agency']")
+    && str_contains($viewCode, "\$p['port']"),
+    'والسطر بيعرض الحاويات والتوكيل والميناء جنب رقم الإذن');
+
+// ═══════════════════════════════════════════════════════════════════════
+sec('⑧ العزل — الشاشة عرض بحت');
 
 $touched = preg_match('~\b(INSERT|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b~i', php_code($view));
 chk(!$touched, 'مفيش استعلام كتابة في ملف العرض');

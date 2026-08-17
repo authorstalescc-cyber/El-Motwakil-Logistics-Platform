@@ -32,20 +32,9 @@ class PermitController extends Controller
      */
     private static function containerBreakdown(string $col, array $ids): array
     {
-        $ids = array_values(array_unique(array_map('intval', $ids)));
-        if (!$ids) { return []; }
-        $col = $col === 'movement_id' ? 'movement_id' : 'permit_id';   // قائمة بيضاء
-        $in  = implode(',', $ids);
-        $map = [];
-        foreach (Database::all(
-            "SELECT $col AS gid, container_type AS type, COALESCE(SUM(container_count),0) AS cnt
-               FROM bawalis
-              WHERE $col IN ($in) AND container_type IS NOT NULL AND container_type <> ''
-              GROUP BY $col, container_type
-              ORDER BY container_type") as $row) {
-            $map[(int)$row['gid']][] = ['type' => $row['type'], 'cnt' => (int)$row['cnt']];
-        }
-        return $map;
+        // ⚠️ الاستعلام اتنقل لـ`Permit::containerBreakdown()` عشان `Metrics`
+        //    تقدر تنادّيه كمان (نافذة «نظرة عامة») — نسخة تانية كانت هتفترق.
+        return Permit::containerBreakdown($col, $ids);
     }
 
     /**

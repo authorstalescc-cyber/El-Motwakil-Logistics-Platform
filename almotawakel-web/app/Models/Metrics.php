@@ -1033,14 +1033,25 @@ class Metrics
               WHERE table_schema = DATABASE() AND table_name = 'rep_submissions'"
         );
 
-        /* الجزء ①: البنود المسجَّلة. الإيصال `stage_key='receipts'` والمصروف
-           `direction='expense'` — نفس تعريف باقي النظام. */
+        /* الجزء ①: البنود المسجَّلة — **خانتان متنافيتان**:
+             • الإيصال = `stage_key='receipts'`.
+             • المصروف = `Permit::expenseSql()` **ناقص الإيصالات** (رسوم أولية +
+               مصروفات إضافية اتجاهها مصروف).
+
+           ⚠️ **الإصلاح (2026-08-17):** الشرط كان `direction='expense'` لوحده،
+              والإيصال المسجَّل من فورم المكتب بيتحفظ بـ`direction='expense'`
+              كمان — فكان **بيتعدّ إيصالًا ومصروفًا في نفس السطر ومبلغه بيتجمع
+              مرّتين** في مجموع الكارت (متحقَّق على الإنتاج: ٢٤ بند، وإذن من
+              ١٥ في يوم واحد). والعكس كان بيحصل مع الرسوم الأولية:
+              `direction` بتاعتها NULL فما كانتش بتتعدّ مصروفًا خالص.
+              `verify_dashboard` بيزرع الحالتين ويفشل لو رجعت. */
+        $exOnly = Permit::expenseSql('s') . " AND s.stage_key <> 'receipts'";
         $parts = ["
             SELECT s.permit_id,
                    SUM(CASE WHEN s.stage_key = 'receipts' THEN 1 ELSE 0 END)        AS rc_cnt,
                    SUM(CASE WHEN s.stage_key = 'receipts' THEN s.amount ELSE 0 END) AS rc_val,
-                   SUM(CASE WHEN s.direction = 'expense'  THEN 1 ELSE 0 END)        AS ex_cnt,
-                   SUM(CASE WHEN s.direction = 'expense'  THEN s.amount ELSE 0 END) AS ex_val,
+                   SUM(CASE WHEN $exOnly THEN 1 ELSE 0 END)                         AS ex_cnt,
+                   SUM(CASE WHEN $exOnly THEN s.amount ELSE 0 END)                  AS ex_val,
                    0 AS pend_cnt, 0 AS pend_val,
                    SUM(CASE WHEN s.paid_by_rep_id IS NOT NULL THEN 1 ELSE 0 END)    AS by_rep
               FROM permit_stages s
@@ -1325,6 +1336,35 @@ class Metrics
 
         $stats['permits']  = count(array_unique(array_map(static fn ($i) => (int) $i['permit_id'], $items)));
         $stats['reps_cnt'] = count($reps);
+
+        /* بيانات الإذن اللي بتميّزه بعين المالك: **الحاويات بتصنيفها** والتوكيل
+           والميناء والجهة. طلب المالك: «جنب رقم الإذن عاوز عدد الحاويات الأصلية
+           للإذن × تصنيفها عشان أعرف أميّزها + التوكيل + الميناء».
+
+           ⚠️ استعلامان لكل الأذونات المعروضة مع بعض (مش واحد لكل إذن)، والتصنيف
+              من `Permit::containerBreakdown()` + `Permit::containerLabel()` —
+              **نفس** اللي بترسمه كروت شاشة الأذونات، فمستحيل الرقمان يفترقوا. */
+        if ($permits) {
+            $ids  = array_keys($permits);
+            $in   = implode(',', array_map('intval', $ids));
+            $meta = [];
+            foreach (Database::all(
+                "SELECT id, containers, container_type, agency, port, destination
+                   FROM permits WHERE id IN ($in)") as $m) {
+                $meta[(int) $m['id']] = $m;
+            }
+            $ctMap = Permit::containerBreakdown('permit_id', $ids);
+            foreach ($permits as $pid2 => &$pr) {
+                $m = $meta[$pid2] ?? [];
+                $pr['containers']  = (int) ($m['containers'] ?? 0);
+                $pr['agency']      = (string) ($m['agency'] ?? '');
+                $pr['port']        = (string) ($m['port'] ?? '');
+                $pr['destination'] = (string) ($m['destination'] ?? '');
+                $pr['containers_label'] = Permit::containerLabel(
+                    $ctMap[$pid2] ?? [], (int) ($m['containers'] ?? 0), $m['container_type'] ?? null);
+            }
+            unset($pr);
+        }
 
         foreach ($permits as &$p) { $p['reps'] = array_keys($p['reps']); }
         unset($p);

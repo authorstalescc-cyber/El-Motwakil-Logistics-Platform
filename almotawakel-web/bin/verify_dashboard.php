@@ -228,6 +228,30 @@ if (class_exists('\App\Models\Metrics') && \App\Core\Database::scalar(
         } else {
             echo "  ⓘ مفيش إذن أو مندوب نشط — فحص البند المستنّي اتخطّى\n";
         }
+
+        /* ⚠️⚠️ **حارس التحسيب المزدوج (إصلاح 2026-08-17):** فورم المكتب بيحفظ
+           الإيصال بـ`direction='expense'`، فالشرط القديم (`direction='expense'`
+           لوحده) كان بيعدّه **إيصالًا ومصروفًا مع بعض** ومبلغه بيتجمع مرّتين
+           في مجموع السطر — بلا أي خطأ ظاهر. والعكس: الرسوم الأولية
+           (`direction` = NULL) ما كانتش بتتعدّ مصروفًا خالص.
+           الفحص بيزرع الحالتين على إذن ويوم معزولين ويقيس الخانتين. */
+        if ($pid > 0) {
+            $dayX = '2026-01-06';
+            \App\Core\Database::exec(
+                "INSERT INTO permit_stages (permit_id, stage_key, direction, amount, qty, entry_date, note, status)
+                 VALUES (?, 'receipts', 'expense', 400, 1, ?, 'إيصال فحص ازدواج', 'done')", [$pid, $dayX]);
+            \App\Core\Database::exec(
+                "INSERT INTO permit_stages (permit_id, stage_key, direction, amount, qty, entry_date, note, status)
+                 VALUES (?, 'primary_fees', NULL, 250, 1, ?, 'رسوم فحص', 'done')", [$pid, $dayX]);
+            $row = null;
+            foreach (\App\Models\Metrics::permitsTouched($dayX) as $r) {
+                if ((int) $r['id'] === $pid) { $row = $r; break; }
+            }
+            chk($row !== null && (int) $row['rc_cnt'] === 1 && (int) $row['ex_cnt'] === 1,
+                '⚠️ الإيصال بيتعدّ **إيصالًا واحدًا بس** والرسوم الأولية بتتعدّ مصروفًا');
+            chk($row !== null && abs(((float) $row['rc_val'] + (float) $row['ex_val']) - 650.0) < 0.01,
+                'ومجموع السطر ٦٥٠ = ٤٠٠ + ٢٥٠ — المبلغ ما اتجمعش مرّتين');
+        }
     } finally {
         $db->rollBack();
     }

@@ -37,6 +37,11 @@ $ovUrl = static function (array $over = []) use ($day, $filter, $repId): string 
     return url('permits/overview' . ($q ? '?' . http_build_query($q) : ''));
 };
 
+/* ⚠️ **الطيّ الافتراضي بيتقرّر بالعدد**: يوم فيه ٣ أذونات المالك عايز يشوف
+   بنوده على طول؛ ويوم فيه ١٥ إذنًا القايمة المفتوحة بتبقى شاشتين تمرير قبل ما
+   يوصل للتالت. الحد ٦ — والزرار فوق بيقلب الكل بضغطة. */
+$openByDefault = count($permits) <= 6;
+
 /** «٣ بنود» لا «٣ بند» — تصريف عربي بسيط لعدّ البنود. */
 $bandf = static fn (int $n): string => $n . ' ' . ($n >= 3 && $n <= 10 ? 'بنود' : 'بند');
 
@@ -51,9 +56,19 @@ $chip = static function (string $key, string $label, string $icon, $count, strin
        . '<b class="num">' . intf((int) $count) . '</b></button>';
 };
 ?>
-<div class="povw">
+<?php /* ⚠️ `data-wide` = **إشارة للنافذة تتوسّع** (`app.js` بيحط `.wide` على
+         `.d-modal-card` لما المحتوى بيطلبها). الشاشة دي فيها ٥ أعمدة معلومات
+         في السطر الواحد، وعرض ٦٤٠ الافتراضي كان بيلفّها. */ ?>
+<div class="povw" data-wide>
 
-  <?php /* ① اليوم والتنقّل — البند بيتحسب بيوم صرفه، فالنافذة عدسة يوم واحد */ ?>
+  <?php /* ① اليوم والتنقّل — البند بيتحسب بيوم صرفه، فالنافذة عدسة يوم واحد.
+           ⚠️ **قدّام وورا**: المالك ممكن يرجع ٣ أيام ويحتاج يمشي لقدّام تاني —
+           وزرار «قدّام» بيتقفل عند يوم العمل (المستقبل مرفوض من الأكشن أصلاً). */ ?>
+  <?php
+    $prevDay = date('Y-m-d', strtotime($day . ' -1 day'));
+    $nextDay = date('Y-m-d', strtotime($day . ' +1 day'));
+    $canNext = $nextDay <= (string) ($work ?? $day);
+  ?>
   <div class="povw-top">
     <div class="povw-when">
       <?= icon('calendar', 16) ?>
@@ -62,13 +77,18 @@ $chip = static function (string $key, string $label, string $icon, $count, strin
       <?php if (!empty($locked)): ?><span class="povw-tag red"><?= icon('lock', 12) ?> مُقفَل</span><?php endif; ?>
     </div>
     <div class="povw-days">
-      <button type="button" class="povw-day-btn"
-              data-drill="<?= e($ovUrl(['d' => date('Y-m-d', strtotime($day . ' -1 day')), 'f' => 'all', 'r' => 0])) ?>"
-              data-drill-title="نظرة عامة — اليوم اللي فات"><?= icon('chevron', 14) ?> اليوم اللي قبله</button>
+      <button type="button" class="povw-day-btn prev"
+              data-drill="<?= e($ovUrl(['d' => $prevDay, 'f' => 'all', 'r' => 0])) ?>"
+              data-drill-title="نظرة عامة — <?= e(dfmt($prevDay)) ?>"><?= icon('chevron', 14) ?> <?= e(dfmt($prevDay)) ?></button>
       <?php if (!$isToday): ?>
         <button type="button" class="povw-day-btn on"
                 data-drill="<?= e($ovUrl(['d' => $work, 'f' => 'all', 'r' => 0])) ?>"
                 data-drill-title="نظرة عامة — النهاردة">النهاردة</button>
+      <?php endif; ?>
+      <?php if ($canNext): ?>
+        <button type="button" class="povw-day-btn next"
+                data-drill="<?= e($ovUrl(['d' => $nextDay, 'f' => 'all', 'r' => 0])) ?>"
+                data-drill-title="نظرة عامة — <?= e(dfmt($nextDay)) ?>"><?= e(dfmt($nextDay)) ?> <?= icon('chevron', 14) ?></button>
       <?php endif; ?>
     </div>
   </div>
@@ -117,6 +137,13 @@ $chip = static function (string $key, string $label, string $icon, $count, strin
     <?php $chip('expense', 'مصروفات', 'coins', $stats['expense_cnt'] ?? 0); ?>
     <?php $chip('missing', 'ناقص بياناته', 'alert', $stats['missing_cnt'] ?? 0, 'warn'); ?>
     <?php $chip('visa', 'بالفيزا', 'credit-card', $stats['visa_cnt'] ?? 0); ?>
+    <?php /* ⚠️ الزرار ده **الإضافة الوحيدة اللي محتاجة جافاسكريبت** في الشاشة —
+             طيّ الإذن الواحد `<details>` أصلية شغّالة من غيره. النص بيتقلب في
+             `app.js` حسب حالة القوايم. */ ?>
+    <?php if ($permits): ?>
+      <button type="button" class="povw-f fold" data-povw-fold>
+        <?= icon('layers', 14) ?><span><?= $openByDefault ? 'اطوي الكل' : 'افتح الكل' ?></span></button>
+    <?php endif; ?>
   </div>
 
   <?php /* ④ شريط المناديب — مين نزل النهاردة وجاب كام بند */ ?>
@@ -154,12 +181,22 @@ $chip = static function (string $key, string $label, string $icon, $count, strin
                  و`$th['tone'] ?? ''` بتطبع كلاسًا فاضيًا **بالسكوت** فالنوع
                  يفضل بلا لون (نفس مصيدة الكلاس بلا CSS). */ ?>
         <?php $th = Permit::theme((string) $p['permit_type']); ?>
-        <section class="povw-g">
-          <a class="povw-g-h" href="<?= url('permits/' . $p['id']) ?>">
+        <?php /* ⚠️ `<details>` أصلية مش جافاسكريبت: الطيّ بيشتغل حتى لو `app.js`
+                 ما اتحمّلش، وبيشتغل بالكيبورد بلا أي كود. الجافاسكريبت بيزوّد
+                 حاجة واحدة بس فوقها: «افتح/اطوي الكل». */ ?>
+        <details class="povw-g"<?= $openByDefault ? ' open' : '' ?>>
+          <summary class="povw-g-h">
             <span class="povw-g-ic <?= e($th['cls']) ?>"><?= icon('folder', 17) ?></span>
             <span class="povw-g-t">
               <b><?= e(Permit::typeLabel($p['permit_type'])) ?> <?= e($p['permit_no'] ?: '#' . $p['id']) ?></b>
               <span class="povw-g-m">
+                <?php /* ⚠️ الحاويات بتصنيفها **أول حاجة** بعد الرقم — دي اللي
+                         بيميّز بيها المالك الإذن بعينه (طلبه بالحرف). */ ?>
+                <?php if (($p['containers_label'] ?? '') !== ''): ?>
+                  <span class="povw-b ct"><?= icon('containers', 11) ?> <?= e($p['containers_label']) ?></span>
+                <?php endif; ?>
+                <?php if (($p['agency'] ?? '') !== ''): ?><span><?= icon('ship', 11) ?> <?= e($p['agency']) ?></span><?php endif; ?>
+                <?php if (($p['port'] ?? '') !== ''): ?><span><?= icon('anchor', 11) ?> <?= e($p['port']) ?></span><?php endif; ?>
                 <?php if (($p['company'] ?? '') !== ''): ?><span><?= icon('building', 11) ?> <?= e($p['company']) ?></span><?php endif; ?>
                 <?php if (($p['client'] ?? '') !== ''): ?><span><?= icon('user', 11) ?> <?= e($p['client']) ?></span><?php endif; ?>
                 <?php if ($p['reps']): ?><span><?= icon('users', 11) ?> <?= e(implode(' · ', $p['reps'])) ?></span><?php endif; ?>
@@ -181,7 +218,11 @@ $chip = static function (string $key, string $label, string $icon, $count, strin
               <b class="num"><?= money0($p['val'], false) ?></b>
               <span><?= e($bandf((int) $p['cnt'])) ?></span>
             </span>
-          </a>
+            <?php /* ⚠️ الرابط **زرار مستقل** جوّه الترويسة مش الترويسة كلها:
+                     الضغط على السطر بيطوي/بيفتح، والضغط على السهم بينقل للإذن —
+                     وإلا كل محاولة طيّ كانت هتسيب الشاشة. */ ?>
+            <a class="povw-g-go" href="<?= url('permits/' . $p['id']) ?>" title="افتح الإذن"><?= icon('external', 15) ?></a>
+          </summary>
 
           <div class="povw-items">
             <?php foreach ($p['items'] as $it): ?>
@@ -232,7 +273,7 @@ $chip = static function (string $key, string $label, string $icon, $count, strin
               </a>
             <?php endforeach; ?>
           </div>
-        </section>
+        </details>
       <?php endforeach; ?>
     </div>
   <?php endif; ?>
