@@ -182,7 +182,9 @@ class RepPortal
             }
         }
 
-        // وصف الحاويات من بوالص كل إذن (نفس منطق الإدخال السريع)
+        /* توزيع الحاويات من بوالص الإذن — **مش** مصدر شارات الكارت (شوف تحت)،
+           لكن `Freight::carsFor` محتاجاه، وبيفضل الملجأ الأخير للإذن القديم
+           اللي أصله بلا عدد. */
         $breakdown = [];
         if ($out) {
             $ids = implode(',', array_map('intval', array_keys($out)));
@@ -195,24 +197,33 @@ class RepPortal
                 $breakdown[(int) $c['permit_id']][] = ['type' => $c['type'], 'cnt' => (int) $c['cnt']];
             }
         }
+        /* ⚠️⚠️ **حاويات الكارت = أصل الإذن، مش اللي خرج فعلاً** (طلب المالك).
+           قبل كده كان التوزيع بيتبني من البوالص المسجَّلة، فالإذن اللي أصله
+           ١٨×٢٠ ولسه اتسجّلت عليه ٣ بوالص كان بيقول للمندوب **٣×٢٠ قدم** —
+           الرقم بيتغيّر تحت إيده كل ما يسجّل بوليصة، والمندوب محتاج يعرف
+           **حمولة الإذن كلها** عشان يعرف فاضل كام لا اللي عدّى.
+           والبوالص بترجع بس كملجأ أخير لإذن قديم أصله بلا عدد — أحسن من فراغ. */
         foreach ($out as $pid => &$p) {
-            $p['container_label'] = Permit::containerLabel(
-                $breakdown[$pid] ?? [], $p['containers'], $p['container_type']
-            ) ?: '';
-            // نفس منطق Permit::containerLabel بس مفكوك لأجزاء، عشان كل «عدد×تصنيف»
-            // يبقى شارة لوحدها ومعزولة اتجاهيًا (وإلا الأرقام بتتقلب في العرض RTL).
+            /* «عدد×تصنيف» مفكوك لأجزاء عن قصد: كل واحد شارة لوحدها ومعزولة
+               اتجاهيًا (وإلا الأرقام بتتقلب في العرض RTL). */
             $parts = [];
-            foreach (($breakdown[$pid] ?? []) as $c) {
-                $t = trim((string) ($c['type'] ?? ''));
-                $n = (int) ($c['cnt'] ?? 0);
-                if ($t !== '' && $n > 0) { $parts[] = $n . '×' . container_norm($t); }
-            }
-            if (!$parts && $p['containers'] > 0) {
+            if ($p['containers'] > 0) {
                 $parts[] = $p['container_type'] !== ''
                     ? $p['containers'] . '×' . container_norm($p['container_type'])
                     : $p['containers'] . ' حاوية';
+            } else {
+                foreach (($breakdown[$pid] ?? []) as $c) {
+                    $t = trim((string) ($c['type'] ?? ''));
+                    $n = (int) ($c['cnt'] ?? 0);
+                    if ($t !== '' && $n > 0) { $parts[] = $n . '×' . container_norm($t); }
+                }
             }
             $p['container_parts'] = $parts;
+            /* ⚠️ النص بيتلمّ **من نفس الأجزاء** لا من `Permit::containerLabel()`
+               تاني: الدالة دي ما بتمرّش على `container_norm()`، فالتصنيف الخام
+               («1*40») كان بيدّي شارة «1×40 قدم» ونصًّا «1×1*40» — نفس الإذن
+               برقمين في نفس البوابة. */
+            $p['container_label'] = implode('، ', $parts);
         }
         unset($p);
 
