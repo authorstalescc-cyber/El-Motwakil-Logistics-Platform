@@ -122,6 +122,7 @@ $r->post('/permits/{id}/copy-bill',   'PermitController@copyBill');
 $r->post('/permits/{id}/close',       'PermitController@close');
 $r->post('/permits/{id}/checklist',   'PermitController@saveChecklist');    // حفظ إجابات مرشد الإيصالات (v32)
 $r->post('/permits/{id}/rcp-dismiss',  'PermitController@receiptDismiss');   // «مش محتاجه في الإذن ده» (v32)
+$r->get('/permits/{id}/rcp-why',       'SuggestionController@receiptWhy');   // «التوقّع ده جاي منين؟» (v101)
 // رحلة الشحنة (v62) — تحديث الحالة التشغيلية. وصفي بحت بلا أي أثر مالي.
 $r->post('/permits/{id}/track',        'PermitController@trackStage');
 $r->post('/permits/{id}/track-undo',   'PermitController@trackUndo');
@@ -508,6 +509,9 @@ $r->get('/suggest/habits', 'SuggestionController@habits');
 // سعر السيارة المعتاد (v98) — **الحرفي `/drill` قبل الجشع `/{permit}`**
 $r->get('/suggest/price/{permit}/drill', 'SuggestionController@carPriceDrill');
 $r->get('/suggest/price/{permit}', 'SuggestionController@carPrice');
+// موديل الإيصالات المدرَّب (v101) — الاستعراض والتدريب بضغطة
+$r->get('/receipt-model',        'ReceiptModelController@index');
+$r->post('/receipt-model/train', 'ReceiptModelController@train');
 $r->get('/search/api', 'SearchController@api');
 $r->get('/search',  'SearchController@index');
 $r->post('/backup', 'BackupController@download');

@@ -133,6 +133,33 @@ class SuggestionController extends Controller
         ], false);
     }
 
+    /**
+     * نافذة «التوقّع ده جاي منين؟» — دليل توقّع نوع إيصال في إذن (v101).
+     *
+     * ⚠️ **النوع بيتاخد من الرابط، والدليل بيتحسب في الموديل من الإذن نفسه.**
+     *    مفيش سياق جاي من الشاشة يتزوّر (القاعدة ③) — أسوأ ما يقدر يعمله رابط
+     *    ملعوب هو إنه يسأل عن نوع مالوش سابقة، والرد ساعتها «مفيش سابقة».
+     */
+    public function receiptWhy(string $permitId): void
+    {
+        $this->requireAuth();
+        $pid  = (int) $permitId;
+        $kind = trim((string) ($_GET['k'] ?? ''));
+        $p    = Permit::find($pid);
+        if (!$p) { $this->notFound('الإذن ده مش موجود.'); }
+        if ($kind === '') { $this->notFound('نوع الإيصال مش محدَّد.'); }
+
+        // ⚠️ محروسة بـ`headers_sent()` (نفس مصيدة v50 فوق).
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: private, no-store, max-age=0');
+        }
+        $this->render('permits/_rcp_why', [
+            'kind' => $kind,
+            'ev'   => \App\Models\ReceiptModel::evidence($pid, $kind),
+        ], false);
+    }
+
     public function names(): void
     {
         $this->requireAuth();

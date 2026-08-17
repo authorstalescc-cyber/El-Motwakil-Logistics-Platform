@@ -17,6 +17,7 @@ use App\Models\Audit;
 use App\Models\PartyMaster;
 use App\Models\DeletionPolicy;
 use App\Models\PermitTrack;
+use App\Models\ReceiptModel;
 
 /**
  * الإصدارات (إذن للصادر / شهادة للوارد) — أكبر عملية في النظام.
@@ -246,22 +247,42 @@ class PermitController extends Controller
             // الإيصالات المضافة لكل إذن (البيان + الإجمالي) — عرضها على البطاقة بدل تفصيل المصاريف
             $rcMap = [];
             if ($ids) {
+                /* ⚠️ `qty` مضافة للاستعلام عشان **الموديل المدرَّب** يقدر
+                   يقارن العدد (٣ من ٧) — من غيرها القايمة بتحسب «موجود»
+                   لأي بند مهما كان عدده ناقصًا، فتقول رقمًا غير رقم الشاشة. */
                 foreach (Database::all(
-                    "SELECT permit_id, note, amount FROM permit_stages
+                    "SELECT permit_id, note, amount, qty FROM permit_stages
                      WHERE permit_id IN ($in) AND stage_key='receipts' AND status <> 'none'
                      ORDER BY entry_date, id"
                 ) as $rc) {
                     $rcMap[(int)$rc['permit_id']][] = $rc;
                 }
             }
+            // عدد السيارات والحاويات لكل إذن — نفس مصدر شاشة الإذن (استعلام واحد)
+            $cntMap = $ids ? ReceiptModel::countsFor($ids) : [];
 
             $incomplete = 0;
             foreach ($rows as &$r) {
                 $r['ctype_breakdown'] = $ctMap[(int)$r['id']] ?? [];
                 $r['receipts'] = $rcMap[(int)$r['id']] ?? [];
-                // الإحصاء الذكي: أي الإيصالات المتوقّعة ناقصة (لعرض «بدون هيئة» … على البطاقة)
-                // $r = صف الإذن كاملاً (SELECT p.*) فيشمل chk_* اللازمة للقواعد المشروطة
-                $r['rcp_missing'] = Permit::receiptGuide($r, $r['receipts'])['missing'];
+                /* الإحصاء الذكي: أي الإيصالات المتوقّعة ناقصة (لعرض «بدون هيئة»…).
+                   $r = صف الإذن كاملاً (SELECT p.*) فيشمل chk_* اللازمة للقواعد.
+
+                   ⚠️ **قواعد v32 + الموديل المدرَّب مع بعض** — نفس اللي شاشة
+                      الإذن بتعرضه بالحرف. لو القايمة فضلت على القواعد لوحدها
+                      كان الإذن هيقول «بدون جيش» في الشاشة و«تمام» في القايمة
+                      (أو العكس) بلا أي خطأ ظاهر — وده بالظبط عطل «كارت يقول
+                      رقم وكشف يقول رقم تاني» المحذَّر منه في CLAUDE.md.
+                   ⚠️ **بلا استعلام إضافي لكل صف**: الإحصاء مفهرس مرة واحدة
+                      (كاش ساكن في `ReceiptModel`)، والإيصالات والعدّادات
+                      متجابين فوق لكل الصفحة في استعلامين. */
+                $rid   = (int) $r['id'];
+                $rcpM  = ReceiptModel::predict(
+                    $r, $r['receipts'],
+                    (int) ($cntMap[$rid]['cars']  ?? 0),
+                    (int) ($cntMap[$rid]['conts'] ?? 0)
+                );
+                $r['rcp_missing'] = ReceiptModel::combine(Permit::receiptGuide($r, $r['receipts']), $rcpM)['missing'];
                 $r['progress'] = $progMap[(int)$r['id']]['percent'] ?? 0;
 
                 /* ⚠️ **دي بتتعرض على البطاقة نصًّا مش في tooltip** — الغرض
@@ -577,8 +598,12 @@ class PermitController extends Controller
             'billRows'     => Permit::bills($pid),
             'moneyRows'    => Permit::moneyRows($pid),
             'lookups'      => Lookup::allGrouped(),
-            // مرشد الإيصالات الذكي (استرشادي — v32): المتوقّع/الناقص حسب النوع والتوكيل والـchecklist
-            'rcpGuide'     => Permit::receiptGuideForPermit($pid),
+            /* مرشد الإيصالات (استرشادي): قواعد v32 **مدموجة** مع الموديل
+               المدرَّب v101 — نقطة واحدة الشاشة بتقرا منها، وهي نفسها اللي
+               القايمة بتقرا منها (`ReceiptModel::predict`) عشان ما يحصلش
+               «الشاشة تقول ٣ ناقص والقايمة تقول ٢». */
+            'rcpGuide'     => ReceiptModel::merged($pid),
+            'rcpFresh'     => ReceiptModel::freshness(),
         ];
     }
 

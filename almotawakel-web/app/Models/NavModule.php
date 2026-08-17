@@ -80,6 +80,7 @@ class NavModule
     ['audit',       'سجل العمليات',  'clipboard',     'AuditController@index',       null],
     ['push',        'إشعارات التطبيق','bell',         'PushController@index',        null],
     ['quality',     'تنظيف البيانات','clipboard',     'QualityController@index',     'data_quality'],
+    ['receipt-model','موديل الإيصالات','cpu',         'ReceiptModelController@index', null],
     ['security',    'المراقبة الأمنية','alert',       'SecurityController@index',    'failed_logins'],
     ['settings',    'الإعدادات',     'settings',      'SettingsController@index',    'weak_pins'],
 
