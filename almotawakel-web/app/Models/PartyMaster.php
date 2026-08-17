@@ -247,7 +247,30 @@ class PartyMaster
             'tax_id'  => trim((string)($data['tax_id'] ?? '')) ?: null,
             'address' => trim((string)($data['address'] ?? '')) ?: null,
         ];
-        if ($type === 'agent') { $fields['payment_terms_days'] = max(0, min(365, (int)($data['payment_terms_days'] ?? 30))); }
+        if ($type === 'agent') {
+            $fields['payment_terms_days'] = max(0, min(365, (int)($data['payment_terms_days'] ?? 30)));
+
+            /* ═══ تفضيلات الفوترة (v100) ═══
+               ⚠️ **الفاضي بيتخزّن `NULL` مش `0`**: `NULL` = «المالك ما قالش»
+                  فالنظام يستنتج من التاريخ، و`0` = «قال: غير خاضع» فيسكت
+                  ويطيع. خلطهم بيقفل باب الاستنتاج على كل العملاء بالسكوت.
+               ⚠️ **القائمة المقفولة هنا هي الحارس**: القيمة جاية من `<select>`
+                  والـselect ممكن يتزوّر — فأي نوع مستند برّه `KINDS` بيرجع
+                  `NULL` بدل ما يتخزّن. */
+            $kind = trim((string)($data['default_doc_kind'] ?? ''));
+            $fields['default_doc_kind'] = isset(PermitInvoice::KINDS[$kind]) ? $kind : null;
+
+            $tax = $data['default_taxable'] ?? '';
+            $fields['default_taxable'] = ($tax === '' || $tax === null)
+                ? null : (((int)$tax) === 1 ? 1 : 0);
+
+            $rate = trim((string)($data['default_vat_rate'] ?? ''));
+            /* النسبة بتتكتب كنسبة مئوية في الشاشة (١٤) وبتتخزّن كسرًا (0.14) —
+               نفس صيغة `settings.vat_rate` العامة، عشان مقارنة القيمتين تبقى
+               ممكنة بلا تحويل في نص الطريق. */
+            $fields['default_vat_rate'] = ($rate === '') ? null
+                : max(0.0, min(1.0, ((float)$rate) > 1 ? ((float)$rate) / 100 : (float)$rate));
+        }
         return $fields;
     }
 

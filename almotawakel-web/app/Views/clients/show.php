@@ -36,6 +36,20 @@ if ($wa !== '' && str_starts_with($wa, '0')) { $wa = '2' . $wa; }
       <span><?= icon('landmark', 13) ?> <bdi><?= e($agent['tax_id']) ?></bdi></span>
     <?php endif; ?>
     <span><?= icon('clock', 13) ?> مهلة <?= intf((int) ($agent['payment_terms_days'] ?? 30)) ?> يوم</span>
+    <?php
+    /* تفضيل الفوترة (v100) — **ومصدره معاه**: المالك لازم يفرّق بين قراره هو
+       («مثبَّت») وتخمين النظام («من التاريخ»). الاتنين بشكل واحد بيخلّي
+       التخمين يتقري كقرار — ودي أخطر حاجة في أي ميزة اقتراح.
+       التعديل من «بيانات العميل» — مفيش شاشة جديدة. */
+    $pref = \App\Models\ClientPref::forAgent($agent);
+    $prefTip = $pref['kind_source'] === 'learned'
+        ? 'مستنتَج من ' . intf($pref['kind_hits']) . ' من ' . intf($pref['docs']) . ' مستند — ثبّته من «بيانات العميل»'
+        : ($pref['kind_source'] === 'pinned' ? 'مثبَّت في بروفايل العميل' : 'الافتراضي العام');
+    ?>
+    <span title="<?= e($prefTip) ?>"><?= icon('receipt', 13) ?>
+      <?= e(\App\Models\PermitInvoice::kindLabel($pref['doc_kind'])) ?><?= $pref['taxable'] ? ' • ضريبية' : '' ?>
+      <?php if ($pref['kind_source'] !== 'default'): ?><span class="pill <?= $pref['kind_source'] === 'pinned' ? 'ok' : 'off' ?>"><?= e(\App\Models\ClientPref::sourceLabel($pref['kind_source'])) ?></span><?php endif; ?>
+    </span>
     <span><?= icon('folder', 13) ?> <?= intf($head['permits']['cnt'] ?? 0) ?> إذن</span>
     <span><?= icon('receipt', 13) ?> <?= intf($head['inv_cnt']) ?> مستند</span>
     <?php if (!empty($agent['address'])): ?>

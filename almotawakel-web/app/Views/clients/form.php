@@ -64,6 +64,41 @@ $id = (int) $agent['id'];
     </div>
   </div>
 
+  <?php
+  /* ═══ تفضيلات الفوترة (v100) ═══
+     ⚠️ **«حسب التاريخ» هو الخيار الأول عن قصد** — وهو `NULL` في القاعدة.
+        القيمة الفاضية معناها «ما قلتش» فالنظام يستنتج؛ ولو حطّينا خيارًا
+        افتراضيًّا محدَّدًا كنا هنعلن قرارًا المالك ما اتخذوش **بالسكوت**.
+     ⚠️ النسبة بتتكتب مئوية (١٤) وبتتخزّن كسرًا (0.14) — التحويل في
+        `PartyMaster::editableFields` مكان واحد لا هنا. */
+  $prefKind = (string) ($row['default_doc_kind'] ?? '');
+  $prefTax  = $row['default_taxable'] ?? null;
+  ?>
+  <div class="cl-pay-row">
+    <div class="field flush grow">
+      <label for="f-dk">المستند المعتاد</label>
+      <select id="f-dk" name="default_doc_kind">
+        <option value="">حسب التاريخ</option>
+        <?php foreach (\App\Models\PermitInvoice::KINDS as $k => $lbl): ?>
+          <option value="<?= e($k) ?>"<?= $prefKind === $k ? ' selected' : '' ?>><?= e($lbl) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div class="field flush grow">
+      <label for="f-dt">الضريبة</label>
+      <select id="f-dt" name="default_taxable">
+        <option value="">حسب التاريخ</option>
+        <option value="1"<?= ($prefTax !== null && (int) $prefTax === 1) ? ' selected' : '' ?>>خاضع</option>
+        <option value="0"<?= ($prefTax !== null && $prefTax !== '' && (int) $prefTax === 0) ? ' selected' : '' ?>>غير خاضع</option>
+      </select>
+    </div>
+    <?php /* ⚠️ **«نسبة ضريبة خاصة بالعميل» مش معروضة عن قصد.** العمود
+             (`agents.default_vat_rate`) اتعمل في v100 لكنه **مش موصَّل**:
+             `PermitController::invoiceStore` بياخد النسبة من الإعدادات العامة
+             وقت الحفظ، فخانة في الشاشة كانت هتوري نسبة **ما بتتطبّقش** —
+             وكذبة صامتة أسوأ من ميزة ناقصة. تتعرض لما نقطة الحفظ تتعدّل. */ ?>
+  </div>
+
   <div class="cl-pay-foot">
     <button class="btn gold" type="submit"><?= icon('check', 15) ?> حفظ</button>
     <a class="btn ghost" href="<?= url('clients/' . $id) ?>">إلغاء</a>

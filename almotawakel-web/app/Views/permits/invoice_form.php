@@ -13,8 +13,14 @@ $formState = $formState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'
 $old = $formState['old']; $errors = $formState['errors'];
 $voidState = $voidState ?? ['token'=>FormState::token(),'old'=>[],'errors'=>[],'back'=>'permits/'.$pid.'/invoice'];
 $voidOldId = (int)($voidState['old']['_void_id'] ?? 0);
-$docKind = $old['doc_kind'] ?? 'invoice';
-$taxableOld = (string)($old['taxable'] ?? '0');
+/* تفضيل فوترة العميل (v100) — مثبَّت في بروفايله، وإلا مستنتَج من تاريخه.
+   ⚠️ **افتراضي الفورم بس**: القيمة اللي بتترسل هي اللي المالك شايفها قدامه،
+      و`PermitInvoice::create()` بيفضل الحارس النهائي فوقها (الكشف والمطالبة
+      ما بيخضعوش للضريبة إطلاقًا مهما كان التفضيل). و`$old` بيغلب دايمًا عشان
+      الرجوع بعد خطأ ما يضيّعش اختيار المالك. */
+$clientPref = \App\Models\ClientPref::forName((string)($p['client'] ?? ''));
+$docKind = $old['doc_kind'] ?? $clientPref['doc_kind'];
+$taxableOld = (string)($old['taxable'] ?? (string)$clientPref['taxable']);
 $renderRows = [];
 if (is_array($old['item_label'] ?? null)) {
     foreach ($old['item_label'] as $i => $label) {
