@@ -93,11 +93,11 @@ chk($viewsWithRepQuery === [], 'ومفيش استعلام أسماء منادي�
 sec('② البناء الجديد — صفوف مش جداول، وخريطة للصفحة');
 
 chk(!str_contains($viewC, '<table'), '⚠️ صفر `<table>` في وضع العرض (كانت ٤ جداول لحد ١١ عمودًا)');
-chk(str_contains($viewC, 'pv3-nav') && str_contains($css, '.pv3-nav{position:sticky'),
-    'وفيه شريط ملاصق بيقفّز للأقسام');
-chk(str_contains($viewC, 'data-fold-all=".pv3-mv"') && str_contains($viewC, 'data-fold-scope'),
+chk(str_contains($viewC, 'pf-tools') && str_contains($css, '.pf-rail{position:sticky'),
+    'وفيه سطر أدوات للشغل + ريل هوية ملاصق');
+chk(str_contains($viewC, 'data-fold-all=".pf-mv"') && str_contains($viewC, 'data-fold-scope'),
     'وزرار «افتح/اطوي الكل» على الآلية العامة نفسها بتاعة نافذة النظرة العامة');
-chk(str_contains($viewC, '<details class="pv3-mv"'),
+chk(str_contains($viewC, '<details class="pf-mv"'),
     'والطيّ `<details>` أصلية — شغّالة بالكيبورد وبلا جافاسكريبت');
 chk(str_contains($viewC, '$mvOpenDefault = count($movements) <= 3'),
     'والطيّ الافتراضي بيتقرّر بعدد الحركات');
@@ -111,20 +111,26 @@ foreach (['_bar.php', '_hero.php', '_journey.php', '_docs.php', '_rcp_guide.php'
 }
 
 /* كل كلاس `pv3-*` له CSS والعكس — الاتجاهين مع بعض (مصيدة `.table-mobile-scroll`). */
-preg_match_all('~class="([^"<]*pv3[^"<]*)"~', $view, $cm);
+preg_match_all('~class="([^"<]*(?:pv3|pf-)[^"<]*)"~', $view, $cm);
 $classes = [];
 foreach ($cm[1] ?? [] as $chunk) {
     foreach (preg_split('~\s+~', trim($chunk)) as $c) {
         $c = rtrim(trim((string) $c), "'\"");
-        if ($c !== '' && str_starts_with($c, 'pv3')) { $classes[$c] = true; }
+        if ($c !== '' && (str_starts_with($c, 'pv3') || str_starts_with($c, 'pf-'))) { $classes[$c] = true; }
     }
 }
 $noCss = array_values(array_filter(array_keys($classes), static fn ($c) => !str_contains($css, '.' . $c)));
-chk($noCss === [], 'وكل كلاس `pv3-*` في الماركب له CSS' . ($noCss ? ' — ناقص: ' . implode(', ', $noCss) : ''));
+chk($noCss === [], 'وكل كلاس `pv3-*`/`pf-*` في الماركب له CSS' . ($noCss ? ' — ناقص: ' . implode(', ', $noCss) : ''));
+/* ⚠️ الماركب اللي بيستعمل الكلاسات دي **موزّع على تلات ملفات** (الغلاف
+   `show.php` · الريل `_hero.php` · الجسم) — الفحص على ملف واحد كان بيدّي
+   «قاعدة ميتة» كذبًا لكل كلاس في الريل. */
 $cssCode = (string) preg_replace('~/\*.*?\*/~s', '', $css);
-preg_match_all('~\.(pv3[a-z0-9-]*)~', $cssCode, $csm);
+$markup  = $view . $show . (string) file_get_contents($root . '/app/Views/permits/_movement.php')
+         . (string) file_get_contents($root . '/app/Views/permits/_hero.php')
+         . (string) file_get_contents($root . '/app/Views/permits/_journey.php');
+preg_match_all('~\.((?:pv3|pf)[a-z0-9-]*)~', $cssCode, $csm);
 $deadCss = array_values(array_unique(array_filter($csm[1] ?? [],
-    static fn ($c) => !str_contains($view, $c))));
+    static fn ($c) => !str_contains($markup, $c))));
 chk($deadCss === [], 'ومفيش قاعدة CSS بلا ماركب' . ($deadCss ? ' — ميتة: ' . implode(', ', $deadCss) : ''));
 
 /* الأيقونة الغلط بترسم دايرة فاضية بلا أي خطأ. */

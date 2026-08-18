@@ -1,24 +1,26 @@
 <?php
 /**
- * هيرو الإذن — **جزء مشترك بين شاشة العرض وشاشة الإدارة** (المرحلة ٣).
+ * لوحة هوية الإذن + دفتر فلوسه — **الريل الجانبي** لشاشة الملف (v104).
  *
- * كان الماركب ده مكرَّر **حرفيًا** في `view.php` و`manage.php` (٣٥ سطر × ٢)،
- * والفرق الوحيد كان مكان حساب `$ctLbl`. أي تعديل في بطاقة واحدة كان لازم
- * يتعمل مرتين، وأول مرة تُنسى بتبقى الشاشتان مختلفتين من غير ما حد ياخد باله.
+ * بلاغ المالك: «التصميم سيئ جدًا جدًا … والهيرو سيكشن يتغيّر برضه».
  *
- * ⚠️ **البلاطات أرقام قابلة للضغط، مش زخرفة.** كانت ٨ `<div class="htile">`
- *    صمّاء — مخالفة صريحة لقاعدة المالك «ممنوع رقم أصمّ» (قانون التصميم ⑤).
- *    بقت ٤ أرقام بمكوّن `stat` اللي **بيرفض يترسم بلا مصدر تفاصيل**، فمستحيل
- *    رقم يرجع أصمّ هنا تاني من غير ما المكوّن نفسه يمنعه.
+ * ═══ اللي اتغيّر ولـيه ═══
+ * الهيرو القديم كان **شريطًا أفقيًا** كحلي فيه ٦ «بلاطات» متساوية الوزن،
+ * وتحته **٤ كروت أرقام** بعرض الشاشة. النتيجة: ٥٩٥px من ارتفاع الشاشة
+ * بيتصرفوا قبل أول بند، والعين مالهاش نقطة تبدأ منها (كل حاجة بنفس الحجم).
  *
- * ⚠️ **ليه ٤ مش ٨؟** التلاتة اللي اتشالوا (عدد الحاويات · الحركات · البوالص)
- *    كانوا **مكرَّرين حرفيًّا** في نفس الشاشة: الحاويات في `hero-meta` تحت،
- *    والحركات في عنوان «الحركات (N)»، والبوالص في عدّاد بلوك البوالص.
- *    والاتنين الباقيين (دين البوالص · المتبقي) دفتر البوالص — عاشوا جوّه
- *    نافذة العهدة مع بوالصهم بدل ما يقفوا لوحدهم بلا سياق.
+ * دلوقتي هو **عمود ملاصق** بيفضل قدّام المالك وهو بيقرا البنود:
+ *   ① **لوحة المستند**: النوع · الحالة · الرقم كمسلسل مونو كبير · شريط التقدّم.
+ *   ② **حقائق الملف**: تسمية | قيمة، سطر لكل حقل — زي خانات المستند الورقي.
+ *   ③ **دفتر الفلوس**: أربعة سطور بدل أربع كروت، وكل سطر **زرار** بيفتح بنوده.
  *
- * المتغيّرات المتوقَّعة من الشاشة المستدعية:
- *   $p $pid $th $noLabel $progress $done $tot $movements $totals
+ * ⚠️ **«ممنوع رقم أصمّ» محفوظة بالكامل**: كل سطر في الدفتر `data-drill` على
+ *    نفس أجسام النوافذ اللي تحت — اللي اتغيّر شكل الرقم مش وصوله لتفاصيله.
+ * ⚠️ **الغياب معلومة**: التوكيل الملاحي بيتعرض حتى لو فاضي («غير محدّد»)
+ *    لأن غيابه بيوقّف قواعد مرشد الإيصالات — بس بلون مطفي.
+ * ⚠️ **جزء مشترك بين وضعَي الشاشة** — بيتضمّ **مرة واحدة** من `show.php`.
+ *
+ * المتغيّرات: $p $pid $th $noLabel $progress $done $tot $movements $totals
  *   $billRows $moneyRows (لنوافذ التفاصيل) · $ctBreakdown (اختياري)
  */
 use App\Models\Freight;
@@ -68,78 +70,84 @@ $heroMoneyRow = static function (array $r, string $amount, string $tone, array $
     ]);
 };
 ?>
-<div class="permit-hero card mb t-<?= $th['cls'] ?>">
-  <div class="hero-main">
-    <?php include __DIR__ . '/_hero_bg.php'; ?>
-    <div class="hero-id">
-      <span class="type-chip <?= $th['cls'] ?>"><span class="tc-arrow"><?= $th['arrow'] ?></span> <?= $th['full'] ?></span>
-      <div class="hero-no"><span><?= e($noLabel) ?></span><h1><?= e($p['permit_no'] ?: '#'.$pid) ?></h1></div>
-      <div class="hero-meta">
-        <?php if($p['company']): ?><span class="hm-pill"><span class="hm-ic"><?= icon('building',16) ?></span><span class="hm-tx"><small>لصالح شركة</small><b><?= e($p['company']) ?></b></span></span><?php endif; ?>
-        <?php if($p['client']): ?><span class="hm-pill"><span class="hm-ic"><?= icon('user',16) ?></span><span class="hm-tx"><small>الوكيل</small><b><?= e($p['client']) ?></b></span></span><?php endif; ?>
-        <?php /* ⚠️ **التوكيل الملاحي بارز وبيتعرض دايمًا** (طلب المالك 2026-08-10).
-                 كان مدفونًا في «تفاصيل إضافية» تحت الطية رغم إنه بيحدّد قواعد
-                 مرشد الإيصالات (`receipt_rules_*_agencies`) وبيتطبع في الفاتورة.
-                 وغيابه **معلومة**: من غيره قواعد التوكيل في المرشد ما بتشتغلش،
-                 فالحالة الفاضية بتتعرض مطفية بدل ما تختفي. والاسم كامل
-                 «التوكيل الملاحي» مش «التوكيل» — عشان ما يتلخبطش بـ«الوكيل»
-                 اللي فوقه بالظبط (كلمتان متشابهتان لكيانين مختلفين). */ ?>
-        <?php $agency = trim((string)($p['agency'] ?? '')); ?>
-        <span class="hm-pill is-key<?= $agency==='' ? ' is-blank' : '' ?>">
-          <span class="hm-ic"><?= icon('landmark',16) ?></span>
-          <span class="hm-tx"><small>التوكيل الملاحي</small><b><?= $agency!=='' ? e($agency) : 'غير محدّد' ?></b></span>
-        </span>
-        <?php if($p['destination']): ?><span class="hm-pill"><span class="hm-ic"><?= icon('map-pin',16) ?></span><span class="hm-tx"><small>الجهة</small><b><?= e($p['destination']) ?></b></span></span><?php endif; ?>
-        <?php if(!empty($p['port'])): ?><span class="hm-pill"><span class="hm-ic"><?= icon('anchor',16) ?></span><span class="hm-tx"><small>الميناء</small><b><?= e($p['port']) ?></b></span></span><?php endif; ?>
-        <span class="hm-pill"><span class="hm-ic"><?= icon('calendar',16) ?></span><span class="hm-tx"><small>التاريخ</small><b><?= dfmt($p['permit_date']) ?: '—' ?></b></span></span>
-        <?php /* ⚠️ السيارات جوّه **نفس البلاطة** مش بلاطة جديدة: العدد مشتقّ من
-                 الحاويات اللي جنبه بالظبط، وبلاطة زيادة كانت هتزوّد الصف لخمسة
-                 وتكسر «سطر واحد + meta واحد». */ ?>
-        <?php if($ctLbl!=='' || $carsLbl!==''): ?><span class="hm-pill"><span class="hm-ic"><?= icon('package',16) ?></span><span class="hm-tx"><small>الحاويات (عدد×تصنيف)</small><b><?= e(trim($ctLbl . ($ctLbl!=='' && $carsLbl!=='' ? ' · ' : '') . $carsLbl)) ?></b></span></span><?php endif; ?>
-      </div>
+
+<?php
+/* حقائق الملف — **الترتيب بيتبع السؤال**: مين · فين · إيه · إمتى.
+   ⚠️ الشركة والوكيل كلمتان متشابهتان لكيانين مختلفين، فالتسمية كاملة. */
+$facts = [
+    ['building',  'لصالح شركة',   trim((string) ($p['company'] ?? '')),      false],
+    ['user',      'الوكيل',        trim((string) ($p['client'] ?? '')),       false],
+    ['landmark',  'التوكيل الملاحي', trim((string) ($p['agency'] ?? '')),     true],
+    ['anchor',    'الميناء',       trim((string) ($p['port'] ?? '')),         false],
+    ['map-pin',   'الجهة',         trim((string) ($p['destination'] ?? '')),  false],
+    ['containers','الحاويات',      trim($ctLbl . ($ctLbl !== '' && $carsLbl !== '' ? ' · ' : '') . $carsLbl), false],
+    ['calendar',  'التاريخ',       dfmt($p['permit_date']), false],
+    /* ⚠️ الأربعة دول كانوا في كارت «تفاصيل إضافية» تحت الطية في آخر الصفحة —
+       واتنين منهم (سعر الكشف والضمان) بيحدّدوا الرسوم الأولية المحسوبة
+       تلقائيًّا، فمكانهم الطبيعي جنب باقي بيانات الملف. */
+    ['ship',      'شركة الشحن',    trim((string) ($p['shipping_co'] ?? '')), false],
+    ['search',    'سعر الكشف',     $p['inspection_rate'] !== null ? money($p['inspection_rate'], false) : '', false],
+    ['shield',    'سعر الضمان',    $p['guarantee_rate'] !== null ? money($p['guarantee_rate'], false) : '', false],
+    ['edit',      'ملاحظة',        trim((string) ($p['note'] ?? '')), false],
+];
+?>
+<aside class="pf-rail">
+
+  <?php /* ① لوحة المستند */ ?>
+  <div class="pf-plate">
+    <div class="pf-plate-top">
+      <span class="pf-kind"><i><?= $th['arrow'] ?></i> <?= $th['full'] ?></span>
+      <span class="pf-state<?= $isClosed ? ' done' : '' ?>">
+        <?= $isClosed ? icon('check', 12) . ' مقفول' : icon('clock', 12) . ' جارٍ' ?>
+      </span>
     </div>
-    <div class="hero-ring">
-      <svg viewBox="0 0 36 36">
-        <path class="ring-bg" pathLength="100" d="M18 2.5a15.5 15.5 0 1 1 0 31 15.5 15.5 0 1 1 0-31"/>
-        <path class="ring-fill" pathLength="100" stroke-dasharray="<?= $progress ?>,100" d="M18 2.5a15.5 15.5 0 1 1 0 31 15.5 15.5 0 1 1 0-31"/>
-      </svg>
-      <div class="ring-lbl"><b><?= $progress ?>%</b><span><?= $done ?>/<?= $tot ?></span></div>
+    <span class="pf-eyebrow"><?= e($noLabel) ?></span>
+    <b class="pf-serial"><?= e($p['permit_no'] ?: '#' . $pid) ?></b>
+    <div class="pf-prog">
+      <?php /* ⚠️ `style="width:%"` هو **الاستثناء الوحيد المسموح** للـinline في
+               النظام (قيمة محسوبة لشريط تقدّم — نفس `_journey.php` بالحرف)،
+               وفاحص الأذونات بيسمح `style="width:` تحديدًا ويرفض أي inline تاني. */ ?>
+      <span class="pf-prog-bar"><i style="width:<?= (int) $progress ?>%"></i></span>
+      <b><span class="num"><?= intf($done) ?></span> من <span class="num"><?= intf($tot) ?></span> خطوات</b>
     </div>
   </div>
-  <?php /* ⚠️ الغلاف `.hero-tiles` هو الشبكة (٤←٣←٢←١ أعمدة) وجوّاه كروت
-           `stat` بلغة النظام. اتساب بنفس الاسم عن قصد: `verify_mobile`
-           بيتأكد إن `.hero-tiles` ليها قاعدة متجاوبة، ولو اتسمّى غيره
-           الفحص بيعدّي وهو مش شايف الشبكة الحقيقية. */ ?>
-  <div class="hero-tiles">
-    <?php partial('stat', [
-      'label' => 'العهدة للسواقين', 'value' => money($totals['custody'], false),
-      'icon' => 'banknote', 'tone' => 'green',
-      'drill' => '#phCustody', 'title' => 'عهدة بوالص الإذن',
-    ]); ?>
-    <?php partial('stat', [
-      'label' => 'اتصرف فعلاً', 'value' => money($totals['expense'], false),
-      'icon' => 'trending-down', 'tone' => 'red',
-      'drill' => '#phExpense', 'title' => 'المصروف على الإذن',
-    ]); ?>
-    <?php partial('stat', [
-      'label' => 'هيتحاسب عليه العميل', 'value' => money($totals['charged'] ?? 0, false),
-      'icon' => 'coins', 'tone' => 'gold',
-      'drill' => '#phCharged', 'title' => 'اللي هيتحاسب بيه العميل',
-    ]); ?>
-    <?php /* الرقم الوحيد اللي بيقول الإذن ده كسبان ولا خسران — وكان مش
-             موجود في الشاشة خالص رغم إن طرفيه الاتنين كانوا معروضين. */ ?>
-    <?php /* ⚠️ الاتجاه في **التسمية** والرقم مطلق — نفس سبب صفوف النافذة:
-             علامة الناقص بتتنقل لآخر الرقم في RTL فتتقرا شرطة تايهة. */ ?>
-    <?php partial('stat', [
-      'label' => 'الفرق — ' . ($heroMargin < 0 ? 'نقص عن المصروف'
-                             : ($heroMargin > 0 ? 'زيادة عن المصروف' : 'متعادل مع المصروف')),
-      'value' => money(abs($heroMargin), false),
-      'icon' => $heroMargin < 0 ? 'trending-down' : 'trending-up',
-      'tone' => $heroMargin < 0 ? 'red' : 'green',
-      'drill' => '#phMargin', 'title' => 'الفرق بين اللي هيتحاسب واللي اتصرف',
-    ]); ?>
+
+  <?php /* ② حقائق الملف */ ?>
+  <div class="pf-card">
+    <div class="pf-facts">
+      <?php foreach ($facts as [$ic, $lbl, $val, $isKey]): ?>
+        <?php if ($val === '' && !$isKey) { continue; } ?>
+        <div class="pf-fact<?= $isKey ? ' key' : '' ?><?= $val === '' ? ' blank' : '' ?>">
+          <span class="pf-fact-l"><?= icon($ic, 12) ?> <?= e($lbl) ?></span>
+          <b><?= $val !== '' ? e($val) : 'غير محدّد' ?></b>
+        </div>
+      <?php endforeach; ?>
+    </div>
   </div>
-</div>
+
+  <?php /* ③ دفتر الفلوس — أربع سطور، كل سطر بيفتح بنوده */ ?>
+  <div class="pf-card">
+    <div class="pf-card-h"><?= icon('banknote', 14) ?> فلوس الإذن</div>
+    <div class="pf-led">
+      <button type="button" class="pf-led-r in" data-drill="#phCustody" data-drill-title="عهدة بوالص الإذن">
+        <span>العهدة للسواقين</span><b class="num"><?= money($totals['custody'], false) ?></b><?= icon('search', 13) ?>
+      </button>
+      <button type="button" class="pf-led-r out" data-drill="#phExpense" data-drill-title="المصروف على الإذن">
+        <span>اتصرف فعلاً</span><b class="num"><?= money($totals['expense'], false) ?></b><?= icon('search', 13) ?>
+      </button>
+      <button type="button" class="pf-led-r" data-drill="#phCharged" data-drill-title="اللي هيتحاسب بيه العميل">
+        <span>هيتحاسب عليه العميل</span><b class="num"><?= money($totals['charged'] ?? 0, false) ?></b><?= icon('search', 13) ?>
+      </button>
+      <?php /* ⚠️ الاتجاه في **الكلمة** والرقم مطلق: علامة الناقص في RTL
+               بتتنقل لآخر الرقم فتتقرا شرطة تايهة (مصيدة موثَّقة). */ ?>
+      <button type="button" class="pf-led-r sum <?= $heroMargin < 0 ? 'neg' : ($heroMargin > 0 ? 'pos' : '') ?>"
+              data-drill="#phMargin" data-drill-title="الفرق بين اللي هيتحاسب واللي اتصرف">
+        <span><?= $heroMargin < 0 ? 'ناقص عن المصروف' : ($heroMargin > 0 ? 'زيادة عن المصروف' : 'متعادل مع المصروف') ?></span>
+        <b class="num"><?= money(abs($heroMargin), false) ?></b><?= icon('search', 13) ?>
+      </button>
+    </div>
+  </div>
+</aside>
 
 <?php /* ═══ أجسام نوافذ التفاصيل — جاهزة في الصفحة ومخفيّة، والنافذة العامة
          بتنسخ محتواها (نفس نمط `custody/index.php`). محطوطة هنا جنب

@@ -288,7 +288,9 @@ $narrowBlocks = '';
 if (preg_match_all('/@media\s*\(max-width:\s*(\d+)px\)\s*\{(.*?)\n\}/s', $cssCode, $nm, PREG_SET_ORDER)) {
     foreach ($nm as $blk) { if ((int) $blk[1] <= 1100) { $narrowBlocks .= "\n" . $blk[2]; } }
 }
-foreach (['set-figs', 'stat-row', 'hero-tiles', 'pv3-grid'] as $cls) {
+/* ⚠️ `.hero-tiles` و`.pv3-grid` اتشالوا من `app.css` مع إعادة بناء شاشة الإذن
+   (v104): الهيرو الأفقي بقى ريل ملاصق وشبكته بقت `.pf-page`. */
+foreach (['set-figs', 'stat-row', 'pf-page'] as $cls) {
     str_contains($narrowBlocks, '.' . $cls)
         ? ok("`.$cls` بينزل عمود واحد على الهاتف")
         : bad("`.$cls` لسه بعدد أعمدة ثابت على الهاتف");

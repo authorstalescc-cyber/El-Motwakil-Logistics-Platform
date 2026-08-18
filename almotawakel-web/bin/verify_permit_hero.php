@@ -74,10 +74,16 @@ chk(!str_contains($heroCode, 'htile'),
     '⚠️ مفيش أي `htile` في الهيرو — البلاطة الصمّاء اتشالت مش اتخبّت');
 chk(!str_contains(css_only($css), '.htile'),
     'وقواعد `.htile` اتشالت من `app.css` (مفيش CSS ميت وراها)');
-chk(str_contains($css, '.hero-tiles'),
-    'و`.hero-tiles` لسه موجودة كشبكة — الكلاس اللي `verify_mobile` بيحرسه');
-chk(preg_match_all("~partial\('stat',~", $heroCode) === 4,
-    'وأربع بطاقات `stat` بالظبط (مش ٨ ولا ٣)');
+/* ⚠️ **إعادة بناء v104:** الهيرو الأفقي + شبكة الأربع كروت اتشالوا. الأرقام
+   بقت **دفتر فلوس** (`.pf-led`) في ريل ملاصق — أربع سطور بدل أربع كروت
+   بعرض الشاشة، وكل سطر لسه زرار بيفتح نفس نافذة تفاصيله.
+   القاعدة زي ما هي: **أربعة أرقام، كلها مضغوطة، ومجموع كل نافذة = رقمها.** */
+chk(!str_contains(css_only($css), '.hero-tiles'),
+    'و`.hero-tiles` اتشالت من `app.css` مع الهيرو القديم (مفيش CSS ميت وراها)');
+chk(preg_match_all('~class="pf-led-r~', $heroCode) === 4,
+    'ودفتر الفلوس أربع سطور بالظبط (مش ٨ ولا ٣)');
+chk(preg_match_all('~data-drill="#ph~', $heroCode) === 4,
+    '⚠️ وكل سطر فيه بيفتح تفاصيله — «ممنوع رقم أصمّ» زي ما هي');
 
 /* ⚠️ الرقم الجديد **لازم** يعيش في `totals()` مش في الـview: هو حرفيًّا طرح
    بلاطتين معروضتين جنبه، ولو اتحسب في الشاشة ممكن يفترق عنهم بالسكوت. */
@@ -92,12 +98,12 @@ sec('①ب التوكيل الملاحي بارز في الهيرو ومش مك�
 
 chk(str_contains($heroCode, 'التوكيل الملاحي'),
     'التوكيل الملاحي في الهيرو **بالاسم الكامل** (مش «التوكيل» اللي بيتلخبط بـ«الوكيل»)');
-chk(str_contains($heroCode, 'is-key'),
-    'وبكلاس التمييز `is-key` — بارز مش بلاطة عادية وسط الباقي');
+chk(preg_match('~\$facts\s*=.*التوكيل الملاحي.*true~su', $heroCode) === 1,
+    'وموسوم **مفتاحيًّا** في قايمة الحقائق (بيتعرض حتى لو فاضي)');
 /* ⚠️ الكلاس اللي بيتطبع بلا CSS بيقع على الشكل الافتراضي **بالسكوت** — نفس
    مصيدة `.table-mobile-scroll` اللي عاشت شهور معطَّلة. */
 $cssCode = css_only($css);
-foreach (['.hm-pill.is-key', '.hm-pill.is-key.is-blank'] as $cls) {
+foreach (['.pf-fact.key', '.pf-fact.blank'] as $cls) {
     chk(str_contains($cssCode, $cls), "وكلاس `$cls` معرَّف في `app.css` (مش ماركب بلا شكل)");
 }
 /* ⚠️ الحقل اللي بيتعرض في مكانين بيفترق مع أول تعديل — اتشال من «تفاصيل
@@ -105,8 +111,8 @@ foreach (['.hm-pill.is-key', '.hm-pill.is-key.is-blank'] as $cls) {
 $bodyVCode = code_only($bodyV);
 chk(!preg_match("~'[^']*التوكيل[^']*',\s*\(\\\$p\['agency'\]~u", $bodyVCode),
     '⚠️ ومش مكرَّر في «تفاصيل إضافية» تحت (اتشال من هناك)');
-chk(str_contains($bodyVCode, "shipping_co"),
-    'و«شركة الشحن» فضلت مكانها — حقل تاني مختلف مش نفس الحاجة');
+chk(str_contains($heroCode, 'shipping_co') && !str_contains($bodyVCode, 'shipping_co'),
+    'و«شركة الشحن» اتنقلت لحقائق الملف — حقل تاني مختلف، ومكان واحد بس');
 
 // ═══════════════════════════════════════════════════════════════════════
 sec('② ترتيب المراحل ثابت — مش بيتعاد ترتيبه حسب الاكتمال');
@@ -216,16 +222,16 @@ if ($pid <= 0) {
         chk(!str_contains($html, 'ممنوع رقم أصمّ'),
             '⚠️ ولا بطاقة رقم بلا مصدر تفاصيل في الشاشة كلها');
 
-        // كل بلاطة في شبكة الهيرو لازم تكون `.d-kpi` بـ`data-drill`
-        if (preg_match('~<div class="hero-tiles">(.*?)\n  </div>~s', $html, $m)) {
-            $grid = $m[1];
-            $cards = preg_match_all('~class="d-kpi ~', $grid);
-            $drills = preg_match_all('~data-drill="~', $grid);
-            chk($cards === 4, "شبكة الهيرو فيها ٤ كروت أرقام (لقى $cards)");
-            chk($cards > 0 && $cards === $drills,
-                "⚠️ وكل رقم فيها بيفتح تفاصيله ($drills من $cards)");
+        // كل سطر في دفتر الفلوس لازم يكون زرار بـ`data-drill`
+        if (preg_match('~<div class="pf-led">(.*?)</div>~s', $html, $m)) {
+            $led = $m[1];
+            $rows   = preg_match_all('~class="pf-led-r~', $led);
+            $drills = preg_match_all('~data-drill="~', $led);
+            chk($rows === 4, "دفتر الفلوس فيه ٤ سطور (لقى $rows)");
+            chk($rows > 0 && $rows === $drills,
+                "⚠️ وكل رقم فيه بيفتح تفاصيله ($drills من $rows)");
         } else {
-            bad('ما لقيتش شبكة `.hero-tiles` في الناتج');
+            bad('ما لقيتش دفتر الفلوس `.pf-led` في الناتج');
         }
 
         foreach (['phCustody', 'phExpense', 'phCharged', 'phMargin'] as $win) {
@@ -236,11 +242,11 @@ if ($pid <= 0) {
            محدّد» لو مش متسجّل (غيابه معلومة: قواعد التوكيل في مرشد الإيصالات
            ما بتشتغلش من غيره). الفحص بيتأكد إن الحالتين بتطلع صح. */
         $permitAgency = trim((string) (\App\Models\Permit::find($pid)['agency'] ?? ''));
-        chk(preg_match('~<span class="hm-pill is-key~', $html) === 1,
-            'وبلاطة التوكيل الملاحي ظاهرة في ميتا الهيرو');
+        chk(preg_match('~<div class="pf-fact key~', $html) === 1,
+            'وحقل التوكيل الملاحي ظاهر في حقائق الملف');
         chk($permitAgency !== ''
-            ? (str_contains($html, e($permitAgency)) && !str_contains($html, 'is-key is-blank'))
-            : str_contains($html, 'is-key is-blank'),
+            ? (str_contains($html, e($permitAgency)) && !str_contains($html, 'pf-fact key blank'))
+            : str_contains($html, 'pf-fact key blank'),
             $permitAgency !== ''
                 ? "وبتعرض قيمته الفعلية ({$permitAgency})"
                 : 'وبتعرض حالة «غير محدّد» المطفية (الإذن ده بلا توكيل)');
@@ -269,9 +275,9 @@ if ($pid <= 0) {
            مع إعادة بناء الجسم، والعدد بقى في **الشريط الملاصق** فوق (`pv3-nav`)
            اللي بيقفّز للقسم كمان. الفحص بيقيس **وجود المعلومة** مش تهجئة
            العنوان القديم — وإلا يبقى فحصًا على نص لا على سلوك. */
-        chk(preg_match('~pv3-nav-l[^>]*>.*?الحركات.*?<b[^>]*>\s*[\d٠-٩,،]+~su', $html) === 1
+        chk(preg_match('~pf-count[^>]*>.*?الحركات.*?<b[^>]*>\s*[\d٠-٩,،]+~su', $html) === 1
             || count($money) === 0,
-            'وعدد الحركات لسه ظاهر (اتنقل لشريط القفز فوق — مش ضاع مع بلاطته)');
+            'وعدد الحركات لسه ظاهر (اتنقل لسطر أدوات الشغل — مش ضاع مع بلاطته)');
 
         // ولا أيقونة وقعت على الدايرة الفاضية
         chk(!str_contains($html, 'icon-missing'), 'وولا أيقونة وقعت على الشكل الافتراضي');
@@ -382,7 +388,7 @@ if ($permitHtml === '') {
        والمقياس اتحوّل للمكان الجديد. الجداول اللي لسه موجودة (وضع التعديل)
        بيفضل شرط تطابق الأعمدة عليها زي ما هو. */
     $groupTotals = substr_count($permitHtml, 'pv3-grp-t');
-    $mvTotals    = substr_count($permitHtml, 'pv3-n');
+    $mvTotals    = substr_count($permitHtml, 'class="pf-n"');
     chk($groupTotals + $mvTotals >= 3,
         "المجموع بيبان جنب بنوده ({$groupTotals} مجموعة + {$mvTotals} ترويسة حركة)");
     /* ⚠️ **`colspan` غلط بيزحلق كل الأرقام عمودًا** فيبان مبلغ تحت عنوان تاني

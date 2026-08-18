@@ -214,8 +214,12 @@ chk96(str_contains($css, '.ct-chip'),
    (اللون بيتكتب في الماركب مش جاي من توكن) — مصيدة موثَّقة. */
 foreach (['app/Views/permits/invoice_form.php', 'app/Views/permits/_hero.php'] as $file) {
     $raw = (string) file_get_contents($root . '/' . $file);
-    chk96(!str_contains($raw, 'style=') && !str_contains($raw, '<style'),
-        "`{$file}` لسه بصفر `style=` محلي");
+    /* ⚠️ `style="width:%"` **الاستثناء الوحيد المسموح** في النظام كله (قيمة
+       محسوبة لشريط تقدّم — نفس `_journey.php`)، وقانون التصميم بينصّ عليه
+       صراحةً. الممنوع هو التنسيق الثابت inline. */
+    $inlineBad = preg_match('~\sstyle="(?!width:)~', $raw) === 1;
+    chk96(!$inlineBad && !str_contains($raw, '<style'),
+        "`{$file}` لسه بصفر `style=` محلي ثابت");
 }
 
 // ═══════════════════════════════════════════ الخلاصة

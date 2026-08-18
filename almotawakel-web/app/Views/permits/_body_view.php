@@ -156,16 +156,15 @@ foreach ($permitStages as $es) {
 ?>
 <div class="pv3" data-fold-scope>
 
-  <?php /* ① الشريط الملاصق: خريطة الصفحة + الإجراء الأهم.
-           ⚠️ **الأرقام هنا مش زخرفة** — كل واحد بينقل لقسمه، والقفز ده هو
-              البديل للتمرير الطويل اللي كان مصيبة النسخة القديمة. */ ?>
-  <div class="pv3-nav">
-    <a class="pv3-nav-l" href="#pv3-movements"><?= icon('shuffle', 14) ?> الحركات <b class="num"><?= intf(count($movements)) ?></b></a>
-    <a class="pv3-nav-l" href="#pv3-movements"><?= icon('truck', 14) ?> البوالص <b class="num"><?= intf($billsCount) ?></b></a>
-    <a class="pv3-nav-l" href="#pv3-side"><?= icon('receipt', 14) ?> البنود <b class="num"><?= intf($itemsCount) ?></b></a>
-    <span class="pv3-sp"></span>
+  <?php /* ① سطر الأدوات — **مش خريطة تانية**: الهوية والأرقام في الريل جنبك،
+           فاللي فاضل هنا عدّادات الشغل والإجراء الأهم وطيّ الكل. */ ?>
+  <div class="pf-tools">
+    <span class="pf-count"><?= icon('shuffle', 14) ?> الحركات <b><?= intf(count($movements)) ?></b></span>
+    <span class="pf-count"><?= icon('truck', 14) ?> البوالص <b><?= intf($billsCount) ?></b></span>
+    <span class="pf-count"><?= icon('receipt', 14) ?> البنود <b><?= intf($itemsCount) ?></b></span>
+    <span class="pf-sp"></span>
     <?php if ($movements): ?>
-      <button type="button" class="pv3-nav-b" data-fold-all=".pv3-mv">
+      <button type="button" class="pf-tool" data-fold-all=".pf-mv">
         <?= icon('layers', 14) ?><span><?= $mvOpenDefault ? 'اطوي الكل' : 'افتح الكل' ?></span></button>
     <?php endif; ?>
     <?php if (!$isClosed): ?>
@@ -173,10 +172,9 @@ foreach ($permitStages as $es) {
     <?php endif; ?>
   </div>
 
-  <div class="pv3-grid">
-
-    <?php /* ② العمود الرئيسي — الحركات */ ?>
-    <div class="pv3-main" id="pv3-movements">
+  <?php /* ② الكعب: كل حركة عقدة عليه — والمحتوى **فعلاً** تسلسل تسليمات،
+           فالعلامة المرقّمة بتقول معلومة صحيحة مش زخرفة. */ ?>
+  <div class="pf-spine" id="pv3-movements">
       <?php if (!$movements): ?>
         <?php partial('empty', ['emoji' => '🚚', 'title' => 'لا حركات على الإذن ده']); ?>
       <?php else: ?>
@@ -201,12 +199,18 @@ foreach ($permitStages as $es) {
           foreach ($mvBills as $b) { $mvCust += (float) $b['custody']; $mvCt += (int) ($b['container_count'] ?? 0); }
           $mvRem = array_sum(array_map(static fn ($b) => (float) $b['remaining'], $mvBills));
         ?>
-        <details class="pv3-mv" id="movement-<?= $mid ?>"<?= $mvOpenDefault || $mvIdx === 0 ? ' open' : '' ?>>
-          <summary class="pv3-mv-h">
-            <span class="pv3-mv-seq num"><?= intf($mv['seq']) ?></span>
-            <span class="pv3-mv-t">
-              <b>حركة <span class="num"><?= intf($mv['seq']) ?></span></b>
-              <span class="pv3-mv-m">
+        <?php /* ⚠️ **الختم برّه الكارت مش جوّاه**: الكارت `overflow:hidden` عشان
+                 الحواف المدوّرة، فأي عنصر بيطلع برّه حدوده **بيتقصّ** (اتصاد فعليًّا
+                 — الختم كان مرسوم وغير مرئي). فالعقدة غلاف والختم أخو الكارت.
+                 ⚠️ ومش زخرفة مرقّمة: الحركات **تسلسل تسليمات فعلي**، والرقم ده
+                 هو نفسه `seq` اللي بيتكتب على الورق وبيتقال في التليفون. */ ?>
+        <div class="pf-node">
+        <span class="pf-stamp num"><?= intf($mv['seq']) ?></span>
+        <details class="pf-mv" id="movement-<?= $mid ?>"<?= $mvOpenDefault || $mvIdx === 0 ? ' open' : '' ?>>
+          <summary class="pf-mv-h">
+            <span class="pf-mv-t">
+              <b>حركة <em><?= intf($mv['seq']) ?></em></b>
+              <span class="pf-mv-m">
                 <span><?= icon('truck', 11) ?> <span class="num"><?= intf(count($mvBills)) ?></span> بوليصة</span>
                 <?php if ($mvCt > 0): ?><span><?= icon('containers', 11) ?> <span class="num"><?= intf($mvCt) ?></span> حاوية</span><?php endif; ?>
                 <span><?= icon('receipt', 11) ?> <span class="num"><?= intf($mvItems) ?></span> بند</span>
@@ -218,15 +222,15 @@ foreach ($permitStages as $es) {
                 <?php endif; ?>
               </span>
             </span>
-            <span class="pv3-mv-n">
-              <span class="pv3-n"><small>عهدة</small><b class="num pos"><?= money($mvCust, false) ?></b></span>
-              <span class="pv3-n"><small>اتصرف</small><b class="num neg"><?= money($mvExp, false) ?></b></span>
-              <span class="pv3-n"><small>للعميل</small><b class="num"><?= $mvCharged > 0 ? money($mvCharged, false) : '—' ?></b></span>
+            <span class="pf-mv-n">
+              <span class="pf-n"><small>عهدة</small><b class="pos"><?= money($mvCust, false) ?></b></span>
+              <span class="pf-n"><small>اتصرف</small><b class="neg"><?= money($mvExp, false) ?></b></span>
+              <span class="pf-n"><small>للعميل</small><b><?= $mvCharged > 0 ? money($mvCharged, false) : '—' ?></b></span>
             </span>
-            <span class="pv3-chev"><?= icon('chevron', 15) ?></span>
+            <span class="pf-chev"><?= icon('chevron', 15) ?></span>
           </summary>
 
-          <div class="pv3-mv-b">
+          <div class="pf-mv-b">
             <?php /* البوالص — صف لكل بوليصة بدل جدول ١١ عمودًا */ ?>
             <section class="pv3-panel">
               <div class="pv3-panel-h">
@@ -292,12 +296,13 @@ foreach ($permitStages as $es) {
             </section>
           </div>
         </details>
+        </div>
         <?php endforeach; ?>
       <?php endif; ?>
 
       <?php /* المولدات — بتظهر بس لو ليها سجل مطابق لرقم الإذن */ ?>
       <?php if (!empty($generators)): ?>
-        <section class="pv3-panel pv3-card" id="pv3-generators">
+        <section class="pv3-panel pv3-card pf-node" id="pv3-generators">
           <div class="pv3-panel-h">
             <?= icon('settings', 14) ?> <b>المولدات</b>
             <span class="pv3-grp-c num"><?= intf(count($generators)) ?></span>
@@ -325,8 +330,8 @@ foreach ($permitStages as $es) {
       <?php endif; ?>
     </div>
 
-    <?php /* ③ العمود الجانبي — الثابت: رسوم الإذن + تفاصيله */ ?>
-    <aside class="pv3-side" id="pv3-side">
+        <?php /* رسوم الإذن — بنود على مستوى الإذن نفسه (مش على حركة).
+               مكانها آخر الكعب لأنها **مش خطوة في التسلسل**، هي مصاريف الملف. */ ?>
       <?php
         $permitMoney = array_filter($pStages,
             static fn ($k) => $k !== 'data' && $k !== 'generators', ARRAY_FILTER_USE_KEY);
@@ -335,42 +340,16 @@ foreach ($permitStages as $es) {
             $feeGroups .= $stageGroup($key, $st, $permitStages[$key] ?? [], 0, true);
         }
       ?>
-      <section class="pv3-panel pv3-card">
-        <div class="pv3-panel-h">
-          <?= icon('coins', 14) ?> <b>رسوم الإذن</b>
-          <span class="pv3-sp"></span>
-          <a class="pv3-grp-a" href="<?= $manageUrl('primary_fees') ?>" title="تعديل الرسوم"><?= icon('edit', 13) ?></a>
-        </div>
-        <?php if ($feeGroups === ''): ?>
-          <div class="pv3-none"><?= icon('x', 12) ?> لا رسوم مسجّلة على الإذن</div>
-        <?php else: ?><?= $feeGroups ?><?php endif; ?>
-      </section>
-
-      <?php
-        /* تفاصيل ما بتتكرّرش مع الهيرو: الهيرو فيه الشركة والوكيل والتوكيل
-           والجهة والميناء والتاريخ والحاويات — فمحدّش منهم بيتكرّر هنا. */
-        $facts = array_values(array_filter([
-          ['package', 'تصنيف الحاويات', trim((string) ($p['container_type'] ?? ''))],
-          ['search',  'سعر الكشف/حاوية', $p['inspection_rate'] !== null ? money($p['inspection_rate'], false) : ''],
-          ['shield',  'سعر الضمان/حاوية', $p['guarantee_rate'] !== null ? money($p['guarantee_rate'], false) : ''],
-          ['ship',    'شركة الشحن', trim((string) ($p['shipping_co'] ?? ''))],
-          ['edit',    'ملاحظة', trim((string) ($p['note'] ?? ''))],
-        ], static fn ($r) => $r[2] !== ''));
-      ?>
-      <?php if ($facts): ?>
-        <section class="pv3-panel pv3-card" id="pv3-facts">
-          <div class="pv3-panel-h"><?= icon('file-text', 14) ?> <b>تفاصيل الإذن</b></div>
-          <div class="pv3-facts">
-            <?php foreach ($facts as [$ic, $lbl, $val]): ?>
-              <div class="pv3-fact">
-                <span class="pv3-fact-l"><?= icon($ic, 12) ?> <?= e($lbl) ?></span>
-                <b><?= e($val) ?></b>
-              </div>
-            <?php endforeach; ?>
+      <?php if ($feeGroups !== ''): ?>
+        <section class="pv3-panel pv3-card pf-node" id="pv3-fees">
+          <div class="pv3-panel-h">
+            <?= icon('coins', 14) ?> <b>رسوم الإذن</b>
+            <span class="pv3-sp"></span>
+            <a class="pv3-grp-a" href="<?= $manageUrl('primary_fees') ?>" title="تعديل الرسوم"><?= icon('edit', 13) ?></a>
           </div>
+          <?= $feeGroups ?>
         </section>
       <?php endif; ?>
-    </aside>
   </div>
 </div>
 
