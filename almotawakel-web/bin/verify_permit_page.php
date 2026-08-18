@@ -93,8 +93,8 @@ chk($viewsWithRepQuery === [], 'ومفيش استعلام أسماء منادي�
 sec('② البناء الجديد — صفوف مش جداول، وخريطة للصفحة');
 
 chk(!str_contains($viewC, '<table'), '⚠️ صفر `<table>` في وضع العرض (كانت ٤ جداول لحد ١١ عمودًا)');
-chk(str_contains($viewC, 'pf-tools') && str_contains($css, '.pf-rail{position:sticky'),
-    'وفيه سطر أدوات للشغل + ريل هوية ملاصق');
+chk(str_contains($viewC, 'pf-tools') && str_contains($css, '.pf-tools{'),
+    'وفيه سطر أدوات للشغل (عدّادات + طيّ الكل + إضافة بند)');
 chk(str_contains($viewC, 'data-fold-all=".pf-mv"') && str_contains($viewC, 'data-fold-scope'),
     'وزرار «افتح/اطوي الكل» على الآلية العامة نفسها بتاعة نافذة النظرة العامة');
 chk(str_contains($viewC, '<details class="pf-mv"'),

@@ -80,10 +80,10 @@ chk(!str_contains(css_only($css), '.htile'),
    القاعدة زي ما هي: **أربعة أرقام، كلها مضغوطة، ومجموع كل نافذة = رقمها.** */
 chk(!str_contains(css_only($css), '.hero-tiles'),
     'و`.hero-tiles` اتشالت من `app.css` مع الهيرو القديم (مفيش CSS ميت وراها)');
-chk(preg_match_all('~class="pf-led-r~', $heroCode) === 4,
-    'ودفتر الفلوس أربع سطور بالظبط (مش ٨ ولا ٣)');
-chk(preg_match_all('~data-drill="#ph~', $heroCode) === 4,
-    '⚠️ وكل سطر فيه بيفتح تفاصيله — «ممنوع رقم أصمّ» زي ما هي');
+chk(preg_match_all("~partial\('stat',~", $heroCode) === 4,
+    'وأربع بطاقات `stat` بالظبط (مش ٨ ولا ٣)');
+chk(preg_match_all('~#ph(Custody|Expense|Charged|Margin)~', $heroCode) >= 4,
+    '⚠️ وكل كارت بيفتح نافذة تفاصيله — «ممنوع رقم أصمّ» زي ما هي');
 
 /* ⚠️ الرقم الجديد **لازم** يعيش في `totals()` مش في الـview: هو حرفيًّا طرح
    بلاطتين معروضتين جنبه، ولو اتحسب في الشاشة ممكن يفترق عنهم بالسكوت. */
@@ -111,8 +111,8 @@ foreach (['.pf-fact.key', '.pf-fact.blank'] as $cls) {
 $bodyVCode = code_only($bodyV);
 chk(!preg_match("~'[^']*التوكيل[^']*',\s*\(\\\$p\['agency'\]~u", $bodyVCode),
     '⚠️ ومش مكرَّر في «تفاصيل إضافية» تحت (اتشال من هناك)');
-chk(str_contains($heroCode, 'shipping_co') && !str_contains($bodyVCode, 'shipping_co'),
-    'و«شركة الشحن» اتنقلت لحقائق الملف — حقل تاني مختلف، ومكان واحد بس');
+chk(!str_contains($heroCode, 'shipping_co') && str_contains($bodyVCode, 'shipping_co'),
+    'و«شركة الشحن» مكانها «تفاصيل الإذن» تحت — حقل تاني مختلف، ومكان واحد بس');
 
 // ═══════════════════════════════════════════════════════════════════════
 sec('② ترتيب المراحل ثابت — مش بيتعاد ترتيبه حسب الاكتمال');
@@ -222,16 +222,16 @@ if ($pid <= 0) {
         chk(!str_contains($html, 'ممنوع رقم أصمّ'),
             '⚠️ ولا بطاقة رقم بلا مصدر تفاصيل في الشاشة كلها');
 
-        // كل سطر في دفتر الفلوس لازم يكون زرار بـ`data-drill`
-        if (preg_match('~<div class="pf-led">(.*?)</div>~s', $html, $m)) {
-            $led = $m[1];
-            $rows   = preg_match_all('~class="pf-led-r~', $led);
-            $drills = preg_match_all('~data-drill="~', $led);
-            chk($rows === 4, "دفتر الفلوس فيه ٤ سطور (لقى $rows)");
-            chk($rows > 0 && $rows === $drills,
-                "⚠️ وكل رقم فيه بيفتح تفاصيله ($drills من $rows)");
+        // كل كارت في صف الأرقام لازم يكون `.d-kpi` بـ`data-drill`
+        if (preg_match('~<div class="pf-tiles">(.*?)\n</div>~s', $html, $m)) {
+            $grid   = $m[1];
+            $cards  = preg_match_all('~class="d-kpi ~', $grid);
+            $drills = preg_match_all('~data-drill="~', $grid);
+            chk($cards === 4, "صف الأرقام فيه ٤ كروت (لقى $cards)");
+            chk($cards > 0 && $cards === $drills,
+                "⚠️ وكل رقم فيه بيفتح تفاصيله ($drills من $cards)");
         } else {
-            bad('ما لقيتش دفتر الفلوس `.pf-led` في الناتج');
+            bad('ما لقيتش صف الأرقام `.pf-tiles` في الناتج');
         }
 
         foreach (['phCustody', 'phExpense', 'phCharged', 'phMargin'] as $win) {
@@ -242,8 +242,8 @@ if ($pid <= 0) {
            محدّد» لو مش متسجّل (غيابه معلومة: قواعد التوكيل في مرشد الإيصالات
            ما بتشتغلش من غيره). الفحص بيتأكد إن الحالتين بتطلع صح. */
         $permitAgency = trim((string) (\App\Models\Permit::find($pid)['agency'] ?? ''));
-        chk(preg_match('~<div class="pf-fact key~', $html) === 1,
-            'وحقل التوكيل الملاحي ظاهر في حقائق الملف');
+        chk(preg_match('~<span class="pf-fact key~', $html) === 1,
+            'وشريحة التوكيل الملاحي ظاهرة في حقائق الهيرو');
         chk($permitAgency !== ''
             ? (str_contains($html, e($permitAgency)) && !str_contains($html, 'pf-fact key blank'))
             : str_contains($html, 'pf-fact key blank'),

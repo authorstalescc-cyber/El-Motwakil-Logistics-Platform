@@ -171,7 +171,7 @@ if ($pid <= 0) {
         preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $html, $m)
             ? bad("خطأ PHP في وضع `$mode`: " . ($m[0] ?? ''))
             : ok("وضع `$mode` بيرندر بلا أخطاء PHP");
-        chk(str_contains($html, 'pf-plate'), "وضع `$mode` فيه الهيرو");
+        chk(str_contains($html, 'pf-hero'), "وضع `$mode` فيه الهيرو");
         chk(str_contains($html, 'pb-modes'), "ووضع `$mode` فيه مفتاح الوضع");
     }
 }

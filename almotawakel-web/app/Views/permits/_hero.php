@@ -1,23 +1,21 @@
 <?php
 /**
- * لوحة هوية الإذن + دفتر فلوسه — **الريل الجانبي** لشاشة الملف (v104).
+ * هيرو الإذن — **شريط أفقي + كروت الأرقام** (v105).
  *
- * بلاغ المالك: «التصميم سيئ جدًا جدًا … والهيرو سيكشن يتغيّر برضه».
+ * ⚠️ **قرار المالك (2026-08-18):** «اللي قبل قبل ده كان جيد — أريد حاجة مشابهة
+ *    له بشكل احترافي وقوي». يعني الشكل الأصلي رجع: **هيرو أفقي بعرض الشاشة**
+ *    فيه هوية الإذن، وتحته **صف كروت الأرقام الأربعة**، والأقسام تحتهم بعرض
+ *    الصفحة. الريل الجانبي والكعب بتوع v104 اتشالوا بالكامل.
  *
- * ═══ اللي اتغيّر ولـيه ═══
- * الهيرو القديم كان **شريطًا أفقيًا** كحلي فيه ٦ «بلاطات» متساوية الوزن،
- * وتحته **٤ كروت أرقام** بعرض الشاشة. النتيجة: ٥٩٥px من ارتفاع الشاشة
- * بيتصرفوا قبل أول بند، والعين مالهاش نقطة تبدأ منها (كل حاجة بنفس الحجم).
+ * ⚠️ **ورجع مبنيًّا من جديد لا منسوخًا**: نفس الشكل بتفاصيل أنضف — تباعد
+ *    منتظم، وزن بصري متدرّج (الرقم أضخم حاجة، والحقائق أهدى)، وخط النظام
+ *    (Cairo) في **كل حاجة حتى الأرقام** (طلب المالك — المونوسبيس اتشال من
+ *    الشاشة كلها والاصطفاف بقى `tabular-nums` من نفس الخط).
  *
- * دلوقتي هو **عمود ملاصق** بيفضل قدّام المالك وهو بيقرا البنود:
- *   ① **لوحة المستند**: النوع · الحالة · الرقم كمسلسل مونو كبير · شريط التقدّم.
- *   ② **حقائق الملف**: تسمية | قيمة، سطر لكل حقل — زي خانات المستند الورقي.
- *   ③ **دفتر الفلوس**: أربعة سطور بدل أربع كروت، وكل سطر **زرار** بيفتح بنوده.
- *
- * ⚠️ **«ممنوع رقم أصمّ» محفوظة بالكامل**: كل سطر في الدفتر `data-drill` على
- *    نفس أجسام النوافذ اللي تحت — اللي اتغيّر شكل الرقم مش وصوله لتفاصيله.
- * ⚠️ **الغياب معلومة**: التوكيل الملاحي بيتعرض حتى لو فاضي («غير محدّد»)
- *    لأن غيابه بيوقّف قواعد مرشد الإيصالات — بس بلون مطفي.
+ * ⚠️ **«ممنوع رقم أصمّ»**: الأربع كروت من مكوّن `stat` اللي **بيرفض يترسم بلا
+ *    مصدر تفاصيل**، وأجسام نوافذها تحت في نفس الملف.
+ * ⚠️ **الغياب معلومة**: التوكيل الملاحي بيتعرض حتى لو فاضي («غير محدّد») لأن
+ *    غيابه بيوقّف قواعد مرشد الإيصالات — بس مطفي عشان ما يسرقش العين.
  * ⚠️ **جزء مشترك بين وضعَي الشاشة** — بيتضمّ **مرة واحدة** من `show.php`.
  *
  * المتغيّرات: $p $pid $th $noLabel $progress $done $tot $movements $totals
@@ -72,82 +70,86 @@ $heroMoneyRow = static function (array $r, string $amount, string $tone, array $
 ?>
 
 <?php
-/* حقائق الملف — **الترتيب بيتبع السؤال**: مين · فين · إيه · إمتى.
-   ⚠️ الشركة والوكيل كلمتان متشابهتان لكيانين مختلفين، فالتسمية كاملة. */
+/* حقائق الإذن في الهيرو — **الترتيب بيتبع السؤال**: مين · فين · إيه · إمتى.
+   ⚠️ «لصالح شركة» و«الوكيل» كلمتان متشابهتان لكيانين مختلفين، فالتسمية كاملة. */
 $facts = [
-    ['building',  'لصالح شركة',   trim((string) ($p['company'] ?? '')),      false],
-    ['user',      'الوكيل',        trim((string) ($p['client'] ?? '')),       false],
-    ['landmark',  'التوكيل الملاحي', trim((string) ($p['agency'] ?? '')),     true],
-    ['anchor',    'الميناء',       trim((string) ($p['port'] ?? '')),         false],
-    ['map-pin',   'الجهة',         trim((string) ($p['destination'] ?? '')),  false],
-    ['containers','الحاويات',      trim($ctLbl . ($ctLbl !== '' && $carsLbl !== '' ? ' · ' : '') . $carsLbl), false],
-    ['calendar',  'التاريخ',       dfmt($p['permit_date']), false],
-    /* ⚠️ الأربعة دول كانوا في كارت «تفاصيل إضافية» تحت الطية في آخر الصفحة —
-       واتنين منهم (سعر الكشف والضمان) بيحدّدوا الرسوم الأولية المحسوبة
-       تلقائيًّا، فمكانهم الطبيعي جنب باقي بيانات الملف. */
-    ['ship',      'شركة الشحن',    trim((string) ($p['shipping_co'] ?? '')), false],
-    ['search',    'سعر الكشف',     $p['inspection_rate'] !== null ? money($p['inspection_rate'], false) : '', false],
-    ['shield',    'سعر الضمان',    $p['guarantee_rate'] !== null ? money($p['guarantee_rate'], false) : '', false],
-    ['edit',      'ملاحظة',        trim((string) ($p['note'] ?? '')), false],
+    ['building',  'لصالح شركة',     trim((string) ($p['company'] ?? '')),      false],
+    ['user',      'الوكيل',          trim((string) ($p['client'] ?? '')),       false],
+    ['landmark',  'التوكيل الملاحي', trim((string) ($p['agency'] ?? '')),       true],
+    ['map-pin',   'الجهة',           trim((string) ($p['destination'] ?? '')),  false],
+    ['anchor',    'الميناء',         trim((string) ($p['port'] ?? '')),         false],
+    ['containers','الحاويات',        trim($ctLbl . ($ctLbl !== '' && $carsLbl !== '' ? ' · ' : '') . $carsLbl), false],
+    ['calendar',  'التاريخ',         dfmt($p['permit_date']), false],
 ];
 ?>
-<aside class="pf-rail">
-
-  <?php /* ① لوحة المستند */ ?>
-  <div class="pf-plate">
-    <div class="pf-plate-top">
+<section class="pf-hero t-<?= $th['cls'] ?>">
+  <div class="pf-hero-id">
+    <div class="pf-hero-top">
       <span class="pf-kind"><i><?= $th['arrow'] ?></i> <?= $th['full'] ?></span>
       <span class="pf-state<?= $isClosed ? ' done' : '' ?>">
         <?= $isClosed ? icon('check', 12) . ' مقفول' : icon('clock', 12) . ' جارٍ' ?>
       </span>
     </div>
     <span class="pf-eyebrow"><?= e($noLabel) ?></span>
-    <b class="pf-serial"><?= e($p['permit_no'] ?: '#' . $pid) ?></b>
-    <div class="pf-prog">
-      <?php /* ⚠️ `style="width:%"` هو **الاستثناء الوحيد المسموح** للـinline في
-               النظام (قيمة محسوبة لشريط تقدّم — نفس `_journey.php` بالحرف)،
-               وفاحص الأذونات بيسمح `style="width:` تحديدًا ويرفض أي inline تاني. */ ?>
-      <span class="pf-prog-bar"><i style="width:<?= (int) $progress ?>%"></i></span>
-      <b><span class="num"><?= intf($done) ?></span> من <span class="num"><?= intf($tot) ?></span> خطوات</b>
-    </div>
-  </div>
+    <h1 class="pf-serial"><?= e($p['permit_no'] ?: '#' . $pid) ?></h1>
 
-  <?php /* ② حقائق الملف */ ?>
-  <div class="pf-card">
     <div class="pf-facts">
       <?php foreach ($facts as [$ic, $lbl, $val, $isKey]): ?>
         <?php if ($val === '' && !$isKey) { continue; } ?>
-        <div class="pf-fact<?= $isKey ? ' key' : '' ?><?= $val === '' ? ' blank' : '' ?>">
-          <span class="pf-fact-l"><?= icon($ic, 12) ?> <?= e($lbl) ?></span>
-          <b><?= $val !== '' ? e($val) : 'غير محدّد' ?></b>
-        </div>
+        <span class="pf-fact<?= $isKey ? ' key' : '' ?><?= $val === '' ? ' blank' : '' ?>">
+          <span class="pf-fact-ic"><?= icon($ic, 15) ?></span>
+          <span class="pf-fact-tx">
+            <small><?= e($lbl) ?></small>
+            <b><?= $val !== '' ? e($val) : 'غير محدّد' ?></b>
+          </span>
+        </span>
       <?php endforeach; ?>
     </div>
   </div>
 
-  <?php /* ③ دفتر الفلوس — أربع سطور، كل سطر بيفتح بنوده */ ?>
-  <div class="pf-card">
-    <div class="pf-card-h"><?= icon('banknote', 14) ?> فلوس الإذن</div>
-    <div class="pf-led">
-      <button type="button" class="pf-led-r in" data-drill="#phCustody" data-drill-title="عهدة بوالص الإذن">
-        <span>العهدة للسواقين</span><b class="num"><?= money($totals['custody'], false) ?></b><?= icon('search', 13) ?>
-      </button>
-      <button type="button" class="pf-led-r out" data-drill="#phExpense" data-drill-title="المصروف على الإذن">
-        <span>اتصرف فعلاً</span><b class="num"><?= money($totals['expense'], false) ?></b><?= icon('search', 13) ?>
-      </button>
-      <button type="button" class="pf-led-r" data-drill="#phCharged" data-drill-title="اللي هيتحاسب بيه العميل">
-        <span>هيتحاسب عليه العميل</span><b class="num"><?= money($totals['charged'] ?? 0, false) ?></b><?= icon('search', 13) ?>
-      </button>
-      <?php /* ⚠️ الاتجاه في **الكلمة** والرقم مطلق: علامة الناقص في RTL
-               بتتنقل لآخر الرقم فتتقرا شرطة تايهة (مصيدة موثَّقة). */ ?>
-      <button type="button" class="pf-led-r sum <?= $heroMargin < 0 ? 'neg' : ($heroMargin > 0 ? 'pos' : '') ?>"
-              data-drill="#phMargin" data-drill-title="الفرق بين اللي هيتحاسب واللي اتصرف">
-        <span><?= $heroMargin < 0 ? 'ناقص عن المصروف' : ($heroMargin > 0 ? 'زيادة عن المصروف' : 'متعادل مع المصروف') ?></span>
-        <b class="num"><?= money(abs($heroMargin), false) ?></b><?= icon('search', 13) ?>
-      </button>
+  <?php /* حلقة التقدّم — الرقم اللي بيقول «الملف ده وصل فين» */ ?>
+  <div class="pf-ring" role="img" aria-label="اكتمال الإذن <?= (int) $progress ?>٪">
+    <svg viewBox="0 0 36 36" aria-hidden="true">
+      <path class="pf-ring-bg" pathLength="100" d="M18 2.5a15.5 15.5 0 1 1 0 31 15.5 15.5 0 1 1 0-31"/>
+      <path class="pf-ring-fill" pathLength="100" stroke-dasharray="<?= (int) $progress ?>,100"
+            d="M18 2.5a15.5 15.5 0 1 1 0 31 15.5 15.5 0 1 1 0-31"/>
+    </svg>
+    <div class="pf-ring-lbl">
+      <b class="num"><?= (int) $progress ?>%</b>
+      <span class="num"><?= intf($done) ?>/<?= intf($tot) ?></span>
     </div>
   </div>
-</aside>
+</section>
+
+<?php /* ⚠️ **كروت الأرقام الأربعة** — من مكوّن `stat` بلغة النظام، وكل واحد
+         بيفتح نافذة تفاصيله (المكوّن نفسه بيرفض الرندر بلا `drill`). */ ?>
+<div class="pf-tiles">
+  <?php partial('stat', [
+    'label' => 'العهدة للسواقين', 'value' => money($totals['custody'], false),
+    'icon' => 'banknote', 'tone' => 'green',
+    'drill' => '#phCustody', 'title' => 'عهدة بوالص الإذن',
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'اتصرف فعلاً', 'value' => money($totals['expense'], false),
+    'icon' => 'trending-down', 'tone' => 'red',
+    'drill' => '#phExpense', 'title' => 'المصروف على الإذن',
+  ]); ?>
+  <?php partial('stat', [
+    'label' => 'هيتحاسب عليه العميل', 'value' => money($totals['charged'] ?? 0, false),
+    'icon' => 'coins', 'tone' => 'gold',
+    'drill' => '#phCharged', 'title' => 'اللي هيتحاسب بيه العميل',
+  ]); ?>
+  <?php /* ⚠️ الاتجاه في **التسمية** والرقم مطلق: علامة الناقص في RTL بتتنقل
+           لآخر الرقم فتتقرا شرطة تايهة (مصيدة موثَّقة). */ ?>
+  <?php partial('stat', [
+    'label' => 'الفرق — ' . ($heroMargin < 0 ? 'نقص عن المصروف'
+                           : ($heroMargin > 0 ? 'زيادة عن المصروف' : 'متعادل مع المصروف')),
+    'value' => money(abs($heroMargin), false),
+    'icon' => $heroMargin < 0 ? 'trending-down' : 'trending-up',
+    'tone' => $heroMargin < 0 ? 'red' : 'green',
+    'drill' => '#phMargin', 'title' => 'الفرق بين اللي هيتحاسب واللي اتصرف',
+  ]); ?>
+</div>
 
 <?php /* ═══ أجسام نوافذ التفاصيل — جاهزة في الصفحة ومخفيّة، والنافذة العامة
          بتنسخ محتواها (نفس نمط `custody/index.php`). محطوطة هنا جنب

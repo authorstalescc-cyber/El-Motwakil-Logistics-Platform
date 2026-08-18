@@ -288,9 +288,10 @@ $narrowBlocks = '';
 if (preg_match_all('/@media\s*\(max-width:\s*(\d+)px\)\s*\{(.*?)\n\}/s', $cssCode, $nm, PREG_SET_ORDER)) {
     foreach ($nm as $blk) { if ((int) $blk[1] <= 1100) { $narrowBlocks .= "\n" . $blk[2]; } }
 }
-/* ⚠️ `.hero-tiles` و`.pv3-grid` اتشالوا من `app.css` مع إعادة بناء شاشة الإذن
-   (v104): الهيرو الأفقي بقى ريل ملاصق وشبكته بقت `.pf-page`. */
-foreach (['set-figs', 'stat-row', 'pf-page'] as $cls) {
+/* ⚠️ الاسم اتغيّر مرتين مع إعادة بناء شاشة الإذن: `.hero-tiles` (الأصل) →
+   `.pf-page` (v104) → **`.pf-tiles`** (v105، رجوع الشكل الأفقي). القاعدة زي
+   ما هي: شبكة الأرقام ما تفضلش بعدد أعمدة ثابت على الهاتف. */
+foreach (['set-figs', 'stat-row', 'pf-tiles'] as $cls) {
     str_contains($narrowBlocks, '.' . $cls)
         ? ok("`.$cls` بينزل عمود واحد على الهاتف")
         : bad("`.$cls` لسه بعدد أعمدة ثابت على الهاتف");

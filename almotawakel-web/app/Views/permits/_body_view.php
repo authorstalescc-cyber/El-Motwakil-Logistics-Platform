@@ -172,9 +172,8 @@ foreach ($permitStages as $es) {
     <?php endif; ?>
   </div>
 
-  <?php /* ② الكعب: كل حركة عقدة عليه — والمحتوى **فعلاً** تسلسل تسليمات،
-           فالعلامة المرقّمة بتقول معلومة صحيحة مش زخرفة. */ ?>
-  <div class="pf-spine" id="pv3-movements">
+  <?php /* ② الحركات — كارت بعرض الصفحة لكل حركة، ورقمها في ختم على ترويستها */ ?>
+  <div class="pf-list" id="pv3-movements">
       <?php if (!$movements): ?>
         <?php partial('empty', ['emoji' => '🚚', 'title' => 'لا حركات على الإذن ده']); ?>
       <?php else: ?>
@@ -199,15 +198,11 @@ foreach ($permitStages as $es) {
           foreach ($mvBills as $b) { $mvCust += (float) $b['custody']; $mvCt += (int) ($b['container_count'] ?? 0); }
           $mvRem = array_sum(array_map(static fn ($b) => (float) $b['remaining'], $mvBills));
         ?>
-        <?php /* ⚠️ **الختم برّه الكارت مش جوّاه**: الكارت `overflow:hidden` عشان
-                 الحواف المدوّرة، فأي عنصر بيطلع برّه حدوده **بيتقصّ** (اتصاد فعليًّا
-                 — الختم كان مرسوم وغير مرئي). فالعقدة غلاف والختم أخو الكارت.
-                 ⚠️ ومش زخرفة مرقّمة: الحركات **تسلسل تسليمات فعلي**، والرقم ده
-                 هو نفسه `seq` اللي بيتكتب على الورق وبيتقال في التليفون. */ ?>
-        <div class="pf-node">
-        <span class="pf-stamp num"><?= intf($mv['seq']) ?></span>
         <details class="pf-mv" id="movement-<?= $mid ?>"<?= $mvOpenDefault || $mvIdx === 0 ? ' open' : '' ?>>
           <summary class="pf-mv-h">
+            <?php /* رقم الحركة في ختم على ترويستها — نفس `seq` اللي بيتكتب على
+                     الورق وبيتقال في التليفون، مش ترقيم زخرفي. */ ?>
+            <span class="pf-stamp num"><?= intf($mv['seq']) ?></span>
             <span class="pf-mv-t">
               <b>حركة <em><?= intf($mv['seq']) ?></em></b>
               <span class="pf-mv-m">
@@ -296,13 +291,12 @@ foreach ($permitStages as $es) {
             </section>
           </div>
         </details>
-        </div>
         <?php endforeach; ?>
       <?php endif; ?>
 
       <?php /* المولدات — بتظهر بس لو ليها سجل مطابق لرقم الإذن */ ?>
       <?php if (!empty($generators)): ?>
-        <section class="pv3-panel pv3-card pf-node" id="pv3-generators">
+        <section class="pv3-panel pv3-card" id="pv3-generators">
           <div class="pv3-panel-h">
             <?= icon('settings', 14) ?> <b>المولدات</b>
             <span class="pv3-grp-c num"><?= intf(count($generators)) ?></span>
@@ -341,13 +335,38 @@ foreach ($permitStages as $es) {
         }
       ?>
       <?php if ($feeGroups !== ''): ?>
-        <section class="pv3-panel pv3-card pf-node" id="pv3-fees">
+        <section class="pv3-panel pv3-card" id="pv3-fees">
           <div class="pv3-panel-h">
             <?= icon('coins', 14) ?> <b>رسوم الإذن</b>
             <span class="pv3-sp"></span>
             <a class="pv3-grp-a" href="<?= $manageUrl('primary_fees') ?>" title="تعديل الرسوم"><?= icon('edit', 13) ?></a>
           </div>
           <?= $feeGroups ?>
+        </section>
+      <?php endif; ?>
+
+      <?php /* ⚠️ **تفاصيل ما بتتكرّرش مع الهيرو**: الهيرو فيه الشركة والوكيل
+               والتوكيل والجهة والميناء والتاريخ والحاويات — فولا واحد فيهم هنا. */ ?>
+      <?php
+        $facts = array_values(array_filter([
+          ['search', 'سعر الكشف لكل حاوية', $p['inspection_rate'] !== null ? money($p['inspection_rate'], false) : ''],
+          ['shield', 'سعر الضمان لكل حاوية', $p['guarantee_rate'] !== null ? money($p['guarantee_rate'], false) : ''],
+          ['ship',   'شركة الشحن', trim((string) ($p['shipping_co'] ?? ''))],
+          ['package','تصنيف الحاويات', trim((string) ($p['container_type'] ?? ''))],
+          ['edit',   'ملاحظة', trim((string) ($p['note'] ?? ''))],
+        ], static fn ($r) => $r[2] !== ''));
+      ?>
+      <?php if ($facts): ?>
+        <section class="pv3-panel pv3-card" id="pv3-facts">
+          <div class="pv3-panel-h"><?= icon('file-text', 14) ?> <b>تفاصيل الإذن</b></div>
+          <div class="pf-facts-grid">
+            <?php foreach ($facts as [$ic, $lbl, $val]): ?>
+              <div class="pf-fact-cell">
+                <span><?= icon($ic, 13) ?> <?= e($lbl) ?></span>
+                <b><?= e($val) ?></b>
+              </div>
+            <?php endforeach; ?>
+          </div>
         </section>
       <?php endif; ?>
   </div>
