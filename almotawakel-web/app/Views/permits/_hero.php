@@ -93,6 +93,32 @@ $facts = [
     <span class="pf-eyebrow"><?= e($noLabel) ?></span>
     <h1 class="pf-serial"><?= e($p['permit_no'] ?: '#' . $pid) ?></h1>
 
+    <?php /* ⚠️ **زرار مرشد الإيصالات (طلب المالك v106)** — كان شريطًا بعرض
+             الصفحة بياخد ~١٥٠px من أول شاشة، وهو استرشادي بيتقري مرة أو
+             مرتين في عمر الإذن. بقى زرار بعدّاد الناقص، ومحتواه بيتجاب عند
+             الضغط بس في النافذة العامة. والزرار **ما بيظهرش** لو المرشد
+             مالوش توقّعات للإذن ده (ما نضفش زرار بيفتح فراغ). */ ?>
+    <?php
+      $rcpItems = (array) (($rcpGuide ?? [])['items'] ?? []);
+      $rcpMiss  = count((array) (($rcpGuide ?? [])['missing'] ?? []))
+                + count((array) (($rcpGuide ?? [])['short'] ?? []));
+    ?>
+    <?php if ($rcpItems): ?>
+      <div class="pf-hero-acts">
+        <button type="button" class="pf-hbtn<?= $rcpMiss > 0 ? ' warn' : ' ok' ?>"
+                data-drill="<?= url('permits/' . $pid . '/rcp-guide') ?>"
+                data-drill-title="مرشد الإيصالات">
+          <?= icon('receipt', 15) ?>
+          <span>مرشد الإيصالات</span>
+          <?php if ($rcpMiss > 0): ?>
+            <b class="num"><?= intf($rcpMiss) ?></b><small>ناقص</small>
+          <?php else: ?>
+            <?= icon('check', 14) ?><small>مكتمل</small>
+          <?php endif; ?>
+        </button>
+      </div>
+    <?php endif; ?>
+
     <div class="pf-facts">
       <?php foreach ($facts as [$ic, $lbl, $val, $isKey]): ?>
         <?php if ($val === '' && !$isKey) { continue; } ?>

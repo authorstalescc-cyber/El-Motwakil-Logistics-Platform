@@ -83,8 +83,9 @@ $permitFormState = $permitFormState ?? [
             واقفة · نسبتها · الخطوة الجاية بزرارها) والتفصيل بضغطة. */ ?>
 <?php include __DIR__ . '/_journey.php'; ?>
 
-<?php /* مرشد الإيصالات الذكي (استرشادي — v32) */ ?>
-<?php $back = $mode; include __DIR__ . '/_rcp_guide.php'; ?>
+<?php /* ⚠️ **مرشد الإيصالات مابقاش شريطًا هنا (v106)** — طلب المالك: «عاوزه
+         كزر فقط في الهيرو». الزرار جوّه `_hero.php` بيفتح **نفس المكوّن**
+         (`_rcp_guide.php`) في النافذة العامة عبر `PermitController@receiptGuide`. */ ?>
 
 <?php /* مستندات الأطراف — البطاقة الضريبية/السجل التجاري (v56، عرض بحت) */ ?>
 <?php include __DIR__ . '/_docs.php'; ?>

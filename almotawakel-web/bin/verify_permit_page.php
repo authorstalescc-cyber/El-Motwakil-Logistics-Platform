@@ -105,7 +105,9 @@ chk(preg_match_all('~\sstyle="~', $viewC) === 0 && !str_contains($viewC, '<style
     'وصفر `style=` inline وصفر `<style>` محلي');
 
 /* الغلاف ما اتلمسش: الأجزاء المشتركة لسه بتترسم مرة واحدة فيه. */
-foreach (['_bar.php', '_hero.php', '_journey.php', '_docs.php', '_rcp_guide.php'] as $part) {
+/* ⚠️ `_rcp_guide.php` اتشال من القايمة (v106): بقى ورا زرار في الهيرو وبيترسم
+   من أكشن مستقل — و`verify_permits_ui` بيحرس إنه مش بيترسم في أي شاشة. */
+foreach (['_bar.php', '_hero.php', '_journey.php', '_docs.php'] as $part) {
     chk(str_contains($show, "include __DIR__ . '/$part'") && !str_contains($view, "include __DIR__ . '/$part'"),
         "و`{$part}` لسه بيترسم مرة واحدة في الغلاف مش في الجسم");
 }
@@ -126,6 +128,7 @@ chk($noCss === [], 'وكل كلاس `pv3-*`/`pf-*` في الماركب له CSS'
    «قاعدة ميتة» كذبًا لكل كلاس في الريل. */
 $cssCode = (string) preg_replace('~/\*.*?\*/~s', '', $css);
 $markup  = $view . $show . (string) file_get_contents($root . '/app/Views/permits/_movement.php')
+         . (string) file_get_contents($root . '/app/Views/permits/_rcp_guide.php')
          . (string) file_get_contents($root . '/app/Views/permits/_hero.php')
          . (string) file_get_contents($root . '/app/Views/permits/_journey.php');
 preg_match_all('~\.((?:pv3|pf)[a-z0-9-]*)~', $cssCode, $csm);

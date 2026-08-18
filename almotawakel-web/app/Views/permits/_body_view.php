@@ -226,40 +226,60 @@ foreach ($permitStages as $es) {
           </summary>
 
           <div class="pf-mv-b">
-            <?php /* البوالص — صف لكل بوليصة بدل جدول ١١ عمودًا */ ?>
-            <section class="pv3-panel">
-              <div class="pv3-panel-h">
-                <?= icon('truck', 14) ?> <b>البوالص</b>
-                <span class="pv3-grp-c num"><?= intf(count($mvBills)) ?></span>
-                <span class="pv3-sp"></span>
+
+            <?php /* ══ البوالص = **لوحة تشغيل**: كل بوليصة كارت عربية ══
+                     ⚠️ التقسيمة القديمة (عمودان متجاوران: بوالص | بنود) كانت
+                        بتسيب **فراغ كبير** تحت الأقصر منهم (بوليصتان مقابل ٦
+                        بنود)، وبتنصّ عرض السطر لنُصّين رغم إن الصفحة عندها
+                        ١٤٠٠px. دلوقتي البوالص شبكة كروت بعرض الحركة، والبنود
+                        تحتها بعرض كامل — مفيش فراغ ومفيش سطر مزنوق.
+                     ⚠️ ورقم العربية هو **بطل الكارت** (زي لوحة السيارة على
+                        لوحة التشغيل) لأنه اللي بيتقال في التليفون والورق. */ ?>
+            <section class="pf-sec">
+              <div class="pf-sec-h">
+                <?= icon('truck', 15) ?> <b>البوالص</b>
+                <span class="pf-badge num"><?= intf(count($mvBills)) ?></span>
+                <?php if ($mvCt > 0): ?><span class="pf-sec-m"><?= icon('containers', 12) ?> <span class="num"><?= intf($mvCt) ?></span> حاوية</span><?php endif; ?>
+                <span class="pf-sp"></span>
                 <?php if ($mvRem != 0): ?><span class="pv3-tag warn">متبقّي <span class="num"><?= money($mvRem, false) ?></span></span><?php endif; ?>
+                <span class="pf-sec-t">عهدة <b class="num"><?= money($mvCust, false) ?></b></span>
                 <a class="pv3-grp-a" href="<?= $manageUrl('bills', $mid) ?>" title="تعديل البوالص"><?= icon('edit', 13) ?></a>
               </div>
               <?php if (!$mvBills): ?>
                 <div class="pv3-none"><?= icon('x', 12) ?> لا بوالص في الحركة دي</div>
               <?php else: ?>
-                <div class="pv3-items">
+                <div class="pf-cars">
                   <?php foreach ($mvBills as $bl): ?>
-                    <a class="pv3-bl" href="<?= url('bawalis/' . (int) $bl['id']) ?>">
-                      <div class="pv3-it-b">
-                        <b class="num"><?= e($bl['bill_number'] ?: '#' . (int) $bl['id']) ?></b>
-                        <div class="pv3-it-m">
-                          <span><?= icon('calendar', 11) ?> <span class="num"><?= dfmt($bl['bill_date']) ?></span></span>
-                          <?php if (($bl['driver'] ?? '') !== ''): ?><span><?= icon('user', 11) ?> <?= e($bl['driver']) ?></span><?php endif; ?>
-                          <?php if (($bl['car_no'] ?? '') !== ''): ?><span><?= icon('truck', 11) ?> <span class="num"><?= e($bl['car_no']) ?></span></span><?php endif; ?>
-                          <?php if (($bl['container_no'] ?? '') !== ''): ?><span><?= icon('containers', 11) ?> <span class="num"><?= e($bl['container_no']) ?></span></span><?php endif; ?>
-                          <?php if (($bl['container_type'] ?? '') !== ''): ?><span class="pv3-tag ct"><span class="num"><?= intf($bl['container_count'] ?? 0) ?></span>×<?= e($bl['container_type']) ?></span><?php endif; ?>
-                          <span class="pill st-<?= e($bl['pay_status']) ?>"><?= e(Bill::STATUS_LABELS[$bl['pay_status']] ?? '') ?></span>
-                        </div>
+                    <?php
+                      $rem  = (float) $bl['remaining'];
+                      $paid = $rem == 0;
+                    ?>
+                    <a class="pf-car<?= $paid ? ' paid' : ' due' ?>" href="<?= url('bawalis/' . (int) $bl['id']) ?>">
+                      <div class="pf-car-top">
+                        <span class="pf-plate num"><?= e($bl['car_no'] ?: '—') ?></span>
+                        <span class="pill st-<?= e($bl['pay_status']) ?>"><?= e(Bill::STATUS_LABELS[$bl['pay_status']] ?? '') ?></span>
                       </div>
-                      <div class="pv3-it-n">
-                        <b class="num pos"><?= money((float) $bl['custody'], false) ?></b>
-                        <?php if ((float) $bl['remaining'] != 0): ?>
-                          <span class="neg">متبقّي <span class="num"><?= money((float) $bl['remaining'], false) ?></span></span>
+                      <div class="pf-car-who">
+                        <?= icon('user', 12) ?> <b><?= e($bl['driver'] ?: 'بلا سائق') ?></b>
+                      </div>
+                      <div class="pf-car-m">
+                        <span><?= icon('truck', 11) ?> بوليصة <span class="num"><?= e($bl['bill_number'] ?: '#' . (int) $bl['id']) ?></span></span>
+                        <span><?= icon('calendar', 11) ?> <span class="num"><?= dfmt($bl['bill_date']) ?></span></span>
+                        <?php if (($bl['container_no'] ?? '') !== ''): ?>
+                          <span><?= icon('containers', 11) ?> <span class="num"><?= e($bl['container_no']) ?></span></span>
+                        <?php endif; ?>
+                        <?php if (($bl['container_type'] ?? '') !== ''): ?>
+                          <span class="pv3-tag ct"><span class="num"><?= intf($bl['container_count'] ?? 0) ?></span>×<?= e($bl['container_type']) ?></span>
+                        <?php endif; ?>
+                      </div>
+                      <div class="pf-car-f">
+                        <span class="pf-car-n"><small>عهدة</small><b class="num"><?= money((float) $bl['custody'], false) ?></b></span>
+                        <?php if ($rem != 0): ?>
+                          <span class="pf-car-n due"><small>متبقّي</small><b class="num"><?= money($rem, false) ?></b></span>
                         <?php elseif ((float) $bl['debt'] != 0): ?>
-                          <span>دين <span class="num"><?= money((float) $bl['debt'], false) ?></span></span>
+                          <span class="pf-car-n"><small>دين</small><b class="num"><?= money((float) $bl['debt'], false) ?></b></span>
                         <?php else: ?>
-                          <span class="mut">مسدَّدة</span>
+                          <span class="pf-car-n ok"><small>الحساب</small><b>مسدَّدة</b></span>
                         <?php endif; ?>
                       </div>
                     </a>
@@ -268,12 +288,16 @@ foreach ($permitStages as $es) {
               <?php endif; ?>
             </section>
 
-            <?php /* البنود — مجمّعة بالمرحلة، وكل بند سطر واحد بشارته */ ?>
-            <section class="pv3-panel">
-              <div class="pv3-panel-h">
-                <?= icon('receipt', 14) ?> <b>البنود</b>
-                <span class="pv3-grp-c num"><?= intf($mvItems) ?></span>
-                <span class="pv3-sp"></span>
+            <?php /* ══ البنود بعرض الحركة كلها، مجمّعة بمرحلتها ══ */ ?>
+            <section class="pf-sec">
+              <div class="pf-sec-h">
+                <?= icon('receipt', 15) ?> <b>البنود</b>
+                <span class="pf-badge num"><?= intf($mvItems) ?></span>
+                <span class="pf-sp"></span>
+                <span class="pf-sec-t">اتصرف <b class="num"><?= money($mvExp, false) ?></b></span>
+                <?php if ($mvCharged > 0): ?>
+                  <span class="pf-sec-t gold">للعميل <b class="num"><?= money($mvCharged, false) ?></b></span>
+                <?php endif; ?>
                 <a class="pv3-grp-a" href="<?= $manageUrl('receipts', $mid) ?>" title="إضافة بند"><?= icon('plus', 13) ?></a>
               </div>
               <?php
