@@ -184,28 +184,42 @@ try {
     $beforeCompany = round(CompanySafe::balance(), 2);
     $beforeDrawer  = round((float) Closing::walletSplit()['drawer'], 2);
 
-    /* ── تحويل من الشركة للمكتب: لازم يبان صفّين موسومين وصافي صفر ── */
+    /* ── تحويل من الشركة للمكتب: لازم يبان صفّين موسومين وصافي صفر ──
+       ⚠️⚠️ **القياس على الفرق مش على الرقم المطلق.** النسخة الأولى كانت
+          بتتوقّع `transfers = 40,000` بالظبط — نجحت محليًّا (يوم فاضي) و**فشلت
+          على الإنتاج** لأن اليوم فيه ٧ تحويلات حقيقية أصلاً. الفحص المكتوب على
+          مبلغ مزروع بيفشل بإنذار كاذب أول ما يشوف بيانات حقيقية (تحذير
+          «افحص السلوك مش رقم fixture»). */
     $tDay = $day;
     if (Closing::isLocked($tDay)) {
         // اليوم متقفل ⇒ التحويل ممنوع أصلاً؛ بنجرّب أول يوم مفتوح بعد آخر إقفال.
         $tDay = date('Y-m-d', strtotime(((string) Closing::lastClosedDate()) . ' +1 day'));
     }
+    $markedOf = static fn (array $s): int =>
+        count(array_filter($s['rows'], static fn ($r) => !empty($r['transfer'])));
+    $stBefore = SafeInventory::statement($tDay, $tDay);
+
     CompanySafe::create(['entry_date' => $tDay, 'kind' => 'deposit',
                          'amount' => 90000, 'source' => 'فحص v108']);
     CompanySafe::create(['entry_date' => $tDay, 'kind' => 'to_office',
                          'amount' => 40000, 'source' => 'فحص v108']);
-
     $stT = SafeInventory::statement($tDay, $tDay);
-    $marked = array_values(array_filter($stT['rows'], static fn ($r) => !empty($r['transfer'])));
-    count($marked) === 2
-        ? ok('التحويل بيبان صفّين موسومين «تحويل داخلي» (شركة + مكتب)')
-        : bad('صفوف التحويل الموسومة = ' . count($marked) . ' بدل ٢');
-    $tNet = 0.0;
-    foreach ($marked as $r) { $tNet += (float) $r['signed']; }
-    near('صافي التحويل على الخزنتين = صفر', round($tNet, 2), 0);
-    near('التحويلات المرصودة = ٤٠٬٠٠٠', $stT['transfers'], 40000);
-    near('الداخل الصافي بلا التحويل = ٩٠٬٠٠٠', $stT['total']['in'], 90000);
-    near('الداخل الخام معاه = ١٣٠٬٠٠٠', $stT['total']['in_gross'], 130000);
+
+    ($markedOf($stT) - $markedOf($stBefore)) === 2
+        ? ok('التحويل زوّد صفّين موسومين «تحويل داخلي» (شركة + مكتب)')
+        : bad('صفوف التحويل الزيادة = ' . ($markedOf($stT) - $markedOf($stBefore)) . ' بدل ٢');
+    near('التحويلات المرصودة زادت ٤٠٬٠٠٠',
+        $stT['transfers'] - $stBefore['transfers'], 40000);
+    /* ⚠️ **الداخل الصافي زاد بالإيداع بس** — التحويل بيتشال من الطرفين، فلو
+       الوسم وقع بيزيد هنا ٤٠٬٠٠٠ زيادة والفحص بيمسكها. */
+    near('الداخل الصافي زاد بالإيداع بس (٩٠٬٠٠٠)',
+        $stT['total']['in'] - $stBefore['total']['in'], 90000);
+    near('الداخل الخام زاد بالاتنين (١٣٠٬٠٠٠)',
+        $stT['total']['in_gross'] - $stBefore['total']['in_gross'], 130000);
+    /* ⚠️ **الصافي المجمّع بيتغيّر بالإيداع بس** — دي الصيغة الحقيقية لـ«التحويل
+       بينقل الفلوس ما بيزوّدهاش»، وأقوى من جمع إشارات صفّين بعينهم. */
+    near('الصافي المجمّع زاد ٩٠٬٠٠٠ (التحويل بينقل لا بيزوّد)',
+        $stT['total']['net'] - $stBefore['total']['net'], 90000);
 
     /* ── شهادة العدّ: بتسجّل الفرق وما بتحركش مليم ── */
     sec('⑥ شهادة العدّ — الحُرّاس وصفر أثر مالي');
