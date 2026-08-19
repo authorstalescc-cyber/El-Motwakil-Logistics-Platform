@@ -861,36 +861,6 @@ class PermitController extends Controller
         return ($_POST['mode'] ?? '') === 'manage' ? 'manage' : 'view';
     }
 
-    /**
-     * ⚠️ **مرشد الإيصالات في نافذة بدل شريط (v106)** — طلب المالك: «مرشد
-     * الإيصالات أنا عاوزه كزر فقط في الهيرو».
-     *
-     * كان **شريطًا بعرض الصفحة** فوق الشغل بياخد ~١٥٠px من أول شاشة في كل
-     * فتحة للإذن، وهو **استرشادي** بيتقري مرة أو مرتين في عمر الإذن. بقى زرار
-     * في الهيرو بعدّاد الناقص، والمحتوى **نفسه بالحرف** بيتجاب عند الضغط بس.
-     *
-     * ⚠️ **نفس المكوّن مش نسخة تانية** (`permits/_rcp_guide.php`): فورم
-     *    الـchecklist وأزرار «مش محتاجه» جوّاه بتشتغل زي ما هي (POST عادي).
-     */
-    public function receiptGuide(string $id): void
-    {
-        $this->requireAuth();
-        $pid = (int) $id;
-        $p = Permit::find($pid);
-        if (!$p) { $this->notFound('الإصدار ده مش موجود أو اتمسح.'); }
-
-        if (!headers_sent()) {
-            header('Content-Type: text/html; charset=utf-8');
-            header('Cache-Control: private, no-store, max-age=0');
-        }
-        $this->render('permits/_rcp_guide', [
-            'p'        => $p,
-            'rcpGuide' => ReceiptModel::merged($pid),
-            'rcpFresh' => ReceiptModel::freshness(),
-            'back'     => 'view',
-        ], false);
-    }
-
     /** تأشير/إلغاء «مش محتاجه في الإذن ده» لإيصال متوقّع (استرشادي بحت). */
     public function receiptDismiss(string $id): void
     {

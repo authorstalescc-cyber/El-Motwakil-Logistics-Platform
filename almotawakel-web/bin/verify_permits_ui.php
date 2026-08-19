@@ -53,21 +53,12 @@ chk(!is_file($root . '/app/Views/permits/view.php')
 chk(is_file($root . '/app/Views/permits/show.php'), 'والغلاف الواحد `show.php` موجود');
 chk(str_contains($show, "include __DIR__ . '/_body_' . \$mode . '.php'"),
     'الغلاف بيضمّ جسم الوضع المطلوب');
-foreach (['_hero.php' => 'الهيرو', '_bar.php' => 'شريط الإجراءات'] as $part => $label) {
+foreach (['_hero.php' => 'الهيرو', '_bar.php' => 'شريط الإجراءات', '_rcp_guide.php' => 'مرشد الإيصالات'] as $part => $label) {
     chk(str_contains($show, "include __DIR__ . '/$part'")
         && !str_contains($bodyV, "include __DIR__ . '/$part'")
         && !str_contains($bodyM, "include __DIR__ . '/$part'"),
         "{$label} بيترسم **مرة واحدة** في الغلاف مش في الجسمين");
 }
-/* ⚠️ **مرشد الإيصالات اتنقل لورا زرار (v106)** — طلب المالك: «عاوزه كزر فقط
-   في الهيرو». فالقاعدة زي ما هي (**مكان رندر واحد**) بس المكان بقى أكشن
-   مستقل بيتجاب عند الضغط: ممنوع يترسم في الغلاف ولا في أي جسم. */
-chk(!str_contains($show, "include __DIR__ . '/_rcp_guide.php'")
-    && !str_contains($bodyV, '_rcp_guide') && !str_contains($bodyM, '_rcp_guide'),
-    'مرشد الإيصالات مش شريطًا في أي شاشة — بقى ورا زرار');
-chk(str_contains($ctrl, 'public function receiptGuide')
-    && str_contains($ctrl, "render('permits/_rcp_guide'"),
-    'وبيترسم من **مكان واحد**: `PermitController@receiptGuide` في نافذة التفاصيل');
 chk(str_contains($show, 'الجسمان فضلوا منفصلين عن قصد'),
     '⚠️ وسبب بقاء الجسمين منفصلين مكتوب في رأس الغلاف (عقد AJAX في `_movement.php`)');
 
@@ -180,7 +171,7 @@ if ($pid <= 0) {
         preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $html, $m)
             ? bad("خطأ PHP في وضع `$mode`: " . ($m[0] ?? ''))
             : ok("وضع `$mode` بيرندر بلا أخطاء PHP");
-        chk(str_contains($html, 'pf-hero'), "وضع `$mode` فيه الهيرو");
+        chk(str_contains($html, 'permit-hero'), "وضع `$mode` فيه الهيرو");
         chk(str_contains($html, 'pb-modes'), "ووضع `$mode` فيه مفتاح الوضع");
     }
 }

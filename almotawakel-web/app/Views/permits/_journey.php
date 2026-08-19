@@ -89,17 +89,6 @@ $jForm = function (string $stageKey, int $billId, string $label, string $cls, st
   <?php endif; ?>
 
   <?php /* ── التايم لاين نفسه ─────────────────────────────────────────── */ ?>
-  <?php /* ⚠️ **مطوي افتراضيًّا (v104)**: التايم لاين ٧ مراحل كان بياخد ~٥٧٠px
-           من ارتفاع الشاشة وأغلبها فراغ، وهو **تفصيل** — الترويسة فوقه بتقول
-           الخلاصة (فين واقفة · نسبتها · الخطوة الجاية بزرارها). الطيّة `<details>`
-           أصلية فبتشتغل بلا جافاسكريبت وبالكيبورد.
-           ⚠️ **بتتفتح لوحدها لو الرحلة ماشية** — ساعتها التفصيل هو الشغل. */ ?>
-  <details class="pj-tl"<?= $jState === 'live' || $jState === 'stale' ? ' open' : '' ?>>
-    <summary>
-      <?= icon('map-pin', 14) ?> <b>مراحل الرحلة</b>
-      <span class="pj-tl-c num"><?= intf(count($jTl)) ?></span>
-      <span class="pf-chev"><?= icon('chevron', 14) ?></span>
-    </summary>
   <ol class="pj-track">
     <?php foreach ($jTl as $s): $ev = $s['event']; ?>
       <li class="pj-step is-<?= $s['state'] ?><?= $s['terminal'] ? ' is-final' : '' ?>">
@@ -150,7 +139,6 @@ $jForm = function (string $stageKey, int $billId, string $label, string $cls, st
       </li>
     <?php endforeach; ?>
   </ol>
-  </details>
 
   <?php /* ── الطبقة التفصيلية: رحلة كل عربية على حِدة ─────────────────── */ ?>
   <?php if ($jBills): ?>
