@@ -59,6 +59,8 @@ class NavModule
     // ⚠️ خزنة الشركة قبل خزنة المكتب عن قصد — هي الأكبر واللي بتغذّيها (v66).
     ['company-safe', 'خزنة الشركة',  'home',          'CompanySafeController@index', null],
     ['custody',     'خزنة المكتب',   'briefcase',     'CustodyController@index',     null],
+    // ⚠️ الجرد بعد الخزنتين مباشرةً — هو العدسة اللي بتجمعهم في كشف واحد (v108).
+    ['safe-audit',  'جرد الخزينة',   'calculator',    'SafeAuditController@index',   null],
     ['office',      'كروت الفيزا',   'credit-card',   'OfficeController@index',      null],
     ['expenses',    'المصروفات',     'trending-down', 'ExpenseController@index',     'receipts_missing'],
 

@@ -274,6 +274,14 @@ $r->post('/company-safe/budget',          'CompanySafeController@saveBudget'); /
 $r->post('/company-safe/{id}/update',     'CompanySafeController@update');
 $r->post('/company-safe/{id}/delete',     'CompanySafeController@destroy');
 
+// جرد الخزينة (v108) — الخزنتان (درج المكتب + خزنة الشركة) في كشف واحد.
+// ⚠️ المسارات الحرفية قبل الجشع /safe-audit/{id}/delete (تحذير ٤).
+$r->get('/safe-audit',                    'SafeAuditController@index');
+$r->get('/safe-audit/drill/{what}',       'SafeAuditController@drill');     // تفاصيل رقم — حرفي
+$r->get('/safe-audit/statement',          'SafeAuditController@statement'); // كشف A4 — حرفي
+$r->post('/safe-audit',                   'SafeAuditController@store');
+$r->post('/safe-audit/{id}/delete',       'SafeAuditController@destroy');
+
 // رصيد المكتب (كروت الفيزا) — المسارات الأخصّ قبل الجشعة /{id}
 $r->get('/office',                        'OfficeController@index');
 $r->get('/office/new',                    'OfficeController@create');

@@ -263,6 +263,41 @@ class DailyReview
         ];
     }
 
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لسؤال «أنهي بند في اليوم ده مسّ درج المكتب فعلاً؟»**
+     *    — بيقرا نفس `collect()` اللي بتغذّي شاشة التقفيل، فمفيش تعريف موازٍ
+     *    لأي بند. بيستخدمه «جرد الخزينة» (v108) عشان يبني صفوف جهة المكتب في
+     *    الكشف الموحّد.
+     *
+     * القاعدة سطران وبس، والاتنين **مشتقّان مش مكتوبان**:
+     *   ① القسم في `BLOCKING` (الأقسام النقدية اللي `Closing` بيحسبها).
+     *   ② ولو القسم `topups`، نوع البند لازم يكون في `countedTopupTypes()` —
+     *      `rep_carry` متحسوب في مرحّل امبارح و`rep_bank` حسب النموذج الفعّال.
+     *
+     * ⚠️ `signed` من **اتجاه القسم** لا من إشارة الرقم: `manual_custody` بيقبل
+     *    السالب (كاش خرج من الدرج) وهو في قسم داخل، فالإشارة بتتظبط لوحدها.
+     *
+     * ⚠️ **مجموع `signed` على الفترة = `Closing::rangeMovement()['net']` بالمليم**
+     *    — ده مش تعليق طموح، ده محروس بفحص في `verify_v108`. لو اتكسر يبقى فيه
+     *    شرط اتضاف في `Closing` وما وصلش هنا (أو العكس).
+     *
+     * @return list<array<string,mixed>>  بنود اليوم اللي بتمسّ الدرج، ومعاها `signed`
+     */
+    public static function officeCashItems(string $date): array
+    {
+        $counted = self::countedTopupTypes();
+        $out = [];
+        foreach (self::collect($date) as $item) {
+            $g = (string) $item['group'];
+            if (!in_array($g, self::BLOCKING, true)) { continue; }
+            if ($g === 'topups' && !in_array((string) $item['type'], $counted, true)) { continue; }
+            $item['dir']    = $g === 'topups' ? 'in' : 'out';
+            $item['signed'] = round($g === 'topups' ? (float) $item['amount'] : -(float) $item['amount'], 2);
+            $out[] = $item;
+        }
+        return $out;
+    }
+
     private static function group(string $key, string $title, string $icon, string $dir, string $kind, string $hint): array
     {
         return ['key'=>$key,'title'=>$title,'icon'=>$icon,'dir'=>$dir,'kind'=>$kind,'hint'=>$hint,

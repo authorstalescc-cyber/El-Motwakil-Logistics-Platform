@@ -361,6 +361,40 @@ class Closing
     }
 
     /**
+     * رصيد **آخر** يوم $date (بعد كل حركته) — الوجه التاني لـ`openingFor`.
+     *
+     * ⚠️ **مش دالة حساب جديدة**: رصيد آخر اليوم = رصيد أول اليوم اللي بعده
+     *    بالتعريف. كتابة معادلة تانية هنا كانت هتحتاج نسخة تانية من `anchor` +
+     *    `movementTotals` — ونسخة تانية معناها إن الرقمين هيختلفوا أول ما شرط
+     *    يتضاف في واحد وينسى في التاني (تحذير `sumExpenses`/`movementTotals`).
+     */
+    public static function closingFor(string $date): float
+    {
+        return self::openingFor(date('Y-m-d', strtotime($date . ' +1 day')));
+    }
+
+    /**
+     * ⚠️⚠️ **المصدر الوحيد لحركة الخزنة في فترة** — بتنادي `movementTotals`
+     *    نفسها اللي بتغذّي `currentBalance` و`openingFor`، فمستحيل كشف الفترة
+     *    يقول رقمًا يخالف الرصيد المعروض في أي شاشة تانية.
+     *
+     * ⚠️ **الحدّ الأعلى شامل**: `movementTotals` بتاخد `$lt` **حصريًّا**، فبنبعت
+     *    اليوم اللي بعد `$to`. نسيان دي بتاكل حركة آخر يوم في الفترة كلها.
+     *
+     * @return array{topups:float,expenses:float,driver:float,in:float,out:float,net:float}
+     */
+    public static function rangeMovement(string $from, string $to): array
+    {
+        $lt = date('Y-m-d', strtotime($to . ' +1 day'));
+        $m  = self::movementTotals($from, true, $lt);
+        // الاتجاه من نفس معادلة الرصيد: opening + topups − expenses − driver.
+        $m['in']  = $m['topups'];
+        $m['out'] = round($m['expenses'] + $m['driver'], 2);
+        $m['net'] = round($m['in'] - $m['out'], 2);
+        return $m;
+    }
+
+    /**
      * تفكيك الرصيد الحالي (لعرض صفحة العهدة) انطلاقًا من نقطة الارتكاز:
      * ['anchor'=>رصيد آخر إقفال, 'anchorDate'=>?تاريخه, 'topups', 'expenses', 'driver', 'balance'].
      * anchorDate=null → لا إقفال بعد، الحساب من بداية كل الحركة.
