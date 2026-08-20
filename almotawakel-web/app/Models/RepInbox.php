@@ -340,8 +340,8 @@ class RepInbox
               معاه، وإلا `receipt_lines` بيفضل شايل أسعارًا مجموعها مش
               الإجمالي الجديد. */
         $lines = null;
-        if (array_key_exists('amounts', $d) && trim((string) $d['amounts']) !== '') {
-            $lines = ReceiptLine::parse((string) $d['amounts']);
+        if (array_key_exists('amounts', $d) && trim(ReceiptLine::rawText($d['amounts'])) !== '') {
+            $lines = ReceiptLine::parse($d['amounts']);
             if (!$lines) { throw new RuntimeException('اكتب سعر إيصال واحد على الأقل.'); }
         }
 

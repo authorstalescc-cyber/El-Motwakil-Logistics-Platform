@@ -6,6 +6,18 @@ $editing = !empty($submission);
 $o = fn(string $k, $d = '') => e((string) ($old[$k] ?? $d));
 $err = fn(string $k) => (string) ($errors[$k] ?? '');
 $kind = (string) ($old['kind'] ?? 'receipt');
+
+/* ══ الوضع اللي الشاشة بتفتح عليه (v109.1) ══
+   المصدر واحد: `$old` — سواء جاية من بند بيتعدّل (`formValues`) أو من محاولة
+   فشلت (`$_POST`). القاعدة: فيه أسعار مفصّلة ⇒ «مختلفة» · العدد > ١ ⇒ «بنفس
+   السعر» · غير كده ⇒ إيصال واحد (وده الافتراضي الساحق).
+   ⚠️ الوضع **عرض بحت** — الخادم بيحكم من `amounts` و`qty` مش منه. */
+$startRows = array_values(array_filter(array_map(
+    static fn ($v) => trim((string) $v),
+    (array) ($old['amounts'] ?? [])
+), static fn ($v) => $v !== ''));
+$startQty  = max(1, (int) ($old['qty'] ?? 1));
+$startMode = $startRows ? 'diff' : ($startQty > 1 ? 'same' : 'one');
 $receiptNotes = array_values(array_unique(\App\Models\Lookup::ofType('mv_receipt')));
 $expenseNotes = array_values(array_unique(\App\Models\Lookup::ofType('mv_expense')));
 $action = $editing ? url('m/entry/' . (int) $submission['id']) : url('m/permit/' . $permit['id']);
@@ -130,23 +142,72 @@ $wdToday = $wd === $today;
       <p class="field-error" id="err-note" <?= $err('note') ? '' : 'hidden' ?>><?= e($err('note')) ?></p>
     </div>
 
-    <?php /* ⚠️ **خانة واحدة لكل الأسعار (v109)** — كانت «سعر الواحدة» + كمية
-             مخبّية ورا زرار، وده مبني على إن الإيصالات نسخ من بعض. مش صحيح:
-             الـ١٢ هيئة كل واحدة بسعرها. المندوب بيكتب الأسعار ورا بعض
-             والعدد والإجمالي بيطلعوا من نفسهم.
-             ⚠️ **بلا `data-money` عن قصد**: الفاصلة هنا فاصل بين إيصالات لا
-                فاصل آلاف، وتنسيق الآلاف التلقائي كان هيحوّل «250,300»
-                (إيصالين) لرقم واحد. */ ?>
-    <div class="field" id="field-amounts" <?= $err('amounts') ? 'data-error="1"' : '' ?>>
-      <label for="amts">دفعت كام؟ <span class="optional">سعر كل إيصال</span></label>
+    <?php /* ══ المبلغ — تلات أوضاع، واحد ظاهر في المرة (v109.1) ══
+             ① إيصال واحد        → سعر بس (الشكل الأصلي بالحرف)
+             ② أكتر بنفس السعر   → سعر + عدد  (الشكل القديم بالحرف — المالك
+                                    محتاجه لأن الكميات بتلزم فعلاً)
+             ③ أكتر بأسعار مختلفة → عدد، وبعدين خانة لكل إيصال
+
+             ⚠️ **الوضع ① هو الافتراضي دايمًا** — أغلب البنود إيصال واحد،
+                وأي وضع تاني بيتفتح بضغطة واعية. النسخة اللي قبلها خلّت خانة
+                الأسعار المتعددة هي الافتراضي، والمندوب اللي بيسجّل إيصالًا
+                واحدًا كان بيدفع تمن تعقيد مش محتاجه.
+
+             ⚠️ **الفورم `novalidate`** (فوق) — فحقل `required` مخبّي ما
+                بيمنعش الإرسال. لولاه كان لازم نشيل `required` مع كل تبديل
+                وضع، ونسيان واحدة = زرار حفظ مش بيعمل حاجة **بلا أي رسالة**. */ ?>
+    <div class="field" id="field-unit_amount" <?= $err('unit_amount') ? 'data-error="1"' : '' ?>>
+      <label for="amt">دفعت كام؟ <span class="optional" id="amtHintLbl">سعر الواحدة</span></label>
       <div class="money-in">
-        <input type="text" id="amts" name="amounts" required inputmode="decimal"
-               enterkeyhint="next" value="<?= $o('amounts') ?>" placeholder="250 250 400"
-               autocomplete="off" aria-describedby="totalHint err-amounts"
-               <?= $err('amounts') ? 'aria-invalid="true"' : '' ?>>
+        <input data-money type="text" id="amt" name="unit_amount" required inputmode="decimal"
+               enterkeyhint="next" value="<?= $o('unit_amount') ?>" placeholder="0"
+               autocomplete="off" aria-describedby="totalHint err-unit_amount"
+               <?= $err('unit_amount') ? 'aria-invalid="true"' : '' ?>>
         <span class="cur">جنيه</span>
       </div>
       <div class="hint total-hint" id="totalHint" hidden></div>
+      <p class="field-error" id="err-unit_amount" <?= $err('unit_amount') ? '' : 'hidden' ?>><?= e($err('unit_amount')) ?></p>
+    </div>
+
+    <?php /* الزرار بيفتح اختيارًا من اتنين — مش بيفتح وضعًا على طول، عشان
+             المندوب يقرّر «نفس السعر ولا مختلف» قبل ما يشوف أي خانات. */ ?>
+    <div class="multi-toggle-row" id="multiRow">
+      <span>البند فيه أكتر من إيصال؟</span>
+      <button type="button" class="mini-action" id="multiToggle" aria-expanded="false">أكتر من إيصال</button>
+    </div>
+    <div class="field qty-extra" id="modePick" hidden>
+      <div class="pick" role="radiogroup" aria-label="نوع الإيصالات">
+        <?php /* ⚠️ الأيقونتين من كتالوج `icon()` فعلاً — الاسم الغلط ما بيرميش
+                 خطأ، بيرسم **دايرة فاضية** (مصيدة موثّقة، و`verify_v109`
+                 بيفحصها). */ ?>
+        <input type="radio" name="amount_mode" id="mode_same" value="same">
+        <label for="mode_same"><?= icon('layers', 14) ?> بنفس السعر</label>
+        <input type="radio" name="amount_mode" id="mode_diff" value="diff">
+        <label for="mode_diff"><?= icon('columns', 14) ?> أسعار مختلفة</label>
+      </div>
+    </div>
+
+    <?php /* عدّاد العدد — مشترك بين الوضعين ②③ (نفس الرقم بيقود الاتنين). */ ?>
+    <div class="field qty-extra" id="field-qty" hidden <?= $err('qty') ? 'data-error="1"' : '' ?>>
+      <label for="qty" id="qtyLbl">عدد الإيصالات بنفس السعر</label>
+      <div class="qty">
+        <button type="button" data-q="-1" aria-label="قلّل العدد">−</button>
+        <input type="number" id="qty" name="qty" min="1" max="200" inputmode="numeric"
+               value="<?= max(1, (int) ($old['qty'] ?? 1)) ?>" aria-describedby="err-qty"
+               <?= $err('qty') ? 'aria-invalid="true"' : '' ?>>
+        <button type="button" data-q="1" aria-label="زوّد العدد">+</button>
+      </div>
+      <p class="field-error" id="err-qty" <?= $err('qty') ? '' : 'hidden' ?>><?= e($err('qty')) ?></p>
+    </div>
+
+    <?php /* ③ خانة لكل إيصال — بتتولّد بالجافاسكريبت من العدد.
+             ⚠️ الاسم `amounts[]` **مصفوفة**: الخادم بيستقبلها عن طريق
+                `ReceiptLine::rawText()` اللي بتلمّها لنص واحد، فالقاعدة
+                بتفضل معرَّفة في `parse()` وحدها. */ ?>
+    <div class="field qty-extra" id="field-amounts" hidden <?= $err('amounts') ? 'data-error="1"' : '' ?>>
+      <label>سعر كل إيصال</label>
+      <div class="amt-rows" id="amtRows"></div>
+      <div class="hint total-hint" id="variedHint" hidden></div>
       <p class="field-error" id="err-amounts" <?= $err('amounts') ? '' : 'hidden' ?>><?= e($err('amounts')) ?></p>
     </div>
 
@@ -204,10 +265,14 @@ $wdToday = $wd === $today;
 (function () {
   'use strict';
   var form = document.getElementById('f');
-  var amt = document.getElementById('amts');
+  var amt  = document.getElementById('amt');            // سعر الواحدة (①②)
+  var qty  = document.getElementById('qty');            // العدد (②③)
+  var rows = document.getElementById('amtRows');        // خانات الأسعار (③)
   var note = document.getElementById('note');
   var hint = document.getElementById('totalHint');
+  var vHint = document.getElementById('variedHint');
   var save = document.getElementById('save');
+  var MAX_ROWS = 200;                                   // حدّ عملي لخانات الشاشة
 
   /* ⚠️ **قواعد الخانة نازلة من `ReceiptLine` مش مكتوبة هنا تاني.** الشاشة
      لازم تقرا النص بنفس طريقة الخادم بالظبط، وإلا المعاينة تقول «٣ إيصالات ·
@@ -249,9 +314,92 @@ $wdToday = $wd === $today;
     return {list: list, bad: null};
   }
 
-  function amountList() { return parseAmounts(amt.value).list; }
+  /* ══ الوضع الحالي ══
+     'one'  إيصال واحد · 'same' أكتر بنفس السعر · 'diff' أكتر بأسعار مختلفة
+     ⚠️ **الوضع بيتحدّد من الشاشة بس، والخادم مش بيثق فيه**: هو بيقرا
+        `amounts` لو موجودة وإلا `qty`×`unit_amount` — فأي تلاعب في الوضع
+        مالوش أثر (القاعدة ③: الحارس في الموديل مش في الشاشة). */
+  var mode = 'one';
+
+  function unitValue() { return parseFloat(ar2en(amt.value)) || 0; }
+  function qtyValue()  { return Math.max(1, Math.min(MAX_ROWS, parseInt(ar2en(qty.value), 10) || 1)); }
+
+  /** أسعار الخانات في وضع «مختلفة» — الفاضية بتتحسب صفرًا لحد ما تتملّى. */
+  function rowValues() {
+    return Array.prototype.map.call(rows.querySelectorAll('input'), function (i) {
+      return Math.round((parseFloat(ar2en(i.value)) || 0) * 100) / 100;
+    });
+  }
+  /** فيه خانة فاضية لسه؟ (الحفظ بيترفض لحد ما تتملّى كلها) */
+  function rowsIncomplete() {
+    return Array.prototype.some.call(rows.querySelectorAll('input'), function (i) {
+      return String(i.value).trim() === '' || (parseFloat(ar2en(i.value)) || 0) <= 0;
+    });
+  }
+
+  /** القايمة اللي هتتبعت فعلاً — نفس اللي الخادم هيحسب منها. */
+  function amountList() {
+    if (mode === 'diff') { return rowValues(); }
+    var u = unitValue();
+    if (u <= 0) { return []; }
+    var n = mode === 'same' ? qtyValue() : 1, out = [];
+    for (var i = 0; i < n; i++) { out.push(u); }
+    return out;
+  }
   function moneyValue() {
     return amountList().reduce(function (a, b) { return a + b; }, 0);
+  }
+
+  /** بيبني خانة لكل إيصال، وبيحافظ على اللي اتكتب قبل تغيير العدد. */
+  function buildRows(n) {
+    var keep = rowValues();
+    rows.innerHTML = '';
+    for (var i = 0; i < n; i++) {
+      var wrap = document.createElement('label');
+      wrap.className = 'amt-row';
+      var idx = document.createElement('span');
+      idx.className = 'amt-idx';
+      idx.textContent = (i + 1);
+      var box = document.createElement('input');
+      box.type = 'text';
+      box.inputMode = 'decimal';
+      box.autocomplete = 'off';
+      box.enterKeyHint = i === n - 1 ? 'done' : 'next';
+      box.name = 'amounts[]';
+      box.placeholder = '0';
+      box.setAttribute('aria-label', 'سعر الإيصال ' + (i + 1));
+      if (keep[i] !== undefined && keep[i] > 0) { box.value = String(keep[i]); }
+      wrap.appendChild(idx);
+      wrap.appendChild(box);
+      rows.appendChild(wrap);
+    }
+  }
+
+  /** بيظهر/بيخفي الحقول حسب الوضع — **نقطة واحدة** بتقرّر شكل الشاشة. */
+  function applyMode(next, focus) {
+    mode = next;
+    var diff = mode === 'diff';
+    var multi = mode !== 'one';
+
+    document.getElementById('field-unit_amount').hidden = diff;
+    document.getElementById('field-qty').hidden = !multi;
+    document.getElementById('field-amounts').hidden = !diff;
+    document.getElementById('modePick').hidden = !multi;
+    document.getElementById('multiToggle').setAttribute('aria-expanded', multi ? 'true' : 'false');
+    document.getElementById('multiToggle').textContent = multi
+      ? (diff ? 'أسعار مختلفة' : 'العدد: ' + qtyValue())
+      : 'أكتر من إيصال';
+    document.getElementById('qtyLbl').textContent = diff ? 'عدد الإيصالات' : 'عدد الإيصالات بنفس السعر';
+
+    var r = document.getElementById('mode_' + (diff ? 'diff' : 'same'));
+    if (multi && r) { r.checked = true; }
+
+    if (diff) {
+      var n = qtyValue();
+      if (rows.querySelectorAll('input').length !== n) { buildRows(n); }
+      if (focus) { var first = rows.querySelector('input'); if (first) { first.focus(); } }
+    }
+    total();
   }
 
   /** «٣×١٨٠ · ٢×٢٥٠» — نفس تجميع `ReceiptLine::summary`. */
@@ -271,17 +419,30 @@ $wdToday = $wd === $today;
   function total() {
     var list = amountList();
     var sum = list.reduce(function (a, b) { return a + b; }, 0);
-    if (list.length && sum > 0) {
-      var money = sum.toLocaleString('en-US', {maximumFractionDigits: 2});
-      hint.textContent = list.length > 1
-        ? list.length + ' إيصال · إجمالي ' + money + ' جنيه — ' + groupLabel(list)
-        : 'الإجمالي: ' + money + ' جنيه';
-      hint.hidden = false;
-      save.textContent = (<?= $editing ? 'true' : 'false' ?> ? 'احفظ ' : 'سجّل ') + money + ' جنيه';
-    } else {
+    var money = sum.toLocaleString('en-US', {maximumFractionDigits: 2});
+
+    /* ⚠️ التلميح بيتعرض **جنب الخانة اللي المندوب بيكتب فيها**: تحت السعر في
+       ①②، وتحت خانات الأسعار في ③ (خانة السعر مخبّية وقتها أصلاً). */
+    if (mode === 'diff') {
       hint.hidden = true;
-      save.textContent = baseSaveText;
+      var filled = list.filter(function (v) { return v > 0; }).length;
+      vHint.textContent = sum > 0
+        ? filled + ' من ' + list.length + ' · إجمالي ' + money + ' جنيه'
+          + (filled > 1 ? ' — ' + groupLabel(list.filter(function (v) { return v > 0; })) : '')
+        : '';
+      vHint.hidden = sum <= 0;
+    } else {
+      vHint.hidden = true;
+      hint.textContent = list.length > 1
+        ? list.length + ' إيصال · إجمالي ' + money + ' جنيه (' + list.length + ' × '
+          + unitValue().toLocaleString('en-US', {maximumFractionDigits: 2}) + ')'
+        : 'الإجمالي: ' + money + ' جنيه';
+      hint.hidden = sum <= 0;
     }
+
+    save.textContent = sum > 0
+      ? (<?= $editing ? 'true' : 'false' ?> ? 'احفظ ' : 'سجّل ') + money + ' جنيه'
+      : baseSaveText;
   }
 
   function setKind(kind) {
@@ -298,7 +459,33 @@ $wdToday = $wd === $today;
     b.addEventListener('click', function () { note.value = b.dataset.note; note.focus(); saveDraft(); });
   });
 
+  // ── أزرار الأوضاع
+  document.getElementById('multiToggle').addEventListener('click', function () {
+    /* الزرار بيفتح **الاختيار** مش وضعًا بعينه: المندوب يقرّر «نفس السعر ولا
+       مختلف» قبل ما يشوف أي خانات. وضغطة تانية بترجّعه لإيصال واحد. */
+    applyMode(mode === 'one' ? 'same' : 'one', false);
+    saveDraft();
+  });
+  form.querySelectorAll('input[name="amount_mode"]').forEach(function (r) {
+    r.addEventListener('change', function () { applyMode(r.value, r.value === 'diff'); saveDraft(); });
+  });
+  form.querySelectorAll('.qty button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      qty.value = Math.max(1, Math.min(MAX_ROWS, qtyValue() + parseInt(b.dataset.q, 10)));
+      if (mode === 'diff') { buildRows(qtyValue()); }
+      applyMode(mode, false);
+      saveDraft();
+    });
+  });
+  qty.addEventListener('input', function () {
+    if (mode === 'diff') { buildRows(qtyValue()); }
+    applyMode(mode, false);
+  });
+
   amt.addEventListener('input', total);
+  /* ⚠️ الاستماع على الحاوية مش على كل خانة: الخانات بتتبني من جديد مع كل
+     تغيير في العدد، فمستمع على الخانة نفسها كان بيضيع بعد أول إعادة بناء. */
+  rows.addEventListener('input', function () { total(); saveDraft(); });
 
   var shot = document.getElementById('shot');
   shot.addEventListener('change', function () {
@@ -322,9 +509,15 @@ $wdToday = $wd === $today;
     var data = {updatedAt: Date.now(), values: {}};
     Array.from(form.elements).forEach(function (el) {
       if (!el.name || el.name === '_csrf' || el.name === 'photo' || el.name === 'remove_photo') { return; }
+      /* ⚠️ خانات الأسعار **بتتخزّن مستقلّة**: كلها بنفس الاسم `amounts[]`،
+         فحفظها في `values` بالاسم كان بيخلّي الأخيرة تدهس اللي قبلها
+         والمسودة ترجع بسعر واحد بدل أربعة. */
+      if (el.name === 'amounts[]') { return; }
       if ((el.type === 'radio' || el.type === 'checkbox') && !el.checked) { return; }
       data.values[el.name] = el.value;
     });
+    data.mode = mode;
+    data.rows = Array.prototype.map.call(rows.querySelectorAll('input'), function (i) { return i.value; });
     return data;
   }
   function saveDraft() {
@@ -347,6 +540,16 @@ $wdToday = $wd === $today;
       document.getElementById('draftNote').hidden = false;
       var selectedKind = form.querySelector('input[name="kind"]:checked');
       setKind(selectedKind ? selectedKind.value : 'receipt');
+
+      /* الوضع بيترجع قبل الخانات — `applyMode('diff')` هي اللي بتبنيها. */
+      applyMode(draft.mode === 'diff' || draft.mode === 'same' ? draft.mode : 'one', false);
+      if (draft.mode === 'diff' && draft.rows && draft.rows.length) {
+        buildRows(draft.rows.length);
+        Array.prototype.forEach.call(rows.querySelectorAll('input'), function (i, k) {
+          i.value = draft.rows[k] || '';
+        });
+        qty.value = draft.rows.length;
+      }
       total();
     } catch (e) {}
   }
@@ -391,7 +594,7 @@ $wdToday = $wd === $today;
   }
 
   function clearErrors() {
-    ['kind','movement_id','note','amounts','ref_no','entry_date','photo','visa_card_id','unpaid'].forEach(clearFieldError);
+    ['kind','movement_id','note','unit_amount','qty','amounts','ref_no','entry_date','photo','visa_card_id','unpaid'].forEach(clearFieldError);
     document.getElementById('errorSummary').hidden = true;
     document.getElementById('errorList').innerHTML = '';
   }
@@ -415,10 +618,19 @@ $wdToday = $wd === $today;
     if (!form.querySelector('input[name="kind"]:checked')) { errors.kind = 'اختر إيصال أو مصروف.'; }
     if (movement && movement.tagName === 'SELECT' && !movement.value) { errors.movement_id = 'اختر الحركة اللي دفعت عليها.'; }
     if (!note.value.trim()) { errors.note = 'اكتب البيان، زي تخصيص أو حمولة.'; }
-    var parsed = parseAmounts(amt.value);
-    if (parsed.bad !== null) { errors.amounts = '«' + parsed.bad + '» مش رقم — اكتب الأسعار بأرقام والمسافة بينهم.'; }
-    else if (!parsed.list.length) { errors.amounts = 'اكتب المبلغ اللي دفعته.'; }
-    else if (parsed.list.reduce(function (a, b) { return a + b; }, 0) <= 0) { errors.amounts = 'إجمالي الأسعار لازم يكون أكبر من صفر.'; }
+    /* ⚠️ **الرسالة بتتعلّق على الخانة الظاهرة فعلاً**: في وضع «مختلفة» خانة
+       السعر مخبّية، فرسالة عليها كانت هتخلّي المندوب يشوف «فيه غلط» ومايشوفش
+       الغلط فين. */
+    if (mode === 'diff') {
+      var vals = rowValues();
+      if (!vals.length) { errors.amounts = 'حدّد عدد الإيصالات الأول.'; }
+      else if (rowsIncomplete()) { errors.amounts = 'فيه إيصال لسه من غير سعر.'; }
+      else if (vals.reduce(function (a, b) { return a + b; }, 0) <= 0) { errors.amounts = 'إجمالي الأسعار لازم يكون أكبر من صفر.'; }
+    } else {
+      if (unitValue() <= 0) { errors.unit_amount = 'اكتب المبلغ اللي دفعته.'; }
+      var q = parseInt(ar2en(qty.value), 10);
+      if (mode === 'same' && (!q || q < 1 || q > MAX_ROWS)) { errors.qty = 'العدد لازم يكون من 1 لـ' + MAX_ROWS + '.'; }
+    }
     // v49: البند الجديد بلا خانة تاريخ (الخادم بيفرض يوم العمل) — نتحقق بس لو الخانة ظاهرة (وضع التعديل).
     var dateEl = form.elements.entry_date;
     if (dateEl && !dateEl.value) { errors.entry_date = 'اكتب تاريخ الدفع.'; }
@@ -490,6 +702,19 @@ $wdToday = $wd === $today;
       busy = false; save.disabled = false; total(); saveDraft(); networkState(true);
     }
   });
+
+  /* ⚠️ **الوضع الابتدائي قبل `restoreDraft`**: المسودة بتكتب فوقه لو موجودة،
+     لكن لو مفيش مسودة (تعديل بند، أو محاولة رجعت بخطأ) لازم الشاشة تفتح على
+     نفس وضع البند — وإلا المندوب يلاقي أسعاره المختلفة اختفت. */
+  var START_ROWS = <?= js_json($startRows) ?>;
+  applyMode(<?= js_json($startMode) ?>, false);
+  if (START_ROWS.length) {
+    buildRows(START_ROWS.length);
+    Array.prototype.forEach.call(rows.querySelectorAll('input'), function (i, k) {
+      i.value = START_ROWS[k] || '';
+    });
+    qty.value = START_ROWS.length;
+  }
 
   restoreDraft();
   setKind((form.querySelector('input[name="kind"]:checked') || {}).value || 'receipt');

@@ -96,9 +96,9 @@ final class ReceiptLine
      * @return array<int,float> الأسعار بالترتيب اللي اتكتب بيه
      * @throws RuntimeException لو فيه رمز مش رقم، أو سعر سالب، أو العدد تعدّى الحد
      */
-    public static function parse(string $raw): array
+    public static function parse(string|array $raw): array
     {
-        $s = trim(ar2en_digits($raw));
+        $s = trim(ar2en_digits(self::rawText($raw)));
         if ($s === '') { return []; }
 
         // توحيد كل الفواصل الممكنة (مسافة · سطر · فاصلة عربي/إنجليزي · فاصلة منقوطة)
@@ -132,6 +132,29 @@ final class ReceiptLine
         }
 
         return $out;
+    }
+
+    /**
+     * أي شكل جاي من الفورم → نص واحد جاهز لـ`parse()`.
+     *
+     * ⚠️⚠️ **الخانات بتتبعت مصفوفة (`amounts[]`) — و`(string)` عليها بتدّي
+     *    «Array» مع تحذير PHP.** ودي نفس عيلة الباج اللي وقّع النسخة اللي
+     *    فاتت (`postedData` بتقصّ الحقل): القيمة بتوصل بشكل مش متوقَّع
+     *    وبتتحوّل لحاجة تانية **بلا خطأ ظاهر**، والمندوب يشوف رسالة غلط
+     *    مالهاش علاقة. الدالة دي هي **نقطة الالتقاء الوحيدة** للشكلين.
+     */
+    public static function rawText(string|array $raw): string
+    {
+        if (is_array($raw)) {
+            $parts = [];
+            foreach ($raw as $v) {
+                if (is_array($v)) { continue; }              // تعشيش مش متوقَّع — بيتتجاهل
+                $v = trim((string) $v);
+                if ($v !== '') { $parts[] = $v; }
+            }
+            return implode(' ', $parts);
+        }
+        return $raw;
     }
 
     /** المصفوفة → نص جاهز للخانة («250 250 400»). */

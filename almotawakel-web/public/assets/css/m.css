@@ -2384,3 +2384,28 @@ dialog{
   min-height:var(--tap); margin-top:18px; border-radius:14px;
   background:var(--navy); color:#fff; font-weight:700;
 }
+
+/* ═══ خانة سعر لكل إيصال — وضع «أسعار مختلفة» (v109.1) ═══
+   ⚠️ الصفوف بتتبني بالجافاسكريبت من العدد، فأصنافها لازم تعيش هنا: الكلاس
+      المطبوع بلا CSS بيقع على الشكل الافتراضي **بالسكوت**. */
+.amt-rows{display:grid; gap:8px}
+.amt-row{
+  display:flex; align-items:center; gap:9px;
+  background:#fff; border:1px solid var(--line); border-radius:11px; padding:6px 10px;
+}
+.amt-idx{
+  flex:none; min-width:22px; height:22px; display:grid; place-items:center;
+  border-radius:7px; background:var(--navy); color:#fff;
+  font-size:.72rem; font-weight:700; font-variant-numeric:tabular-nums;
+}
+/* ⚠️ **`.hf-body` في المنتقي إجباري** — القاعدة العامة
+   `.hf-body input[type=text]` أخصّ من `.amt-row input`، فبتفضل بتحطّ إطارًا
+   وخلفية وارتفاع ٥٤ بكسل جوّه الصف، والنتيجة **إطار جوّه إطار**. متحقَّق
+   بقياس `getComputedStyle` مش بالنظر. */
+.hf-body .amt-row input{
+  flex:1; min-width:0; border:0; background:transparent; padding:6px 0;
+  min-height:38px; border-radius:0;
+  font-size:1.05rem; font-weight:700; font-variant-numeric:tabular-nums; color:var(--navy);
+}
+.hf-body .amt-row input:focus{outline:none; box-shadow:none; border-color:transparent}
+.amt-row:focus-within{border-color:var(--gold); box-shadow:0 0 0 3px rgba(191,155,48,.14)}

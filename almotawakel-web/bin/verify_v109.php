@@ -157,8 +157,10 @@ if (preg_match_all('/<(?:input|select|textarea)\b[^>]*>/i', src('app/Views/m/ent
     $formFields = array_values(array_unique($formFields));
 }
 /* حقول بتتولّى في مكان تاني عن قصد: `_csrf` حارس، و`photo`/`remove_photo`
-   بيتقرا من `$_FILES` مش من `$_POST`، و`entry_date` الخادم بيفرضه (v49). */
-$exempt  = ['_csrf', 'photo', 'remove_photo', 'entry_date'];
+   بيتقرا من `$_FILES` مش من `$_POST`، و`entry_date` الخادم بيفرضه (v49).
+   و`amount_mode` **اختيار عرض بحت** — الخادم بيحكم من `amounts` و`qty`
+   مش منه (القاعدة ③: الفورم مش مصدر ثقة)، فوصوله للموديل مالوش لازمة. */
+$exempt  = ['_csrf', 'photo', 'remove_photo', 'entry_date', 'amount_mode'];
 $dropped = [];
 foreach ($formFields as $f) {
     if (in_array($f, $exempt, true)) { continue; }
@@ -169,6 +171,23 @@ $formFields
         ? bad('حقول بيبعتها فورم المندوب و`postedData` بتقصّها: ' . implode('، ', $dropped))
         : ok('كل حقول فورم المندوب (' . count($formFields) . ') بتوصل للموديل'))
     : bad('ما قدرتش أقرا حقول فورم المندوب — الفحص ده اتعطّل');
+
+/* ⚠️⚠️ **خانات الأسعار بتتبعت مصفوفة (`amounts[]`)** — و`(string)` عليها بتدّي
+   «Array» + تحذير PHP، يعني نفس عيلة الباج السابق: القيمة بتتحوّل لحاجة تانية
+   بلا خطأ ظاهر. الفحص بيتأكد إن كل نقطة استقبال بتعدّي على `rawText()`. */
+ReceiptLine::rawText(['250', '', '400']) === '250 400'
+    ? ok('`rawText()` بتلمّ المصفوفة وبتشيل الفاضي') : bad('`rawText()` مش بتلمّ المصفوفة');
+ReceiptLine::parse(['250', '250', '400']) === [250.0, 250.0, 400.0]
+    ? ok('`parse()` بتقبل المصفوفة زي النص') : bad('`parse()` بترفض المصفوفة');
+$ctrlPosted = code_only('app/Controllers/RepPortalController.php');
+str_contains($ctrlPosted, "is_array(\$_POST['amounts']")
+    ? ok('`postedData` بتمرّر المصفوفة بلا تحويل لنص')
+    : bad('`postedData` بتعمل (string) على `amounts` — هتدّي «Array»');
+foreach (['app/Models/RepPortal.php', 'app/Models/RepInbox.php'] as $f) {
+    str_contains(code_only($f), 'ReceiptLine::rawText')
+        ? ok(basename($f) . ' بتقرا `amounts` من `rawText()`')
+        : bad(basename($f) . ' بتحوّل `amounts` لنص بإيدها');
+}
 
 // ═══════════════════════════════════════════════════════════ ②④⑤⑥
 sec('②④⑤⑥ سلوك حقيقي: إرسال ← اعتماد ← توزيع ← تعديل');
@@ -271,6 +290,64 @@ if (!$permit || !$rep) {
 
     near('① الرجوع رجّع رصيد الدرج بالمليم', Closing::currentBalance(), $safeBefore);
     near('① خزنة الشركة ما اتلمستش', CompanySafe::balance(), $compBefore);
+}
+
+// ═══════════════════════════════════════════════════════════ ⑨
+sec('⑨ الأوضاع التلاتة — الشكل القديم لسه موجود (طلب المالك)');
+
+/* ⚠️⚠️ **الشكل القديم (سعر واحد + كمية) قرار مالك صريح** — «أحيانًا بيبقى
+   محتاجين الكميات». النسخة الأولى من v109 شالته وخلّت الأسعار المتعددة هي
+   الطريق الوحيد، والفحص ده بيمنع رجوع ده تاني: الشاشة لازم تفضل فيها خانة
+   `unit_amount` وخانة `qty` واختيار الوضع. */
+$entrySrc = src('app/Views/m/entry.php');
+$missingFields = [];
+foreach (['name="unit_amount"', 'name="qty"', 'name="amount_mode"', "name=\"amounts[]\""] as $needle) {
+    if (!str_contains($entrySrc, $needle) && !str_contains($entrySrc, str_replace('"', "'", $needle))) {
+        $missingFields[] = $needle;
+    }
+}
+/* `amounts[]` بتتبني بالجافاسكريبت، فبندوّر عليها في السكربت كمان. */
+if (in_array('name="amounts[]"', $missingFields, true) && str_contains($entrySrc, "'amounts[]'")) {
+    $missingFields = array_values(array_diff($missingFields, ['name="amounts[]"']));
+}
+$missingFields ? bad('شاشة المندوب ناقصها: ' . implode('، ', $missingFields))
+               : ok('الشاشة فيها الأوضاع التلاتة (سعر واحد · سعر + كمية · أسعار مختلفة)');
+
+if (isset($permit, $rep) && $permit && $rep) {
+    $pid2 = (int) $permit['id'];
+    Database::conn()->beginTransaction();
+    try {
+        /* ② الشكل القديم: سعر واحد + كمية ⇒ الإجمالي = الضرب، وبلا تفصيل مختلف. */
+        $sub2 = RepPortal::submit((int) $rep['id'], [
+            'permit_id' => $pid2, 'movement_id' => (int) $permit['mv'],
+            'kind' => 'receipt', 'note' => 'إيصال هيئة',
+            'unit_amount' => '250', 'qty' => 4, 'entry_date' => date('Y-m-d'),
+        ]);
+        $r2 = Database::row('SELECT qty, amount, lines_json FROM rep_submissions WHERE id=?', [$sub2]);
+        near('② الكمية × السعر = الإجمالي', (float) $r2['amount'], 1000);
+        (int) $r2['qty'] === 4 ? ok('② الكمية اتحفظت زي ما هي') : bad('② الكمية اتغيّرت');
+        ReceiptLine::decode($r2['lines_json']) === null
+            ? ok('② البند بسعر واحد مالوش تفصيل أسعار') : bad('② اتخزّن تفصيل لبند بسعر واحد');
+
+        /* ③ المصفوفة الجاية من الخانات ⇒ الإجمالي = المجموع. */
+        $sub3 = RepPortal::submit((int) $rep['id'], [
+            'permit_id' => $pid2, 'movement_id' => (int) $permit['mv'],
+            'kind' => 'receipt', 'note' => 'إيصال هيئة',
+            'amounts' => ['250', '250', '400', '180'], 'entry_date' => date('Y-m-d'),
+        ]);
+        $r3 = Database::row('SELECT qty, amount, lines_json FROM rep_submissions WHERE id=?', [$sub3]);
+        near('③ مجموع الخانات = الإجمالي', (float) $r3['amount'], 1080);
+        ReceiptLine::decode($r3['lines_json']) === [250.0, 250.0, 400.0, 180.0]
+            ? ok('③ الأسعار اتحفظت بالحرف من المصفوفة') : bad('③ الأسعار اتغيّرت');
+
+        /* ⚠️ **الشاشة بتفتح على وضع البند**: بند بسعر واحد ما يفتحش «مختلفة». */
+        RepPortal::formValues($r2)['amounts'] === []
+            ? ok('البند بسعر واحد بيفتح بالشكل القديم') : bad('البند بسعر واحد بيفتح وضع «مختلفة»');
+        RepPortal::formValues($r3)['amounts'] === [250.0, 250.0, 400.0, 180.0]
+            ? ok('البند بأسعار مختلفة بيفتح بخاناته مليانة') : bad('التفصيل ما بيرجعش للشاشة');
+    } finally {
+        Database::conn()->rollBack();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════ ⑧

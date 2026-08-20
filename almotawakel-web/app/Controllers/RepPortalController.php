@@ -1289,7 +1289,12 @@ class RepPortalController extends Controller
                ويرفض بـ«اكتب المبلغ اللي دفعته» — والمندوب كاتب المبلغ قدامه.
                `verify_v109` بقى بيقارن أسماء حقول الفورم بالقايمة دي عشان
                الباج ده ما يرجعش من غير ما حد ياخد باله. */
-            'amounts'     => (string) ($_POST['amounts'] ?? ''),
+            /* ⚠️ **بلا `(string)`**: الخانات بتتبعت `amounts[]` يعني **مصفوفة**،
+               والتحويل لنص كان هيدّي «Array» + تحذير PHP. `ReceiptLine::rawText()`
+               بتلمّ الشكلين، وبتتنادى من الموديل مش من هنا عشان القاعدة تفضل
+               في مكان واحد. */
+            'amounts'     => is_array($_POST['amounts'] ?? null)
+                ? $_POST['amounts'] : (string) ($_POST['amounts'] ?? ''),
             'entry_date'  => $date,
             'ref_no'      => (string) ($_POST['ref_no'] ?? ''),
             'client_token'=> trim((string) ($_POST['client_token'] ?? '')),

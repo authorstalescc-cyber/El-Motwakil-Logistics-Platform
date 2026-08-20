@@ -485,12 +485,14 @@ class RepPortal
             'note'        => (string) ($s['note'] ?? ''),
             'qty'         => (string) ($s['qty'] ?? 1),
             'unit_amount' => (string) ($s['unit_amount'] ?? ''),
-            /* v109 — خانة الأسعار بترجع مليانة دايمًا: من التفصيل المحفوظ لو
-               موجود، وإلا من السعر الواحد متكرر بعدد الكمية. البند القديم
-               (qty × unit) بيتفكّ لأسعاره ويرجع لنفس إجماليه بالحرف. */
-            'amounts'     => ReceiptLine::formatCompact(
-                ReceiptLine::decode($s['lines_json'] ?? null)
-                ?? array_fill(0, max(1, (int) ($s['qty'] ?? 1)), round((float) ($s['unit_amount'] ?? 0), 2))),
+            /* v109.1 — **مصفوفة الأسعار، وفاضية لما البند مالوش أسعار مختلفة.**
+               الشاشة بتفتح وضع «أسعار مختلفة» **بس** لو القايمة دي مليانة،
+               فالبند بسعر واحد (حتى لو كميته ٥) بيترجع بالشكل القديم اللي
+               المالك طلبه: سعر واحد + عدد. */
+            'amounts'     => (static function () use ($s): array {
+                $lines = ReceiptLine::decode($s['lines_json'] ?? null);
+                return ($lines !== null && ReceiptLine::varied($lines)) ? $lines : [];
+            })(),
             'entry_date'  => (string) ($s['entry_date'] ?? date('Y-m-d')),
             'ref_no'      => (string) ($s['ref_no'] ?? ''),
             'is_visa'     => !empty($s['is_visa']) ? '1' : '',
@@ -865,7 +867,7 @@ class RepPortal
               (مش من الضرب)، وأي شاشة بتعرض بندًا أسعاره مختلفة **ممنوع**
               تعرض سعر وحدة — تعرض `ReceiptLine::summary()` بدله. */
         $lines    = null;
-        $rawLines = trim((string) ($d['amounts'] ?? ''));
+        $rawLines = trim(ReceiptLine::rawText($d['amounts'] ?? ''));
         if ($rawLines !== '') {
             try {
                 $parsed = ReceiptLine::parse($rawLines);
