@@ -1201,7 +1201,64 @@ input.name-warn{border-color:#e0a94f!important;background:var(--gold-light)!impo
 .type-chip .tc-arrow{font-size:var(--fs-4);font-weight:700;line-height:1}
 /* هايلايتس — الشبكة بس؛ الكارت جوّاها بقى `.d-kpi` بلغة النظام.
    (قواعد `.htile` القديمة اتشالت: البلاطات الصمّاء اتحوّلت لمكوّن `stat`.) */
-.hero-tiles{display:grid;grid-template-columns:repeat(7,1fr)}
+/* ⚠️ **صف أرقام الهيرو (v108)** — بلاغ المالك: «شكلها سيئ وخصوصًا على الهاتف».
+   المقيس: القاعدة اللي بتحدّد الأعمدة كانت **ضايعة**، فالأربع كروت كانت
+   بتترسم في شبكة ٧ أعمدة — يعني بتاخد ٤/٧ من العرض وتسيب **تلت الشاشة أبيض**
+   على الشمال (اتصاد في لقطة المالك). والموبايل كان بينزّلهم عمودًا واحدًا =
+   أربع كروت فوق بعض بتاكل شاشة كاملة قبل ما يوصل للشغل.
+
+   القرار: **٤ أعمدة تملا العرض** على الديسك، **٢×٢ مضغوطة** على التابلت
+   والموبايل — الأربع أرقام كلها في نص شاشة واحدة بلا تمرير. */
+/* ── زرار رحلة الشحنة في الهيرو (v108) ────────────────────────────────
+   بلاغ المالك: «الرحلة أخذة مساحة كبيرة على الفاضي — خليها زرار في الهيرو
+   يفتح Popup». اللوح كان **٥٧٠px** أغلبها فراغ فوق الشغل المالي؛ الخلاصة
+   (فين واقفة · نسبتها) بقت على الزرار، والتفصيل بضغطة.
+   ⚠️ الهيرو **سطح داكن** فالألوان هنا شفافة على أبيض — ممنوع `--ink`/`--navy`
+      (نص داكن على داكن = 1.3:1، القاعدة الحاكمة للألوان). */
+.hero-acts{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-3)}
+.hero-btn{display:inline-flex;align-items:center;gap:9px;cursor:pointer;font:inherit;text-align:start;
+  padding:7px 13px 7px 9px;border-radius:999px;color:var(--white);
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);transition:.16s}
+.hero-btn:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.34)}
+.hero-btn .hb-ic{display:flex;flex:none;width:28px;height:28px;align-items:center;justify-content:center;
+  border-radius:50%;background:rgba(255,255,255,.12)}
+.hero-btn .hb-tx{display:flex;flex-direction:column;gap:1px;min-width:0}
+.hero-btn .hb-tx small{font-size:var(--fs-1);opacity:.62;line-height:1.2}
+.hero-btn .hb-tx b{font-size:var(--fs-2);font-weight:600;line-height:1.3;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:190px}
+.hero-btn .hb-pct{flex:none;font-size:var(--fs-2);font-weight:600;padding:2px 9px;border-radius:999px;
+  background:rgba(255,255,255,.14);font-variant-numeric:tabular-nums}
+/* حالة الرحلة بتتقري من لون الزرار قبل ما تتقري نصّه */
+.hero-btn.is-live{background:rgba(61,220,132,.16);border-color:rgba(61,220,132,.4)}
+.hero-btn.is-live .hb-ic,.hero-btn.is-live .hb-pct{background:rgba(61,220,132,.22);color:#b6f2d0}
+.hero-btn.is-stale{background:rgba(201,162,39,.22);border-color:rgba(243,233,198,.45);color:var(--gold-pale)}
+.hero-btn.is-stale .hb-ic,.hero-btn.is-stale .hb-pct{background:rgba(243,233,198,.24)}
+.hero-btn.is-done{background:rgba(61,220,132,.22);border-color:rgba(61,220,132,.5);color:#b6f2d0}
+.hero-btn.is-done .hb-ic,.hero-btn.is-done .hb-pct{background:rgba(61,220,132,.26)}
+@media(max-width:640px){
+  .hero-btn{width:100%}
+  .hero-btn .hb-tx{flex:1}
+  .hero-btn .hb-tx b{max-width:none}
+  .hero-btn .hb-pct{margin-inline-start:auto}
+}
+
+.hero-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-3);
+  padding:var(--space-4);background:var(--zebra);border-top:1px solid var(--line)}
+.hero-tiles .d-kpi{margin-bottom:0}
+@media(max-width:1100px){
+  .hero-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:640px){
+  /* ⚠️ **٢×٢ مش عمود واحد**: عمود واحد = أربع كروت بارتفاع ٩٠px كل واحد
+     (٣٦٠px) قبل أول بند. الشبكة المضغوطة بتوقّعهم في ~١٧٠px. */
+  .hero-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px}
+  .hero-tiles .d-kpi{padding:10px 11px;border-radius:var(--radius-2)}
+  .hero-tiles .d-kpi-ic{width:22px;height:22px;margin-bottom:5px}
+  .hero-tiles .d-kpi-ic svg{width:14px;height:14px}
+  .hero-tiles .d-kpi-val{font-size:var(--fs-4)}
+  .hero-tiles .d-kpi-lbl{font-size:var(--fs-1);margin-top:3px;line-height:1.35}
+  .hero-tiles .d-kpi-eye{display:none}
+}
 
 /* ==========================================================================
    ✦ إعادة تصميم هيرو الإذن — بلاطات إحصائية ملوّنة (كل مؤشر بلونه)
@@ -4378,7 +4435,10 @@ button.d-hchip{cursor:pointer;font-family:inherit}
   /* ── ③ الكروت والبلاطات الوصفية ──
      الشبكات اللي بـ`auto-fit/minmax` متجاوبة أصلاً، بس اللي بعدد ثابت لأ. */
   .set-figs{grid-template-columns:1fr!important}
-  .stat-row,.pb-tiles{grid-template-columns:1fr!important}
+  .stat-row,.pb-tiles,.detail-grid{grid-template-columns:1fr!important}
+  /* ⚠️ `.hero-tiles` **مستثناة عن قصد** من السطر ده (v108): قاعدتها الخاصة
+     فوق بتخلّيها **٢×٢ مضغوطة** على الموبايل بدل عمود واحد — عمود واحد كان
+     بيدّي ٤ كروت فوق بعض (٣٦٠px) قبل أول بند. */
 
   /* ── ④ العناوين الطويلة ما تكسرش التخطيط ── */
   .section-head,.card-head-txt,.page-head-txt{min-width:0;overflow-wrap:anywhere}
@@ -5617,11 +5677,16 @@ table.data tbody td.neg.dbt-tot,table.data tbody td.neg.mv-ref{background:transp
 
 /* ── التايم لاين ───────────────────────────────────────────────────────── */
 .pj-track{list-style:none;margin:0;padding:var(--space-4) var(--space-5);position:relative}
+/* ⚠️ **الصف بقى سطرًا قابلًا للتمييز (v108)**: زرار «سجّل» بيظهر عند المرور،
+   فالمساحة اللي جنبه كانت بتتقري **فراغًا ميتًا**. خلفية عند المرور بتخلّي
+   المساحة دي «جسم الصف» — نفس المساحة، بس بتتقري مقصودة. */
 .pj-step{position:relative;display:flex;align-items:flex-start;gap:var(--space-3);
-  padding-block:var(--space-2);padding-inline-start:0}
+  padding-block:var(--space-2);padding-inline:8px;border-radius:var(--radius-2);
+  transition:background .14s}
+.pj-step:hover{background:var(--zebra)}
 /* الخط الواصل — بيتوقف عند آخر خطوة فما بيدلدلش تحتها */
 .pj-step::before{content:"";position:absolute;inset-block-start:30px;inset-block-end:-8px;
-  inset-inline-start:13px;width:2px;background:var(--line)}
+  inset-inline-start:21px;width:2px;background:var(--line)}
 .pj-step:last-child::before{display:none}
 .pj-step.is-done::before,.pj-step.is-current::before{background:var(--navy);opacity:.35}
 
@@ -5690,15 +5755,19 @@ table.data tbody td.neg.dbt-tot,table.data tbody td.neg.mv-ref{background:transp
   gap:var(--space-3);align-items:end;padding:0 var(--space-5) var(--space-4)}
 .pj-manual-f .btn{align-self:end}
 
-/* ⚠️ على الشاشة الواسعة الصف بيتقسم عمودين زي برامج التتبع: الاسم على
-   الابتداء والوقت/المسجِّل على الانتهاء — من غير كده نص الصف بيفضل فاضي.
+/* ⚠️ **الصف بيتقرا سطرًا واحدًا مضغوطًا (v108)** — بلاغ المالك: «الرحلة أخذة
+   مساحة كبيرة على الفاضي».
+   القديم كان `1fr auto`: الاسم بياخد كل العرض المتاح والوقت بيتزقّ لآخر السطر،
+   فبينهم فراغ بيوصل ٢٥٠px (اتصاد في لقطة المالك، والمشكلة بانت أوضح لما اللوح
+   بقى نافذة أضيق). الجديد `auto minmax(0,1fr)`: الاسم بعرض محتواه، والوقت
+   والمسجِّل **بيبدأوا بعده على طول**.
    في RTL العمود ١ = يمين والعمود ٢ = شمال (منطقية مش فيزيائية). */
 @media (min-width:760px){
-  .pj-body{display:grid;grid-template-columns:1fr auto;column-gap:var(--space-4);align-items:start}
+  .pj-body{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:var(--space-3);align-items:baseline}
   .pj-label{grid-column:1;grid-row:1}
-  .pj-note{grid-column:1;grid-row:2;margin-block-start:4px;justify-self:start}
-  .pj-when{grid-column:2;grid-row:1;text-align:end}
-  .pj-who{grid-column:2;grid-row:2;justify-content:flex-end}
+  .pj-note{grid-column:1 / -1;grid-row:2;margin-block-start:4px;justify-self:start}
+  .pj-when{grid-column:2;grid-row:1;text-align:start;justify-self:start}
+  .pj-who{grid-column:2;grid-row:2;justify-content:flex-start}
 }
 
 @media (max-width:640px){

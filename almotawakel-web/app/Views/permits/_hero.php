@@ -97,6 +97,35 @@ $heroMoneyRow = static function (array $r, string $amount, string $tone, array $
                  وتكسر «سطر واحد + meta واحد». */ ?>
         <?php if($ctLbl!=='' || $carsLbl!==''): ?><span class="hm-pill"><span class="hm-ic"><?= icon('package',16) ?></span><span class="hm-tx"><small>الحاويات (عدد×تصنيف)</small><b><?= e(trim($ctLbl . ($ctLbl!=='' && $carsLbl!=='' ? ' · ' : '') . $carsLbl)) ?></b></span></span><?php endif; ?>
       </div>
+
+      <?php /* ⚠️ **زرار رحلة الشحنة (v108)** — بلاغ المالك: «الرحلة أخذة مساحة
+               كبيرة على الفاضي، خليها كزر في الهيرو يفتح Popup بحالة الشحنة».
+               الخلاصة اللي بيحتاجها **على الزرار نفسه** (فين واقفة · نسبتها ·
+               وتنبيه لو ساكنة)، والتفصيل كله بضغطة.
+               ⚠️ `id="journey"` + `data-drill-hash` عشان الرابط القديم في
+                  الإشعارات (`…#journey`) يفضل شغّال ويفتح النافذة تلقائيًّا. */ ?>
+      <?php if (!empty($trackReady ?? false) && !empty($journey)): ?>
+        <?php
+          $jPct  = (int) ($journey['percent'] ?? 0);
+          $jTxt  = (string) ($journey['label'] ?? 'لسه ما بدأتش');
+          $jIdle = $journey['idle_hours'] ?? null;
+          $jState = empty($journey['started']) ? 'idle'
+                  : (!empty($journey['finished']) ? 'done'
+                  : (($jIdle !== null && $jIdle >= 48) ? 'stale' : 'live'));
+        ?>
+        <div class="hero-acts">
+          <button type="button" class="hero-btn is-<?= e($jState) ?>" id="journey"
+                  data-drill="<?= url('permits/' . $pid . '/journey') ?>"
+                  data-drill-title="رحلة الشحنة" data-drill-hash="journey">
+            <span class="hb-ic"><?= icon($journey['icon'] ?? 'clock', 16) ?></span>
+            <span class="hb-tx">
+              <small>رحلة الشحنة</small>
+              <b><?= e($jTxt) ?></b>
+            </span>
+            <span class="hb-pct"><?= intf($jPct) ?>%</span>
+          </button>
+        </div>
+      <?php endif; ?>
     </div>
     <div class="hero-ring">
       <svg viewBox="0 0 36 36">

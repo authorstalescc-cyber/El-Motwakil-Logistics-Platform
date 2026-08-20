@@ -48,6 +48,9 @@ $jForm = function (string $stageKey, int $billId, string $label, string $cls, st
     <?php
 };
 ?>
+<?php /* ⚠️ **بلا `data-wide` عن قصد**: جرّبت أوسّع النافذة لـ١١٦٠px فطلع
+         **عيب أوضح** — التايم لاين قايمة ضيّقة بطبعها، فاتنين تلت النافذة
+         فضلوا أبيض. عرض النافذة الافتراضي (٦٤٠) هو المقاس الصح للمحتوى ده. */ ?>
 <section class="pj card mb" id="journey" data-state="<?= $jState ?>">
 
   <?php /* ── الترويسة: الحالة الحالية + شريط التقدّم ─────────────────── */ ?>

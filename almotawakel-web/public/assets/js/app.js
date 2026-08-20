@@ -2849,6 +2849,19 @@
       e.preventDefault();
       open(el.getAttribute('data-drill'), el.getAttribute('data-drill-title') || el.getAttribute('data-title'));
     });
+    /* ⚠️ **الرابط القديم لازم يفضل شغّال**: إشعارات رحلة الشحنة بتبعت
+       `…/permits/12#journey`، واللوح بقى نافذة (v108). أي عنصر بـ
+       `data-drill-hash="x"` بيتفتح تلقائيًّا لما الصفحة تيجي على `#x` —
+       فالرابط المحفوظ عند المالك بيوصل لنفس المحتوى بالظبط. */
+    (function openFromHash() {
+      const h = (location.hash || '').replace('#', '');
+      if (!h) return;
+      const el = document.querySelector('[data-drill-hash="' + h + '"]');
+      if (!el) return;
+      setTimeout(() => open(el.getAttribute('data-drill'),
+        el.getAttribute('data-drill-title') || el.getAttribute('data-title')), 120);
+    })();
+
     modal.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', close));
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !modal.hidden) { e.stopPropagation(); close(); }

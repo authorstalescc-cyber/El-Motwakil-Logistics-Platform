@@ -124,6 +124,7 @@ $r->post('/permits/{id}/close',       'PermitController@close');
 $r->post('/permits/{id}/checklist',   'PermitController@saveChecklist');    // حفظ إجابات مرشد الإيصالات (v32)
 $r->post('/permits/{id}/rcp-dismiss',  'PermitController@receiptDismiss');   // «مش محتاجه في الإذن ده» (v32)
 $r->get('/permits/{id}/rcp-why',       'SuggestionController@receiptWhy');   // «التوقّع ده جاي منين؟» (v101)
+$r->get('/permits/{id}/journey',       'PermitController@journeyDrill');     // رحلة الشحنة في نافذة (v108)
 $r->get('/permits/{id}/freight-why',   'SuggestionController@freightWhy');   // «النولون المتوقّع جاي منين؟» (v102)
 // رحلة الشحنة (v62) — تحديث الحالة التشغيلية. وصفي بحت بلا أي أثر مالي.
 $r->post('/permits/{id}/track',        'PermitController@trackStage');

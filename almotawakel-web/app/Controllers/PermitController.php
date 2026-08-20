@@ -861,6 +861,47 @@ class PermitController extends Controller
         return ($_POST['mode'] ?? '') === 'manage' ? 'manage' : 'view';
     }
 
+    /**
+     * ⚠️ **رحلة الشحنة في نافذة بدل لوح (v108)** — بلاغ المالك: «رحلة الشحنة
+     * أخذة مساحة كبيرة على الفاضي، خليها كزر في الهيرو عند الضغط عليه يظهر
+     * Popup بحالة الشحنة».
+     *
+     * المقيس: اللوح كان بياخد **٥٧٠px** من ارتفاع الشاشة وأغلبها فراغ (٧ مراحل
+     * في عمودين متباعدين)، وبيتحطّ **قبل** الشغل المالي في كل فتحة للإذن.
+     * الخلاصة اللي المالك بيحتاجها (فين واقفة · نسبتها) بقت **على الزرار
+     * نفسه**، والتفصيل كله بضغطة.
+     *
+     * ⚠️ **نفس المكوّن مش نسخة تانية** (`permits/_journey.php`): فورم تسجيل
+     *    المرحلة والتراجع جوّاه بيشتغلوا زي ما هُمّ (POST عادي بيرجّع للشاشة).
+     * ⚠️ **الرابط القديم `#journey` لسه شغّال**: الإشعار بيفتح الصفحة على
+     *    الزرار، و`data-drill-hash` بيفتح النافذة تلقائيًّا.
+     */
+    public function journeyDrill(string $id): void
+    {
+        $this->requireAuth();
+        $pid = (int) $id;
+        $p = Permit::find($pid);
+        if (!$p) { $this->notFound('الإصدار ده مش موجود أو اتمسح.'); }
+
+        /* نفس مصادر `gather()` بالحرف — الأحداث بتتجاب مرة واحدة وبتتوزّع
+           على ملخّص الإذن وملخّص كل بوليصة. */
+        $events = PermitTrack::events($pid);
+
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: private, no-store, max-age=0');
+        }
+        $this->render('permits/_journey', [
+            'p'            => $p,
+            'pid'          => $pid,
+            'mode'         => 'view',
+            'isClosed'     => ($p['status'] ?? 'open') === 'closed',
+            'trackReady'   => PermitTrack::ready(),
+            'journey'      => PermitTrack::summary($pid, $p['permit_type'], PermitTrack::WHOLE_PERMIT, $events),
+            'journeyBills' => PermitTrack::billSummaries($pid, $p['permit_type'], $events),
+        ], false);
+    }
+
     /** تأشير/إلغاء «مش محتاجه في الإذن ده» لإيصال متوقّع (استرشادي بحت). */
     public function receiptDismiss(string $id): void
     {
