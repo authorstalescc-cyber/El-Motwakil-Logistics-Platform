@@ -138,6 +138,38 @@ $usesConsts = str_contains($entryJs, 'ReceiptLine::SEPARATORS')
 $usesConsts ? ok('شاشة المندوب بتنزّل قواعد `ReceiptLine` مش بتكتبها تاني')
             : bad('شاشة المندوب كتبت قواعد التفكيك بنفسها — هتفترق عن الخادم');
 
+/* ⚠️⚠️ **الفحص ده اتكتب بعد باج حقيقي وقع مرتين** (v72 «نوع النثرية» ·
+   v109 «قايمة الأسعار»): `RepPortalController::postedData()` **قايمة بيضا** —
+   أي حقل في الفورم مش مذكور فيها بالاسم بيتقصّ **قبل** ما الموديل يشوفه،
+   فالمندوب يكتب القيمة صح والموديل يرفض بـ«الحقل ده فاضي». مفيش خطأ ولا
+   تحذير — الحلقة بتتقطع في النص بالسكوت.
+
+   الفحص بيقرا أسماء الحقول من الماركب فعلاً ويقارنها بالقايمة. */
+$posted = strstr(code_only('app/Controllers/RepPortalController.php'), 'function postedData(') ?: '';
+$posted = substr($posted, 0, 2000);
+/* ⚠️ **حقول الفورم بس** — `\sname="..."` لوحده بيلقط `<meta name="viewport">`
+   ويدّي فشلًا كاذبًا. بنقرا الوسوم الأول وبعدين اسم الحقل من جوّاها. */
+$formFields = [];
+if (preg_match_all('/<(?:input|select|textarea)\b[^>]*>/i', src('app/Views/m/entry.php'), $tags)) {
+    foreach ($tags[0] as $tag) {
+        if (preg_match('/\sname="([a-z_]+)"/', $tag, $nm)) { $formFields[] = $nm[1]; }
+    }
+    $formFields = array_values(array_unique($formFields));
+}
+/* حقول بتتولّى في مكان تاني عن قصد: `_csrf` حارس، و`photo`/`remove_photo`
+   بيتقرا من `$_FILES` مش من `$_POST`، و`entry_date` الخادم بيفرضه (v49). */
+$exempt  = ['_csrf', 'photo', 'remove_photo', 'entry_date'];
+$dropped = [];
+foreach ($formFields as $f) {
+    if (in_array($f, $exempt, true)) { continue; }
+    if (!str_contains($posted, "'" . $f . "'")) { $dropped[] = $f; }
+}
+$formFields
+    ? ($dropped
+        ? bad('حقول بيبعتها فورم المندوب و`postedData` بتقصّها: ' . implode('، ', $dropped))
+        : ok('كل حقول فورم المندوب (' . count($formFields) . ') بتوصل للموديل'))
+    : bad('ما قدرتش أقرا حقول فورم المندوب — الفحص ده اتعطّل');
+
 // ═══════════════════════════════════════════════════════════ ②④⑤⑥
 sec('②④⑤⑥ سلوك حقيقي: إرسال ← اعتماد ← توزيع ← تعديل');
 

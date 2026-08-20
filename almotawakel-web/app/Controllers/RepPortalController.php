@@ -1282,6 +1282,14 @@ class RepPortalController extends Controller
             'note'        => (string) ($_POST['note'] ?? ''),
             'qty'         => (int) ($_POST['qty'] ?? 1),
             'unit_amount' => (string) ($_POST['unit_amount'] ?? ''),
+            /* ⚠️⚠️ v109 — **قايمة أسعار الإيصالات، ونسيانها هنا كرّر باج v72
+               بالحرف**: شاشة البند بقت تبعت `amounts` بدل `unit_amount`،
+               والقايمة البيضا دي كانت بتقصّه، فالموديل يرجع للطريق القديم
+               ويلاقي `unit_amount` فاضية (خانتها اتشالت من الفورم أصلاً)
+               ويرفض بـ«اكتب المبلغ اللي دفعته» — والمندوب كاتب المبلغ قدامه.
+               `verify_v109` بقى بيقارن أسماء حقول الفورم بالقايمة دي عشان
+               الباج ده ما يرجعش من غير ما حد ياخد باله. */
+            'amounts'     => (string) ($_POST['amounts'] ?? ''),
             'entry_date'  => $date,
             'ref_no'      => (string) ($_POST['ref_no'] ?? ''),
             'client_token'=> trim((string) ($_POST['client_token'] ?? '')),
