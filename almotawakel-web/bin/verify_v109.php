@@ -210,26 +210,36 @@ if (!$permit || !$rep) {
 
     Database::conn()->beginTransaction();
     try {
+        /* ⚠️ **الفكستشر بقى «بند بكمية» مش «بند بأسعار مختلفة»** (v109.3):
+           الأسعار المختلفة بقت **بند لكل إيصال** (القسم ⑪)، فالبند اللي بيبقى
+           فيه أكتر من سطر هو بند «نفس السعر × الكمية» — وهو بالظبط اللي
+           حُرّاس السطور والتوزيع بيشتغلوا عليه. */
         $subId = RepPortal::submit((int) $rep['id'], [
             'permit_id' => $pid, 'movement_id' => (int) $permit['mv'],
             'kind' => 'receipt', 'note' => 'إيصال هيئة',
-            'amounts' => '250 250 400 180', 'entry_date' => date('Y-m-d'),
+            'unit_amount' => '270', 'qty' => 4, 'entry_date' => date('Y-m-d'),
         ]);
         $sub = Database::row('SELECT * FROM rep_submissions WHERE id=?', [$subId]);
-        near('الإجمالي = مجموع الأسعار', (float) $sub['amount'], 1080);
-        (int) $sub['qty'] === 4 ? ok('العدد = عدد الأسعار المكتوبة') : bad('العدد غلط');
-        ReceiptLine::decode($sub['lines_json']) === [250.0, 250.0, 400.0, 180.0]
-            ? ok('الأسعار محفوظة بالحرف في صندوق الانتظار') : bad('lines_json مش مطابق');
+        near('الإجمالي = الكمية × السعر', (float) $sub['amount'], 1080);
+        (int) $sub['qty'] === 4 ? ok('الكمية اتحفظت زي ما هي') : bad('الكمية غلط');
+        ReceiptLine::decode($sub['lines_json']) === null
+            ? ok('البند بسعر واحد مالوش تفصيل في صندوق الانتظار') : bad('اتخزّن تفصيل بلا داعٍ');
 
         $stageId = RepInbox::approve($subId);
         $lines = ReceiptLine::forStage($stageId);
         count($lines) === 4 ? ok('الاعتماد ولّد سطرًا لكل إيصال') : bad('عدد السطور غلط');
-        array_map(static fn ($l) => (float) $l['amount'], $lines) === [250.0, 250.0, 400.0, 180.0]
-            ? ok('كل إيصال بسعره هو (مش بالمتوسط)') : bad('الأسعار اتغيّرت في الاعتماد');
 
         $stage = Database::row('SELECT amount, qty FROM permit_stages WHERE id=?', [$stageId]);
         near('② مجموع السطور = إجمالي البند',
             array_sum(array_map(static fn ($l) => (float) $l['amount'], $lines)), (float) $stage['amount']);
+
+        /* ⚠️ **الحارس الحاكم بالإيجاب**: قايمة أسعار مختلفة مجموعها = الإجمالي
+           بتتقبل (ودي اللي بيستخدمها المالك في «فصّل الأسعار»). */
+        ReceiptLine::sync($stageId, [250.0, 250.0, 400.0, 180.0]);
+        array_map(static fn ($l) => (float) $l['amount'], ReceiptLine::forStage($stageId))
+            === [250.0, 250.0, 400.0, 180.0]
+            ? ok('② أسعار مختلفة مجموعها = الإجمالي بتتقبل') : bad('② القايمة السليمة اترفضت');
+        $lines = ReceiptLine::forStage($stageId);
 
         // ② الحُرّاس: مجموع غلط · عدد غلط
         try { ReceiptLine::sync($stageId, [1.0, 2.0, 3.0, 4.0]); bad('② مجموع مخالف اتقبل'); }
@@ -329,25 +339,133 @@ if (isset($permit, $rep) && $permit && $rep) {
         ReceiptLine::decode($r2['lines_json']) === null
             ? ok('② البند بسعر واحد مالوش تفصيل أسعار') : bad('② اتخزّن تفصيل لبند بسعر واحد');
 
-        /* ③ المصفوفة الجاية من الخانات ⇒ الإجمالي = المجموع. */
-        $sub3 = RepPortal::submit((int) $rep['id'], [
+        /* ③ المصفوفة الجاية من الخانات ⇒ **بند لكل خانة** (v109.3 — التفاصيل
+           والحُرّاس في القسم ⑪). هنا بنتأكد بس إن المجموع ما اتغيّرش. */
+        $tok3 = bin2hex(random_bytes(16));
+        RepPortal::submit((int) $rep['id'], [
             'permit_id' => $pid2, 'movement_id' => (int) $permit['mv'],
-            'kind' => 'receipt', 'note' => 'إيصال هيئة',
+            'kind' => 'receipt', 'note' => 'إيصال هيئة', 'client_token' => $tok3,
             'amounts' => ['250', '250', '400', '180'], 'entry_date' => date('Y-m-d'),
         ]);
-        $r3 = Database::row('SELECT qty, amount, lines_json FROM rep_submissions WHERE id=?', [$sub3]);
-        near('③ مجموع الخانات = الإجمالي', (float) $r3['amount'], 1080);
-        ReceiptLine::decode($r3['lines_json']) === [250.0, 250.0, 400.0, 180.0]
-            ? ok('③ الأسعار اتحفظت بالحرف من المصفوفة') : bad('③ الأسعار اتغيّرت');
+        $r3s = Database::all(
+            'SELECT qty, amount FROM rep_submissions WHERE rep_id=? AND client_token LIKE ? ORDER BY id',
+            [(int) $rep['id'], $tok3 . '%']);
+        count($r3s) === 4 ? ok('③ كل خانة بقت بندًا مستقلًّا') : bad('③ العدد ' . count($r3s) . ' مش 4');
+        near('③ مجموع البنود = اللي المندوب دفعه',
+            array_sum(array_map(static fn ($x) => (float) $x['amount'], $r3s)), 1080);
 
-        /* ⚠️ **الشاشة بتفتح على وضع البند**: بند بسعر واحد ما يفتحش «مختلفة». */
+        /* ⚠️ **الشاشة بتفتح على وضع البند**: بند بسعر واحد ما يفتحش «مختلفة».
+           و`formValues` دالة صافية، فبنقيسها على صفوف مركَّبة — أوضح من
+           الاعتماد على شكل بيانات اتسجّلت في مسار تاني. */
         RepPortal::formValues($r2)['amounts'] === []
             ? ok('البند بسعر واحد بيفتح بالشكل القديم') : bad('البند بسعر واحد بيفتح وضع «مختلفة»');
-        RepPortal::formValues($r3)['amounts'] === [250.0, 250.0, 400.0, 180.0]
-            ? ok('البند بأسعار مختلفة بيفتح بخاناته مليانة') : bad('التفصيل ما بيرجعش للشاشة');
+        RepPortal::formValues(['qty' => 4, 'unit_amount' => 250,
+            'lines_json' => json_encode([250, 250, 250, 250])])['amounts'] === []
+            ? ok('التفصيل المتساوي ما بيفتحش وضع «مختلفة»') : bad('التفصيل المتساوي بيفتح «مختلفة»');
+        RepPortal::formValues(['qty' => 3, 'unit_amount' => 300,
+            'lines_json' => json_encode([250, 250, 400])])['amounts'] === [250.0, 250.0, 400.0]
+            ? ok('البند اللي المالك فصّله بيرجع بخاناته مليانة') : bad('التفصيل ما بيرجعش للشاشة');
     } finally {
         Database::conn()->rollBack();
     }
+}
+
+// ═══════════════════════════════════════════════════════════ ⑪
+sec('⑪ الأسعار المختلفة = بند لكل إيصال (v109.3)');
+
+/* ⚠️⚠️ **قرار المالك**: «مش عاوزهم في بند واحد — عاوزهم أكتر من بند وفقًا
+   للعدد عشان أقدر أدخل إيصال كل واحد منهم». رقم الإيصال عمود واحد على البند،
+   فالأربعة في بند واحد = رقم واحد لأربع ورقات.
+   ⚠️ والفصل **عند الإدخال** مش عند الاعتماد: `rep_submissions.stage_id` عمود
+      واحد بمفتاح أجنبي، فسجل مراجعة واحد ما ينفعش يشاور على أربع بنود —
+      والفصل هنا بيخلّي كل سجل ↔ بنده ١:١ فالاعتماد والرفض والإلغاء بيمشوا
+      في نفس الطريق الموجود بالحرف. */
+if (isset($permit, $rep) && $permit && $rep) {
+    $pid4 = (int) $permit['id'];
+    Database::conn()->beginTransaction();
+    try {
+        $tok4 = bin2hex(random_bytes(16));
+        $firstId = RepPortal::submit((int) $rep['id'], [
+            'permit_id' => $pid4, 'movement_id' => (int) $permit['mv'],
+            'kind' => 'receipt', 'note' => 'إيصال هيئة', 'ref_no' => 'A-1',
+            'client_token' => $tok4, 'entry_date' => date('Y-m-d'),
+            'amounts' => ['250', '250', '400', '180'],
+        ]);
+        $subs4 = Database::all(
+            'SELECT id, qty, amount, ref_no, lines_json, client_token FROM rep_submissions
+              WHERE rep_id = ? AND client_token LIKE ? ORDER BY id',
+            [(int) $rep['id'], $tok4 . '%']);
+
+        count($subs4) === 4 ? ok('⑪ اتسجّلوا 4 بنود منفصلة') : bad('⑪ العدد ' . count($subs4) . ' مش 4');
+        count(array_filter($subs4, static fn ($s) => (int) $s['qty'] === 1)) === 4
+            ? ok('⑪ كل بند كميته 1') : bad('⑪ فيه بند كميته مش 1');
+        array_map(static fn ($s) => (float) $s['amount'], $subs4) === [250.0, 250.0, 400.0, 180.0]
+            ? ok('⑪ كل بند بسعره هو') : bad('⑪ الأسعار اتغيّرت');
+        near('⑪ المجموع لسه هو هو',
+            array_sum(array_map(static fn ($s) => (float) $s['amount'], $subs4)), 1080);
+        count(array_filter($subs4, static fn ($s) => $s['lines_json'] !== null)) === 0
+            ? ok('⑪ ولا بند فيهم فيه تفصيل أسعار (كل واحد إيصال)') : bad('⑪ فيه بند لسه فيه تفصيل');
+        count(array_unique(array_column($subs4, 'client_token'))) === 4
+            ? ok('⑪ رمز مستقل لكل بند (المفتاح الفريد ما بيترفضش)') : bad('⑪ الرموز مكرَّرة');
+
+        /* ⚠️ إعادة الإرسال (نت ضعيف) لازم ترجّع نفس الدفعة — مش تكرّرها.
+           بلا ده، ضغطة تانية من المندوب = ٨ إيصالات بدل ٤ في عهدته. */
+        RepPortal::submit((int) $rep['id'], [
+            'permit_id' => $pid4, 'movement_id' => (int) $permit['mv'],
+            'kind' => 'receipt', 'note' => 'إيصال هيئة', 'ref_no' => 'A-1',
+            'client_token' => $tok4, 'entry_date' => date('Y-m-d'),
+            'amounts' => ['250', '250', '400', '180'],
+        ]) === $firstId
+        && (int) Database::scalar(
+            'SELECT COUNT(*) FROM rep_submissions WHERE rep_id=? AND client_token LIKE ?',
+            [(int) $rep['id'], $tok4 . '%']) === 4
+            ? ok('⑪ إعادة الإرسال ما كرّرتش الدفعة') : bad('⑪ إعادة الإرسال كرّرت البنود');
+
+        // كل بند بيتعتمد لوحده وبياخد بنده على الإذن
+        $stages4 = [];
+        foreach ($subs4 as $s) { $stages4[] = RepInbox::approve((int) $s['id']); }
+        count(array_unique($stages4)) === 4
+            ? ok('⑪ اتولّد بند مستقل على الإذن لكل إيصال') : bad('⑪ البنود اتلمّت');
+
+        /* ⚠️ التعديل **ما بيفصلش** — الفصل مكانه الإدخال بس، وإلا نفس اليوم
+           بيبقى فيه نموذجين مختلفين لنفس الحاجة. */
+        $solo = RepPortal::submit((int) $rep['id'], [
+            'permit_id' => $pid4, 'movement_id' => (int) $permit['mv'],
+            'kind' => 'receipt', 'note' => 'إيصال هيئة', 'unit_amount' => '100', 'qty' => 1,
+            'client_token' => bin2hex(random_bytes(16)), 'entry_date' => date('Y-m-d'),
+        ]);
+        try {
+            RepPortal::updateMine((int) $rep['id'], $solo, [
+                'permit_id' => $pid4, 'movement_id' => (int) $permit['mv'],
+                'kind' => 'receipt', 'note' => 'إيصال هيئة',
+                'amounts' => ['50', '60'], 'entry_date' => date('Y-m-d'),
+            ]);
+            bad('⑪ التعديل بأسعار متعددة اتقبل');
+        } catch (\App\Models\RepSubmissionValidationException) {
+            ok('⑪ التعديل بأسعار متعددة بيترفض برسالة واضحة');
+        }
+    } finally {
+        Database::conn()->rollBack();
+    }
+}
+
+/* ⚠️⚠️ **صورة مستقلة لكل بند.** البنود المتقسّمة لو شاركوا نفس الملف، أول
+   حذف لأي واحد فيهم بيمسح الملف من على القرص (`deleteStage` بينده
+   `deleteFile`) والباقي يفضل بيشاور على مرفق مش موجود **بلا أي خطأ**. */
+$shotDir = \App\Core\App::basePath('storage/private_uploads/reps');
+if (is_dir($shotDir) || @mkdir($shotDir, 0770, true)) {
+    $nm = bin2hex(random_bytes(20)) . '.jpg';
+    file_put_contents($shotDir . '/' . $nm, "\xFF\xD8\xFF\xE0" . str_repeat('x', 200));
+    $srcLogical = 'private/reps/' . $nm;
+    $dup = \App\Core\PrivateFile::duplicate($srcLogical);
+    $a = \App\Core\PrivateFile::resolve($srcLogical);
+    $b = $dup ? \App\Core\PrivateFile::resolve($dup) : null;
+    ($a && $b && $a['path'] !== $b['path'] && md5_file($a['path']) === md5_file($b['path']))
+        ? ok('⑪ نسخة الصورة ملف مستقل بنفس المحتوى') : bad('⑪ نسخ الصورة مش شغّال');
+    \App\Core\PrivateFile::delete($srcLogical);
+    (\App\Core\PrivateFile::resolve($dup ?? '') !== null)
+        ? ok('⑪ حذف بند ما بيمسحش صورة إخواته') : bad('⑪ حذف الأصل مسح النسخة');
+    \App\Core\PrivateFile::delete($dup);
 }
 
 // ═══════════════════════════════════════════════════════════ ⑩

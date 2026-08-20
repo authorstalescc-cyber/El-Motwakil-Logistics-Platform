@@ -62,6 +62,37 @@ class PrivateFile
         return ['path' => $path, 'mime' => $mime, 'name' => basename($path)];
     }
 
+    /**
+     * نسخة مستقلّة من مرفق موجود — بترجّع مسارها المنطقي (أو `null` لو مفيش أصل).
+     *
+     * ⚠️⚠️ **الملف المشترك بين صفّين = قنبلة موقوتة.** لما بند واحد بيتقسم
+     *    لكذا بند (إيصالات بأسعار مختلفة — v109.3) وكلهم بيشاوروا على **نفس
+     *    الملف**، أول حذف لأي واحد فيهم بيمسح الملف من على القرص
+     *    (`deleteStage` بينده `deleteFile`) — والباقي يفضل بيشاور على مرفق
+     *    مش موجود **بلا أي خطأ**، ومحدش هيربط العطل بالحذف ده.
+     *    عشان كده كل بند بياخد نسخته هو.
+     */
+    public static function duplicate(?string $logical): ?string
+    {
+        $src = self::resolve($logical);
+        if (!$src) { return null; }
+
+        // بنقرا التصنيف من المسار المنطقي نفسه عشان النسخة تعيش في نفس المجلد.
+        if (!preg_match('#^private/(permits|reps|party_docs|company_safe)/[a-f0-9]{40}\.([a-z0-9]+)$#',
+                        ltrim((string) $logical, '/'), $m)) {
+            return null;   // المرفقات القديمة (`uploads/…`) ما بتتنسخش — بتتساب زي ما هي
+        }
+        [$category, $ext] = [$m[1], $m[2]];
+
+        $dir = self::storageDir($category);
+        if (!is_dir($dir) && !mkdir($dir, 0770, true) && !is_dir($dir)) { return null; }
+
+        $name = bin2hex(random_bytes(20)) . '.' . $ext;
+        if (!@copy($src['path'], $dir . '/' . $name)) { return null; }
+        @chmod($dir . '/' . $name, 0660);
+        return 'private/' . $category . '/' . $name;
+    }
+
     public static function delete(?string $logical): void
     {
         $file = self::resolve($logical);

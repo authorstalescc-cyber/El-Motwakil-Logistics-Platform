@@ -2,6 +2,7 @@
 namespace App\Models;
 
 use App\Core\Database;
+use App\Core\PrivateFile;
 use App\Models\PartyDoc;
 use App\Models\PermitTrack;
 use RuntimeException;
@@ -707,6 +708,26 @@ class RepPortal
 
         $n = self::normaliseSubmission($repId, $d);
 
+        /* ══ الإيصالات بأسعار مختلفة = **بند لكل إيصال** (v109.3) ══
+           قرار المالك: «مش عاوزهم يبقوا في بند واحد، عاوزهم أكتر من بند وفقًا
+           للعدد عشان أقدر أدخل إيصال كل واحد منهم» — رقم الإيصال عمود واحد
+           على البند (`ref_no`)، فالأربعة في بند واحد معناهم رقم واحد لأربع
+           ورقات.
+
+           ⚠️⚠️ **الفصل بيحصل هنا — عند الإدخال — مش عند الاعتماد.** لأن
+              `rep_submissions.stage_id` عمود **واحد** بمفتاح أجنبي، فسجل
+              مراجعة واحد ما ينفعش يشاور على أربع بنود. الفصل هنا بيخلّي كل
+              سجل ↔ بنده ١:١، فالاعتماد والرفض والإلغاء والحذف والعهدة كلهم
+              بيمشوا في **نفس الطريق الموجود بالحرف** بلا أي تعديل — وده أهم
+              حاجة والمناديب شغّالين فعليًّا.
+
+           ⚠️ الشاشة اللي فيها خانة لكل إيصال هي اللي بتفصل — بغضّ النظر عن
+              إن الأسعار طلعت متساوية أو لأ. «شاشة الخانات = بند لكل خانة»
+              قاعدة يقدر يتوقّعها، أوضح من «بتفصل لو الأسعار مختلفة». */
+        if ($n['lines'] !== null && count($n['lines']) > 1) {
+            return self::submitSplit($repId, $token, $n, (string) ($d['photo'] ?? ''));
+        }
+
         // ملحوظة: مفيش Closing::guard هنا عن قصد — البند ده ما بيمسّش الخزنة
         // لا دلوقتي ولا بعد الاعتماد (مدفوع من عهدة المندوب — v35).
 
@@ -743,6 +764,76 @@ class RepPortal
         return Database::lastId();
     }
 
+    /**
+     * إيصالات بأسعار مختلفة → **بند مستقل لكل إيصال** (v109.3).
+     * بيرجّع id أول بند (الكنترولر بيستخدمه للرسالة والرجوع).
+     *
+     * ⚠️ **كله جوّه معاملة واحدة**: ٤ إيصالات لازم يدخلوا كلهم أو ولا واحد —
+     *    نص دفعة معناها عهدة المندوب ناقصة وهو فاكر إنه بعت الأربعة.
+     *
+     * ⚠️ **رمز مستقل لكل بند** (`{token}{ii}`): المفتاح الفريد على
+     *    (rep_id, client_token)، فنفس الرمز لأربعة كان هيرفض التلاتة التانية.
+     *    والزيادة **hex** عشان تفضل مطابقة لنمط الرمز، والفحص على أول رمز
+     *    بيخلّي إعادة الإرسال (نت ضعيف) ترجّع نفس الدفعة بدل ما تكرّرها.
+     *
+     * ⚠️ **صورة مستقلة لكل بند** (`PrivateFile::duplicate`) — الملف المشترك
+     *    بيتمسح من على القرص أول ما أي بند فيهم يتحذف، والباقي يفضل بيشاور
+     *    على مرفق مش موجود بلا أي خطأ.
+     */
+    private static function submitSplit(int $repId, string $token, array $n, string $photo): int
+    {
+        $prices = array_values($n['lines']);
+        $tokenOf = static fn (int $i): string => $token . sprintf('%02x', $i);
+
+        // إعادة إرسال نفس الدفعة (رد الشبكة ضاع) → رجّع اللي اتسجّل خلاص
+        $first = Database::scalar(
+            'SELECT id FROM rep_submissions WHERE rep_id = ? AND client_token = ?',
+            [$repId, $tokenOf(0)]);
+        if ($first) { return (int) $first; }
+
+        $kindCol = self::miscKindReady();
+        $lineCol = ReceiptLine::ready();
+
+        $pdo  = Database::conn();
+        $own  = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            $ids = [];
+            foreach ($prices as $i => $price) {
+                $price = round((float) $price, 2);
+                /* أول بند بياخد الصورة الأصلية، والباقي نسخًا — عشان محدش
+                   يشارك حد في ملف. الرقم المرجعي بيتساب فاضي للبنود التانية:
+                   المالك بيحطّ رقم كل إيصال بإيده وده كل الغرض من الفصل. */
+                $shot = $photo === '' ? null : ($i === 0 ? $photo : (PrivateFile::duplicate($photo) ?? null));
+
+                $args = [$repId, $tokenOf($i), $n['permit_id'], $n['movement_id'], $n['kind'], $n['note'],
+                         1, $price, $price, $n['entry_date'], $i === 0 ? $n['ref_no'] : null,
+                         $shot, $n['is_visa'], $n['visa_card_id'], $n['unpaid']];
+                if ($kindCol) { $args[] = $n['misc_kind']; }
+                if ($lineCol) { $args[] = null; }   // بند بإيصال واحد — مالوش تفصيل
+
+                Database::exec(
+                    "INSERT INTO rep_submissions
+                        (rep_id, client_token, permit_id, movement_id, kind, note, qty,
+                         unit_amount, amount, entry_date, ref_no, photo, is_visa, visa_card_id,
+                         unpaid" . ($kindCol ? ', misc_kind' : '') . ($lineCol ? ', lines_json' : '') . ", status)
+                     VALUES (" . implode(',', array_fill(0, count($args), '?')) . ", 'pending')",
+                    $args);
+                $ids[] = Database::lastId();
+            }
+            if ($own) { $pdo->commit(); }
+            return (int) $ids[0];
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            // طلبان متزامنان بنفس الرمز → رجّع اللي عدّى بدل ما نرمي خطأ
+            $first = Database::scalar(
+                'SELECT id FROM rep_submissions WHERE rep_id = ? AND client_token = ?',
+                [$repId, $tokenOf(0)]);
+            if ($first) { return (int) $first; }
+            throw $e;
+        }
+    }
+
     /** تعديل بند معلّق قبل أن يبدأ المكتب مراجعته. */
     public static function updateMine(int $repId, int $subId, array $d): array
     {
@@ -761,6 +852,17 @@ class RepPortal
         }
 
         $n = self::normaliseSubmission($repId, $d);
+
+        /* ⚠️ **التعديل ما بيفصلش** (v109.3): البند بعد الفصل بقى **إيصالًا
+           واحدًا**، والفصل مكانه الإدخال بس. لو المندوب بعت أكتر من سعر على
+           بند قايم، بنرفض برسالة واضحة بدل ما نسجّل بندًا بأسعار متعددة —
+           وده كان هيرجّع الشكل القديم من باب خلفي ويخلّي نفس اليوم فيه
+           نموذجين مختلفين لنفس الحاجة. */
+        if ($n['lines'] !== null && count($n['lines']) > 1) {
+            throw new RepSubmissionValidationException([
+                'amounts' => 'البند ده إيصال واحد. امسحه وسجّله من جديد لو عايز أكتر من إيصال.',
+            ]);
+        }
 
         $photo = array_key_exists('photo', $d) ? trim((string) $d['photo']) : (string) ($old['photo'] ?? '');
         $kindCol = self::miscKindReady();   // v71

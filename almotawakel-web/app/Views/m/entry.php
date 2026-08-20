@@ -175,6 +175,10 @@ $wdToday = $wd === $today;
       <span>البند فيه أكتر من إيصال؟</span>
       <button type="button" class="mini-action" id="multiToggle" aria-expanded="false">أكتر من إيصال</button>
     </div>
+    <?php /* ⚠️ **«أسعار مختلفة» مش متاحة وقت التعديل** (v109.3): كل بند بقى
+             إيصالًا واحدًا، والفصل بيحصل عند الإدخال بس. عرض الخيار هنا كان
+             هيوَدّي المندوب لرسالة رفض بعد ما يملّي الخانات — والأحسن ما
+             يشوفهاش من الأول. (الخادم بيرفض بردو — الشاشة مش مصدر ثقة.) */ ?>
     <div class="field qty-extra" id="modePick" hidden>
       <div class="pick" role="radiogroup" aria-label="نوع الإيصالات">
         <?php /* ⚠️ الأيقونتين من كتالوج `icon()` فعلاً — الاسم الغلط ما بيرميش
@@ -182,8 +186,10 @@ $wdToday = $wd === $today;
                  بيفحصها). */ ?>
         <input type="radio" name="amount_mode" id="mode_same" value="same">
         <label for="mode_same"><?= icon('layers', 14) ?> بنفس السعر</label>
-        <input type="radio" name="amount_mode" id="mode_diff" value="diff">
-        <label for="mode_diff"><?= icon('columns', 14) ?> أسعار مختلفة</label>
+        <?php if (!$editing): ?>
+          <input type="radio" name="amount_mode" id="mode_diff" value="diff">
+          <label for="mode_diff"><?= icon('columns', 14) ?> أسعار مختلفة</label>
+        <?php endif; ?>
       </div>
     </div>
 
