@@ -158,6 +158,10 @@ class PermitQuickEntry
                      $row['entry_date'],$row['ref_no'],$row['note'],$row['is_visa']?1:0,$row['visa_card_id']]
                 );
                 $id = Database::lastId();
+                // v109 — الإضافة السريعة بتدخّل أسعارًا متساوية، فسطورها
+                // بتتولّد بالتساوي. لازم تتولّد هنا كمان عشان عدّاد «مش
+                // متوزّع» يشوف بنود المالك زي بنود المناديب بالظبط.
+                ReceiptLine::refreshFor($id);
                 $saved = Database::row('SELECT * FROM permit_stages WHERE id=?', [$id]);
                 $ids[] = $id;
                 $totals[$row['kind']] += $row['amount'];

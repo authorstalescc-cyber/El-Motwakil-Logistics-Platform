@@ -249,6 +249,53 @@ class RepInbox
     }
 
     /**
+     * **المصدر الوحيد لتوليد سطور الإيصال بعد الاعتماد أو بعد تعديل معتمد.**
+     *
+     * ⚠️ **الاعتماد ما يقعش أبدًا بسبب تفصيل.** لو `lines_json` مخالف لإجمالي
+     *    البند أو لعدده (بند اتعدّل من مسار قديم قبل ما التفصيل يتحدّث)،
+     *    بنرجع للتقسيم بالتساوي بدل ما نسيب `sync()` ترمي وتفشّل اعتمادًا
+     *    ماليًّا سليم. المال هو الأصل والتفصيل خادم له، مش العكس.
+     */
+    private static function syncStageLines(int $stageId, array $sub): void
+    {
+        if (!ReceiptLine::ready() || $stageId <= 0) { return; }
+
+        $lines  = ReceiptLine::decode($sub['lines_json'] ?? null);
+        $amount = round((float) ($sub['amount'] ?? 0), 2);
+        $qty    = (int) ($sub['qty'] ?? 0);
+
+        if ($lines !== null
+            && count($lines) === $qty
+            && abs(round(array_sum($lines), 2) - $amount) < 0.005) {
+            ReceiptLine::sync($stageId, $lines);
+            return;
+        }
+
+        // بلا تفصيل (أو تفصيل متقادم) → سطر لكل إيصال بالتساوي، عشان التوزيع
+        // على العربيات يشتغل على كل البنود بنفس الطريقة.
+        ReceiptLine::ensureFor($stageId);
+    }
+
+    /**
+     * وصف العدد في سجل التدقيق — «(١٢ إيصال · ٣×١٨٠ · ٢×٢٥٠)» للأسعار
+     * المختلفة، و«(٣ × ٢٥٠)» للسعر الواحد المتكرر.
+     *
+     * ⚠️ **ممنوع «الكمية × سعر الوحدة» على بند أسعاره مختلفة** — الرقم ده
+     *    متوسط ما دفعوش حد، وكتابته في السجل بتخلّيه شاهدًا على رقم وهمي.
+     */
+    private static function qtyLabel(array $sub): string
+    {
+        $qty = (int) ($sub['qty'] ?? 1);
+        if ($qty <= 1) { return ''; }
+
+        $lines = ReceiptLine::decode($sub['lines_json'] ?? null);
+        if ($lines !== null && ReceiptLine::varied($lines)) {
+            return ' (' . $qty . ' إيصال · ' . ReceiptLine::summary($lines) . ')';
+        }
+        return ' (' . $qty . ' × ' . number_format((float) ($sub['unit_amount'] ?? 0), 2, '.', ',') . ')';
+    }
+
+    /**
      * ⚠️⚠️ **المصدر الوحيد للتحقّق من حقول بند المندوب** — بيتنادى من
      * `update()` (البند المستني) ومن `updateApproved()` (البند المعتمد).
      *
@@ -282,12 +329,36 @@ class RepInbox
                 : 'البند ده على إذن — ما ينفعش تحوّله لنثرية عامة. ارفضه والمندوب يسجّله كنثرية.');
         }
 
-        $qty = array_key_exists('qty', $d) ? (int) $d['qty'] : (int) $s['qty'];
-        if ($qty < 1 || $qty > 10000) { throw new RuntimeException('الكمية لازم تكون من 1 لـ10000.'); }
+        /* ══ المبلغ (v109) — يا قايمة أسعار يا سعر واحد متكرر ══
+           نفس قاعدة `RepPortal::normaliseSubmission` بالحرف: خانة `amounts`
+           لما تتبعت بتحكم، والعدد والإجمالي بيطلعوا منها. الطريق القديم
+           (`qty` + `unit_amount`) باقي زي ما هو للنثرية وللتعديل الجماعي
+           اللي بيبعت التاريخ بس.
 
-        $unit = array_key_exists('unit_amount', $d)
-            ? round((float) $d['unit_amount'], 2) : round((float) $s['unit_amount'], 2);
-        if ($unit <= 0) { throw new RuntimeException('المبلغ لازم يكون أكبر من صفر.'); }
+           ⚠️ **الحقل الفاضي المبعوت صراحةً = «شيل التفصيل»** مش «سيبه»: المالك
+              اللي مسح الأسعار وكتب سعرًا واحدًا لازم التفصيل القديم يروح
+              معاه، وإلا `receipt_lines` بيفضل شايل أسعارًا مجموعها مش
+              الإجمالي الجديد. */
+        $lines = null;
+        if (array_key_exists('amounts', $d) && trim((string) $d['amounts']) !== '') {
+            $lines = ReceiptLine::parse((string) $d['amounts']);
+            if (!$lines) { throw new RuntimeException('اكتب سعر إيصال واحد على الأقل.'); }
+        }
+
+        if ($lines !== null) {
+            $qty  = count($lines);
+            $sum  = round(array_sum($lines), 2);
+            if ($sum <= 0) { throw new RuntimeException('إجمالي الأسعار لازم يكون أكبر من صفر.'); }
+            $unit = round($sum / $qty, 2);
+        } else {
+            $qty = array_key_exists('qty', $d) ? (int) $d['qty'] : (int) $s['qty'];
+            if ($qty < 1 || $qty > 10000) { throw new RuntimeException('الكمية لازم تكون من 1 لـ10000.'); }
+
+            $unit = array_key_exists('unit_amount', $d)
+                ? round((float) $d['unit_amount'], 2) : round((float) $s['unit_amount'], 2);
+            if ($unit <= 0) { throw new RuntimeException('المبلغ لازم يكون أكبر من صفر.'); }
+            $sum  = round($unit * $qty, 2);
+        }
 
         // السعر الفعلي للعميل — فاضي = يتحطّ بعدين من /expenses/receipts.
         // ⚠️ النثرية مالهاش سعر فعلي أصلاً (مش بتتحاسب على أي عميل)، فبنفرضه NULL
@@ -373,7 +444,12 @@ class RepInbox
             'qty'          => $qty,
             'unit'         => $unit,
             'actual'       => $actual,
-            'amount'       => round($unit * $qty, 2),
+            /* ⚠️ **الإجمالي من مجموع الأسعار لا من الضرب** لما القايمة تتبعت:
+               `round(sum/qty, 2) × qty` ما بيرجّعش المجموع لما الأسعار تختلف
+               (١٢ إيصال بـ٢٬٨٧٠ بيدّي ٢٬٨٧٠٫٠٤) — والقرش ده كان هيتخصم من
+               عهدة المندوب بلا سبب. */
+            'amount'       => $sum,
+            'lines'        => $lines,
             'date'         => $date,
             'ref'          => $ref !== '' ? $ref : null,
             'movement_id'  => $movementId,
@@ -393,15 +469,17 @@ class RepInbox
     private static function writeSubmission(int $subId, string $status, array $v): void
     {
         $kindCol = RepPortal::miscKindReady();   // v71
+        $lineCol = ReceiptLine::ready();         // v109
         $set = [$v['note'], $v['kind'], $v['qty'], $v['unit'], $v['actual'], $v['amount'],
                 $v['date'], $v['ref'], $v['movement_id'], $v['is_visa'] ? 1 : 0, $v['visa_card_id'],
                 $v['unpaid'] ? 1 : 0];
         if ($kindCol) { $set[] = $v['misc_kind']; }
+        if ($lineCol) { $set[] = $v['lines'] !== null ? json_encode($v['lines']) : null; }
         Database::exec(
             "UPDATE rep_submissions
              SET note=?, kind=?, qty=?, unit_amount=?, actual_unit=?, amount=?,
                  entry_date=?, ref_no=?, movement_id=?, is_visa=?, visa_card_id=?, unpaid=?"
-                 . ($kindCol ? ', misc_kind=?' : '') . ",
+                 . ($kindCol ? ', misc_kind=?' : '') . ($lineCol ? ', lines_json=?' : '') . ",
                  edited_by=?, edited_at=NOW()
              WHERE id=? AND status=?",
             array_merge($set, [Auth::user(), $subId, $status]));
@@ -528,6 +606,20 @@ class RepInbox
                         $v['unpaid'] ? 1 : 0,
                         $stageId,
                     ]);
+
+                /* v109 — التفصيل بيتحدّث مع البند في نفس المعاملة. لو ما
+                   اتحدّثش هنا، بند اتغيّر إجماليه بيفضل شايل سطورًا مجموعها
+                   الإجمالي القديم — وكارت العربية يقول رقم والإذن يقول رقم
+                   تاني بلا أي خطأ ظاهر. */
+                // ⚠️ القراءة **بعد** `writeSubmission` عن قصد: هي اللي كتبت
+                //    الأسعار الجديدة، فالسطور بتتولّد من آخر قيمة لا من القديمة.
+                //    والاستعلام نفسه مشروط بجاهزية العمود — على قاعدة قبل v109
+                //    كان `lines_json` هيرمي خطأ SQL ويفشّل تعديلًا سليمًا.
+                if (ReceiptLine::ready()) {
+                    self::syncStageLines($stageId, Database::row(
+                        'SELECT amount, qty, lines_json FROM rep_submissions WHERE id=?', [$subId]) ?? []);
+                }
+
                 $after = Database::row('SELECT * FROM permit_stages WHERE id=?', [$stageId]);
                 Audit::log('update', 'permit_stages', $stageId, $before, $after,
                     'تعديل بند مندوب **بعد اعتماده** «' . $v['note'] . '» — '
@@ -758,6 +850,10 @@ class RepInbox
                 ]);
             $stageId = Database::lastId();
 
+            // v109 — الأسعار المفصّلة بتتحوّل لسطور حقيقية دلوقتي (وقبل كده
+            // كانت لسه JSON في صندوق الانتظار). دي أول لحظة يبقى فيها للبند id.
+            self::syncStageLines($stageId, $s);
+
             $changed = Database::exec(
                 "UPDATE rep_submissions
                  SET status='approved', reviewed_by=?, reviewed_at=NOW(), stage_id=?, review_note=NULL
@@ -771,7 +867,7 @@ class RepInbox
             Audit::log('create', 'permit_stages', $stageId, null, $saved,
                 'اعتماد بند مندوب: ' . RepPortal::KINDS[$s['kind']] . ' «' . $s['note'] . '» بقيمة '
                 . number_format((float) $s['amount'], 2, '.', ',')
-                . ((int) $s['qty'] > 1 ? ' (' . (int) $s['qty'] . ' × ' . number_format((float) $s['unit_amount'], 2, '.', ',') . ')' : '')
+                . self::qtyLabel($s)
                 . ' — ' . Permit::noLabel($s['permit_type'] ?? 'sader') . ' ' . ($s['permit_no'] ?: '#' . $s['permit_id'])
                 . ' — مدفوع من عهدة ' . $s['rep_name'],
                 [

@@ -485,6 +485,12 @@ class RepPortal
             'note'        => (string) ($s['note'] ?? ''),
             'qty'         => (string) ($s['qty'] ?? 1),
             'unit_amount' => (string) ($s['unit_amount'] ?? ''),
+            /* v109 — خانة الأسعار بترجع مليانة دايمًا: من التفصيل المحفوظ لو
+               موجود، وإلا من السعر الواحد متكرر بعدد الكمية. البند القديم
+               (qty × unit) بيتفكّ لأسعاره ويرجع لنفس إجماليه بالحرف. */
+            'amounts'     => ReceiptLine::formatCompact(
+                ReceiptLine::decode($s['lines_json'] ?? null)
+                ?? array_fill(0, max(1, (int) ($s['qty'] ?? 1)), round((float) ($s['unit_amount'] ?? 0), 2))),
             'entry_date'  => (string) ($s['entry_date'] ?? date('Y-m-d')),
             'ref_no'      => (string) ($s['ref_no'] ?? ''),
             'is_visa'     => !empty($s['is_visa']) ? '1' : '',
@@ -706,16 +712,20 @@ class RepPortal
             // v71 — الوسم بيتضاف للاستعلام بس لو العمود اترحّل، فالنظام يفضل
             // شغّالًا بالحرف على قاعدة قبل الترحيل بدل ما يرمي خطأ SQL.
             $kindCol = self::miscKindReady();
+            // v109 — قايمة الأسعار بتتخزّن مع البند وهو لسه في الانتظار،
+            // وبتتحوّل لسطور حقيقية في `receipt_lines` وقت الاعتماد بس.
+            $lineCol = ReceiptLine::ready();
             $args = [$repId, $token, $n['permit_id'], $n['movement_id'], $n['kind'], $n['note'],
                      $n['qty'], $n['unit_amount'], $n['amount'], $n['entry_date'], $n['ref_no'],
                      ($d['photo'] ?? '') !== '' ? $d['photo'] : null,
                      $n['is_visa'], $n['visa_card_id'], $n['unpaid']];
             if ($kindCol) { $args[] = $n['misc_kind']; }
+            if ($lineCol) { $args[] = $n['lines'] !== null ? json_encode($n['lines']) : null; }
             Database::exec(
                 "INSERT INTO rep_submissions
                     (rep_id, client_token, permit_id, movement_id, kind, note, qty,
                      unit_amount, amount, entry_date, ref_no, photo, is_visa, visa_card_id,
-                     unpaid" . ($kindCol ? ', misc_kind' : '') . ", status)
+                     unpaid" . ($kindCol ? ', misc_kind' : '') . ($lineCol ? ', lines_json' : '') . ", status)
                  VALUES (" . implode(',', array_fill(0, count($args), '?')) . ", 'pending')",
                 $args);
         } catch (\Throwable $e) {
@@ -752,15 +762,21 @@ class RepPortal
 
         $photo = array_key_exists('photo', $d) ? trim((string) $d['photo']) : (string) ($old['photo'] ?? '');
         $kindCol = self::miscKindReady();   // v71
+        $lineCol = ReceiptLine::ready();    // v109
         $set = [$n['movement_id'], $n['kind'], $n['note'], $n['qty'], $n['unit_amount'],
                 $n['amount'], $n['entry_date'], $n['ref_no'], $photo !== '' ? $photo : null,
                 $n['is_visa'], $n['visa_card_id'], $n['unpaid']];
         if ($kindCol) { $set[] = $n['misc_kind']; }
+        /* ⚠️ **بيتكتب دايمًا — حتى وهو `NULL`.** المندوب اللي عدّل بند مفصّل
+           لسعر واحد لازم التفصيل القديم يتشال معاه، وإلا `lines_json` بيفضل
+           شايل أسعارًا مجموعها مش الإجمالي الجديد — والاعتماد بعدها بيرفض
+           بند سليم برسالة «المجموع ≠ الإجمالي» بلا سبب مفهوم للمالك. */
+        if ($lineCol) { $set[] = $n['lines'] !== null ? json_encode($n['lines']) : null; }
         $affected = Database::exec(
             "UPDATE rep_submissions
              SET movement_id=?, kind=?, note=?, qty=?, unit_amount=?, amount=?, entry_date=?,
                  ref_no=?, photo=?, is_visa=?, visa_card_id=?, unpaid=?"
-                 . ($kindCol ? ', misc_kind=?' : '') . ", updated_at=NOW()
+                 . ($kindCol ? ', misc_kind=?' : '') . ($lineCol ? ', lines_json=?' : '') . ", updated_at=NOW()
              WHERE id=? AND rep_id=? AND status='pending' AND review_started_at IS NULL",
             array_merge($set, [$subId, $repId]));
 
@@ -837,15 +853,49 @@ class RepPortal
         if ($note === '') { $errors['note'] = 'اكتب البيان، زي تخصيص أو حمولة.'; }
         elseif (mb_strlen($note) > 255) { $errors['note'] = 'البيان لازم يكون 255 حرف أو أقل.'; }
 
-        $qty = (int) ($d['qty'] ?? 1);
-        if ($qty < 1 || $qty > 10000) { $errors['qty'] = 'الكمية لازم تكون من 1 لـ10000.'; }
+        /* ══ المبلغ (v109) — يا **قايمة أسعار** يا سعر واحد متكرر ══
+           المندوب بيطلع من الجهة ماسك ١٢ إيصال هيئة **كل واحد بسعره**، فخانة
+           `amounts` بتاخدهم ورا بعض («250 250 400») والعدد بيطلع من عددهم
+           والإجمالي من مجموعهم. الطريق التاني (`qty` × `unit_amount`) لسه
+           شغّال بالحرف لشاشة النثرية وللمسودات القديمة.
 
-        $rawUnit = strtr(ar2en_digits(trim((string) ($d['unit_amount'] ?? ''))), [
-            ',' => '', '٬' => '', ' ' => '', '٫' => '.',
-        ]);
-        $unit = round((float) $rawUnit, 2);
-        if ($rawUnit === '' || $unit <= 0) { $errors['unit_amount'] = 'اكتب المبلغ اللي دفعته.'; }
-        elseif ($unit > 999999999999.99) { $errors['unit_amount'] = 'المبلغ أكبر من الحد المسموح.'; }
+           ⚠️ **لما القايمة تتبعت، `unit_amount` بيبقى متوسطًا للعرض القديم
+              وبس** — و`round(amount/qty)` × qty **مش** بيرجّع الإجمالي لما
+              الأسعار تختلف. عشان كده الإجمالي بيتحسب من المجموع مباشرةً
+              (مش من الضرب)، وأي شاشة بتعرض بندًا أسعاره مختلفة **ممنوع**
+              تعرض سعر وحدة — تعرض `ReceiptLine::summary()` بدله. */
+        $lines    = null;
+        $rawLines = trim((string) ($d['amounts'] ?? ''));
+        if ($rawLines !== '') {
+            try {
+                $parsed = ReceiptLine::parse($rawLines);
+                if (!$parsed) { $errors['amounts'] = 'اكتب سعر إيصال واحد على الأقل.'; }
+                else { $lines = $parsed; }
+            } catch (\RuntimeException $e) {
+                $errors['amounts'] = $e->getMessage();
+            }
+        }
+
+        if ($lines !== null) {
+            $qty    = count($lines);
+            $amount = round(array_sum($lines), 2);
+            $unit   = round($amount / $qty, 2);
+            if ($amount <= 0) { $errors['amounts'] = 'إجمالي الأسعار لازم يكون أكبر من صفر.'; }
+            elseif ($amount > 999999999999.99) { $errors['amounts'] = 'إجمالي المبلغ أكبر من الحد المسموح.'; }
+        } else {
+            $qty = (int) ($d['qty'] ?? 1);
+            if ($qty < 1 || $qty > 10000) { $errors['qty'] = 'الكمية لازم تكون من 1 لـ10000.'; }
+
+            $rawUnit = strtr(ar2en_digits(trim((string) ($d['unit_amount'] ?? ''))), [
+                ',' => '', '٬' => '', ' ' => '', '٫' => '.',
+            ]);
+            $unit = round((float) $rawUnit, 2);
+            if ($rawUnit === '' || $unit <= 0) { $errors['unit_amount'] = 'اكتب المبلغ اللي دفعته.'; }
+            elseif ($unit > 999999999999.99) { $errors['unit_amount'] = 'المبلغ أكبر من الحد المسموح.'; }
+
+            $amount = round($unit * $qty, 2);
+            if ($amount > 999999999999.99) { $errors['unit_amount'] = 'إجمالي المبلغ أكبر من الحد المسموح.'; }
+        }
 
         $movementId = $misc ? null : ((int) ($d['movement_id'] ?? 0) ?: null);
         $hasMovements = $permitId > 0 ? (int) Database::scalar(
@@ -900,9 +950,6 @@ class RepPortal
         }
         if ($unpaid) { $isVisa = false; $cardId = null; }
 
-        $amount = round($unit * $qty, 2);
-        if ($amount > 999999999999.99) { $errors['unit_amount'] = 'إجمالي المبلغ أكبر من الحد المسموح.'; }
-
         if ($errors) { throw new RepSubmissionValidationException($errors); }
         return [
             // النثرية بتتخزن بـpermit_id = NULL (العمود بقى nullable في v39)
@@ -913,6 +960,7 @@ class RepPortal
             'is_visa' => $isVisa ? 1 : 0, 'visa_card_id' => $cardId,
             'unpaid' => $unpaid ? 1 : 0,
             'misc_kind' => $miscKind,   // v71 — NULL على أي بند مربوط بإذن
+            'lines' => $lines,          // v109 — NULL = بند بلا تفصيل أسعار
         ];
     }
 

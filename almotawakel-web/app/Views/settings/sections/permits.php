@@ -23,6 +23,14 @@ use App\Models\Permit;
           <input type="text" name="inspection_creditor" value="<?= e($permitNums['inspection_creditor']) ?>"></div>
         <div class="field"><label>جهة الضمان (المستحق)</label>
           <input type="text" name="guarantee_creditor" value="<?= e($permitNums['guarantee_creditor']) ?>"></div>
+        <?php /* v109 — أنواع الإيصالات اللي بيظهر عليها عدّاد «لسه مش متوزّع
+                 على عربيات». التوزيع نفسه متاح لأي إيصال، والقايمة الفاضية
+                 بتطفّي العدّاد بس. `ReceiptLine::carKinds()` بتقراها. */ ?>
+        <div class="field"><label>إيصالات تتربط بالعربيات</label>
+          <input type="text" name="receipt_car_kinds"
+                 value="<?= e($permitNums['receipt_car_kinds']) ?>"
+                 placeholder="هيئة، جيش">
+          <div class="hint">افصل بينهم بفاصلة. سيبها فاضية تطفّي عدّاد «مش متوزّع».</div></div>
       </div>
       <div class="table-wrap"><table class="data wrap-normal">
         <thead><tr>

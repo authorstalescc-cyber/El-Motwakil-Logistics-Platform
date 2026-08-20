@@ -133,6 +133,7 @@ $r->post('/permits/{id}/movement',    'PermitController@createMovement');
 $r->post('/permits/movement/{mid}/update','PermitController@updateMovement');
 $r->post('/permits/movement/{mid}/delete','PermitController@deleteMovement');
 $r->post('/permits/stage/{sid}/move',  'PermitController@moveReceipt');
+$r->post('/permits/stage/{sid}/distribute','PermitController@distributeStage');  // v109 — الإيصالات على العربيات
 $r->post('/permits/stage/{sid}/delete','PermitController@deleteStage');
 // فوترة العميل الخاصة بالأذونات (مسارات «invoice» الحرفية قبل المسارات الجشعة /{id})
 $r->get('/permits/invoice/{invId}',        'PermitController@invoicePrint');   // طباعة A4
@@ -365,6 +366,7 @@ $r->post('/rep-custody/{sid}/approve',             'RepCustodyController@approve
 $r->post('/rep-custody/{sid}/reject',              'RepCustodyController@reject');
 $r->post('/rep-custody/{sid}/edit',                'RepCustodyController@editSubmission');
 $r->post('/rep-custody/{sid}/edit-approved',       'RepCustodyController@editApproved');    // v95 — تعديل بند معتمد
+$r->post('/rep-custody/{sid}/distribute',          'RepCustodyController@distribute');      // v109 — توزيع الإيصالات على العربيات
 $r->post('/rep-custody/{sid}/unapprove',           'RepCustodyController@unapprove');       // v95 — إلغاء الاعتماد
 $r->post('/rep-custody/{sid}/delete-approved',     'RepCustodyController@deleteApproved');  // v95 — حذف بند معتمد
 $r->post('/rep-custody/{sid}/delete',              'RepCustodyController@deleteSubmission');   // حذف نهائي من الصندوق

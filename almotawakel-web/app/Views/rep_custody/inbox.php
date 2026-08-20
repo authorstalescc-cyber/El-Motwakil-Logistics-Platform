@@ -561,6 +561,27 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
     }
     $movsByPermit = RepInbox::movementsFor($rowPermitIds);
     $hasActs = $canDelete || $canEditApproved;
+
+    /* ══ سطور الإيصالات وعربيات الأذونات (v109) ══
+       ⚠️ **الاتنين بيتجابوا بالجملة قبل اللوب** — نداؤهم جوّه اللوب كان
+          هيبقى استعلامين لكل صف على صفحة فيها ٥٠ بند (نفس درس `movementsFor`
+          فوق بالحرف). */
+    $rdLines = \App\Models\ReceiptLine::forStages(array_column($rows, 'stage_id'));
+    $rdCars  = [];
+    foreach (array_unique($rowPermitIds) as $rdPid) {
+        $rdCars[$rdPid] = \App\Models\ReceiptLine::carsOfPermit((int) $rdPid);
+    }
+    /** البند ده يستاهل زرار توزيع؟ (إيصال معتمد له سطور فعلاً) */
+    $rdShow = static function (array $r) use ($rdLines): bool {
+        return $r['status'] === 'approved'
+            && (int) ($r['stage_id'] ?? 0) > 0
+            && !empty($rdLines[(int) $r['stage_id']]);
+    };
+    /** كام إيصال لسه بلا عربية في البند ده. */
+    $rdLeft = static function (array $r) use ($rdLines): int {
+        $ls = $rdLines[(int) ($r['stage_id'] ?? 0)] ?? [];
+        return count(array_filter($ls, static fn ($l) => $l['bawali_id'] === null));
+    };
   ?>
   <div class="card">
     <div class="table-wrap"><table class="data">
@@ -638,6 +659,15 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
                 <?php if ($r['status'] === 'approved'): ?>
                   <?php if ($canEditApproved && $approvedEditable($r)): $asid = (int) $r['id']; ?>
                     <span class="ib-acts">
+                      <?php /* v109 — توزيع إيصالات البند على عربيات الإذن.
+                               ⚠️ العنوان بيقول **العدد الباقي** لا «وزّع» وبس:
+                                  الرقم هو اللي بيخلّي المالك يعرف إن فيه
+                                  إيصالات ضايعة من غير ما يفتح اللوحة. */ ?>
+                      <?php if ($rdShow($r)): $rdN = $rdLeft($r); ?>
+                        <button class="ib-btn" type="button"
+                                title="<?= $rdN ? $rdN . ' إيصال لسه بلا عربية' : 'وزّع الإيصالات على العربيات' ?>"
+                                onclick="ibToggle('rd<?= $asid ?>')"><?= icon('truck', 14) ?></button>
+                      <?php endif; ?>
                       <button class="ib-btn" type="button" title="عدّل البند المعتمد"
                               onclick="ibToggle('ea<?= $asid ?>')"><?= icon('edit', 14) ?></button>
                       <?php /* ⚠️ البيان والمبلغ في `data-` مش مقروءين من خلية
@@ -686,6 +716,23 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
               وعرض الخلية بيتحدّد بخوارزمية الجدول مش بعرض الصفحة، فالحقول
               كلها بتقع في سطر واحد وبتطلع برّه الحافة. (متحقَّق بلقطة.)
            الحقول بتتربط بفورمها بسمة `form=` فمفيش داعي لأي تداخل. */ ?>
+  <?php /* v109 — لوحات التوزيع: **برّه الجدول** لنفس السببين فوق بالحرف
+           (فورم جوّه `<table>` بيتفكّ، و`.ib-grid` بتتكسر جوّه `<td>`). */ ?>
+  <?php foreach ($rows as $r): ?>
+    <?php if ($rdShow($r)): $rsid = (int) $r['id']; ?>
+      <?php partial('receipt_distribute', [
+        'lines'  => $rdLines[(int) $r['stage_id']] ?? [],
+        'cars'   => $rdCars[(int) $r['permit_id']] ?? [],
+        'eid'    => 'rd' . $rsid,
+        'action' => url('rep-custody/' . $rsid . '/distribute'),
+        'back'   => $inboxState['back'],
+        'note'   => (string) $r['note'],
+        'token'  => $rowToken('distribute', $rsid),
+        'open'   => $failedAction === 'distribute' && $failedSid === $rsid,
+      ]); ?>
+    <?php endif; ?>
+  <?php endforeach; ?>
+
   <?php if ($canEditApproved): ?>
     <?php foreach ($rows as $r): ?>
       <?php if ($r['status'] === 'approved' && $approvedEditable($r)):
@@ -948,6 +995,23 @@ body.ib-has-bar{padding-bottom:78px}
   });
   document.querySelectorAll('.js-ib-edit-date').forEach(function (el) {
     el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  /* ── v109: «وزّع بالترتيب» — بيملّى الخانات بالعربيات بالتناوب.
+     ⚠️ **بيملّى وبس، ما بيحفظش.** الحفظ ضغطة مستقلة عشان المالك يشوف
+        التوزيع ويعدّله قبل ما يثبّت — التوزيع التلقائي تخمين، والتخمين
+        اللي بيتحفظ لوحده بيبقى «حقيقة» في كارت العربية بلا ما حد راجعه. */
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest && ev.target.closest('[data-rd-seq]');
+    if (!btn) { return; }
+    var panel = document.getElementById(btn.getAttribute('data-rd-seq'));
+    if (!panel) { return; }
+    var sels = panel.querySelectorAll('.js-rd-car');
+    if (!sels.length) { return; }
+    var cars = Array.from(sels[0].options).map(function (o) { return o.value; })
+                    .filter(function (v) { return v !== '0'; });
+    if (!cars.length) { return; }
+    sels.forEach(function (s, i) { s.value = cars[i % cars.length]; });
   });
 
   // ── لوحة تعديل البند المعتمد: تقفل بالخلفية · بزرار × · بـEsc

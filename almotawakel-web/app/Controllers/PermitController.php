@@ -1176,6 +1176,9 @@ class PermitController extends Controller
                         'UPDATE permit_stages SET note = ?, qty = ?, actual_amount = ? WHERE id = ? AND permit_id = ?',
                         [$label ?: null, (int)$qty, $clientTotal, $sid, $pid]
                     );
+                    // v109 — الكمية بتتغيّر هنا (المبلغ النقدي لأ)، فالتفصيل
+                    // لازم يتصالح معاها وإلا عدد السطور يخالف عدد الإيصالات.
+                    \App\Models\ReceiptLine::onStageChanged($sid);
                 }
             }
             // ⚠️ `src === 'new'` (بند كتبه المالك في الفاتورة) و`primary_auto` (رسوم أولية
@@ -1618,6 +1621,12 @@ class PermitController extends Controller
             );
             $stageId = Database::lastId();
         }
+        /* v109 — البند اللي ليه تفصيل أسعار لازم تفصيله يفضل مطابقًا لإجماليه.
+           المالك بيعدّل الإجمالي من الفورم ده مباشرةً، فالمصالِح بيعيد بناء
+           السطور بالتساوي لو الإجمالي أو العدد اتغيّر (وبيسيبها زي ما هي لو
+           مطابقة). البند اللي مالوش تفصيل ما بيتلمسش. */
+        \App\Models\ReceiptLine::refreshFor($stageId);
+
         $savedStage = Database::row('SELECT * FROM permit_stages WHERE id = ?', [$stageId]);
         $entryKind = $key === 'receipts' ? 'إيصال'
             : ((in_array($key, Permit::expenseKeys(), true) || ($key === 'custom' && $direction !== 'revenue')) ? 'مصروف' : 'بند');
@@ -1660,6 +1669,62 @@ class PermitController extends Controller
             flash('error', $e->getMessage());
             redirect($sourcePermitId ? 'permits/'.$sourcePermitId.'/manage#stage-receipts' : 'permits');
         }
+    }
+
+    /**
+     * توزيع إيصالات بند على عربيات الإذن — **من صفحة الإذن** (v109).
+     *
+     * ⚠️ نفس إجراء `RepCustodyController@distribute` بالظبط، والفرق إن ده
+     *    بيغطّي البنود اللي **المالك دخّلها بنفسه** (مالهاش صف في صندوق
+     *    المراجعة أصلاً) — من غيره كان فيه إيصالات مستحيل تتوزّع.
+     *
+     * ⚠️ **ولا مليم بيتحرّك** — فمفيش `Closing::guard`: البند المتقفل يومه
+     *    لسه ينفع تقول إن إيصاله كان لعربية فلان. والحُرّاس (السطر من البند ده،
+     *    والعربية من بوالص نفس الإذن) في `ReceiptLine::assignMany`.
+     */
+    public function distributeStage(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $stageId = (int) $sid;
+
+        $row = Database::row(
+            'SELECT s.permit_id, s.movement_id, s.note, p.permit_no, p.permit_type
+               FROM permit_stages s JOIN permits p ON p.id = s.permit_id
+              WHERE s.id = ?', [$stageId]);
+        if (!$row) { $this->fail('البند مش موجود.', 'permits'); }
+
+        $pid  = (int) $row['permit_id'];
+        $back = 'permits/' . $pid . '/manage';
+        $this->claimForm($back);
+
+        $map = [];
+        foreach ((array) ($_POST['car'] ?? []) as $lineId => $bawaliId) {
+            $map[(int) $lineId] = (int) $bawaliId;
+        }
+
+        try {
+            $n = \App\Models\ReceiptLine::assignMany($stageId, $map);
+        } catch (\Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect($back);
+        }
+
+        if ($n > 0) {
+            Audit::log('update', 'permit_stages', $stageId, null, null,
+                'توزيع ' . $n . ' إيصال من «' . (string) $row['note'] . '» على عربيات '
+                . Permit::noLabel($row['permit_type']) . ' ' . ($row['permit_no'] ?: '#' . $pid),
+                ['permit_id' => $pid, 'permit_no' => $row['permit_no'],
+                 'movement_id' => $row['movement_id']]);
+        }
+
+        $left = count(array_filter(
+            \App\Models\ReceiptLine::forStage($stageId),
+            static fn ($l) => $l['bawali_id'] === null));
+        flash('success', $n === 0
+            ? 'مفيش تغيير في التوزيع.'
+            : 'اتوزّع ' . $n . ' إيصال' . ($left ? " — فاضل $left بلا عربية." : ' — كله اتوزّع.'));
+        redirect($back);
     }
 
     public function deleteStage(string $sid): void

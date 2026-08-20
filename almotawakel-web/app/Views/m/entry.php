@@ -6,7 +6,6 @@ $editing = !empty($submission);
 $o = fn(string $k, $d = '') => e((string) ($old[$k] ?? $d));
 $err = fn(string $k) => (string) ($errors[$k] ?? '');
 $kind = (string) ($old['kind'] ?? 'receipt');
-$qtyValue = max(1, (int) ($old['qty'] ?? 1));
 $receiptNotes = array_values(array_unique(\App\Models\Lookup::ofType('mv_receipt')));
 $expenseNotes = array_values(array_unique(\App\Models\Lookup::ofType('mv_expense')));
 $action = $editing ? url('m/entry/' . (int) $submission['id']) : url('m/permit/' . $permit['id']);
@@ -131,34 +130,24 @@ $wdToday = $wd === $today;
       <p class="field-error" id="err-note" <?= $err('note') ? '' : 'hidden' ?>><?= e($err('note')) ?></p>
     </div>
 
-    <div class="field" id="field-unit_amount" <?= $err('unit_amount') ? 'data-error="1"' : '' ?>>
-      <label for="amt">دفعت كام؟ <span class="optional">سعر الواحدة</span></label>
+    <?php /* ⚠️ **خانة واحدة لكل الأسعار (v109)** — كانت «سعر الواحدة» + كمية
+             مخبّية ورا زرار، وده مبني على إن الإيصالات نسخ من بعض. مش صحيح:
+             الـ١٢ هيئة كل واحدة بسعرها. المندوب بيكتب الأسعار ورا بعض
+             والعدد والإجمالي بيطلعوا من نفسهم.
+             ⚠️ **بلا `data-money` عن قصد**: الفاصلة هنا فاصل بين إيصالات لا
+                فاصل آلاف، وتنسيق الآلاف التلقائي كان هيحوّل «250,300»
+                (إيصالين) لرقم واحد. */ ?>
+    <div class="field" id="field-amounts" <?= $err('amounts') ? 'data-error="1"' : '' ?>>
+      <label for="amts">دفعت كام؟ <span class="optional">سعر كل إيصال</span></label>
       <div class="money-in">
-        <input data-money type="text" id="amt" name="unit_amount" required inputmode="decimal"
-               enterkeyhint="next" value="<?= $o('unit_amount') ?>" placeholder="0"
-               autocomplete="off" aria-describedby="totalHint err-unit_amount"
-               <?= $err('unit_amount') ? 'aria-invalid="true"' : '' ?>>
+        <input type="text" id="amts" name="amounts" required inputmode="decimal"
+               enterkeyhint="next" value="<?= $o('amounts') ?>" placeholder="250 250 400"
+               autocomplete="off" aria-describedby="totalHint err-amounts"
+               <?= $err('amounts') ? 'aria-invalid="true"' : '' ?>>
         <span class="cur">جنيه</span>
       </div>
       <div class="hint total-hint" id="totalHint" hidden></div>
-      <p class="field-error" id="err-unit_amount" <?= $err('unit_amount') ? '' : 'hidden' ?>><?= e($err('unit_amount')) ?></p>
-    </div>
-
-    <div class="multi-toggle-row">
-      <span>دفعت نفس المبلغ لأكتر من إيصال؟</span>
-      <button type="button" class="mini-action" id="multiToggle" aria-expanded="<?= $qtyValue > 1 ? 'true' : 'false' ?>">
-        <?= $qtyValue > 1 ? 'الكمية: ' . $qtyValue : 'أكتر من واحد' ?>
-      </button>
-    </div>
-    <div class="field qty-extra" id="field-qty" <?= $qtyValue > 1 ? '' : 'hidden' ?> <?= $err('qty') ? 'data-error="1"' : '' ?>>
-      <label for="qty">عدد الإيصالات بنفس السعر</label>
-      <div class="qty">
-        <button type="button" data-q="-1" aria-label="قلّل الكمية">−</button>
-        <input type="number" id="qty" name="qty" min="1" max="10000" required inputmode="numeric"
-               value="<?= $qtyValue ?>" aria-describedby="err-qty" <?= $err('qty') ? 'aria-invalid="true"' : '' ?>>
-        <button type="button" data-q="1" aria-label="زوّد الكمية">+</button>
-      </div>
-      <p class="field-error" id="err-qty" <?= $err('qty') ? '' : 'hidden' ?>><?= e($err('qty')) ?></p>
+      <p class="field-error" id="err-amounts" <?= $err('amounts') ? '' : 'hidden' ?>><?= e($err('amounts')) ?></p>
     </div>
 
     <div class="field" id="field-ref_no" <?= $err('ref_no') ? 'data-error="1"' : '' ?>>
@@ -215,11 +204,18 @@ $wdToday = $wd === $today;
 (function () {
   'use strict';
   var form = document.getElementById('f');
-  var amt = document.getElementById('amt');
-  var qty = document.getElementById('qty');
+  var amt = document.getElementById('amts');
   var note = document.getElementById('note');
   var hint = document.getElementById('totalHint');
   var save = document.getElementById('save');
+
+  /* ⚠️ **قواعد الخانة نازلة من `ReceiptLine` مش مكتوبة هنا تاني.** الشاشة
+     لازم تقرا النص بنفس طريقة الخادم بالظبط، وإلا المعاينة تقول «٣ إيصالات ·
+     ٩٠٠» والحفظ يرفض — والمندوب مش هيفهم ليه. */
+  var SEPS    = <?= js_json(\App\Models\ReceiptLine::SEPARATORS) ?>;
+  var TOKEN_RE = new RegExp(<?= js_json(\App\Models\ReceiptLine::TOKEN_RE) ?>);
+  var MULT_RE  = new RegExp(<?= js_json(\App\Models\ReceiptLine::MULT_RE) ?>);
+  var MAX_LINES = <?= (int) \App\Models\ReceiptLine::MAX ?>;
   var baseSaveText = <?= js_json($editing ? 'احفظ التعديل' : 'سجّل البند') ?>;
   var draftKey = form.dataset.draftKey;
   var draftTtl = 24 * 60 * 60 * 1000;
@@ -230,15 +226,58 @@ $wdToday = $wd === $today;
       .replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); })
       .replace(/[٬,\s]/g, '').replace('٫', '.');
   }
-  function moneyValue() { return parseFloat(ar2en(amt.value)) || 0; }
+  /** نفس `ReceiptLine::parse` — بيرجّع {list, bad} و`bad` = الرمز اللي مش رقم. */
+  function parseAmounts(raw) {
+    var s = ar2en(String(raw || '')).trim();
+    SEPS.forEach(function (sep) { s = s.split(sep).join(' '); });
+    s = s.split('٫').join('.').replace(/\s+/g, ' ').trim();
+    if (s === '') { return {list: [], bad: null}; }
+
+    var list = [];
+    var toks = s.split(' ');
+    for (var i = 0; i < toks.length; i++) {
+      var tok = toks[i];
+      if (tok === '') { continue; }
+      var times = 1, m = MULT_RE.exec(tok);
+      if (m) { tok = m[1]; times = parseInt(m[2], 10) || 0; if (times < 1) { return {list: [], bad: toks[i]}; } }
+      if (!TOKEN_RE.test(tok)) { return {list: [], bad: toks[i]}; }
+      for (var k = 0; k < times; k++) {
+        list.push(Math.round(parseFloat(tok) * 100) / 100);
+        if (list.length > MAX_LINES) { return {list: [], bad: toks[i]}; }
+      }
+    }
+    return {list: list, bad: null};
+  }
+
+  function amountList() { return parseAmounts(amt.value).list; }
+  function moneyValue() {
+    return amountList().reduce(function (a, b) { return a + b; }, 0);
+  }
+
+  /** «٣×١٨٠ · ٢×٢٥٠» — نفس تجميع `ReceiptLine::summary`. */
+  function groupLabel(list) {
+    var counts = {}, order = [];
+    list.forEach(function (v) {
+      var k = v.toFixed(2);
+      if (counts[k] === undefined) { counts[k] = 0; order.push(k); }
+      counts[k]++;
+    });
+    order.sort(function (a, b) { return counts[b] - counts[a]; });
+    return order.slice(0, 4).map(function (k) {
+      return counts[k] + '×' + parseFloat(k).toLocaleString('en-US', {maximumFractionDigits: 2});
+    }).join(' · ') + (order.length > 4 ? ' · +' + (order.length - 4) + ' غيرهم' : '');
+  }
+
   function total() {
-    var a = moneyValue(), q = Math.max(1, parseInt(qty.value, 10) || 1), sum = a * q;
-    if (a > 0) {
-      hint.textContent = q > 1
-        ? 'الإجمالي: ' + sum.toLocaleString('en-US', {maximumFractionDigits: 2}) + ' جنيه (' + q + ' × ' + a.toLocaleString('en-US') + ')'
-        : 'الإجمالي: ' + sum.toLocaleString('en-US', {maximumFractionDigits: 2}) + ' جنيه';
+    var list = amountList();
+    var sum = list.reduce(function (a, b) { return a + b; }, 0);
+    if (list.length && sum > 0) {
+      var money = sum.toLocaleString('en-US', {maximumFractionDigits: 2});
+      hint.textContent = list.length > 1
+        ? list.length + ' إيصال · إجمالي ' + money + ' جنيه — ' + groupLabel(list)
+        : 'الإجمالي: ' + money + ' جنيه';
       hint.hidden = false;
-      save.textContent = (<?= $editing ? 'true' : 'false' ?> ? 'احفظ ' : 'سجّل ') + sum.toLocaleString('en-US', {maximumFractionDigits: 2}) + ' جنيه';
+      save.textContent = (<?= $editing ? 'true' : 'false' ?> ? 'احفظ ' : 'سجّل ') + money + ' جنيه';
     } else {
       hint.hidden = true;
       save.textContent = baseSaveText;
@@ -259,27 +298,7 @@ $wdToday = $wd === $today;
     b.addEventListener('click', function () { note.value = b.dataset.note; note.focus(); saveDraft(); });
   });
 
-  document.getElementById('multiToggle').addEventListener('click', function () {
-    var box = document.getElementById('field-qty');
-    box.hidden = !box.hidden;
-    this.setAttribute('aria-expanded', box.hidden ? 'false' : 'true');
-    if (box.hidden) { qty.value = '1'; }
-    else { qty.focus(); }
-    total(); saveDraft();
-  });
-  form.querySelectorAll('.qty button').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var v = (parseInt(qty.value, 10) || 1) + parseInt(b.dataset.q, 10);
-      qty.value = Math.max(1, Math.min(10000, v));
-      document.getElementById('multiToggle').textContent = 'الكمية: ' + qty.value;
-      total(); saveDraft();
-    });
-  });
   amt.addEventListener('input', total);
-  qty.addEventListener('input', function () {
-    document.getElementById('multiToggle').textContent = 'الكمية: ' + (parseInt(qty.value, 10) || 1);
-    total();
-  });
 
   var shot = document.getElementById('shot');
   shot.addEventListener('change', function () {
@@ -328,7 +347,7 @@ $wdToday = $wd === $today;
       document.getElementById('draftNote').hidden = false;
       var selectedKind = form.querySelector('input[name="kind"]:checked');
       setKind(selectedKind ? selectedKind.value : 'receipt');
-      document.getElementById('field-qty').hidden = (parseInt(qty.value, 10) || 1) <= 1;
+      total();
     } catch (e) {}
   }
   form.addEventListener('input', saveDraft);
@@ -372,7 +391,7 @@ $wdToday = $wd === $today;
   }
 
   function clearErrors() {
-    ['kind','movement_id','note','unit_amount','qty','ref_no','entry_date','photo','visa_card_id','unpaid'].forEach(clearFieldError);
+    ['kind','movement_id','note','amounts','ref_no','entry_date','photo','visa_card_id','unpaid'].forEach(clearFieldError);
     document.getElementById('errorSummary').hidden = true;
     document.getElementById('errorList').innerHTML = '';
   }
@@ -396,8 +415,10 @@ $wdToday = $wd === $today;
     if (!form.querySelector('input[name="kind"]:checked')) { errors.kind = 'اختر إيصال أو مصروف.'; }
     if (movement && movement.tagName === 'SELECT' && !movement.value) { errors.movement_id = 'اختر الحركة اللي دفعت عليها.'; }
     if (!note.value.trim()) { errors.note = 'اكتب البيان، زي تخصيص أو حمولة.'; }
-    if (moneyValue() <= 0) { errors.unit_amount = 'اكتب المبلغ اللي دفعته.'; }
-    var q = parseInt(qty.value, 10); if (!q || q < 1 || q > 10000) { errors.qty = 'الكمية لازم تكون من 1 لـ10000.'; }
+    var parsed = parseAmounts(amt.value);
+    if (parsed.bad !== null) { errors.amounts = '«' + parsed.bad + '» مش رقم — اكتب الأسعار بأرقام والمسافة بينهم.'; }
+    else if (!parsed.list.length) { errors.amounts = 'اكتب المبلغ اللي دفعته.'; }
+    else if (parsed.list.reduce(function (a, b) { return a + b; }, 0) <= 0) { errors.amounts = 'إجمالي الأسعار لازم يكون أكبر من صفر.'; }
     // v49: البند الجديد بلا خانة تاريخ (الخادم بيفرض يوم العمل) — نتحقق بس لو الخانة ظاهرة (وضع التعديل).
     var dateEl = form.elements.entry_date;
     if (dateEl && !dateEl.value) { errors.entry_date = 'اكتب تاريخ الدفع.'; }

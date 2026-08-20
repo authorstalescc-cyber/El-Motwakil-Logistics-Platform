@@ -3112,3 +3112,22 @@
     }
   });
 })();
+
+/* ═══ توزيع الإيصالات على العربيات — «وزّع بالترتيب» (v109) ═══
+   بيملّى خانات الاختيار بالعربيات بالتناوب، **وبيقف عند كده**: الحفظ ضغطة
+   مستقلة عشان المالك يراجع التخمين قبل ما يثبّته. التوزيع اللي بيتحفظ لوحده
+   بيبقى «حقيقة» في تكلفة العربية بلا ما حد بصّ عليه. */
+(function () {
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-rd-seq-local]');
+    if (!btn) return;
+    var form = btn.closest('form');
+    if (!form) return;
+    var sels = form.querySelectorAll('.js-rd-car');
+    if (!sels.length) return;
+    var cars = Array.prototype.map.call(sels[0].options, function (o) { return o.value; })
+      .filter(function (v) { return v !== '0'; });
+    if (!cars.length) return;
+    Array.prototype.forEach.call(sels, function (s, i) { s.value = cars[i % cars.length]; });
+  });
+})();

@@ -150,6 +150,9 @@ class SettingsController extends Controller
                 'inspection_batch'    => App::setting('inspection_batch', '10'),
                 'inspection_creditor' => Debt::inspectionAccount()['name'],   // مستحق الكشف
                 'guarantee_creditor'  => Debt::guaranteeAccount()['name'],    // مستحق الضمان
+                /* v109 — بتترسم بفواصل عشان تبقى سطرًا واحدًا في الشبكة،
+                   و`ReceiptLine::carKinds()` بتقبل الفاصلة والسطر الاتنين. */
+                'receipt_car_kinds'   => implode('، ', \App\Models\ReceiptLine::carKinds()),
             ],
             'ai' => $owner ? $this->aiSettings() : [],
             'users'  => $owner
@@ -756,6 +759,19 @@ class SettingsController extends Controller
         App::setSetting('inspection_batch',  (string)max(1, (int)($_POST['inspection_batch'] ?? 10)));
         Debt::setInspectionCreditor((string)($_POST['inspection_creditor'] ?? ''));  // مستحق الكشف (يُسمح بالفراغ)
         Debt::setGuaranteeCreditor((string)($_POST['guarantee_creditor'] ?? ''));    // مستحق الضمان
+
+        /* v109 — أنواع الإيصالات اللي بيظهر عليها عدّاد «مش متوزّع».
+           ⚠️ **بتتخزّن سطرًا لكل نوع** لأن `SettingsSchema` معرّفها `T_LIST`،
+              والشاشة بتاخدها بفواصل — التحويل هنا هو نقطة الالتقاء الوحيدة.
+           ⚠️ و**بتتكتب بس لو الفورم بعت الحقل**: الإرسال الجزئي (نفس حماية
+              مصفوفة المراحل تحت) ما يصحّش يفضّي القايمة من ورا ظهر المالك. */
+        if (array_key_exists('receipt_car_kinds', $_POST)) {
+            $kinds = array_values(array_filter(array_map(
+                static fn ($k) => trim((string) $k),
+                preg_split('/[\r\n,،]+/u', (string) $_POST['receipt_car_kinds']) ?: []
+            ), static fn ($k) => $k !== ''));
+            App::setSetting('receipt_car_kinds', implode("\n", $kinds));
+        }
 
         // حماية: لا نعيد بناء إعدادات المراحل إلا لو الفورم أرسل مصفوفة المراحل فعلاً.
         // (يمنع تصفير إظهار/أسماء المراحل عند إرسال جزئي للنموذج.)

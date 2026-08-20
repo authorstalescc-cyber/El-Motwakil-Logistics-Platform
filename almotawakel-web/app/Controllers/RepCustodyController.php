@@ -883,6 +883,65 @@ class RepCustodyController extends Controller
         redirect($this->inboxBack());
     }
 
+    /**
+     * توزيع إيصالات بند معتمد على عربيات الإذن (v109).
+     *
+     * ⚠️⚠️ **إجراء وصفي بحت — ولا مليم بيتحرّك.** إجمالي البند في
+     *    `permit_stages` هو الحقيقة المالية وما بيتلمسش هنا خالص؛ اللي
+     *    بيتكتب هو «الإيصال ده بتاع أنهي عربية» وبس. عشان كده مفيش
+     *    `Closing::guard` ولا فحص يوم متقفل: البند المتقفل يومه لسه ينفع
+     *    تقول إن إيصاله كان لعربية فلان.
+     *
+     * ⚠️ **الحُرّاس في `ReceiptLine::assignMany`** مش هنا: السطر لازم يكون من
+     *    سطور البند ده، والعربية لازم تكون من بوالص نفس الإذن. الفورم مش
+     *    مصدر ثقة (القاعدة ③).
+     */
+    public function distribute(string $sid): void
+    {
+        $this->requireAuth();
+        $this->requireCsrf();
+        $id = (int) $sid;
+        $this->claimForm($this->inboxBack());
+        try {
+            $s = RepInbox::find($id);
+            if (!$s) { throw new \RuntimeException('البند مش موجود.'); }
+            $stageId = (int) ($s['stage_id'] ?? 0);
+            if ($s['status'] !== 'approved' || $stageId <= 0) {
+                throw new \RuntimeException('البند ده مالوش بند فعلي على الإذن — اعتمده الأول.');
+            }
+
+            $map = [];
+            foreach ((array) ($_POST['car'] ?? []) as $lineId => $bawaliId) {
+                $map[(int) $lineId] = (int) $bawaliId;
+            }
+            $n = \App\Models\ReceiptLine::assignMany($stageId, $map);
+
+            if ($n > 0) {
+                Audit::log('update', 'permit_stages', $stageId, null, null,
+                    'توزيع ' . $n . ' إيصال من «' . $s['note'] . '» على عربيات '
+                    . \App\Models\Permit::noLabel($s['permit_type'] ?? 'sader') . ' '
+                    . ($s['permit_no'] ?: '#' . $s['permit_id']),
+                    [
+                        'permit_id'     => (int) $s['permit_id'],
+                        'permit_no'     => $s['permit_no'],
+                        'record_date'   => $s['entry_date'],
+                        'rep_id'        => (int) $s['rep_id'],
+                        'submission_id' => $id,
+                    ]);
+            }
+
+            $left = count(array_filter(
+                \App\Models\ReceiptLine::forStage($stageId),
+                static fn ($l) => $l['bawali_id'] === null));
+            flash('success', $n === 0
+                ? 'مفيش تغيير في التوزيع.'
+                : 'اتوزّع ' . $n . ' إيصال' . ($left ? " — فاضل $left بلا عربية." : ' — كله اتوزّع.'));
+        } catch (\Throwable $e) {
+            $this->inboxFailure('distribute', ['submission_id' => $id], ['_form' => $e->getMessage()], 'submission-' . $id);
+        }
+        redirect($this->inboxBack());
+    }
+
     /** تعديل جماعي — تاريخ/نوع/سعر فعلي لكل البنود المعلَّمة مرة واحدة. */
     public function bulkEdit(): void
     {

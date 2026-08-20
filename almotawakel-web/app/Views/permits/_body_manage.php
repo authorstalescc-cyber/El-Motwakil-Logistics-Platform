@@ -19,6 +19,10 @@ $nameMap = $nameMap ?? ['agentCompanies'=>[], 'companyAgents'=>[]];
 $carMap  = $carMap ?? [];
 $receiptMoveTargets = $receiptMoveTargets ?? [];
 
+/* v109 — عربيات الإذن (بوالصه) بتتجاب **مرة واحدة للصفحة**: كل بند إيصالات
+   محتاجها لقايمة الاختيار، ونداؤها جوّه اللوب كان هيبقى استعلامًا لكل بند. */
+$permitCars = \App\Models\ReceiptLine::carsOfPermit($pid);
+
 /* التقدّم بيتحسب في الغلاف `show.php` — الهيرو محتاجه قبل الجسم. */
 
 // حاويات الإذن: الإجمالي المُدخَل على الإذن مقابل الموزّع على البوالص
@@ -110,17 +114,35 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
             </form>
           </div>
         <?php endif; ?>
-        <?php if ($realEntries): foreach ($realEntries as $en): ?>
+        <?php if ($realEntries): foreach ($realEntries as $en):
+                /* v109 — سطور الإيصال: كل إيصال بسعره وعربيته. البند بلا
+                   سطور (قبل الترحيل، أو بند مش إيصالات) بيتعرض زي الأول
+                   بالحرف. */
+                $enLines = $key === 'receipts'
+                    ? (\App\Models\ReceiptLine::forStages([(int) $en['id']])[(int) $en['id']] ?? [])
+                    : [];
+                $enAmts  = array_map(static fn ($l) => (float) $l['amount'], $enLines);
+        ?>
           <details class="tl-entry">
             <summary>
               <span class="te-date"><?= dfmt($en['entry_date']) ?></span>
               <span class="te-amt neg"><?= money($en['amount'],false) ?></span>
               <?php if(!empty($en['is_visa'])): ?><span class="tl-visa-badge"><?= icon('credit-card', 14) ?> فيزا</span><?php endif; ?>
               <?php if($en['note']): ?><span class="te-note"><?= e($en['note']) ?></span><?php endif; ?>
+              <?php /* ⚠️ **العرض المفصّل بدل «الكمية × السعر»** لما الأسعار
+                       تختلف: سعر الوحدة وقتها متوسط ما دفعوش حد. */ ?>
+              <?php if (count($enLines) > 1 && \App\Models\ReceiptLine::varied($enAmts)): ?>
+                <span class="te-note"><?= count($enLines) ?> إيصال · <?= e(\App\Models\ReceiptLine::summary($enAmts, 3)) ?></span>
+              <?php endif; ?>
               <?= $statusBadge($en['status']) ?>
               <?php if($en['attachment']): ?><a class="te-clip" href="<?= url('attachments/stage/'.(int)$en['id']) ?>" target="_blank" onclick="event.stopPropagation()"><?= icon('file-text', 14) ?></a><?php endif; ?>
               <span class="te-edit">تعديل <?= icon('chevron', 13) ?></span>
             </summary>
+            <?php if ($enLines): ?>
+              <?php /* البارشيال بيقرا `$lines`/`$cars`/`$stageId` من النطاق ده. */ ?>
+              <?php $lines = $enLines; $cars = $permitCars; $stageId = (int) $en['id'];
+                    require __DIR__ . '/_receipt_cars.php'; ?>
+            <?php endif; ?>
             <?= $stageForm($key, $en) ?>
             <form class="js-ajax confirm-delete ps-del-form" method="post" action="<?= url('permits/stage/'.$en['id'].'/delete') ?>">
               <?= csrfField() ?><button class="btn ghost sm danger" type="submit"><?= icon('trash', 14) ?> حذف</button>
