@@ -49,11 +49,13 @@ $total = array_sum(array_map(static fn ($l) => (float) $l['amount'], $lines));
             <h4><?= count($lines) ?> إيصال · <?= e(money($total, false)) ?> — <?= e(ReceiptLine::summary(
                   array_map(static fn ($l) => (float) $l['amount'], $lines))) ?></h4>
             <div class="ib-grid">
-              <?php foreach ($lines as $i => $l): $lid = (int) $l['id']; ?>
-                <label for="<?= e($eid) ?>c<?= $lid ?>">
+              <?php /* ⚠️ **المفتاح `seq` مش `id`**: البند المعتمد قبل v109
+                       مالوش سطور، فاللي بيتعرض معاينة والـ`id` لسه مش موجود.
+                       الحفظ بيولّد السطور وبعدين يربطها بالترتيب. */ ?>
+              <?php foreach ($lines as $l): $seq = (int) $l['seq']; ?>
+                <label for="<?= e($eid) ?>c<?= $seq ?>">
                   <?= e(money((float) $l['amount'], false)) ?>
-                  <select id="<?= e($eid) ?>c<?= $lid ?>" name="car[<?= $lid ?>]" class="js-rd-car"
-                          data-idx="<?= $i ?>">
+                  <select id="<?= e($eid) ?>c<?= $seq ?>" name="car[<?= $seq ?>]" class="js-rd-car">
                     <option value="0">— مش متوزّع —</option>
                     <?php foreach ($cars as $c): ?>
                       <option value="<?= (int) $c['id'] ?>"

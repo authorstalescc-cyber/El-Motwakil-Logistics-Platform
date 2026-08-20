@@ -350,6 +350,86 @@ if (isset($permit, $rep) && $permit && $rep) {
     }
 }
 
+// ═══════════════════════════════════════════════════════════ ⑩
+sec('⑩ البند المعتمد قبل v109 — لازم يفضل قابلًا للتوزيع');
+
+/* ⚠️⚠️ **العطل اللي المالك بلّغه**: زرار العربيات كان مشروطًا بوجود سطور في
+   `receipt_lines`، وكل بند اتعتمد قبل الترحيل مالوش سطور — فالزرار ما ظهرش
+   ولا مرة على أي بند قديم. الحل: الشاشة بتعرض **معاينة محسوبة بلا كتابة**،
+   والسطور بتتولّد أول ما يتحفظ توزيع. الفحص ده بيثبت السلوك ده بالكامل. */
+if (isset($permit, $rep) && $permit && $rep) {
+    $pid3 = (int) $permit['id'];
+    Database::conn()->beginTransaction();
+    try {
+        $subL = RepPortal::submit((int) $rep['id'], [
+            'permit_id' => $pid3, 'movement_id' => (int) $permit['mv'],
+            'kind' => 'receipt', 'note' => 'إيصال هيئة',
+            'unit_amount' => '300', 'qty' => 3, 'entry_date' => date('Y-m-d'),
+        ]);
+        $stL = RepInbox::approve($subL);
+
+        // بنقلّد بند «قديم»: نشيل سطوره زي ما كان الوضع قبل الترحيل
+        Database::exec('DELETE FROM receipt_lines WHERE stage_id = ?', [$stL]);
+        (int) Database::scalar('SELECT COUNT(*) FROM receipt_lines WHERE stage_id=?', [$stL]) === 0
+            ? ok('⑩ اتقلّد بند بلا سطور (زي ما قبل v109)') : bad('⑩ التقليد فشل');
+
+        $prev = ReceiptLine::previewFor($stL);
+        count($prev) === 3 ? ok('⑩ المعاينة بتدّي صفًّا لكل إيصال') : bad('⑩ المعاينة ناقصة');
+        ($prev[0]['real'] ?? true) === false
+            ? ok('⑩ المعاينة معلَّمة إنها مش سطورًا حقيقية') : bad('⑩ المعاينة مش معلَّمة');
+        near('⑩ مجموع المعاينة = إجمالي البند',
+            array_sum(array_map(static fn ($l) => $l['amount'], $prev)), 900);
+
+        /* ⚠️ **الأهم: العرض ما بيكتبش.** كتابة جوّه GET كانت هتخلّي مجرد فتح
+           الصفحة يملا الجدول لكل بند في النظام. */
+        (int) Database::scalar('SELECT COUNT(*) FROM receipt_lines WHERE stage_id=?', [$stL]) === 0
+            ? ok('⑩ المعاينة ما كتبتش ولا سطر') : bad('⑩ المعاينة كتبت في الجدول');
+
+        count(ReceiptLine::previewForStages([$stL])[$stL] ?? []) === 3
+            ? ok('⑩ المعاينة بالجملة بتدّي نفس النتيجة') : bad('⑩ المعاينة بالجملة مختلفة');
+
+        // التوزيع بالترتيب بيولّد السطور ويربطها
+        $carsL = ReceiptLine::carsOfPermit($pid3);
+        if ($carsL) {
+            $mapL = [];
+            foreach ($prev as $l) { $mapL[$l['seq']] = (int) $carsL[($l['seq'] - 1) % count($carsL)]['id']; }
+            ReceiptLine::assignManyBySeq($stL, $mapL) === 3
+                ? ok('⑩ التوزيع بالترتيب اشتغل على بند بلا سطور') : bad('⑩ التوزيع فشل');
+            $nowL = ReceiptLine::forStage($stL);
+            count(array_filter($nowL, static fn ($l) => $l['bawali_id'] !== null)) === 3
+                ? ok('⑩ السطور اتولّدت واترتبطت بعربياتها') : bad('⑩ الربط ما اكتملش');
+            near('⑩ مجموع السطور المتولّدة = إجمالي البند',
+                array_sum(array_map(static fn ($l) => (float) $l['amount'], $nowL)), 900);
+        }
+
+        /* ⚠️ **تفصيل البند المعتمد من درج المراجعة بيمسّ المال** — الإجمالي
+           بيتغيّر من ٩٠٠ لـ١٬٠٠٠، والخزنة لازم تتحرّك بالفرق بالظبط. */
+        $safeL = round((float) Closing::currentBalance(), 2);
+        RepInbox::updateApproved($subL, ['amounts' => ['500', '300', '200']]);
+        $stRow = Database::row('SELECT amount, qty FROM permit_stages WHERE id=?', [$stL]);
+        near('⑩ التفصيل غيّر الإجمالي لمجموع الأسعار', (float) $stRow['amount'], 1000);
+        (int) $stRow['qty'] === 3 ? ok('⑩ الكمية = عدد الأسعار') : bad('⑩ الكمية مش مظبوطة');
+        array_map(static fn ($l) => (float) $l['amount'], ReceiptLine::forStage($stL)) === [500.0, 300.0, 200.0]
+            ? ok('⑩ سطور البند بقت بأسعارها الجديدة') : bad('⑩ السطور ما اتحدّثتش');
+        near('⑩ الخزنة اتحرّكت بفرق التعديل بالظبط',
+            Closing::currentBalance() - $safeL, -100);
+    } finally {
+        Database::conn()->rollBack();
+    }
+}
+
+/* ⚠️ خانات التفصيل في درج المراجعة **لازم تفضل `disabled` وهي مقفولة** —
+   الخانة المعطَّلة ما بتتبعتش، وده اللي بيخلّي البند اللي المالك مفتحش
+   تفصيله يمشي في الطريق القديم (`qty` × `unit_amount`) بالحرف. */
+$drawer = src('app/Views/partials/rep_submission_edit.php');
+str_contains($drawer, 'name="amounts[]"') && str_contains($drawer, "'disabled'")
+    ? ok('درج المراجعة فيه خانة سعر لكل إيصال (مقفولة بالافتراضي)')
+    : bad('درج المراجعة مافيهوش تفصيل الأسعار أو مش مقفول بالافتراضي');
+str_contains(src('app/Views/rep_custody/inbox.php'), 'data-ib-split')
+    ? ok('زرار «فصّل الأسعار» له سلوك في الشاشة') : bad('زرار «فصّل الأسعار» مالوش سلوك');
+str_contains(src('app/Views/rep_custody/inbox.php'), '.ib-grid>.ib-split')
+    ? ok('صندوق التفصيل بياخد عرض الشبكة كامل') : bad('صندوق التفصيل هيقع في عمود ضيّق');
+
 // ═══════════════════════════════════════════════════════════ ⑧
 sec('⑧ الأسعار المختلفة ما بتتعرضش كـ«كمية × سعر»');
 

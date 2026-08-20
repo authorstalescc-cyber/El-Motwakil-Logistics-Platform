@@ -293,6 +293,82 @@ final class ReceiptLine
     }
 
     /**
+     * سطور **للعرض** — الحقيقية لو موجودة، وإلا معاينة محسوبة **بلا أي كتابة**.
+     *
+     * ⚠️⚠️ **البند المعتمد قبل v109 مالوش سطور** — وده كان بيخفي زرار توزيع
+     *    العربيات عن **كل** بنود النظام القديمة (العطل اللي المالك بلّغه:
+     *    «مش شايف الربط في المراجعة»). الحل مش إننا نكتب سطورًا وقت عرض
+     *    الصفحة (كتابة جوّه GET)، ولا ترحيل بيملا الجدول لكل بند قديم — الحل
+     *    إن الشاشة تعرض **معاينة** والسطور الحقيقية تتولّد أول ما المالك
+     *    يحفظ توزيعًا فعلاً (`assignManyBySeq`).
+     *
+     * @return array<int,array{seq:int,amount:float,bawali_id:?int,id:?int,real:bool}>
+     */
+    public static function previewFor(int $stageId): array
+    {
+        $real = self::forStage($stageId);
+        if ($real) {
+            return array_map(static fn ($l) => [
+                'seq'       => (int) $l['seq'],
+                'amount'    => (float) $l['amount'],
+                'bawali_id' => $l['bawali_id'] !== null ? (int) $l['bawali_id'] : null,
+                'id'        => (int) $l['id'],
+                'real'      => true,
+            ], $real);
+        }
+
+        $stage = Database::row(
+            'SELECT stage_key, amount, qty FROM permit_stages WHERE id = ?', [$stageId]);
+        if (!$stage || (string) $stage['stage_key'] !== 'receipts') { return []; }
+
+        $qty = max(1, (int) $stage['qty']);
+        if ($qty > self::MAX) { return []; }
+
+        $out = [];
+        foreach (Payroll::split((float) $stage['amount'], $qty) as $i => $a) {
+            $out[] = ['seq' => $i + 1, 'amount' => $a, 'bawali_id' => null, 'id' => null, 'real' => false];
+        }
+        return $out;
+    }
+
+    /** معاينة كذا بند مرة واحدة — `stage_id => rows` (بيمنع N+1 في القوايم). */
+    public static function previewForStages(array $stageIds): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $stageIds)));
+        $ids = array_values(array_filter($ids, static fn ($i) => $i > 0));
+        if (!self::ready() || !$ids) { return []; }
+
+        $have = self::forStages($ids);
+        $out  = [];
+        foreach ($have as $sid => $rowsOf) {
+            $out[$sid] = array_map(static fn ($l) => [
+                'seq'       => (int) $l['seq'],
+                'amount'    => (float) $l['amount'],
+                'bawali_id' => $l['bawali_id'] !== null ? (int) $l['bawali_id'] : null,
+                'id'        => (int) $l['id'],
+                'real'      => true,
+            ], $rowsOf);
+        }
+
+        $missing = array_values(array_diff($ids, array_keys($out)));
+        if (!$missing) { return $out; }
+
+        $in = implode(',', array_fill(0, count($missing), '?'));
+        foreach (Database::all(
+            "SELECT id, amount, qty FROM permit_stages
+              WHERE id IN ($in) AND stage_key = 'receipts'", $missing) as $st) {
+            $qty = max(1, (int) $st['qty']);
+            if ($qty > self::MAX) { continue; }
+            $rowsOf = [];
+            foreach (Payroll::split((float) $st['amount'], $qty) as $i => $a) {
+                $rowsOf[] = ['seq' => $i + 1, 'amount' => $a, 'bawali_id' => null, 'id' => null, 'real' => false];
+            }
+            $out[(int) $st['id']] = $rowsOf;
+        }
+        return $out;
+    }
+
+    /**
      * **الكاتب الوحيد.** بيكتب قايمة أسعار البند ويحافظ على ربط العربيات.
      *
      * ⚠️ **الحارس الحاكم: مجموع السطور لازم يساوي `permit_stages.amount`
@@ -493,6 +569,39 @@ final class ReceiptLine
             $n++;
         }
         return $n;
+    }
+
+    /**
+     * توزيع بالترتيب (`seq`) لا بالـ`id` — `[seq => bawali_id|0]`.
+     *
+     * ⚠️⚠️ **دي هي اللي بتخلّي التوزيع يشتغل على البنود القديمة**: البند
+     *    المعتمد قبل v109 مالوش سطور، فالشاشة بتعرض **معاينة** بترتيبها،
+     *    والحفظ هنا بيولّد السطور الحقيقية (`ensureFor`) وبعدين يربطها.
+     *    الفورم بيبعت الترتيب لأنه **ثابت ومعروف قبل الكتابة** — الـ`id`
+     *    مش موجود أصلاً وقت الرسم.
+     */
+    public static function assignManyBySeq(int $stageId, array $map, ?string $user = null): int
+    {
+        if (!self::ready() || $stageId <= 0) { return 0; }
+
+        // مفيش حاجة تتوزّع؟ ما نولّدش سطورًا على الفاضي.
+        $wanted = array_filter($map, static fn ($v) => (int) $v > 0);
+        if (!$wanted && !self::forStage($stageId)) { return 0; }
+
+        self::ensureFor($stageId);
+
+        $bySeq = [];
+        foreach (Database::all(
+            'SELECT id, seq FROM receipt_lines WHERE stage_id = ?', [$stageId]) as $r) {
+            $bySeq[(int) $r['seq']] = (int) $r['id'];
+        }
+
+        $byId = [];
+        foreach ($map as $seq => $bawaliId) {
+            $seq = (int) $seq;
+            if (isset($bySeq[$seq])) { $byId[$bySeq[$seq]] = (int) $bawaliId; }
+        }
+        return self::assignMany($stageId, $byId, $user);
     }
 
     /** عربيات الإذن جاهزة للاختيار (رقم العربية + السائق). */

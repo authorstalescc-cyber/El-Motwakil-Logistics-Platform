@@ -566,12 +566,17 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
        ⚠️ **الاتنين بيتجابوا بالجملة قبل اللوب** — نداؤهم جوّه اللوب كان
           هيبقى استعلامين لكل صف على صفحة فيها ٥٠ بند (نفس درس `movementsFor`
           فوق بالحرف). */
-    $rdLines = \App\Models\ReceiptLine::forStages(array_column($rows, 'stage_id'));
+    /* ⚠️⚠️ **`previewForStages` مش `forStages`** — البند المعتمد **قبل v109**
+       مالوش سطور في الجدول، والشرط على وجودها كان بيخفي زرار العربيات عن
+       **كل** بنود النظام القديمة (العطل اللي المالك بلّغه). المعاينة بتحسب
+       السطور من إجمالي البند وكميته **بلا أي كتابة**، والسطور الحقيقية
+       بتتولّد أول ما يتحفظ توزيع فعلاً. */
+    $rdLines = \App\Models\ReceiptLine::previewForStages(array_column($rows, 'stage_id'));
     $rdCars  = [];
     foreach (array_unique($rowPermitIds) as $rdPid) {
         $rdCars[$rdPid] = \App\Models\ReceiptLine::carsOfPermit((int) $rdPid);
     }
-    /** البند ده يستاهل زرار توزيع؟ (إيصال معتمد له سطور فعلاً) */
+    /** البند ده يستاهل زرار توزيع؟ (إيصال معتمد له بند فعلي على الإذن) */
     $rdShow = static function (array $r) use ($rdLines): bool {
         return $r['status'] === 'approved'
             && (int) ($r['stage_id'] ?? 0) > 0
@@ -908,6 +913,15 @@ $movsByPermit = RepInbox::movementsFor($permitIds);
 
 /* درج التعديل */
 .ib-edit{padding:6px 18px 16px;background:var(--zebra);border-top:1px dashed var(--line2)}
+/* v109.2 — «الإيصالات واحد واحد» في درج المراجعة */
+.ib-split-head{display:flex; align-items:center; justify-content:space-between; gap:10px}
+/* ⚠️ **`.ib-grid label.wide` بينطبق على `label` بس** — و`.ib-split` عنصر
+   `div`، فكلاس `wide` عليه ما بيعملش حاجة والصندوق بيقع في عمود واحد ضيّق.
+   القاعدة دي هي اللي بتمدّه على عرض الشبكة. */
+.ib-grid>.ib-split{grid-column:1/-1}
+.ib-split{margin-top:8px; padding:10px; border:1px dashed var(--line2); border-radius:var(--radius-2)}
+.ib-split-foot{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.ib-split-total{font-weight:700; font-variant-numeric:tabular-nums; color:var(--accent)}
 .ib-edit-sec{margin-top:12px}
 .ib-edit-sec h4{margin:0 0 7px;font-size:var(--fs-1);font-weight:700;color:var(--grey);letter-spacing:.02em}
 .ib-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
@@ -996,6 +1010,73 @@ body.ib-has-bar{padding-bottom:78px}
   document.querySelectorAll('.js-ib-edit-date').forEach(function (el) {
     el.dispatchEvent(new Event('input', { bubbles: true }));
   });
+
+  /* ── v109.2: «فصّل الأسعار» — الإيصالات واحد واحد في درج المراجعة.
+     ⚠️ **الخانات `disabled` وهي مقفولة، والمعطَّلة ما بتتبعتش خالص** — فالبند
+        اللي المالك مفتحش تفصيله بيمشي في الطريق القديم بالحرف. ولما التفصيل
+        يفتح، `qty`/`unit_amount` بيتعطّلوا عشان ما يبقاش فيه مصدرين للرقم. */
+  function ibSplitTotal(box) {
+    var amts = box.querySelectorAll('.js-ib-split-amt');
+    var sum = 0, n = 0;
+    Array.prototype.forEach.call(amts, function (i) {
+      var v = parseFloat(String(i.value).replace(/[^0-9.\-]/g, '')) || 0;
+      sum += v; n++;
+    });
+    var out = box.querySelector('.ib-split-total');
+    if (out) {
+      out.textContent = n + ' إيصال · ' + sum.toLocaleString('en-US', {maximumFractionDigits: 2}) + ' جنيه';
+    }
+  }
+  function ibSplitSet(eid, on) {
+    var box = document.getElementById(eid + 'sp');
+    if (!box) { return; }
+    box.hidden = !on;
+    Array.prototype.forEach.call(box.querySelectorAll('.js-ib-split-amt'), function (i) { i.disabled = !on; });
+
+    /* ⚠️ `qty`/`unit_amount` مربوطين بالفورم بسمة `form=`، فمش بالضرورة جوّه
+       نفس العنصر — بندوّر عليهم بالفورم نفسه مش بالحاوية. */
+    var f = document.getElementById(eid + 'f');
+    var scope = box.closest('.ib-edit') || document;
+    ['qty', 'unit_amount'].forEach(function (name) {
+      var el = scope.querySelector('[name="' + name + '"]');
+      if (el) { el.disabled = on; }
+    });
+    if (f) { /* لمس الفورم عشان المتصفح يعيد حساب الحقول المربوطة */ }
+    var btn = document.querySelector('[data-ib-split="' + eid + '"]');
+    if (btn) {
+      btn.textContent = on ? 'ارجع لسعر واحد' : 'فصّل الأسعار';
+      btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    }
+    if (on) { ibSplitTotal(box); }
+  }
+  document.addEventListener('click', function (ev) {
+    var t = ev.target.closest && ev.target.closest('[data-ib-split]');
+    if (t) {
+      ibSplitSet(t.getAttribute('data-ib-split'), t.getAttribute('aria-expanded') !== 'true');
+      return;
+    }
+    var add = ev.target.closest && ev.target.closest('[data-ib-split-add]');
+    if (!add) { return; }
+    var eid = add.getAttribute('data-ib-split-add');
+    var box = document.getElementById(eid + 'sp');
+    if (!box) { return; }
+    var last = box.querySelector('.js-ib-split-amt');
+    if (!last) { return; }
+    var lab = document.createElement('label');
+    lab.textContent = 'إيصال ' + (box.querySelectorAll('.js-ib-split-amt').length + 1);
+    var inp = last.cloneNode(false);
+    inp.value = ''; inp.disabled = false;
+    lab.appendChild(inp);
+    box.insertBefore(lab, box.querySelector('.ib-split-foot'));
+    inp.focus();
+    ibSplitTotal(box);
+  });
+  document.addEventListener('input', function (ev) {
+    if (!ev.target.classList || !ev.target.classList.contains('js-ib-split-amt')) { return; }
+    var box = ev.target.closest('.ib-split');
+    if (box) { ibSplitTotal(box); }
+  });
+  document.querySelectorAll('.ib-split:not([hidden])').forEach(function (b) { ibSplitTotal(b); });
 
   /* ── v109: «وزّع بالترتيب» — بيملّى الخانات بالعربيات بالتناوب.
      ⚠️ **بيملّى وبس، ما بيحفظش.** الحفظ ضغطة مستقلة عشان المالك يشوف

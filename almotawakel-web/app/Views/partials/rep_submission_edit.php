@@ -139,6 +139,50 @@ $hasActual = $r['actual_unit'] !== null && $r['actual_unit'] !== '';
                  value="<?= e($editFailed ? ($inboxOld['actual_unit'] ?? '') : ($hasActual ? (string) round((float) $r['actual_unit'], 2) : '')) ?>"
                  <?= $editFailed ? fieldErrorAttrs('actual_unit', $inboxErrors) : '' ?>><?= $editFailed ? fieldError('actual_unit', $inboxErrors) : '' ?></label>
       <?php endif; ?>
+      <?php /* ══ الإيصالات واحد واحد (v109.2) — طلب المالك ══
+               «عند إدخال أكتر من إيصال بشكل مجمّع المفروض أشوفه مفصّل، ويظهر
+                لو ٤ كل إيصال بكام، والمفروض أدخل سعره.»
+
+               ⚠️ **مطفي بالافتراضي والخانات `disabled`** — والخانة المعطَّلة
+                  **ما بتتبعتش أصلاً**، فالبند اللي المالك مفتحش تفصيله بيمشي
+                  في الطريق القديم (`qty` × `unit_amount`) بالحرف. ده أهم حارس
+                  هنا: من غيره كل تعديل عادي كان هيتحوّل لتفصيل من ورا ظهره.
+
+               ⚠️ ولما التفصيل يشتغل، `qty` و`unit_amount` بيتعطّلوا — عشان
+                  ما يبقاش فيه مصدرين للرقم على نفس الشاشة والمالك مش عارف
+                  أنهي واحد بيتحسب. */ ?>
+      <?php if (!$isMisc && (string) $r['kind'] === 'receipt'):
+              $splitVals = \App\Models\ReceiptLine::decode($r['lines_json'] ?? null);
+              if ($splitVals === null) {
+                  $splitVals = \App\Models\Payroll::split((float) $r['amount'], max(1, (int) $r['qty']));
+              }
+              $splitOld = $editFailed ? (array) ($inboxOld['amounts'] ?? []) : [];
+              if ($splitOld) { $splitVals = array_map(static fn ($v) => (float) $v, $splitOld); }
+      ?>
+        <label class="wide ib-split-head">
+          <span><?= icon('receipt', 14) ?> الإيصالات واحد واحد</span>
+          <button type="button" class="btn ghost sm" data-ib-split="<?= $eid ?>"
+                  aria-expanded="<?= $splitOld ? 'true' : 'false' ?>">
+            <?= $splitOld ? 'ارجع لسعر واحد' : 'فصّل الأسعار' ?>
+          </button>
+        </label>
+        <div class="ib-grid wide ib-split" id="<?= $eid ?>sp" <?= $splitOld ? '' : 'hidden' ?>>
+          <?php foreach ($splitVals as $i => $p): ?>
+            <label>إيصال <?= (int) $i + 1 ?>
+              <input data-money type="number" step="0.01" min="0" name="amounts[]" form="<?= $eid ?>f"
+                     class="js-ib-split-amt" value="<?= e((string) round((float) $p, 2)) ?>"
+                     <?= $splitOld ? '' : 'disabled' ?>></label>
+          <?php endforeach; ?>
+          <label class="wide ib-split-foot">
+            <button type="button" class="btn ghost sm" data-ib-split-add="<?= $eid ?>">+ إيصال</button>
+            <span class="ib-split-total" id="<?= $eid ?>st"></span>
+          </label>
+        </div>
+        <?php if ($editFailed && !empty($inboxErrors['amounts'])): ?>
+          <label class="wide"><?= fieldError('amounts', $inboxErrors) ?></label>
+        <?php endif; ?>
+      <?php endif; ?>
+
       <?php $editVisa = $editFailed ? !empty($inboxOld['is_visa']) : !empty($r['is_visa']); ?>
       <label class="ib-visa"><?= icon('credit-card', 14) ?> مدفوع بالفيزا
         <span class="ib-visa-row">

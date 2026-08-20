@@ -35,10 +35,12 @@ $left = count(array_filter($lines, static fn ($l) => $l['bawali_id'] === null));
     <form class="tl-form" method="post" action="<?= url('permits/stage/' . (int) $stageId . '/distribute') ?>">
       <?= csrfField() ?>
       <div class="tl-fields">
-        <?php foreach ($lines as $i => $l): $lid = (int) $l['id']; ?>
+        <?php /* ⚠️ المفتاح `seq` مش `id` — نفس سبب لوحة الصندوق: البند القديم
+                 بيتعرض معاينة وسطوره بتتولّد وقت الحفظ. */ ?>
+        <?php foreach ($lines as $l): $seq = (int) $l['seq']; ?>
           <label>
             <?= e(money((float) $l['amount'], false)) ?>
-            <select name="car[<?= $lid ?>]" class="js-rd-car">
+            <select name="car[<?= $seq ?>]" class="js-rd-car">
               <option value="0">— مش متوزّع —</option>
               <?php foreach ($cars as $c): ?>
                 <option value="<?= (int) $c['id'] ?>"

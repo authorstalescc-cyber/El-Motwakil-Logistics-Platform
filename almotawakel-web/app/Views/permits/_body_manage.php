@@ -118,8 +118,11 @@ $moneyStage = function(string $key, array $st, array $entries, int $idx) use ($s
                 /* v109 — سطور الإيصال: كل إيصال بسعره وعربيته. البند بلا
                    سطور (قبل الترحيل، أو بند مش إيصالات) بيتعرض زي الأول
                    بالحرف. */
+                /* ⚠️ **معاينة** — البند القديم مالوش سطور، وسطوره بتتولّد أول
+                   ما يتحفظ توزيع. من غير كده التوزيع كان مخفيًّا عن كل بنود
+                   ما قبل v109. */
                 $enLines = $key === 'receipts'
-                    ? (\App\Models\ReceiptLine::forStages([(int) $en['id']])[(int) $en['id']] ?? [])
+                    ? \App\Models\ReceiptLine::previewFor((int) $en['id'])
                     : [];
                 $enAmts  = array_map(static fn ($l) => (float) $l['amount'], $enLines);
         ?>

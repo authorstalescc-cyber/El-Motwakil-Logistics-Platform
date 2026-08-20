@@ -914,10 +914,17 @@ class RepCustodyController extends Controller
             foreach ((array) ($_POST['car'] ?? []) as $lineId => $bawaliId) {
                 $map[(int) $lineId] = (int) $bawaliId;
             }
-            $n = \App\Models\ReceiptLine::assignMany($stageId, $map);
+            // ⚠️ **بالترتيب مش بالـid**: البند المعتمد قبل v109 مالوش سطور،
+            //    والدالة دي بتولّدها ساعة الحفظ (`ensureFor`) وبعدين تربطها.
+            $n = \App\Models\ReceiptLine::assignManyBySeq($stageId, $map);
 
             if ($n > 0) {
-                Audit::log('update', 'permit_stages', $stageId, null, null,
+                /* ⚠️⚠️ **الاسم الكامل إجباري** — `Audit` **مش** ضمن `use` بتوع
+                   الملف ده، و`Audit::log` كانت هتتحلّ لـ`App\Controllers\Audit`
+                   وترمي «Class not found» **وقت الحفظ بس** (السطر جوّه
+                   `if ($n > 0)`، يعني الشاشة بتفتح تمام والانفجار بيحصل عند
+                   أول توزيع فعلي). نفس مصيدة `\App\Models\X` الموثّقة. */
+                \App\Models\Audit::log('update', 'permit_stages', $stageId, null, null,
                     'توزيع ' . $n . ' إيصال من «' . $s['note'] . '» على عربيات '
                     . \App\Models\Permit::noLabel($s['permit_type'] ?? 'sader') . ' '
                     . ($s['permit_no'] ?: '#' . $s['permit_id']),

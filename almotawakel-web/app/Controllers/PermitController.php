@@ -1704,7 +1704,8 @@ class PermitController extends Controller
         }
 
         try {
-            $n = \App\Models\ReceiptLine::assignMany($stageId, $map);
+            // ⚠️ بالترتيب مش بالـid — البند القديم بتتولّد سطوره ساعة الحفظ.
+            $n = \App\Models\ReceiptLine::assignManyBySeq($stageId, $map);
         } catch (\Throwable $e) {
             flash('error', $e->getMessage());
             redirect($back);
