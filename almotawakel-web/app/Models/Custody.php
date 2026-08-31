@@ -337,6 +337,21 @@ class Custody
            ٢٦٠,٣٣٠ — يعني **نفس مرض «رقمين على نفس الشاشة»** اللي الإصلاح ده
            موجود عشانه، راجع من باب القطع. وبأخد الآخِر: آخر سطر بيساوي رصيد
            آخر المدة بالظبط، والمالك أصلاً بيدوّر على الأحدث. */
+        /* ⚠️⚠️ **الإجماليات بتتحسب على الصفوف كلها قبل القطع** — ودي مش رفاهية:
+           نوافذ التفاصيل بتقول «إجمالي المصروفات» و«المحتجز»، ولو حسبتهم من
+           الصفوف **المعروضة** بتقول رقمًا يخالف الكارت. مقيس على الإنتاج
+           2026-08-31: المصروفات من الصفوف المعروضة ٥١١,٠٧١ والحقيقية
+           ١,٢٣٨,٧٣٢ — **فرق ٧٢٧,٦٦١**، نفس مرض «رقمين على نفس الشاشة». */
+        $groupTotals = [];
+        $retainedAll = 0.0;
+        foreach ($rows as $r) {
+            $g = $r['group'];
+            $groupTotals[$g] = round(($groupTotals[$g] ?? 0.0) + abs($r['signed']), 2);
+            if ($g === 'custody') {
+                $retainedAll += self::retained((float) ($r['gross'] ?? 0), $r['car'] ?? null, $r['date']);
+            }
+        }
+
         $lead = $opening;                 // الرصيد قبل أول صف **معروض**
         $rowsTotal = count($rows);
         if ($rowsTotal > SafeInventory::MAX_ROWS) {
@@ -359,6 +374,10 @@ class Custody
                 'expenses' => round((float) $move['expenses'], 2),
                 'driver'   => round((float) $move['driver'], 2),
             ],
+            /* إجماليات كل قسم **على الفترة كلها** — دي اللي نوافذ التفاصيل
+               بتقولها، مش مجموع الصفوف المعروضة. */
+            'group_totals'   => $groupTotals,
+            'retained_total' => round($retainedAll, 2),
             'rows' => $rows, 'capped' => $capped, 'rows_total' => $rowsTotal,
         ];
     }

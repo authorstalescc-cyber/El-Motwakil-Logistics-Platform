@@ -46,10 +46,20 @@ $moveRows = static function (array $rows): void {
         ]);
     }
 };
-$sum = static function (array $rows): float {
+/* ⚠️⚠️ **الإجمالي من `group_totals` (الفترة كلها) لا من الصفوف المعروضة.**
+   جمع الصفوف المعروضة بيدّي رقمًا يخالف الكارت أول ما الصفوف تتقص — مقيس على
+   الإنتاج: المصروفات من الصفوف المعروضة ٥١١,٠٧١ والحقيقية ١,٢٣٨,٧٣٢
+   (**فرق ٧٢٧,٦٦١**). ده نفس مرض «رقمين على نفس الشاشة» في صورة تالتة. */
+$groupSum = static function (array $groups) use ($move): float {
     $t = 0.0;
-    foreach ($rows as $r) { $t += abs((float) $r['signed']); }
+    foreach ($groups as $g) { $t += (float) ($move['group_totals'][$g] ?? 0); }
     return round($t, 2);
+};
+/** عدد البنود الحقيقي في الفترة — لا عدد المعروض. */
+$groupCount = static function (array $groups) use ($move): int {
+    $n = 0;
+    foreach (($move['rows'] ?? []) as $r) { if (in_array($r['group'], $groups, true)) { $n++; } }
+    return $n;
 };
 ?>
 <?php if ($what === 'balance'): ?>
@@ -154,8 +164,8 @@ $sum = static function (array $rows): float {
   <?php $rows = $byGroup(['topups']); ?>
   <?php partial('drill', [
     'how'   => 'العهد اللي دخلت الخزنة في الفترة (' . $rangeLbl . ').' . ($cut() ? ' ' . $cut() . '.' : ''),
-    'total' => ['label' => 'إجمالي الداخل', 'value' => money($sum($rows), false)],
-    'count' => count($rows),
+    'total' => ['label' => 'إجمالي الداخل', 'value' => money($groupSum(['topups']), false)],
+    'count' => $groupCount(['topups']),
     'more'  => ['label' => 'كل الحركات', 'url' => url('custody') . '?tab=moves&from=' . $from . '&to=' . $to],
     'empty' => ['title' => 'مفيش إضافات في الفترة دي'],
     'body'  => function () use ($rows, $moveRows) { $moveRows($rows); },
@@ -167,8 +177,8 @@ $sum = static function (array $rows): float {
   <?php $rows = $byGroup(['permits', 'general', 'rep_deposit']); ?>
   <?php partial('drill', [
     'how'   => 'كل اللي خرج من الخزنة مصروفًا في الفترة (' . $rangeLbl . ').' . ($cut() ? ' ' . $cut() . '.' : ''),
-    'total' => ['label' => 'إجمالي المصروفات', 'value' => money($sum($rows), false)],
-    'count' => count($rows),
+    'total' => ['label' => 'إجمالي المصروفات', 'value' => money($groupSum(['permits', 'general', 'rep_deposit']), false)],
+    'count' => $groupCount(['permits', 'general', 'rep_deposit']),
     'more'  => ['label' => 'المصروفات', 'url' => url('expenses')],
     'empty' => ['title' => 'مفيش مصروفات في الفترة دي'],
     'body'  => function () use ($rows, $moveRows) { $moveRows($rows); },
@@ -178,8 +188,8 @@ $sum = static function (array $rows): float {
   <?php $rows = $byGroup(['custody']); ?>
   <?php partial('drill', [
     'how'   => 'المخصوم من الدرج لكل بوليصة = العهدة − ' . intf($rate) . ' (والسيارة المعفاة بتتخصم كاملة).',
-    'total' => ['label' => 'المخصوم من الدرج', 'value' => money($sum($rows), false)],
-    'count' => count($rows),
+    'total' => ['label' => 'المخصوم من الدرج', 'value' => money($groupSum(['custody']), false)],
+    'count' => $groupCount(['custody']),
     'more'  => ['label' => 'عهد السائقين', 'url' => url('custody') . '?tab=drivers&from=' . $from . '&to=' . $to],
     'empty' => ['title' => 'مفيش عهد سائقين في الفترة دي'],
     'body'  => function () use ($rows, $moveRows) { $moveRows($rows); },
@@ -188,15 +198,14 @@ $sum = static function (array $rows): float {
 <?php else: /* retained */ ?>
   <?php
   $rows = $byGroup(['custody']);
-  $keptTotal = 0.0;
-  foreach ($rows as $r) {
-      $keptTotal += Custody::retained((float) ($r['gross'] ?? 0), $r['car'] ?? null, $r['date']);
-  }
+  /* ⚠️ من `retained_total` (محسوب على الفترة كلها قبل القطع) لا من الصفوف
+     المعروضة — وإلا النافذة بتقول محتجزًا أقل من الحقيقة بلا ما تقول ليه. */
+  $keptTotal = (float) ($move['retained_total'] ?? 0);
   ?>
   <?php partial('drill', [
     'how'   => 'المحتجز = العهدة − المخصوم. الجزء اللي ما خرجش للسائق وفضل في الدرج، وهو مصدر كومسيون المناديب.',
     'total' => ['label' => 'إجمالي المحتجز', 'value' => money(round($keptTotal, 2), false)],
-    'count' => count($rows),
+    'count' => $groupCount(['custody']),
     'more'  => ['label' => 'رواتب المناديب', 'url' => url('payroll')],
     'empty' => ['title' => 'مفيش عهد سائقين في الفترة دي'],
     'body'  => function () use ($rows) {
