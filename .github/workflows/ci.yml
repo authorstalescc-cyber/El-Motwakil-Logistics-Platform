@@ -33,6 +33,16 @@ jobs:
         run: find app bin public -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Python syntax
         run: python -m py_compile bin/*_ui.py bin/run_browser_verifiers.py bin/run_browser_suite.py
+      # ⚠️ فحوصات `impact => none` بنيوية بلا قاعدة، بس بتحمّل `app/bootstrap.php`
+      #    و`App::boot()` بيعمل `require` لـ`config/config.php`. الملف مستثنى من
+      #    git (بيانات السيرفر)، فمن غير السطر ده ٨ فحوصات بتموت بـexit 255
+      #    و«فشل ٨» يتقري غلطًا إنها ارتداد في الكود. مفيش MySQL في الوظيفة دي
+      #    ولا محتاجة — الملف بيتعمل عشان الإقلاع يعدّي بس.
+      - name: Create non-secret CI config
+        run: |
+          cp config/config.example.php config/config.php
+          sed -i "s/'password' => 'CHANGE_ME'/'password' => 'ci-owner-password-2026'/" config/config.php
+          sed -i "s/'enabled' => true/'enabled' => false/" config/config.php
       - name: Safe verifier suite
         run: php bin/run_verifiers.php
 
