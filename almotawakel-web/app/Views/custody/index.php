@@ -229,11 +229,21 @@ $returnPath = current_app_path() ?: 'custody';
     <?= icon('info', 15) ?> الفترة أطول من <?= intf(\App\Models\SafeInventory::MAX_ROW_DAYS) ?> يوم — الإجماليات كاملة والصفوف مخفية.
   </div>
 <?php endif; ?>
+<?php /* ⚠️ **ممنوع قطع صامت** — والرقم بيتقال بالظبط لا بكلمة «بعض». */ ?>
+<?php if ($move['truncated']): ?>
+  <div class="card mb p5-pad-sm p5-edge-gold-r">
+    <?= icon('info', 15) ?> آخر <?= intf(count($move['rows'])) ?> حركة من <?= intf($move['rows_total']) ?> — قصّر الفترة تشوفها كلها.
+  </div>
+<?php endif; ?>
 
 <?php partial('panel', [
   'title'  => 'حركة الخزنة',
   'icon'   => 'layers',
-  'badge'  => $move['rows_total'] ? ['text' => intf($move['rows_total']), 'tone' => 'navy'] : null,
+  'badge'  => $move['rows_total']
+    ? ['text' => $move['truncated']
+        ? intf(count($move['rows'])) . ' من ' . intf($move['rows_total'])
+        : intf($move['rows_total']), 'tone' => 'navy']
+    : null,
   'scroll' => true,
   'body'   => function () use ($move, $returnPath) {
     if (!$move['rows']) {
@@ -242,12 +252,18 @@ $returnPath = current_app_path() ?: 'custody';
         : 'مفيش حركة في الفترة دي']);
       return;
     }
-    /* سطر افتتاحي — من غيره الرصيد الجاري في أول صف بيبان كأنه طالع من العدم. */
+    /* سطر افتتاحي — من غيره الرصيد الجاري في أول صف بيبان كأنه طالع من العدم.
+       ⚠️ لما الصفوف تتقص بيبقى المعروض **آخر** الصفوف، فسطر البداية بيقول
+          الرصيد قبل أول صف معروض لا رصيد أول المدة — وإلا الحساب ما يقفلش. */
     partial('row_item', [
-      'title'  => 'رصيد أول المدة (' . dfmt($move['from']) . ')',
+      'title'  => $move['truncated']
+        ? 'الرصيد قبل أول صف معروض'
+        : 'رصيد أول المدة (' . dfmt($move['from']) . ')',
       'icon'   => 'lock',
-      'meta'   => [['icon' => 'info', 'text' => 'نقطة البداية']],
-      'amount' => money($move['opening'], false),
+      'meta'   => [['icon' => 'info', 'text' => $move['truncated']
+        ? 'رصيد أول المدة ' . money($move['opening'], false)
+        : 'نقطة البداية']],
+      'amount' => money($move['lead'], false),
     ]);
     $day = null;
     foreach ($move['rows'] as $r) {

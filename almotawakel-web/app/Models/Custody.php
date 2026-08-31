@@ -319,19 +319,31 @@ class Custody
         unset($r);
         usort($rows, static fn ($a, $b) => [$a['date'], $a['seq']] <=> [$b['date'], $b['seq']]);
 
-        $rowsTotal = count($rows);
-        if ($rowsTotal > SafeInventory::MAX_ROWS) {
-            $rows = array_slice($rows, 0, SafeInventory::MAX_ROWS);
-        }
-
-        // الرصيد الجاري من رصيد أول المدة — فآخر سطر بيساوي رصيد آخرها
+        /* ⚠️⚠️ **الرصيد الجاري بيتحسب على الصفوف كلها قبل أي قطع** — وده اللي
+           بيخلّي آخر سطر معروض = رصيد آخر المدة حتى لو الباقي اتقص. */
         $run = $opening;
         foreach ($rows as &$r) { $run = round($run + $r['signed'], 2); $r['running'] = $run; }
         unset($r);
 
+        /* ⚠️⚠️ **القطع بياخد الآخر مش الأول — والفرق ده مش تفصيلة شكل.**
+           قياس على الإنتاج 2026-08-31: الشهر فيه **١,٩١٠ صف** والمعروض ٨٠٠.
+           لو قصّينا **الأول**، آخر رصيد جاري معروض بيطلع ٣١٣,٦٧٠ والفوتر بيقول
+           ٢٦٠,٣٣٠ — يعني **نفس مرض «رقمين على نفس الشاشة»** اللي الإصلاح ده
+           موجود عشانه، راجع من باب القطع. وبأخد الآخِر: آخر سطر بيساوي رصيد
+           آخر المدة بالظبط، والمالك أصلاً بيدوّر على الأحدث. */
+        $lead = $opening;                 // الرصيد قبل أول صف **معروض**
+        $rowsTotal = count($rows);
+        if ($rowsTotal > SafeInventory::MAX_ROWS) {
+            $rows = array_slice($rows, -SafeInventory::MAX_ROWS);
+            $lead = round($rows[0]['running'] - $rows[0]['signed'], 2);
+        }
+
         return [
             'from' => $from, 'to' => $to, 'days' => $days,
             'opening' => $opening, 'closing' => $closing,
+            // الرصيد اللي سطر البداية في الشاشة بيعرضه — بيساوي `opening` إلا لو اتقص
+            'lead' => $lead,
+            'truncated' => $rowsTotal > count($rows),
             'in'  => round((float) $move['in'], 2),
             'out' => round((float) $move['out'], 2),
             'net' => $net,
