@@ -67,7 +67,11 @@ $treasuryBefore = Closing::currentBalance();
 sec('① /office — كروت الفيزا');
 chk(str_contains($office, "partial('stat_grid'") && !str_contains($office, 'class="kpi-grid'),
     'الأرقام التلاتة بمكوّن `stat`');
-chk(substr_count($office, "'drill' =>") >= 3, 'وكلهم بيفتحوا بنودهم');
+/* ⚠️ **بلا مسافات مكتوبة بالإيد**: كان `substr_count($office, "'drill' =>")`
+   فوقع بإنذار كاذب لما v110 أعاد صياغة الشاشة بـ`'drill'=>$od(...)` (بلا
+   مسافة) — الأرقام التلاتة لسه بتفتح بنودها والفحص بيقول لأ. الفحص على
+   **المعنى**: كل رقم معاه مصدر تفاصيل. */
+chk(preg_match_all("/'drill'\s*=>/", $office) >= 3, 'وكلهم بيفتحوا بنودهم');
 chk(!str_contains($office, '<table'), 'الجدول (٧ أعمدة) اتشال — الكارت بقى `entity_card`');
 chk(str_contains($office, "partial('entity_card'") && str_contains($office, "partial('row_item'"),
     'وبيستخدم كارت الكيان والصف');
