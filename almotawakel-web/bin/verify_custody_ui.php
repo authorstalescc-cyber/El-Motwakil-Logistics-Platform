@@ -176,14 +176,17 @@ $checked > 0 ? ok("اتفحصت {$checked} فترة كاملة (المقطوعة
 foreach ($ranges as $label => [$from, $to]) {
     $m = Custody::movements($from, $to);
     if ($m['capped']) { continue; }
+    /* ⚠️ `group_totals` **بالإشارة**: الداخل موجب والخارج سالب. المقارنة
+       بالإشارة الصح هي اللي مسكت إن `abs()` كانت بتضخّم الإضافات بضعف
+       السالب (`manual_custody` بيقبل السالب = كاش خرج من الدرج). */
     $gt = $m['group_totals'];
     near("«{$label}» إجمالي الإضافات = parts.topups",
          (float) ($gt['topups'] ?? 0), $m['parts']['topups']);
     near("«{$label}» إجمالي المصروفات = parts.expenses",
-         round((float) ($gt['permits'] ?? 0) + ($gt['general'] ?? 0) + ($gt['rep_deposit'] ?? 0), 2),
+         round(-((float) ($gt['permits'] ?? 0) + ($gt['general'] ?? 0) + ($gt['rep_deposit'] ?? 0)), 2),
          $m['parts']['expenses']);
     near("«{$label}» إجمالي عهد السائقين = parts.driver",
-         (float) ($gt['custody'] ?? 0), $m['parts']['driver']);
+         round(-(float) ($gt['custody'] ?? 0), 2), $m['parts']['driver']);
 }
 
 // ═══════════════════════════════════════════════════════════ ③

@@ -50,10 +50,11 @@ $moveRows = static function (array $rows): void {
    جمع الصفوف المعروضة بيدّي رقمًا يخالف الكارت أول ما الصفوف تتقص — مقيس على
    الإنتاج: المصروفات من الصفوف المعروضة ٥١١,٠٧١ والحقيقية ١,٢٣٨,٧٣٢
    (**فرق ٧٢٧,٦٦١**). ده نفس مرض «رقمين على نفس الشاشة» في صورة تالتة. */
+/* ⚠️ `group_totals` بالإشارة (الخارج سالب) — العرض بياخد المقدار. */
 $groupSum = static function (array $groups) use ($move): float {
     $t = 0.0;
     foreach ($groups as $g) { $t += (float) ($move['group_totals'][$g] ?? 0); }
-    return round($t, 2);
+    return round(abs($t), 2);
 };
 /** عدد البنود الحقيقي في الفترة — لا عدد المعروض. */
 $groupCount = static function (array $groups) use ($move): int {
