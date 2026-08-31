@@ -47,7 +47,15 @@ echo "فحص شاشات الفلوس — المرحلة ١٤\n" . str_repeat('='
 $root = dirname(__DIR__);
 $read = static fn (string $rel): string => (string) file_get_contents($root . '/' . $rel);
 $office   = code_only($read('app/Views/office/index.php'));
-$custody  = code_only($read('app/Views/custody/index.php'));
+/* ⚠️ خزنة المكتب اتقسمت لتبويبات + درج (2026-08-31، docs/21): الفحص بيقرا
+   **الشاشة كلها** مش الغلاف، وإلا بيفشل بإنذار كاذب لمجرد إن القسم اتنقل. */
+/* ⚠️ `code_only()` هنا بتاخد **النص** مش المسار (توقيعها مختلف عن باقي
+   الفاحصات) — تمرير المسار ليها بيدّي فحصًا على اسم الملف بلا ما يقع. */
+$custodyFiles = glob($root . '/app/Views/custody/{index,_tab_*,_drawer,_drill,_period}.php',
+                     GLOB_BRACE) ?: [];
+$custody = '';
+foreach ($custodyFiles as $__cf) { $custody .= code_only((string) file_get_contents($__cf)); }
+if (!$custodyFiles) { $custody = '__مفيش_ملفات_شاشة_الخزنة__'; }
 $payments = code_only($read('app/Views/payments/index.php'));
 $expenses = code_only($read('app/Views/expenses/index.php'));
 $debts    = code_only($read('app/Views/debts/index.php'));
@@ -75,15 +83,34 @@ chk(!str_contains($office, 'secret-toggle') && !str_contains($office, "'secret' 
 
 // ═══ ② خزنة المكتب
 sec('② /custody — خزنة المكتب');
-chk(str_contains($custody, "partial('stat_grid'"), 'الرصيد وتفكيكه بقوا أربع أرقام بمكوّن `stat`');
-chk(str_contains($custody, "'drill' => '#custodyBreak'"),
-    '⚠️ التفكيك **جاهز في الصفحة** — أربعة أرقام محسوبة أصلاً، مش محتاجة طلب تاني');
-chk(str_contains($custody, 'id="custodyBreak"'), 'وجسم النافذة موجود ومخفي');
+/* ⚠️⚠️ **الفحوصات دي اتغيّرت مع إعادة البناء (2026-08-31، docs/21) — والسبب
+   مسجَّل عشان ما يتقريش «حد ضعّف الفحص».** كانت مربوطة بتفاصيل التنفيذ القديم:
+   `#custodyBreak` (تفكيك جاهز جوّه الصفحة) و`stat_grid` في الغلاف. والتنفيذ ده
+   نفسه كان هو الضعف: **الأربع أرقام كانوا بيوجّهوا لنفس النافذة بالحرف**، يعني
+   تقنيًا مفيش رقم أصمّ وعمليًا ضغط أي رقم بيدّي نفس الجواب.
+   دلوقتي كل رقم له نافذته من `/custody/drill/{what}` — والفحص بقى على
+   **المعنى**: كل رقم بيفتح تفاصيل، والتفاصيل دي مختلفة عن بعضها. */
+chk(str_contains($custody, 'data-drill=') || str_contains($custody, "'drill' =>"),
+    'أرقام الخزنة بتفتح تفاصيلها (ممنوع رقم أصمّ)');
+/* ⚠️ الشاشة بتبني الرابط بمختصر (`$cd('balance')`) فالنص الكامل
+   `custody/drill/balance` مش موجود حرفيًّا — الفحص لازم يمسك الشكلين. */
+preg_match_all("~custody/drill/([a-z_]+)|\\\$cd\\('([a-z_]+)'\\)~", $custody, $cdm);
+$drillTargets = array_unique(array_filter(array_merge($cdm[1] ?? [], $cdm[2] ?? [])));
+chk(count($drillTargets) >= 4,
+    '⚠️ وكل رقم بيفتح **نافذته هو** (' . count($drillTargets)
+    . ' نافذة مختلفة) — مش الأربعة على نفس النافذة زي قبل كده');
+$custodyCtrl = code_only($read('app/Controllers/CustodyController.php'));
+chk(str_contains($custodyCtrl, 'const DRILL = ') && str_contains($custodyCtrl, 'notFound'),
+    'ونوع التفاصيل محصور في قائمة بيضا');
 chk(!str_contains($custody, '<table'), 'جدول السجل (٨ أعمدة مليانة `—`) اتشال');
 chk(str_contains($custody, "partial('row_item'") && str_contains($custody, "partial('panel'"),
     'والسجل بقى صفوف جوّه لوح');
 chk(str_contains($custody, 'الرصيد الجاري'),
     'والرصيد الجاري لسه ظاهر (بقى سطر جنب المبلغ بدل عمود لوحده)');
+/* ⚠️ الضمانة الجديدة: الرصيد الجاري لازم يبدأ من رصيد أول المدة لا من صفر —
+   دي كانت أصل «الكارت بيقول رقم والسجل بيقول رقم تاني». */
+chk(str_contains(code_only($read('app/Models/Custody.php')), '$run = $opening;'),
+    '⚠️⚠️ والرصيد الجاري بيبدأ من رصيد أول المدة (مش من صفر)');
 
 // ═══ ③ التحصيلات
 sec('③ /payments — تحصيلات العملاء');

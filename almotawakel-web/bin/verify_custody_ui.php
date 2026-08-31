@@ -2,7 +2,7 @@
 // ═══ حارس: سطر الأوامر فقط ═══
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /**
- * فحص شاشة «خزنة المكتب» (`/custody`) — المرحلة ١ من إعادة البناء (docs/21).
+ * فحص شاشة «خزنة المكتب» (`/custody`) — المراحل ١→٥ من إعادة البناء (docs/21).
  *
  * ═══════════════════════════════════════════════════════════════════════
  *  القاعدة اللي الفاحص ده موجود عشانها
@@ -22,8 +22,13 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
  *   ⑥ **`walletSplit()` مش `Custody::balance()`** في أي كلام عن محفظة.
  *   ⑦ **السقف من `SafeInventory`** لا ثوابت جديدة، و**القطع بيتقال بالنص**.
  *   ⑧ **كل أيقونة موجودة في خريطة `icon()`** (وإلا دايرة فاضية بالسكوت).
- *   ⑨ **كل كلاس مطبوع له تعريف في `app.css`**، و**صفر `<style>`/`style=` محلي**.
- *   ⑩ **الكنترولر بيحمّل فعلاً** وبيرندر الشاشة بلا تحذير.
+ *   ⑨ **كل كلاس مطبوع له تعريف في `app.css`**، و**صفر `<style>`/`style=` محلي**
+ *      في كل ملفات الشاشة (`statement.php` مستثنى — مستند A4 مستقل).
+ *   ⑩ **رندر فعلي عبر الكنترولر** لكل تبويب وكل نافذة وكشف الطباعة، و**كل رقم
+ *      بيفتح نافذة مختلفة** (الشاشة القديمة كانت بتوجّه أرقامها الأربعة لنفس
+ *      النافذة بالحرف — تقنيًا مفيش رقم أصمّ وعمليًا نفس الجواب أربع مرات).
+ *   ⑪ **التبويبات روابط `?tab=`** لا جافاسكريبت، والمسارات الحرفية قبل اللي
+ *      بمعامل، وقايمة التفاصيل بيضا مقفولة و`notFound` لأي حاجة برّاها.
  *
  * ⚠️ الفاحص **قراءة بحتة** — ما بيكتبش ولا صف، فمش محتاج transaction.
  * التشغيل:  php bin/verify_custody_ui.php
@@ -62,6 +67,21 @@ echo "فحص شاشة خزنة المكتب (/custody)\n" . str_repeat('=', 64) 
 $MODEL = 'app/Models/Custody.php';
 $CTRL  = 'app/Controllers/CustodyController.php';
 $VIEW  = 'app/Views/custody/index.php';
+
+/* ⚠️ **الفحص لازم يشوف الشاشة كلها لا الغلاف بس.** بعد التقسيم لتبويبات
+   (docs/21 المرحلة ٣) بقى المحتوى في `_tab_*.php`، وفحص على `index.php`
+   لوحده كان هيقول «الشاشة مش بتقول عن القطع» وهي بتقول — أو أسوأ: ينجح
+   وهو مش شايف الملف اللي فيه الغلط.
+   ⚠️ `statement.php` **مستثنى من فحص الستايل** عن قصد: مستند A4 مستقل
+      ما بيحمّلش `app.css`، فالـ`<style>` فيه هو القاعدة زي كل كشوف النظام. */
+$SCREEN_VIEWS = ['app/Views/custody/index.php', 'app/Views/custody/_period.php',
+                 'app/Views/custody/_drawer.php', 'app/Views/custody/_drill.php'];
+foreach (App\Controllers\CustodyController::TABS as $__t) {
+    $SCREEN_VIEWS[] = 'app/Views/custody/_tab_' . $__t . '.php';
+}
+$STATEMENT = 'app/Views/custody/statement.php';
+$views = '';
+foreach ($SCREEN_VIEWS as $__v) { $views .= src($__v); }
 
 // ═══════════════════════════════════════════════════════════ ①
 sec('① آخر سطر في الحركة = رصيد آخر المدة (القاعدة الحاكمة)');
@@ -180,7 +200,7 @@ if ($m['rows']) {
    اتقادمت بعد تعديل على يوم متقفل. */
 array_key_exists('drift', $m) ? ok('`drift` بترجع مع الحركة (لقطة متقادمة تتقال)')
                              : bad('`drift` اتشالت — التقادم هيتخبّى');
-str_contains(src($VIEW), "drift")
+str_contains($views, "drift")
     ? ok('الشاشة بتعرض `drift` لما يحصل') : bad('الشاشة ما بتقولش عن اللقطة المتقادمة');
 
 // ═══════════════════════════════════════════════════════════ ④
@@ -246,7 +266,7 @@ foreach (['drawer', 'reps', 'total', 'grand'] as $k) {
                              : bad("`walletSplit()` مالهاش مفتاح `{$k}`");
 }
 /* لما النموذج مجمّع، «المتاح» كلمة كاذبة — لازم الشاشة تقول إنه شامل الجيوب. */
-str_contains($view, 'aggregate')
+str_contains($views, 'aggregate')
     ? ok('تسمية الرصيد بتتغيّر مع النموذج')
     : bad('التسمية ثابتة — «المتاح» هتتقال على فلوس في جيب مندوب');
 
@@ -256,7 +276,7 @@ sec('⑦ السقف من `SafeInventory` والقطع بيتقال');
 str_contains($body, 'SafeInventory::MAX_ROW_DAYS') && str_contains($body, 'SafeInventory::MAX_ROWS')
     ? ok('السقف من `SafeInventory` (مش ثوابت جديدة)')
     : bad('الوحدة عرّفت سقفًا خاصًّا بيها — هيفترق عن الجرد');
-str_contains($view, 'capped') && str_contains($view, 'truncated')
+str_contains($views, 'capped') && str_contains($views, 'truncated')
     ? ok('الشاشة بتقول إن الصفوف مقطوعة (ممنوع قطع صامت)')
     : bad('القطع صامت — الشاشة هتبان كأنها عرضت كل حاجة');
 
@@ -268,7 +288,7 @@ str_contains($view, 'capped') && str_contains($view, 'truncated')
 str_contains($body, 'array_slice($rows, -SafeInventory::MAX_ROWS)')
     ? ok('القطع بياخد **آخر** الصفوف — فآخر سطر يفضل = رصيد آخر المدة')
     : bad('القطع مش بياخد آخر الصفوف — آخر رصيد معروض هيخالف الفوتر');
-str_contains($body, "'lead'") && str_contains($view, "\$move['lead']")
+str_contains($body, "'lead'") && str_contains($views, "\$move['lead']")
     ? ok('سطر البداية بيعرض الرصيد قبل أول صف **معروض**')
     : bad('سطر البداية بيعرض رصيد أول المدة مع إن المعروض آخر الصفوف');
 
@@ -290,7 +310,7 @@ abs($long['net']) >= 0 && array_key_exists('net', $long)
 sec('⑧ كل أيقونة موجودة في خريطة `icon()`');
 
 /* ⚠️ `icon('اسم-غلط')` **ما بترميش خطأ — بترسم دايرة فاضية**. */
-preg_match_all("/icon\(\s*'([a-z0-9-]+)'/", $view, $mm);
+preg_match_all("/icon\(\s*'([a-z0-9-]+)'/", $views . src($STATEMENT), $mm);
 $iconNames = array_unique($mm[1]);
 /* أيقونات الأقسام جاية من `groupIcon` — بتتقاس من الدالة نفسها لا بقايمة مكتوبة. */
 $ref = new ReflectionMethod(Custody::class, 'groupIcon');
@@ -307,11 +327,19 @@ $missing ? bad('أيقونات مش في الخريطة: ' . implode(', ', $miss
 // ═══════════════════════════════════════════════════════════ ⑨
 sec('⑨ صفر ستايل محلي وكل كلاس له تعريف');
 
-$viewCode = code_only($VIEW);
-str_contains($viewCode, '<style') ? bad('فيه `<style>` محلي (قانون التصميم بند ٧)')
-                                  : ok('صفر `<style>` محلي');
-preg_match_all('/\sstyle\s*=\s*"/', $viewCode, $st);
-count($st[0]) === 0 ? ok('صفر `style=` inline') : bad(count($st[0]) . ' خانة `style=` inline');
+/* ⚠️ الفحص على **كل ملفات الشاشة** لا الغلاف بس — بعد التقسيم لتبويبات
+   الغلاف بقى ٦٠ سطرًا، وفحصه لوحده كان هيعدّي على أي `<style>` في تبويب. */
+$styleHits = $inlineHits = [];
+foreach ($SCREEN_VIEWS as $v) {
+    $c = code_only($v);
+    if (str_contains($c, '<style')) { $styleHits[] = basename($v); }
+    preg_match_all('/\sstyle\s*=\s*"/', $c, $st);
+    if ($st[0]) { $inlineHits[] = basename($v) . '(' . count($st[0]) . ')'; }
+}
+$styleHits ? bad('`<style>` محلي في: ' . implode(' · ', $styleHits))
+           : ok('صفر `<style>` محلي في ' . count($SCREEN_VIEWS) . ' ملف');
+$inlineHits ? bad('`style=` inline في: ' . implode(' · ', $inlineHits))
+            : ok('صفر `style=` inline');
 
 /* ⚠️ أي كلاس بيتطبع لازم يكون له **CSS أو سلوك JS** — الناقص بيقع على الشكل
    الافتراضي **بالسكوت** (`.table-mobile-scroll` عاش شهور معطَّل كده).
@@ -322,7 +350,7 @@ $js  = '';
 foreach (glob(dirname(__DIR__) . '/public/assets/js/*.js') ?: [] as $jsFile) {
     $js .= (string) file_get_contents($jsFile);
 }
-preg_match_all('/class="([^"<>]*)"/', $view, $cm);
+preg_match_all('/class="([^"<>]*)"/', $views, $cm);
 $classes = [];
 foreach ($cm[1] as $chunk) {
     foreach (preg_split('/\s+/', trim($chunk)) as $c) {
@@ -348,45 +376,123 @@ try {
     bad('الكنترولر بيفشل في التحميل: ' . $e->getMessage());
 }
 
-/* رندر فعلي للشاشة — أي `Undefined variable` أو أيقونة ناقصة بتطلع هنا. */
-$vars = [
-    'title' => 'رصيد العهدة', 'repList' => [], 'rate' => Custody::deductionRate(),
-    'move' => Custody::movements(...Custody::defaultRange()),
-    'wallet' => Closing::walletSplit(), 'breakdown' => Closing::currentBreakdown(),
-    'lastClosed' => Closing::lastClosedDate(),
-    'aggregate' => \App\Models\RepCustody::bankTopupActive(),
-    'topupState' => ['token' => 'x', 'old' => [], 'errors' => [], 'back' => 'custody'],
-    'repDepState' => ['token' => 'x', 'old' => [], 'errors' => [], 'back' => 'custody'],
-];
-$level = error_reporting();
+/* ⚠️⚠️ **الرندر بيمرّ على الكنترولر الحقيقي لا على `include` للـview.**
+   الـ`include` بمصفوفة متغيّرات مكتوبة بالإيد بيفحص الـview بس، وبيفوته أي
+   متغيّر الكنترولر نسي يبعته — وده بالظبط اللي حصل بعد التقسيم لتبويبات. */
+$uid = (int) \App\Core\Database::scalar('SELECT MIN(id) FROM users');
+$_SESSION = ['uid' => $uid, 'role' => 'owner', 'uname' => 'فحص',
+             'last_activity' => time(), 'uid_checked' => time()];
+
 $warned = [];
-set_error_handler(static function ($no, $str) use (&$warned) { $warned[] = $str; return true; });
-ob_start();
-try {
-    (static function (array $data) {
-        extract($data, EXTR_SKIP);
-        include dirname(__DIR__) . '/app/Views/custody/index.php';
-    })($vars);
-    $html = (string) ob_get_clean();
-    $ok = true;
-} catch (\Throwable $e) {
-    ob_end_clean();
-    $html = ''; $ok = false;
-    bad('الشاشة بترمي استثناء: ' . $e->getMessage());
+$run = static function (callable $fn, string $where) use (&$warned): string {
+    $seen = [];
+    set_error_handler(static function ($no, $str) use (&$seen) { $seen[] = $str; return true; });
+    ob_start();
+    try { $fn(); $html = (string) ob_get_clean(); }
+    catch (\Throwable $e) { ob_end_clean(); restore_error_handler(); bad("استثناء في {$where}: " . $e->getMessage()); return ''; }
+    restore_error_handler();
+    if ($seen) { $warned[] = $where . ': ' . $seen[0]; }
+    /* ⚠️ الاستثناء بيتمسك فوق، لكن `Warning` بيتلزق **جوّه** الـHTML — فلازم
+       نفتّش النص كمان مش نعتمد على المعالج بس. */
+    preg_match('/Fatal error|Warning:|Undefined variable|Undefined array key/', $html, $m)
+        ? bad("خطأ PHP في {$where}: " . ($m[0] ?? ''))
+        : ok("{$where} بيرندر بلا أخطاء PHP (" . number_format(strlen($html)) . " بايت)");
+    return $html;
+};
+
+/* ⚠️ الأسماء هنا **مش** `tab`/`drill`/`statement`: الأب عنده `tab()` خاصة
+   ساكنة، وإعادة تعريفها بتوقيع مختلف مصيدة موثَّقة (`php -l` ما بيمسكهاش). */
+$probe = new class extends \App\Controllers\CustodyController {
+    public function openTab(string $t): void { $_GET = ['tab' => $t]; $this->index(); }
+    public function drl(string $w): void { $_GET = []; $this->drill($w); }
+    public function stmt(): void { $_GET = []; $this->statement(); }
+};
+
+$tabHtml = [];
+foreach (\App\Controllers\CustodyController::TABS as $t) {
+    $tabHtml[$t] = $run(static fn () => $probe->openTab($t), "تبويب «{$t}»");
 }
-restore_error_handler();
-error_reporting($level);
-if ($ok) {
-    $html !== '' ? ok('الشاشة بترندر (' . number_format(strlen($html)) . ' بايت)')
-                 : bad('الشاشة رندرت فاضية');
-    $warned ? bad('تحذيرات وقت الرندر: ' . implode(' | ', array_slice($warned, 0, 3)))
-            : ok('صفر تحذير وقت الرندر');
-    /* ⚠️ **صفر رقم أصمّ** — الرصيد لازم يفتح تفكيكه. */
-    str_contains($html, 'custodyBreak') ? ok('الرصيد بيفتح تفكيكه (ممنوع رقم أصمّ)')
-                                        : bad('الرصيد بقى رقمًا أصمّ');
-    /* الحركة لازم تعرض المصروفات — دي كانت مختفية تمامًا قبل الإصلاح. */
-    str_contains($html, 'حركة الخزنة') ? ok('قسم الحركة موجود') : bad('قسم الحركة اختفى');
+foreach (\App\Controllers\CustodyController::DRILL as $w) {
+    $h = $run(static fn () => $probe->drl($w), "نافذة «{$w}»");
+    /* نافذة فاضية = رقم أصمّ فعليًّا — الزرار بيفتح لوحًا مفيهوش حاجة. */
+    if ($h !== '' && strlen(trim(strip_tags($h))) < 5) { bad("نافذة «{$w}» فاضية"); }
 }
+$stmtHtml = $run(static fn () => $probe->stmt(), 'كشف الحساب');
+$_GET = [];
+
+$warned ? bad('تحذيرات وقت الرندر: ' . implode(' | ', array_slice($warned, 0, 3)))
+        : ok('صفر تحذير وقت الرندر');
+
+/* ⚠️ **صفر رقم أصمّ** — كل رقم لازم يفتح بنوده، وبنوافذ **مختلفة**.
+   الشاشة القديمة كانت بتوجّه أرقامها الأربعة لنفس النافذة (`#custodyBreak`)
+   فتقنيًا مفيش رقم أصمّ وعمليًا الأربعة بيدّوا نفس الجواب. */
+preg_match_all('/data-drill="([^"]+)"/', $tabHtml['overview'] ?? '', $dm);
+$targets = array_unique($dm[1] ?? []);
+count($targets) >= 4
+    ? ok('«نظرة عامة» فيها ' . count($targets) . ' نافذة **مختلفة**')
+    : bad('أرقام النظرة العامة بتفتح ' . count($targets) . ' نافذة بس — رجعنا لمرض «نفس الجواب»');
+foreach ($targets as $t) {
+    if (!str_contains($t, '/custody/drill/')) { bad("هدف نافذة مش من مسار الوحدة: {$t}"); }
+}
+
+/* المصروفات كانت **مختفية تمامًا** من السجل قبل الإصلاح — لازم تفضل ظاهرة. */
+str_contains($tabHtml['moves'] ?? '', 'حركة الخزنة')
+    ? ok('قسم الحركة موجود') : bad('قسم الحركة اختفى');
+str_contains($tabHtml['drivers'] ?? '', 'المحتجز')
+    ? ok('«المحتجز» ظاهر (مصدر كومسيون المناديب)') : bad('«المحتجز» مش ظاهر');
+
+/* الكشف: مستند A4 حقيقي بهوية النظام. */
+str_contains($stmtHtml, '<!doctype html') && str_contains($stmtHtml, 'كشف حساب خزنة المكتب')
+    ? ok('كشف الحساب مستند A4 كامل') : bad('كشف الحساب مش مستند مكتمل');
+/* ⚠️ ممنوع أي مستند يكتب اسم خط بإيده — الهوية من `print_base`. */
+str_contains(src($STATEMENT), "partial('print_base')")
+    ? ok('الكشف بياخد هويته من `print_base` (المصدر الوحيد)')
+    : bad('الكشف بيكتب هوية طباعة بنفسه');
+preg_match('/font-family\s*:\s*(?!var\(--font\))[\'"a-zA-Z]/', src($STATEMENT))
+    ? bad('الكشف بيكتب اسم خط بإيده — لازم `var(--font)`')
+    : ok('الكشف ما بيكتبش اسم خط بإيده');
+
+// ═══════════════════════════════════════════════════════════ ⑪
+sec('⑪ التبويبات والمسارات');
+
+/* ⚠️ التبويب **رابط حقيقي** (`?tab=`) لا تبديل بالجافاسكريبت — الرجوع
+   بالمتصفح والمشاركة والفتح في تبويب جديد كلها بتشتغل. */
+str_contains($views, "?tab=") && !preg_match('/onclick\s*=\s*"[^"]*tab/i', $views)
+    ? ok('التبويبات روابط `?tab=` مش جافاسكريبت')
+    : bad('التبويبات بتتبدّل بالجافاسكريبت — الرجوع بالمتصفح هيكسر');
+
+foreach ($SCREEN_VIEWS as $v) {
+    is_file(dirname(__DIR__) . '/' . $v)
+        ? ok(basename($v) . ' موجود') : bad("ملف الشاشة ناقص: {$v}");
+}
+
+$routes = code_only('public/index.php');
+foreach (["\$r->get('/custody/drill/{what}'", "\$r->get('/custody/statement'"] as $needle) {
+    str_contains($routes, $needle) ? ok("المسار مسجَّل: {$needle}") : bad("المسار مش مسجَّل: {$needle}");
+}
+/* ⚠️ الحرفي قبل أي مسار بمعامل — الراوتر first-match-wins (تحذير ٤). */
+$pDrill = strpos($routes, "/custody/drill/{what}");
+$pStmt  = strpos($routes, "/custody/statement");
+$pParam = strpos($routes, "/custody/topup/{id}");
+($pDrill !== false && $pStmt !== false && $pParam !== false && $pDrill < $pParam && $pStmt < $pParam)
+    ? ok('المسارات الحرفية قبل اللي بمعامل (تحذير ٤)')
+    : bad('ترتيب المسارات غلط');
+
+/* ⚠️⚠️ **الرفض هو الافتراضي — والفحص بالكود مش بالنداء.**
+   نداء `drill()` بنوع مزوّر بيوصل لـ`notFound()` اللي **بتطبع وبتعمل exit**،
+   فبتقتل باقي الفاحص بلا رسالة (مصيدة موثَّقة في CLAUDE.md — اتصادفت هنا فعلاً:
+   الفاحص طبع صفحة ٤٠٤ في الطرفية ووقف قبل السطر ده). */
+$drillBody = code_only($CTRL);
+$ds = strpos($drillBody, 'function drill');
+$de = strpos($drillBody, 'function statement');
+$drillOnly = ($ds !== false && $de !== false && $de > $ds) ? substr($drillBody, $ds, $de - $ds) : '';
+str_contains($drillOnly, 'in_array($what, self::DRILL, true)') && str_contains($drillOnly, 'notFound')
+    ? ok('نوع التفاصيل محصور في قايمة بيضا والباقي `notFound`')
+    : bad('`drill()` بيقبل أي نوع من الرابط');
+/* والقايمة نفسها لازم تفضل مقفولة — مفيش `$_GET` جوّه الشرط. */
+!preg_match('/DRILL\s*=\s*\[[^\]]*\$/', src($CTRL))
+    ? ok('قايمة التفاصيل ثابتة مش مبنية من الرابط')
+    : bad('قايمة التفاصيل بتتبني من مدخلات — مش قايمة بيضا');
 
 // ─────────────────────────────────────────────────────────────
 echo "\n" . str_repeat('=', 64) . "\n";

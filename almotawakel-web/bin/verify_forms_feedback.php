@@ -84,8 +84,12 @@ try {
     }
 
     $financialWaves = [
+        /* ⚠️ خزنة المكتب اتقسمت لتبويبات + درج إدخال (2026-08-31، docs/21):
+           الغلاف `index.php` + `_tab_*.php` + `_drawer.php`. الفحص بيقرا
+           **الشاشة كلها** مش الغلاف — نفس علاج كارت المندوب تحت، وإلا بيفشل
+           بإنذار كاذب لمجرد إن النموذج اتنقل لملف تاني. */
         'العهدة' => [
-            'view' => 'app/Views/custody/index.php',
+            'view' => 'app/Views/custody/{index,_tab_*,_drawer}.php',
             'controller' => 'app/Controllers/CustodyController.php',
             'formId' => 'custody.topup.create',
         ],
@@ -106,7 +110,12 @@ try {
         ],
     ];
     foreach ($financialWaves as $label => $files) {
-        $view = (string) file_get_contents(dirname(__DIR__) . '/' . $files['view']);
+        /* ⚠️ المسار ممكن يكون نمطًا (شاشة متقسّمة لتبويبات) — بنقرا كل ملفاتها. */
+        $view = '';
+        foreach (glob(dirname(__DIR__) . '/' . $files['view'], GLOB_BRACE) ?: [] as $vf) {
+            $view .= (string) file_get_contents($vf);
+        }
+        if ($view === '') { chk(false, "$label — مفيش ملفات شاشة على المسار {$files['view']}"); continue; }
         $controller = (string) file_get_contents(dirname(__DIR__) . '/' . $files['controller']);
         chk(str_contains($view, 'formStateFields') && str_contains($view, 'formErrorSummary'),
             "$label تعرض حالة النموذج وملخص أخطاء مفهوم");

@@ -10,28 +10,54 @@ use App\Models\PushNotify;
 use App\Models\RepCustody;
 
 /**
- * رصيد عهدة المكتب (محفظة العهدة) — صفحة مستقلة.
- * تعرض الرصيد الحالي + سجل تراكمي بكل الحركات، وتدير الإضافات اليدوية (توب-أب).
- * عهد السائقين تُسحب حيًّا من البوالص (غير قابلة للتعديل من هنا).
+ * خزنة المكتب (`/custody`) — **أُعيد تنظيمها 2026-08-31** (docs/21 المرحلة ٣).
+ *
+ * ═══ الشكل ═══
+ * كانت **صفحة واحدة طويلة**: ٤ كروت ← نموذج إدخال ← نموذج إدخال تاني ← سجل.
+ * وده بالحرف الشكل اللي المالك رفضه في خزنة الشركة قبل v68. بقت:
+ *   ترويسة + إجراء أساسي ← ٤ تبويبات (`?tab=`) ← جسم التبويب ← درج الإدخال.
+ *
+ * ⚠️⚠️ **كل تبويب بياناته هو بس.** «نظرة عامة» (الشاشة اللي بتفتح) بتستعمل
+ *    الأرقام المجمّعة الرخيصة بس + حركة **النهارده**؛ وسجل الفترة الكامل
+ *    بيتحمّل في تبويب «الحركات» لما يتطلب. مقيس على الإنتاج: الشهر الكامل
+ *    **٠.٦٧ ثانية** (١,٩١٠ صف) والمجمّعات **٠.٠٩** واليوم **٠.٠١** — فتحميل
+ *    الشهر في كل فتحة كان هيبطّئ الشاشة الافتتاحية ٧ أضعاف بلا داعي.
+ *
+ * ⚠️ **التبويبات روابط حقيقية** (`?tab=`) لا تبديل بالجافاسكريبت — الرجوع
+ *    بالمتصفح والمشاركة والفتح في تبويب جديد كلها شغّالة (قاعدة `tabs.php`).
+ *
+ * ⚠️ **ولا رقم بيتحسب هنا** — كله من `Custody::movements()` و`Closing`.
  */
 class CustodyController extends Controller
 {
+    /** ⚠️ قايمة بيضا — أي قيمة تانية من الرابط بترجع للافتراضي. */
+    public const TABS = ['overview', 'moves', 'drivers', 'reps'];
+
+    private static function tab(): string
+    {
+        $t = (string) ($_GET['tab'] ?? '');
+        return in_array($t, self::TABS, true) ? $t : 'overview';
+    }
+
     public function index(): void
     {
         $this->requireAuth();
-        $state = FormState::consume('custody.topup.create', 'custody');
+        $tab = self::tab();
         [$from, $to] = $this->range();
-        $this->render('custody/index', [
-            'title'      => 'رصيد العهدة',
-            // نزّل عهدة لمندوب من الدرج — بتظهر بس لو فيه مناديب نشطين
-            'repList'    => RepCustody::available() ? RepCustody::activeReps() : [],
-            'repDepState'=> FormState::consume('custody.repdep.create', 'custody'),
+        $day = work_date();
+
+        /* الدرج: `?new=topup` أو `?new=rep` — **حالة في الرابط لا في
+           الجافاسكريبت**، فالحفظ لو فشل بيرجع والدرج مفتوح وفيه اللي اتكتب. */
+        $newKind = (string) ($_GET['new'] ?? '');
+        $newKind = in_array($newKind, ['topup', 'rep'], true) ? $newKind : '';
+
+        $data = [
+            'title'      => 'خزنة المكتب',
+            'tab'        => $tab,
+            'day'        => $day,
+            'from'       => $from,
+            'to'         => $to,
             'rate'       => Custody::deductionRate(),
-            /* ⚠️ الحركة والرصيد الجاري من `Custody::movements()` — المصدر الوحيد
-               المبني على `DailyReview::officeCashItems` + `Closing`. الدالة
-               القديمة `ledger()` كانت بتحسب بإيدها فكانت بتقول رقمًا يخالف
-               الرصيد المعروض فوق (شرحها في ترويسة `movements`). */
-            'move'       => Custody::movements($from, $to),
             /* ⚠️ تفكيك المحفظة — «الرصيد» معناه بيتغيّر مع النموذج الفعّال:
                في النموذج المجمّع هو الدرج **+ جيوب المناديب**. لازم الشاشة
                تفرّقهم وإلا بتقول «متاح» على فلوس مش في الدرج. */
@@ -39,8 +65,76 @@ class CustodyController extends Controller
             'breakdown'  => Closing::currentBreakdown(),
             'lastClosed' => Closing::lastClosedDate(),
             'aggregate'  => RepCustody::bankTopupActive(),
-            'topupState' => $state,
-        ]);
+            'repList'    => RepCustody::available() ? RepCustody::activeReps() : [],
+            'drawer'     => $newKind,
+            'topupState' => FormState::consume('custody.topup.create', 'custody'),
+            'repDepState'=> FormState::consume('custody.repdep.create', 'custody'),
+        ];
+
+        /* ⚠️ **الغالي بيتحمّل عند الحاجة بس** — شرحها في ترويسة الكلاس. */
+        $data += match ($tab) {
+            'moves'   => ['move' => Custody::movements($from, $to)],
+            'drivers' => ['move' => Custody::movements($from, $to)],
+            'reps'    => ['move' => null],
+            default   => ['move' => Custody::movements($day, $day),   // نظرة عامة: النهارده بس
+                          'series' => Closing::balanceSeries(14)],
+        };
+
+        $this->render('custody/index', $data);
+    }
+
+    /**
+     * تفاصيل أي رقم في الشاشة — قاعدة المالك «ممنوع رقم أصمّ».
+     *
+     * ⚠️ **النوع محصور في قايمة بيضا**، والمسار بيمرّ على `requireAuth` زي أي
+     *    مسار تاني (الرفض هو الافتراضي — تحذير ٣).
+     *
+     * ⚠️⚠️ **ما بيكتبش استعلامًا جديدًا** — بيقرا من نفس دوال `Custody`/`Closing`
+     *    اللي الأرقام اتحسبت منها، فمستحيل النافذة تقول رقمًا والكارت يقول غيره.
+     *    (الشاشة القديمة كانت بتوجّه أرقامها الأربعة لنفس النافذة بالحرف، يعني
+     *    الأربعة كانوا بيدّوا نفس الجواب.)
+     */
+    public const DRILL = ['balance', 'drawer', 'reps', 'topups', 'expenses', 'driver', 'retained'];
+
+    public function drill(string $what): void
+    {
+        $this->requireAuth();
+        if (!in_array($what, self::DRILL, true)) {
+            $this->notFound('نوع التفاصيل ده مش موجود.');
+        }
+        /* ⚠️ محروسة بـ`headers_sent()` — أي مخرَج سابق بيلزق Warning جوّه جسم
+           الرد فالنافذة تستقبل HTML متلوّث (باج v50). */
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: private, no-store, max-age=0');
+        }
+        [$from, $to] = $this->range();
+        /* الأرقام المجمّعة بتكفي التلاتة الأولى — بلا تحميل صفوف الفترة. */
+        $needsRows = in_array($what, ['topups', 'expenses', 'driver', 'retained'], true);
+        $this->render('custody/_drill', [
+            'what'      => $what,
+            'from'      => $from,
+            'to'        => $to,
+            'rate'      => Custody::deductionRate(),
+            'wallet'    => Closing::walletSplit(),
+            'breakdown' => Closing::currentBreakdown(),
+            'aggregate' => RepCustody::bankTopupActive(),
+            'move'      => $needsRows ? Custody::movements($from, $to) : null,
+        ], false);
+    }
+
+    /** كشف حساب A4 للخزنة بفترة (صفحة مستقلّة للطباعة/حفظ PDF). */
+    public function statement(): void
+    {
+        $this->requireAuth();
+        [$from, $to] = $this->range();
+        $this->render('custody/statement', [
+            'title'     => 'كشف حساب خزنة المكتب',
+            'move'      => Custody::movements($from, $to),
+            'wallet'    => Closing::walletSplit(),
+            'aggregate' => RepCustody::bankTopupActive(),
+            'rate'      => Custody::deductionRate(),
+        ], false);
     }
 
     /**

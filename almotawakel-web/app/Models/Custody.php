@@ -304,6 +304,12 @@ class Custody
                         'by_rep' => trim((string) ($it['by_rep'] ?? '')) ?: null,
                         'signed' => round((float) $it['signed'], 2),
                         'link'   => $it['link'] ?? null,
+                        /* ⚠️ `gross`/`car` بيتنقلوا زي ما هُمّ عشان **تبويب عهد
+                           السائقين يتبني من نفس الصفوف دي** بلا استعلام تاني —
+                           استعلام تاني معناه رقمان لنفس العهدة. فاضيين في أي
+                           قسم تاني (`null`). */
+                        'gross'  => $it['gross'] ?? null,
+                        'car'    => $it['car'] ?? null,
                         // مفتاح البند الأصلي — الإضافة اليدوية بس هي القابلة للتعديل من هنا
                         'type'   => (string) $it['type'],
                         'id'     => (int) $it['id'],

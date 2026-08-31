@@ -259,6 +259,9 @@ $r->post('/closing/reopen',       'DailyClosingController@reopen');   // افت�
 
 // رصيد العهدة (محفظة عهدة المكتب)
 $r->get('/custody',                       'CustodyController@index');
+// تفاصيل الأرقام وكشف الحساب — حرفي قبل أي مسار بمعامل (تحذير ٤)
+$r->get('/custody/drill/{what}',          'CustodyController@drill');
+$r->get('/custody/statement',             'CustodyController@statement');
 $r->post('/custody/topup',                'CustodyController@storeTopup');
 $r->get('/custody/topup/{id}/edit',       'CustodyController@editTopup');
 $r->post('/custody/topup/{id}/delete',    'CustodyController@deleteTopup');
@@ -284,8 +287,17 @@ $r->get('/safe-audit/statement',          'SafeAuditController@statement'); // �
 $r->post('/safe-audit',                   'SafeAuditController@store');
 $r->post('/safe-audit/{id}/delete',       'SafeAuditController@destroy');
 
-// رصيد المكتب (كروت الفيزا) — المسارات الأخصّ قبل الجشعة /{id}
+// الحسابات البنكية وكروت الفيزا — كل مسارات accounts الحرفية قبل /office/{id}
 $r->get('/office',                        'OfficeController@index');
+$r->get('/office/accounts/new',           'OfficeController@accountCreate');
+$r->post('/office/accounts',              'OfficeController@accountStore');
+$r->post('/office/accounts/entry/{entryId}/delete','OfficeController@deleteAccountEntry');
+$r->get('/office/accounts/{id}/edit',     'OfficeController@accountEdit');
+$r->get('/office/accounts/{id}/statement','OfficeController@accountStatement');
+$r->post('/office/accounts/{id}/entry',   'OfficeController@storeAccountEntry');
+$r->post('/office/accounts/{id}/delete',  'OfficeController@accountDestroy');
+$r->post('/office/accounts/{id}',         'OfficeController@accountUpdate');
+$r->get('/office/accounts/{id}',          'OfficeController@account');
 $r->get('/office/new',                    'OfficeController@create');
 // تفاصيل أرقام الكروت (ممنوع رقم أصمّ) — حرفي قبل الجشع /office/{id}
 $r->get('/office/drill/{what}',           'OfficeController@drill');
