@@ -33,18 +33,13 @@ jobs:
         run: find app bin public -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Python syntax
         run: python -m py_compile bin/*_ui.py bin/run_browser_verifiers.py bin/run_browser_suite.py
-      # ⚠️ فحوصات `impact => none` بنيوية بلا قاعدة، بس بتحمّل `app/bootstrap.php`
-      #    و`App::boot()` بيعمل `require` لـ`config/config.php`. الملف مستثنى من
-      #    git (بيانات السيرفر)، فمن غير السطر ده ٨ فحوصات بتموت بـexit 255
-      #    و«فشل ٨» يتقري غلطًا إنها ارتداد في الكود. مفيش MySQL في الوظيفة دي
-      #    ولا محتاجة — الملف بيتعمل عشان الإقلاع يعدّي بس.
-      - name: Create non-secret CI config
-        run: |
-          cp config/config.example.php config/config.php
-          sed -i "s/'password' => 'CHANGE_ME'/'password' => 'ci-owner-password-2026'/" config/config.php
-          sed -i "s/'enabled' => true/'enabled' => false/" config/config.php
-      - name: Safe verifier suite
-        run: php bin/run_verifiers.php
+      # ⚠️ **مفيش `run_verifiers.php` هنا عن قصد.** الوظيفة دي فحص نحوي بلا بنية
+      #    تحتية: لا config ولا MySQL. وprofile=safe مكتوب عنه إنه «الفاحصات
+      #    اللي ما بتتصلش بقاعدة» — بس `verify_pwa` و`verify_ux` بيتصلوا فعلاً،
+      #    فكانوا بيموتوا بـ«Connection refused» هنا وبيعدّوا محليًّا لأن جهاز
+      #    المطوّر دايمًا فيه قاعدة شغّالة. وبما إن profile=ci **مجموعة أشمل**
+      #    من safe (الفرق الوحيد ٥ فاحصات كلها `rollback` مش `none`)، الوظيفة
+      #    التحتانية بتغطّيها كلها على قاعدة معزولة حقيقية بلا أي ازدواج.
 
   integration:
     name: Isolated MySQL and browser journeys
@@ -86,6 +81,10 @@ jobs:
           cp config/config.example.php config/config.php
           sed -i "s/'password' => 'CHANGE_ME'/'password' => 'ci-owner-password-2026'/" config/config.php
           sed -i "s/'enabled' => true/'enabled' => false/" config/config.php
+          # ⚠️ `verify_security` بيطلب `fileperms & 0o077 === 0` — يعني مفيش أي
+          #    صلاحية لمجموعة ولا لغيرها. `cp` بيدّي 644 فالفحص بيفشل. والفحص
+          #    كان بيعدّي قبل كده بالصدفة لأن الملف مكانش موجود أصلاً.
+          chmod 600 config/config.php
       - name: Install isolated database
         run: php bin/install.php install
       - name: Isolated PHP verifier suite
