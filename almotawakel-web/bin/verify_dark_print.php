@@ -137,7 +137,7 @@ $printViews = [
     'closing/print.php', 'reports/print.php', 'reps/settlement_print.php',
     'statements/print.php', 'statements/batch_print.php',
     'permits/invoice_print.php', 'permits/_print_styles.php', 'legacy/statement.php',
-    'office/statement.php',
+    'office/statement.php', 'office/account_statement.php',
 ];
 foreach ($printViews as $rel) {
     $src = (string) file_get_contents($root . '/app/Views/' . $rel);

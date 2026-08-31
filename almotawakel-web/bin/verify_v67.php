@@ -32,6 +32,7 @@ use App\Models\CompanySafe;
 use App\Models\Custody;
 use App\Models\RepCustody;
 use App\Models\VisaCard;
+use App\Models\BankAccount;
 
 $pass = 0; $fail = 0;
 function ok(string $m): void  { global $pass; $pass++; echo "  ✓ $m\n"; }
@@ -120,7 +121,7 @@ substr_count(code_only('app/Models/Closing.php'), 'CompanySafe') === 1
 /* ⚠️ الأعمدة الرابطة **مقصورة على قايمة معروفة**: كل واحد فيهم بيربط الصف
    بالصف المُولَّد في محفظة تانية عشان الحذف يشيل الاتنين. أي عمود تاني بيربط
    الوحدة بحساب قائم (إذن · بوليصة · بند · إقفال) معناه إن العزل اتكسر. */
-$linkCols = ['custody_id', 'visa_card_id', 'visa_deposit_id', 'rep_id', 'rep_deposit_id'];
+$linkCols = ['custody_id', 'visa_card_id', 'bank_account_id', 'visa_deposit_id', 'rep_id', 'rep_deposit_id'];
 $badCols  = array_values(array_filter($colsNow, static fn ($c) =>
     preg_match('/(permit|bawali|bill|stage|closing|visa|rep_|custody)/i', (string) $c)
     && !in_array($c, $linkCols, true)));
@@ -146,13 +147,13 @@ sec('② كل نوع بيكتب صفًّا في محفظة تانية له عك�
 $wl = fn_body('app/Models/CompanySafe.php', 'writeLinked');
 $rl = fn_body('app/Models/CompanySafe.php', 'removeLinked');
 foreach (['custody_id' => 'Custody::deleteTopup',
-          'visa_deposit_id' => 'VisaCard::deleteDeposit',
+          'visa_deposit_id' => 'BankAccount::deleteEntry',
           'rep_deposit_id' => 'RepCustody::deleteDeposit'] as $key => $undo) {
     str_contains($rl, $undo)
         ? ok("removeLinked بتعكس {$key} عبر {$undo}")
         : bad("removeLinked ما بتعكسش {$key} — الفلوس هتتكرّر عند الحذف");
 }
-foreach (['Custody::createTopup', 'VisaCard::createDeposit', 'RepCustody::createDeposit'] as $w) {
+foreach (['Custody::createTopup', 'BankAccount::createEntry', 'RepCustody::createDeposit'] as $w) {
     str_contains($wl, $w) ? ok("writeLinked بتنادي {$w}") : bad("writeLinked ما بتنادّيش {$w}");
 }
 // ⚠️ القايمة الموثَّقة لازم تطابق الواقع — نوع جديد بيتضاف لواحدة وينسى في التانية.
@@ -223,12 +224,12 @@ try {
     $day     = date('Y-m-d');
     $safe0   = round(Custody::balance(), 2);
     $co0     = round(CompanySafe::balance(), 2);
-    $card    = VisaCard::all(true)[0] ?? null;
+    $account = BankAccount::all(true)[0] ?? null;
     $reps    = RepCustody::activeReps();
     $repId   = (int) (array_key_first($reps) ?? 0);
     $rep0    = $repId ? round(RepCustody::balance($repId), 2) : 0.0;
-    $cardId  = $card ? (int) $card['id'] : 0;
-    $card0   = $cardId ? round(VisaCard::balanceOf($cardId), 2) : 0.0;
+    $accountId = $account ? (int) $account['id'] : 0;
+    $account0  = $accountId ? round(BankAccount::balanceOf($accountId), 2) : 0.0;
 
     CompanySafe::create(['entry_date' => $day, 'kind' => 'deposit', 'amount' => 500000,
                          'source' => 'فحص v67']);
@@ -250,20 +251,20 @@ try {
     CompanySafe::delete($dId);
 
     // ── فيزا
-    if ($cardId) {
+    if ($accountId) {
         $v1 = CompanySafe::create(['entry_date' => $day, 'kind' => 'to_visa', 'amount' => 7000,
-                                   'visa_card_id' => $cardId]);
+                                   'bank_account_id' => $accountId]);
         near('شحن الفيزا بينقّص الشركة', CompanySafe::balance(), $co0 + 490000);
-        near('شحن الفيزا بيزوّد الكارت', VisaCard::balanceOf($cardId), $card0 + 7000);
+        near('التحويل بيزوّد الحساب البنكي', BankAccount::balanceOf($accountId), $account0 + 7000);
         near('شحن الفيزا ما بيمسّش خزنة المكتب', Custody::balance(), $safe0);
         $v2 = CompanySafe::create(['entry_date' => $day, 'kind' => 'from_visa', 'amount' => 2000,
-                                   'visa_card_id' => $cardId]);
+                                   'bank_account_id' => $accountId]);
         near('السحب من الفيزا بيزوّد الشركة', CompanySafe::balance(), $co0 + 492000);
-        near('السحب من الفيزا بينقّص الكارت', VisaCard::balanceOf($cardId), $card0 + 5000);
+        near('السحب بينقّص الحساب البنكي', BankAccount::balanceOf($accountId), $account0 + 5000);
         CompanySafe::delete($v1); CompanySafe::delete($v2);
-        near('حذف حركات الفيزا بيرجّع رصيد الكارت', VisaCard::balanceOf($cardId), $card0);
+        near('حذف الحركات بيرجّع رصيد الحساب', BankAccount::balanceOf($accountId), $account0);
         near('حذف حركات الفيزا بيرجّع رصيد الشركة', CompanySafe::balance(), $co0 + 497000);
-    } else { note('مفيش كارت فيزا نشط — قسم الفيزا اتخطّى'); }
+    } else { note('مفيش حساب بنكي نشط — القسم اتخطّى'); }
 
     // ── عهدة مندوب
     if ($repId) {
@@ -329,10 +330,10 @@ try {
     $reject('السحب فوق رصيد الشركة مرفوض',
         fn () => CompanySafe::create(['entry_date' => $day, 'kind' => 'expense', 'amount' => 9e8]),
         'أكبر من رصيد');
-    $reject('كارت فيزا مزوّر مرفوض',
+    $reject('حساب بنكي مزوّر مرفوض',
         fn () => CompanySafe::create(['entry_date' => $day, 'kind' => 'to_visa', 'amount' => 10,
-                                      'visa_card_id' => 999999]),
-        'كارت الفيزا');
+                                      'bank_account_id' => 999999]),
+        'الحساب البنكي');
     $reject('مندوب مزوّر مرفوض',
         fn () => CompanySafe::create(['entry_date' => $day, 'kind' => 'to_rep', 'amount' => 10,
                                       'rep_id' => 999999]),
@@ -402,16 +403,18 @@ try {
 
     /* ⚠️ اسم كارت الفيزا/المندوب لازم يبان (طلب المالك: «لو من فيزا يتم كتابة
        أي فيزا») — «سحب كاش من كارت فيزا» بلا اسم مابيجاوبش على السؤال. */
-    if ($cardId) {
+    if ($accountId) {
         // ⚠️ بنزرع صفًّا هنا: صفوف الفيزا اللي فوق اتمسحت في اختبار الحذف.
+        $seedId = CompanySafe::create(['entry_date' => $day, 'kind' => 'to_visa',
+                                       'amount' => 900, 'bank_account_id' => $accountId]);
         $vId = CompanySafe::create(['entry_date' => $day, 'kind' => 'from_visa',
-                                    'amount' => 900, 'visa_card_id' => $cardId]);
+                                    'amount' => 900, 'bank_account_id' => $accountId]);
         $vRows = array_values(array_filter(
             CompanySafe::ledger(['kind' => 'from_visa'], 50),
             static fn ($r) => (int) $r['id'] === $vId));
         ($vRows && ($vRows[0]['wallet'] ?? '') !== '')
-            ? ok('اسم كارت الفيزا بيظهر على بند الفيزا (' . ($vRows[0]['wallet'] ?? '') . ')')
-            : bad('بند الفيزا بلا اسم كارت');
+            ? ok('اسم الحساب البنكي بيظهر على الحركة (' . ($vRows[0]['wallet'] ?? '') . ')')
+            : bad('الحركة بلا اسم حساب بنكي');
         /* ⚠️ **وفي كشف الطباعة كمان** — الاسم كان بيتحلّ في `ledger()` بس،
            فورقة A4 كانت بتقول «سحب كاش من كارت فيزا» بلا ما تقول أنهي كارت.
            الفحص على **الصف نفسه** لا على نص الورقة (النص بيتغيّر مشروعًا). */
@@ -419,9 +422,9 @@ try {
             CompanySafe::statement($day, $day)['rows'],
             static fn ($r) => (int) $r['id'] === $vId));
         ($sRows && ($sRows[0]['wallet'] ?? '') !== '')
-            ? ok('اسم الكارت بيظهر في كشف الطباعة كمان')
-            : bad('كشف الطباعة بيعرض بند فيزا بلا اسم كارت');
-        CompanySafe::delete($vId);
+            ? ok('اسم الحساب بيظهر في كشف الطباعة كمان')
+            : bad('كشف الطباعة بيعرض الحركة بلا اسم حساب');
+        CompanySafe::delete($vId); CompanySafe::delete($seedId);
     }
 
     // ⚠️ الفترات: كل مفتاح بيدّي مدى صحيح، والمجهول بيرجع لليوم.

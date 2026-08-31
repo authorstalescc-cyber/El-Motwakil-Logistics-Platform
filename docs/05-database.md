@@ -38,6 +38,10 @@ agents (الوكلاء = عملاؤنا)  ──M:N── companies (الشرك�
 
 debt_accounts (الدائنون: الكشف والضمان + مديونيات أخرى)
   └─1:N─ debt_payments  (دفعات صادرة للدائن)  [FK CASCADE]
+
+bank_accounts (المحفظة البنكية صاحبة الرصيد)
+  ├─1:N─ visa_cards     (وسائل الدفع)          [FK RESTRICT]
+  └─1:N─ visa_deposits  (إيداع + / سحب −)      [FK RESTRICT]
 ```
 
 > **★ Foreign Keys مُعلَنة فقط على:** `bill_payments→bawalis`, `movements→bawalis`, `movement_items→movements`, `permit_movements→permits`, `permit_stages→permits`, `agent_company→agents/companies`.
@@ -106,6 +110,15 @@ PK `setting_key`, `setting_value` TEXT (موسّع ليحمل JSON، مثل إع
 
 ### `manual_expenses` — المصروفات اليدوية
 `exp_date, category, beneficiary` (المستفيد), `amount, note`. + `is_visa` (من v6).
+
+### `bank_accounts` + `visa_cards` + `visa_deposits` — الحسابات البنكية والفيزا — من migrate_v110
+`bank_accounts`: `id`, `name`, `bank_name`, `status`, `created_at`, `updated_at`. الحساب هو المحفظة صاحبة الرصيد ويمكن أن يحمل أكثر من كارت.
+
+`visa_cards.bank_account_id` إلزامي (FK `RESTRICT`). بيانات الكارت (`name`, `owner`, `status`) تعرّف وسيلة الدفع فقط؛ العمود القديم `bank` يُزامَن باسم بنك الحساب للتوافق، و`opening_balance` يُصفَّر بعد تحويله إلى حركة حساب.
+
+`visa_deposits` باقٍ بالاسم التاريخي لكنه صار دفتر حركات الحساب: `bank_account_id` إلزامي، و`amount` موقّع (`+` إيداع، `−` سحب)، و`card_id` nullable للتوافق التاريخي. `client_payments.bank_account_id` و`company_safe_entries.bank_account_id` يربطان مصدر الحركة بالحساب مباشرة. لا يُحذف حساب له كروت أو حركات، ولا تُحذف حركة مرتبطة بمصدر من شاشة الحساب.
+
+الرصيد **مشتق لا مخزّن**: مجموع حركات الحساب الموقعة ناقص مدفوعات كل الكروت التابعة له. كل تغيير يمر داخل transaction مع قفل `bank_accounts ... FOR UPDATE` ويُرفض إن كان سيجعل الرصيد سالبًا.
 
 ### `manual_custody` — الإضافات اليدوية لرصيد العهدة (توب-أب) — من migrate_v11
 `cust_date, driver/note` (البيان/المصدر — اختياري)`, amount`. **إضافات يدوية تزيد رصيد عهدة المكتب** (محفظة العهدة، صفحة `/custody`). كل صف = مبلغ يوضَع في محفظة العهدة (+). تُدار من صفحة **رصيد العهدة**. الموديل: `App\Models\Custody` (توب-أب + حساب الرصيد/السجل).
@@ -208,6 +221,7 @@ expense_remainder, deficit` `deficit_decision ('office'|'deduct')` `reps_count`
 | **migrate_v29** | **سجل الإدخالات وتدقيق التاريخ.** يضيف إلى `audit_logs` عمودي `work_date` (تاريخ جلسة العمل لحظة الكتابة) و`record_date` (تاريخ المستند المحفوظ) مع فهارس. `Audit::log` يستخرجهما تلقائيًا، فتستطيع `/audit?mode=entries` إظهار التطابق أو الاختلاف بلا خلط مع `created_at`. الترحيل idempotent. |
 | **migrate_v50** | **مراجعة التقفيل بعلامة ✓ لكل بند (بديلة مطابقة v28).** ينشئ `daily_closing_reviews` (صف لكل بند متراجَع + `amount_snapshot`). المطابقة اليدوية القديمة اتشالت من الكود بالكامل (المسار `/closing/reconcile` والموديل `DailyReconciliation`)، وجداولها باقية كأرشيف بلا قارئ. الإقفال بقى مشروط بمراجعة كل بند نقدي في اليوم، والعلامة بتسقط لو المبلغ اتغيّر بعدها. **بلا أي أثر مالي** (الترحيل بيتحقّق إن رصيد الخزنة ثابت). فحص: `php bin/verify_v50.php` (71 فحص). |
 | **migrate_v49** | **عهدة المناديب بقت «عهدة يوم».** أول ترحيل بالبنية الجديدة (`return ['up'=>…, 'verify'=>…]` — `MigrationRunner::STRUCTURED_FROM_VERSION = 49`). **بلا جدول ولا عمود مالي جديد**: كل مصادر العهدة مؤرَّخة أصلاً، فعهدة اليوم تُحسب من نفس الصفوف بفلتر تاريخ. يغيّر حاجتين بس: `rep_custody_deposits.dep_date` بقى **NOT NULL** (يُعبَّأ من `DATE(created_at)` — التنزيل بلا تاريخ مالوش يوم يتحسب عليه)، وفهرسا `permit_stages(paid_by_rep_id, entry_date)` و`rep_submissions(rep_id, entry_date)`. **مفيش ترحيل بين الأيام** (قرار المالك): عهدة يوم D = المنزَّل في D + المحوَّل له − المصروف − المرتجع − المحوَّل منه، واليوم بيبدأ من صفر. الرصيد التراكمي (`RepCustody::balance` بلا يوم) فضل زي ما هو وهو أساس التسوية وحد التحويل. اليوم المتقفل في `daily_closings` (v18) بيمنع كتابة المندوب عبر `RepCustody::dayLockReason()`. فحص: `php bin/verify_v49.php` (54 فحص). |
+| **migrate_v110** | **الحساب البنكي هو المحفظة والكروت تشترك في رصيده.** ينشئ `bank_accounts`، ويربط كل `visa_cards` و`visa_deposits` به، ويضيف الربط المباشر إلى `client_payments` و`company_safe_entries`. يجمع الكروت القديمة حسب اسم البنك المطبّع، يحوّل `opening_balance` إلى حركة حساب ثم يصفّره، ويثبت FKs من نوع `RESTRICT`. يتحقق بالسنت أن إجمالي الرصيد قبل/بعد ثابت. التشغيل: `php bin/migrate_v110.php --dry-run` ثم التشغيل الفعلي؛ الفحص: `php bin/verify_v110.php`. |
 | **normalize_names** | (ليست هجرة schema) غلاف CLI فوق `Maintenance::normalizeNames()` لدمج تهجئات الأسماء المكرّرة (سائقين، ملاك سيارات، شركات، عملاء…). يدعم `--dry` (معاينة). |
 
 ---

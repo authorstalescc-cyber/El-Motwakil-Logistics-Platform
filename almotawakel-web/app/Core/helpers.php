@@ -979,7 +979,7 @@ function visa_card_select($selected = 0, string $name = 'visa_card_id', string $
     $sel = (int) $selected;
     if (!$cards) {
         return '<span class="visa-card-empty">— لا كروت مسجّلة. '
-             . '<a href="' . url('office') . '">' . icon('plus', 13) . ' أضِف كارت فيزا</a></span>';
+             . '<a href="' . url('office/new') . '">' . icon('plus', 13) . ' أضِف كارت فيزا</a></span>';
     }
     /* ⚠️ المعامل التالت بقى **كلاس** لا `style=` inline — الـinline كان
        بيتحقن في كل شاشة بتنادي الدالة (المديونيات · السداد · الأذونات)
@@ -987,11 +987,35 @@ function visa_card_select($selected = 0, string $name = 'visa_card_id', string $
     $st = ' class="visa-card-sel' . ($class !== '' ? ' ' . e($class) : '') . '"';
     $idAttr = $id !== '' ? ' id="' . e($id) . '"' : '';
     $formAttr = $form !== '' ? ' form="' . e($form) . '"' : '';
-    $h  = '<select name="' . e($name) . '"' . $idAttr . $formAttr . ' title="كارت الفيزا (رصيد المكتب)"' . $st . '>'
+    $h  = '<select name="' . e($name) . '"' . $idAttr . $formAttr . ' title="كارت الفيزا والحساب التابع له"' . $st . '>'
         . '<option value="">— اختر الكارت —</option>';
     foreach ($cards as $vc) {
-        $lbl = e($vc['name']) . ($vc['owner'] ? ' — ' . e($vc['owner']) : '');
+        $lbl = e($vc['name']) . ($vc['owner'] ? ' — ' . e($vc['owner']) : '')
+             . (!empty($vc['account_name']) ? ' · ' . e($vc['account_name']) : '');
         $h  .= '<option value="' . (int) $vc['id'] . '"' . ($sel === (int) $vc['id'] ? ' selected' : '') . '>' . $lbl . '</option>';
+    }
+    return $h . '</select>';
+}
+
+/** قائمة الحسابات البنكية النشطة للتحصيل والتحويلات الداخلة/الخارجة. */
+function bank_account_select($selected = 0, string $name = 'bank_account_id', string $class = '', string $id = '', string $form = ''): string
+{
+    static $accounts = null;
+    if ($accounts === null) { $accounts = \App\Models\BankAccount::all(true); }
+    if (!$accounts) {
+        return '<span class="visa-card-empty">— لا حسابات بنكية مسجّلة. '
+             . '<a href="' . url('office/accounts/new') . '">' . icon('plus', 13) . ' أضِف حسابًا</a></span>';
+    }
+    $sel = (int) $selected;
+    $cls = ' class="visa-card-sel' . ($class !== '' ? ' ' . e($class) : '') . '"';
+    $idAttr = $id !== '' ? ' id="' . e($id) . '"' : '';
+    $formAttr = $form !== '' ? ' form="' . e($form) . '"' : '';
+    $h = '<select name="' . e($name) . '"' . $idAttr . $formAttr . ' title="الحساب البنكي"' . $cls . '>'
+       . '<option value="">— اختر الحساب —</option>';
+    foreach ($accounts as $a) {
+        $label = e($a['name']) . (!empty($a['bank_name']) ? ' — ' . e($a['bank_name']) : '');
+        $h .= '<option value="' . (int) $a['id'] . '"' . ($sel === (int) $a['id'] ? ' selected' : '')
+            . '>' . $label . '</option>';
     }
     return $h . '</select>';
 }

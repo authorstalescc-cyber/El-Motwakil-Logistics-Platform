@@ -109,7 +109,7 @@ $q = static function (array $over = []) use ($filters): string {
                                             'text' => (string) $r['wallet']]; }
       if ($r['note'])   { $meta[] = ['icon' => 'file-text', 'text' => (string) $r['note']]; }
       if (!empty($r['custody_id']))      { $meta[] = ['icon' => 'landmark', 'text' => 'مسّت خزنة المكتب']; }
-      if (!empty($r['visa_deposit_id'])) { $meta[] = ['icon' => 'credit-card', 'text' => 'مسّت كارت الفيزا']; }
+      if (!empty($r['visa_deposit_id'])) { $meta[] = ['icon' => 'landmark', 'text' => 'مسّت الحساب البنكي']; }
       if (!empty($r['rep_deposit_id']))  { $meta[] = ['icon' => 'truck', 'text' => 'نزلت لمندوب']; }
       $meta[] = ['icon' => 'home', 'text' => 'الرصيد ' . money((float) $r['running'], false)];
       partial('row_item', [
@@ -126,7 +126,7 @@ $q = static function (array $over = []) use ($filters): string {
           <a class="edit" title="تعديل"
              href="<?= url('company-safe') ?>?tab=moves&edit=<?= (int) $r['id'] ?>"><?= icon('edit', 13) ?></a>
           <form method="post" action="<?= url('company-safe/' . (int) $r['id'] . '/delete') ?>"
-                class="confirm-delete" data-confirm="حذف الحركة دي؟<?= !empty($r['custody_id']) ? ' هتتشال من خزنة المكتب كمان.' : (!empty($r['visa_deposit_id']) ? ' هتتشال من كارت الفيزا كمان.' : (!empty($r['rep_deposit_id']) ? ' هتتشال من عهدة المندوب كمان.' : '')) ?>">
+                class="confirm-delete" data-confirm="حذف الحركة دي؟<?= !empty($r['custody_id']) ? ' هتتشال من خزنة المكتب كمان.' : (!empty($r['visa_deposit_id']) ? ' هتتشال من الحساب البنكي كمان.' : (!empty($r['rep_deposit_id']) ? ' هتتشال من عهدة المندوب كمان.' : '')) ?>">
             <?= csrfField() ?>
             <?= formStateFields(FormState::token(), $retPath) ?>
             <button class="edit" type="submit" title="حذف"><?= icon('trash', 13) ?></button>

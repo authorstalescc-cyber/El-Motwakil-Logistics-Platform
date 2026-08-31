@@ -190,17 +190,29 @@ class Debt
     public static function addPayment(int $accountId, float $amount, ?string $date, ?string $note, bool $isVisa = false, ?int $cardId = null): void
     {
         if ($amount == 0) { return; }
-        Database::exec(
-            "INSERT INTO debt_payments (account_id, pay_date, amount, note, is_visa, visa_card_id)
-             VALUES (?,?,?,?,?,?)",
-            [$accountId, $date ?: work_date(), $amount, $note !== '' ? $note : null, $isVisa ? 1 : 0,
-             ($isVisa && $cardId) ? $cardId : null]
-        );
+        $visaCardId = ($isVisa && $cardId) ? $cardId : null;
+        BankAccount::withCardSpendChanges([[
+            'new_card' => $visaCardId, 'new_amount' => $isVisa ? $amount : 0,
+        ]], static function () use ($accountId, $amount, $date, $note, $isVisa, $visaCardId): void {
+            Database::exec(
+                "INSERT INTO debt_payments (account_id, pay_date, amount, note, is_visa, visa_card_id)
+                 VALUES (?,?,?,?,?,?)",
+                [$accountId, $date ?: work_date(), $amount, $note !== '' ? $note : null,
+                 $isVisa ? 1 : 0, $visaCardId]
+            );
+        });
     }
 
     public static function deletePayment(int $paymentId): void
     {
-        Database::exec("DELETE FROM debt_payments WHERE id = ?", [$paymentId]);
+        $old = Database::row('SELECT * FROM debt_payments WHERE id=?', [$paymentId]);
+        if (!$old) { return; }
+        BankAccount::withCardSpendChanges([[
+            'old_card' => !empty($old['is_visa']) ? $old['visa_card_id'] : null,
+            'old_amount' => !empty($old['is_visa']) ? $old['amount'] : 0,
+        ]], static function () use ($paymentId): void {
+            Database::exec("DELETE FROM debt_payments WHERE id = ?", [$paymentId]);
+        });
     }
 
     /**

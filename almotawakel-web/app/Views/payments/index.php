@@ -1,13 +1,13 @@
 <?php
-/** @var array $f @var array $payments @var array $summary @var array $agents @var array $visaCards */
+/** @var array $f @var array $payments @var array $summary @var array $agents @var array $bankAccounts */
 use App\Core\FormState;
 $formState = $formState ?? ['token'=>'','old'=>[],'errors'=>[],'back'=>'payments'];
 $formOld = $formState['old'];
 $formErrors = $formState['errors'];
 $autoAllocateChecked = $formErrors ? !empty($formOld['auto_allocate']) : true;
 $br = $summary['by_route'];
-$cardName = [];
-foreach ($visaCards as $vc) { $cardName[(int)$vc['id']] = $vc['name'].($vc['owner']?' — '.$vc['owner']:''); }
+$accountName = [];
+foreach ($bankAccounts as $a) { $accountName[(int)$a['id']] = $a['name'].($a['bank_name']?' — '.$a['bank_name']:''); }
 $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to']!=='' || $f['q']!=='');
 ?>
 <div class="toolbar">
@@ -37,10 +37,10 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
     'drill' => $pd('cash'), 'title' => 'التحصيلات المتوجّهة للعهدة النقدية',
   ]); ?>
   <?php partial('stat', [
-    'label' => 'شحن فيزا', 'value' => intf($br['visa']['value']),
+    'label' => 'إيداع بنكي', 'value' => intf($br['visa']['value']),
     'unit'  => intf($br['visa']['count']) . ' دفعة',
     'icon'  => 'credit-card', 'tone' => 'teal',
-    'drill' => $pd('visa'), 'title' => 'التحصيلات المتوجّهة لشحن الكروت',
+    'drill' => $pd('visa'), 'title' => 'التحصيلات المتوجّهة للحسابات البنكية',
   ]); ?>
   <?php partial('stat', [
     'label' => 'بدون توجيه', 'value' => intf($br['none']['value']),
@@ -89,19 +89,19 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
         <?php $formRoute = $formOld['route'] ?? 'none'; ?>
         <label class="cp-route-opt"><input type="radio" name="route" value="none" <?= $formRoute==='none'?'checked':'' ?> onchange="cpRoute()"> <span>بدون توجيه</span></label>
         <label class="cp-route-opt"><input type="radio" name="route" value="cash" <?= $formRoute==='cash'?'checked':'' ?> onchange="cpRoute()"> <span><?= icon('banknote', 14) ?> عهدة نقدية (تُضاف لعهدة اليوم)</span></label>
-        <label class="cp-route-opt"><input type="radio" name="route" value="visa" <?= $formRoute==='visa'?'checked':'' ?> onchange="cpRoute()"> <span><?= icon('credit-card', 14) ?> شحن كارت فيزا</span></label>
+        <label class="cp-route-opt"><input type="radio" name="route" value="visa" <?= $formRoute==='visa'?'checked':'' ?> onchange="cpRoute()"> <span><?= icon('landmark', 14) ?> إيداع في حساب بنكي</span></label>
         <?php /* ⚠️ الخيار بيظهر بس لو `routeChoices()` فيه `company` — نفس القايمة
                  اللي الكنترولر بيتحقق بيها، وإلا خيار معروض والخادم يرفضه بالسكوت. */ ?>
         <?php if (isset(\App\Models\ClientPayment::routeChoices()['company'])): ?>
           <label class="cp-route-opt"><input type="radio" name="route" value="company" <?= $formRoute==='company'?'checked':'' ?> onchange="cpRoute()"> <span><?= icon('home', 14) ?> خزنة الشركة</span></label>
         <?php endif; ?>
-        <span id="cpVisaBox" class="cp-visa-box"<?= $formRoute==='visa' ? '' : ' hidden' ?>><?= visa_card_select($formOld['visa_card_id'] ?? null) ?><?= fieldError('visa_card_id', $formErrors) ?></span>
+        <span id="cpVisaBox" class="cp-visa-box"<?= $formRoute==='visa' ? '' : ' hidden' ?>><?= bank_account_select($formOld['bank_account_id'] ?? null) ?><?= fieldError('bank_account_id', $formErrors) ?></span>
       </div>
       <label class="cp-route-opt p5-mb"><input type="checkbox" name="auto_allocate" value="1" <?= $autoAllocateChecked?'checked':'' ?>>
         <span><b>تخصيص تلقائي</b> على أقدم الفواتير المستحقة لهذا العميل</span></label>
       <div class="cp-form-actions">
         <button class="btn gold" type="submit" data-primary-submit>＋ تسجيل التحصيل</button>
-        <span class="cp-hint">«نقدي» تدخل التقفيل اليومي (عهدة اليوم)، و«فيزا» تشحن رصيد الكارت.</span>
+        <span class="cp-hint">«نقدي» تدخل التقفيل اليومي، و«الحساب البنكي» يزيد رصيده الموحّد لكل كروته.</span>
       </div>
     </form>
   </div>
@@ -125,7 +125,7 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
         <option value="">— الكل —</option>
         <option value="none" <?= $f['route']==='none'?'selected':'' ?>>بدون توجيه</option>
         <option value="cash" <?= $f['route']==='cash'?'selected':'' ?>>عهدة نقدية</option>
-        <option value="visa" <?= $f['route']==='visa'?'selected':'' ?>>شحن فيزا</option>
+        <option value="visa" <?= $f['route']==='visa'?'selected':'' ?>>حساب بنكي</option>
         <?php if (isset(\App\Models\ClientPayment::routeChoices()['company'])): ?>
           <option value="company" <?= $f['route']==='company'?'selected':'' ?>>خزنة الشركة</option>
         <?php endif; ?>
@@ -159,7 +159,7 @@ $hasFilter = ($f['client']!=='' || $f['route']!=='' || $f['from']!=='' || $f['to
             <?php if($pm['route']==='cash'): ?>
               <span class="pill st-paid"><?= icon('banknote', 14) ?> عهدة نقدية</span>
             <?php elseif($pm['route']==='visa'): ?>
-              <span class="pill st-partial"><?= icon('credit-card', 14) ?> <?= e($cardName[(int)$pm['visa_card_id']] ?? 'فيزا') ?></span>
+              <span class="pill st-partial"><?= icon('landmark', 14) ?> <?= e($accountName[(int)($pm['bank_account_id'] ?? 0)] ?? 'حساب بنكي') ?></span>
             <?php elseif($pm['route']==='company'): ?>
               <span class="pill st-paid"><?= icon('home', 14) ?> خزنة الشركة</span>
             <?php else: ?>

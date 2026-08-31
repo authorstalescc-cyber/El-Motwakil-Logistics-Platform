@@ -8,7 +8,7 @@ use App\Models\Closing;
 use App\Models\CompanySafe;
 use App\Models\Custody;
 use App\Models\RepCustody;
-use App\Models\VisaCard;
+use App\Models\BankAccount;
 
 /**
  * خزنة الشركة (v66 · v67 · **أُعيد تنظيمها في v68**) — الخزنة الأكبر اللي
@@ -28,7 +28,7 @@ use App\Models\VisaCard;
  *
  * ⚠️ **الوحدة معزولة عن كل حسابات الخزنة بالبناء** (`company_safe_entries`
  *    جدول خاص). أي أثر برّه الجدول بيمرّ على **API الوحدة التانية**:
- *    `Custody::createTopup` · `VisaCard::createDeposit` · `RepCustody::createDeposit`
+ *    `Custody::createTopup` · `BankAccount::createEntry` · `RepCustody::createDeposit`
  *    — فمفيش سطر واحد في `Closing`/`DailyReview`/`Expense`/`Metrics` اتغيّر.
  *
  * ⚠️ **`Closing::guard` بيتنادى هنا وفي الموديل مع بعض** (حزام أمان مزدوج):
@@ -300,8 +300,8 @@ class CompanySafeController extends Controller
             }
         }
         if (in_array($kind, CompanySafe::VISA_KINDS, true)
-            && !VisaCard::isActive((int) ($_POST['visa_card_id'] ?? 0))) {
-            $fail(['visa_card_id' => 'اختار كارت الفيزا.']);
+            && !BankAccount::isActive((int) ($_POST['bank_account_id'] ?? 0))) {
+            $fail(['bank_account_id' => 'اختار الحساب البنكي.']);
         }
         if ($kind === 'to_rep' && !isset(RepCustody::activeReps()[(int) ($_POST['rep_id'] ?? 0)])) {
             $fail(['rep_id' => 'اختار المندوب.']);
@@ -331,7 +331,7 @@ class CompanySafeController extends Controller
             'entry_date' => $date, 'kind' => $kind, 'amount' => $amount,
             'source' => $source, 'note' => $note,
             'category'     => $_POST['category'] ?? null,
-            'visa_card_id' => $_POST['visa_card_id'] ?? null,
+            'bank_account_id' => $_POST['bank_account_id'] ?? null,
             'rep_id'       => $_POST['rep_id'] ?? null,
             'attachment'   => $attachment,
         ];
@@ -368,8 +368,8 @@ class CompanySafeController extends Controller
             'to_office'   => 'اتحوّل ' . $m . ' من خزنة الشركة لخزنة المكتب.',
             'from_office' => 'اتسحب ' . $m . ' من خزنة المكتب لخزنة الشركة.',
             'expense'     => 'اتسجّل مصروف ' . $m . ' من خزنة الشركة.',
-            'to_visa'     => 'اتشحن ' . $m . ' على كارت الفيزا.',
-            'from_visa'   => 'اتسحب ' . $m . ' من كارت الفيزا لخزنة الشركة.',
+            'to_visa'     => 'اتحوّل ' . $m . ' للحساب البنكي.',
+            'from_visa'   => 'اتسحب ' . $m . ' من الحساب البنكي لخزنة الشركة.',
             'to_rep'      => 'نزلت عهدة ' . $m . ' للمندوب من خزنة الشركة.',
             default       => 'اتضاف ' . $m . ' لخزنة الشركة.',
         };
@@ -389,7 +389,7 @@ class CompanySafeController extends Controller
         }
         $extra = match (true) {
             !empty($row['custody_id'])      => ' ومعاها أثرها على خزنة المكتب.',
-            !empty($row['visa_deposit_id']) => ' ومعاها شحنة كارت الفيزا.',
+            !empty($row['visa_deposit_id']) => ' ومعاها حركة الحساب البنكي.',
             !empty($row['rep_deposit_id'])  => ' ومعاها تنزيل عهدة المندوب.',
             default                         => '.',
         };

@@ -142,11 +142,12 @@ class PermitQuickEntry
         unset($row);
 
         $batch = bin2hex(random_bytes(8));
-        $ids = []; $totals = ['receipt'=>0.0,'expense'=>0.0];
-        $pdo = Database::conn();
-        $ownsTransaction = !$pdo->inTransaction();
-        if ($ownsTransaction) { $pdo->beginTransaction(); }
-        try {
+        $changes = [];
+        foreach ($rows as $row) {
+            if ($row['is_visa']) { $changes[] = ['new_card'=>$row['visa_card_id'],'new_amount'=>$row['amount']]; }
+        }
+        return BankAccount::withCardSpendChanges($changes, static function () use ($rows, $batch): array {
+            $ids = []; $totals = ['receipt'=>0.0,'expense'=>0.0];
             foreach ($rows as $row) {
                 $stageKey = $row['kind'] === 'receipt' ? 'receipts' : 'custom';
                 $direction = $row['kind'] === 'expense' ? 'expense' : null;
@@ -158,9 +159,6 @@ class PermitQuickEntry
                      $row['entry_date'],$row['ref_no'],$row['note'],$row['is_visa']?1:0,$row['visa_card_id']]
                 );
                 $id = Database::lastId();
-                // v109 — الإضافة السريعة بتدخّل أسعارًا متساوية، فسطورها
-                // بتتولّد بالتساوي. لازم تتولّد هنا كمان عشان عدّاد «مش
-                // متوزّع» يشوف بنود المالك زي بنود المناديب بالظبط.
                 ReceiptLine::refreshFor($id);
                 $saved = Database::row('SELECT * FROM permit_stages WHERE id=?', [$id]);
                 $ids[] = $id;
@@ -177,12 +175,8 @@ class PermitQuickEntry
                     'record_date'=>$row['entry_date'], 'quick_batch'=>$batch,
                 ]);
             }
-            if ($ownsTransaction) { $pdo->commit(); }
-        } catch (\Throwable $e) {
-            if ($ownsTransaction && $pdo->inTransaction()) { $pdo->rollBack(); }
-            throw $e;
-        }
-        return ['count'=>count($ids),'ids'=>$ids,'totals'=>$totals,'batch'=>$batch];
+            return ['count'=>count($ids),'ids'=>$ids,'totals'=>$totals,'batch'=>$batch];
+        });
     }
 
     private static function normalize(array $input): array

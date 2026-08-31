@@ -5,7 +5,7 @@
  * ⚠️ النموذج ده **نفس المنطق القديم بالحرف** (`ClientPayment::create`) —
  *    الجديد إنه بقى يقدر يتحصّل على **فاتورة بعينها** بدل التخصيص التلقائي
  *    على الأقدم، والاتنين في نفس الفورم.
- * ⚠️ `visa_card_select()` هي المصدر الوحيد لقايمة الكروت، و`routeChoices()`
+ * ⚠️ `bank_account_select()` هي المصدر الوحيد لقايمة الحسابات، و`routeChoices()`
  *    للتوجيهات — خيار معروض والخادم يرفضه = دفعة بتتسجّل «بدون توجيه» بالسكوت.
  *
  * @var array $agent @var array $payments @var array $payState @var array $openInv
@@ -77,8 +77,8 @@ foreach ($payments as $pm) {
         </select>
       </div>
       <div class="field flush grow" id="cl-visa" <?= $routeOld === 'visa' ? '' : 'hidden' ?>>
-        <label for="pay-card">كارت الفيزا</label>
-        <?= visa_card_select((int) ($payOld['visa_card_id'] ?? 0), 'visa_card_id', '', 'pay-card') ?>
+        <label for="pay-account">الحساب البنكي</label>
+        <?= bank_account_select((int) ($payOld['bank_account_id'] ?? 0), 'bank_account_id', '', 'pay-account') ?>
       </div>
     </div>
 
@@ -86,7 +86,7 @@ foreach ($payments as $pm) {
       <label class="cl-check"><input type="checkbox" name="auto_allocate" value="1" checked> تخصيص تلقائي على الأقدم</label>
       <button class="btn gold" type="submit"><?= icon('plus', 15) ?> تسجيل التحصيل</button>
       <?php /* تحذير **وظيفي**: التوجيه بيحرّك فلوس في مكان تاني. */ ?>
-      <span class="cl-mut">«نقدي» يدخل التقفيل · «فيزا» يشحن الكارت</span>
+      <span class="cl-mut">«نقدي» يدخل التقفيل · «بنكي» يزيد الرصيد الموحّد</span>
     </div>
   </form>
 </div>

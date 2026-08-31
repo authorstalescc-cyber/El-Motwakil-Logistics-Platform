@@ -30,7 +30,7 @@ $entryRow = static function (array $r) use ($labels): void {
     if (!empty($r['category'])) { $meta[] = ['icon' => 'tag', 'text' => CompanySafe::catLabel((string) $r['category'])]; }
     if ($r['note'])   { $meta[] = ['icon' => 'file-text', 'text' => (string) $r['note']]; }
     if (!empty($r['custody_id']))      { $meta[] = ['icon' => 'landmark', 'text' => 'أثّرت على خزنة المكتب']; }
-    if (!empty($r['visa_deposit_id'])) { $meta[] = ['icon' => 'credit-card', 'text' => 'أثّرت على كارت الفيزا']; }
+    if (!empty($r['visa_deposit_id'])) { $meta[] = ['icon' => 'landmark', 'text' => 'أثّرت على الحساب البنكي']; }
     if (!empty($r['rep_deposit_id']))  { $meta[] = ['icon' => 'truck', 'text' => 'نزلت لمندوب']; }
     partial('row_item', [
         'title'  => (string) ($r['title'] ?? ($labels[$kind] ?? $kind)),
@@ -100,7 +100,7 @@ case 'wallets':
       في الشرط بين الرقم وبنوده هو بالظبط «البيان المضلِّل» اللي المالك رفضه. */
 case 'day_in':
     partial('drill', [
-        'how'   => 'كل اللي دخل خزنة الشركة في يوم العمل ده — بمصدره: بنك ولا عميل ولا رجوع من كارت فيزا.',
+        'how'   => 'كل اللي دخل خزنة الشركة في يوم العمل ده — بمصدره: بنك ولا عميل ولا رجوع من حساب بنكي.',
         'count' => count($rows),
         'total' => ['label' => 'دخل يوم ' . dfmt($day),
                     'value' => money(array_sum(array_map(static fn ($r) => (float) $r['amount'], $rows)), false)],
@@ -186,7 +186,7 @@ case 'office_drawer':
 case 'in':
     $rows = array_values(array_filter($rows, static fn ($r) => CompanySafe::isIn((string) $r['kind'])));
     partial('drill', [
-        'how'   => 'كل الكاش اللي دخل خزنة الشركة: إيداعات ومسحوبات البنك + تحصيل العملاء + اللي رجع من خزنة المكتب أو من كارت فيزا.',
+        'how'   => 'كل الكاش اللي دخل خزنة الشركة: إيداعات ومسحوبات البنك + تحصيل العملاء + اللي رجع من خزنة المكتب أو من حساب بنكي.',
         'count' => count($rows),
         'total' => ['label' => 'إجمالي الداخل', 'value' => money($sideTotal(true), false)],
         'more'  => ['label' => 'كل الحركات', 'url' => url('company-safe')],
@@ -198,7 +198,7 @@ case 'in':
 case 'out':
     $rows = array_values(array_filter($rows, static fn ($r) => !CompanySafe::isIn((string) $r['kind'])));
     partial('drill', [
-        'how'   => 'كل الكاش اللي خرج من خزنة الشركة: تحويل للمكتب + مصروفات + شحن كروت الفيزا + عهد المناديب.',
+        'how'   => 'كل الكاش اللي خرج من خزنة الشركة: تحويل للمكتب + مصروفات + تحويلات للحسابات البنكية + عهد المناديب.',
         'count' => count($rows),
         'total' => ['label' => 'إجمالي الخارج', 'value' => money($sideTotal(false), false)],
         'more'  => ['label' => 'كل الحركات', 'url' => url('company-safe')],

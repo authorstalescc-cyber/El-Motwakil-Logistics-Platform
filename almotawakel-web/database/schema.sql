@@ -574,17 +574,33 @@ INSERT IGNORE INTO debt_accounts (account_key, name, kind, opening, note) VALUES
     ('guarantee', 'ياسر أبو عمر / كونتراكت', 'guarantee', 0, 'مديونية الضمان — تُحتسب تلقائياً من حاويات الأذونات');
 
 -- ═══════════════════════════════════════════════════════════════════
--- رصيد المكتب — كروت الفيزا (migrate_v22)
---   visa_cards: كارت الفيزا (اسم/رقم + صاحبه + بنك + رصيد افتتاحي).
---   visa_deposits: شحنات/إيداعات رصيد على الكارت (تزيد الرصيد).
---   الرصيد = افتتاحي + Σ الشحنات − Σ المدفوعات المعلَّمة is_visa=1 والمنسوبة للكارت
---   عبر عمود visa_card_id في: manual_expenses / permit_stages / movement_items / debt_payments.
+-- الحسابات البنكية وكروت الفيزا (v22، أُعيد بناؤها في migrate_v110)
+-- الحساب هو المحفظة صاحبة الرصيد، وكل كروته تشترك فيه.
+-- الرصيد = Σ حركات الحساب الموقعة − Σ المدفوعات بكل كروت الحساب.
 -- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS bank_accounts (
+    id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name        VARCHAR(180)  NOT NULL,
+    bank_name   VARCHAR(180)  NULL,
+    account_ref VARCHAR(80)   NULL,
+    owner       VARCHAR(180)  NULL,
+    status      VARCHAR(20)   NOT NULL DEFAULT 'active',
+    note        VARCHAR(255)  NULL,
+    legacy_key  VARCHAR(191)  NULL,
+    created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_bank_legacy (legacy_key),
+    KEY idx_bank_status (status),
+    KEY idx_bank_name (bank_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS visa_cards (
     id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
     name            VARCHAR(180)  NOT NULL,           -- اسم/رقم الكارت
     owner           VARCHAR(180)  NULL,               -- صاحب الكارت
     bank            VARCHAR(180)  NULL,               -- البنك
+    bank_account_id INT UNSIGNED NOT NULL,            -- المحفظة الأم (v110)
     opening_balance DECIMAL(14,2) NOT NULL DEFAULT 0, -- الرصيد الافتتاحي
     status          VARCHAR(20)   NOT NULL DEFAULT 'active',  -- active | inactive
     note            VARCHAR(255)  NULL,
@@ -592,20 +608,25 @@ CREATE TABLE IF NOT EXISTS visa_cards (
     updated_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     KEY idx_owner (owner),
-    KEY idx_status (status)
+    KEY idx_status (status),
+    KEY idx_vc_bank_account (bank_account_id),
+    CONSTRAINT fk_vc_bank_account FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS visa_deposits (
     id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    card_id     INT UNSIGNED NOT NULL,
+    card_id     INT UNSIGNED NULL,                    -- اختياري: الحركة تخص الحساب أولًا
+    bank_account_id INT UNSIGNED NOT NULL,
     dep_date    DATE          NULL,
-    amount      DECIMAL(14,2) NOT NULL DEFAULT 0,   -- موجب = شحن للكارت
+    amount      DECIMAL(14,2) NOT NULL DEFAULT 0,   -- موجب = إيداع، سالب = سحب
     note        VARCHAR(255)  NULL,
     created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     KEY idx_card (card_id),
-    KEY idx_date (dep_date)
+    KEY idx_date (dep_date),
+    KEY idx_vd_bank_account (bank_account_id),
+    CONSTRAINT fk_vd_bank_account FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- سجل الترحيلات: يمنع إعادة التطبيق وتعديل ملف سبق اعتماده.

@@ -37,7 +37,7 @@
        بيقارنهم ويفشل لو اختلفوا — كانت منحرفة: `--warid` كان لونًا تانيًا
        خالص، و`--red/--green/--sader/--gold-l` درجات مختلفة عن الشاشة) */
     --navy:#15355B; --navy2:#1E4B7A; --gold:#C9A227; --gold-l:#F3E9C6; --gold-d:#8A6D10;
-    --ink:#1A2433; --muted:#5A6472; --line:#E2E7EE; --bg:#F4F6F9;
+    --ink:#1A2433; --muted:#5A6472; --line:#E2E7EE; --bg:#F4F6F9; --card:#FFFFFF;
     --red:#9B2C2C; --green:#1E6E3C;
     --sader:#B26A1B; --warid:#0E7C86;
     --font:'Cairo',system-ui,-apple-system,Tahoma,Arial,sans-serif;

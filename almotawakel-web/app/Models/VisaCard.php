@@ -4,16 +4,14 @@ namespace App\Models;
 use App\Core\Database;
 
 /**
- * رصيد المكتب — كروت الفيزا.
+ * كروت الفيزا التابعة للحسابات البنكية.
  *
  * القاعدة:
- *   • كل كارت له رصيد افتتاحي + شحنات يدوية (visa_deposits) تزيده.
- *   • كل عملية مدفوعة بالفيزا (is_visa=1) في النظام كله تُنسَب لكارت (visa_card_id)
- *     فتُخصم من رصيده. مصادر المدفوعات الأربعة:
- *       manual_expenses / permit_stages / movement_items / debt_payments
- *   • الرصيد = الرصيد الافتتاحي + Σ(الشحنات) − Σ(المدفوعات المنسوبة للكارت).
- *
- * ملاحظة: visa_card_id وسم للنسبة فقط — لا يمسّ أي حساب قائم ولا التقفيل اليومي.
+ *   • كل كارت تابع لحساب بنكي واحد، وكل كروت الحساب تشترك في رصيده.
+ *   • كل عملية مدفوعة بالفيزا تُنسَب للكارت فتُخصم من **حسابه البنكي**.
+ *     مصادر المدفوعات:
+ *       manual_expenses / permit_stages / movement_items / debt_payments / rep_misc_expenses
+ * الرصيد وحركاته في `BankAccount`؛ هذا الموديل يحتفظ بهوية الكارت ونشاطه فقط.
  */
 class VisaCard
 {
@@ -31,13 +29,25 @@ class VisaCard
     /** كل الكروت (مع خيار الحالة). */
     public static function all(bool $activeOnly = false): array
     {
-        $where = $activeOnly ? "WHERE status = 'active'" : '';
-        return Database::all("SELECT * FROM visa_cards $where ORDER BY status='inactive', name");
+        $where = $activeOnly ? "WHERE c.status='active' AND a.status='active'" : '';
+        if (!BankAccount::ready()) {
+            $legacy = $activeOnly ? "WHERE status='active'" : '';
+            return Database::all("SELECT * FROM visa_cards $legacy ORDER BY status='inactive',name");
+        }
+        return Database::all(
+            "SELECT c.*,a.name account_name,a.bank_name account_bank,a.status account_status
+               FROM visa_cards c JOIN bank_accounts a ON a.id=c.bank_account_id
+               $where ORDER BY c.status='inactive',a.name,c.name"
+        );
     }
 
     public static function find(int $id): ?array
     {
-        return Database::row("SELECT * FROM visa_cards WHERE id = ?", [$id]);
+        if (!BankAccount::ready()) { return Database::row('SELECT * FROM visa_cards WHERE id=?', [$id]); }
+        return Database::row(
+            'SELECT c.*,a.name account_name,a.bank_name account_bank,a.status account_status
+               FROM visa_cards c JOIN bank_accounts a ON a.id=c.bank_account_id WHERE c.id=?', [$id]
+        );
     }
 
     /**
@@ -47,25 +57,55 @@ class VisaCard
     public static function isActive(int $id): bool
     {
         if ($id <= 0) { return false; }
-        return (string) Database::scalar(
-            "SELECT status FROM visa_cards WHERE id = ?", [$id]) === 'active';
+        if (!BankAccount::ready()) {
+            return (string) Database::scalar('SELECT status FROM visa_cards WHERE id=?', [$id]) === 'active';
+        }
+        return (bool) Database::scalar(
+            "SELECT COUNT(*) FROM visa_cards c JOIN bank_accounts a ON a.id=c.bank_account_id
+              WHERE c.id=? AND c.status='active' AND a.status='active'", [$id]
+        );
+    }
+
+    /** حساب الكارت؛ `$active=true` يشترط نشاط الكارت والحساب معًا. */
+    public static function accountId(int $id, bool $active = true): int
+    {
+        if ($id <= 0 || !BankAccount::ready()) { return 0; }
+        $where = $active ? " AND c.status='active' AND a.status='active'" : '';
+        return (int) Database::scalar(
+            "SELECT c.bank_account_id FROM visa_cards c
+              JOIN bank_accounts a ON a.id=c.bank_account_id WHERE c.id=?$where", [$id]
+        );
     }
 
     /** خريطة [id => name] للعرض السريع في الجداول والسجلات. */
     public static function nameMap(): array
     {
         $out = [];
-        foreach (Database::all("SELECT id, name, owner FROM visa_cards") as $c) {
-            $out[(int) $c['id']] = $c['name'] . ($c['owner'] ? ' — ' . $c['owner'] : '');
+        foreach (self::all(false) as $c) {
+            $out[(int) $c['id']] = $c['name'] . ($c['owner'] ? ' — ' . $c['owner'] : '')
+                . (!empty($c['account_name']) ? ' — ' . $c['account_name'] : '');
         }
         return $out;
     }
 
     public static function create(array $d): int
     {
+        $accountId = (int) ($d['bank_account_id'] ?? 0);
+        if (BankAccount::ready() && !BankAccount::isActive($accountId)) {
+            throw new \RuntimeException('اختار حسابًا بنكيًا نشطًا للكارت.');
+        }
+        $bind = self::bind($d);
+        if (BankAccount::ready()) {
+            Database::exec(
+                "INSERT INTO visa_cards (name,owner,bank,bank_account_id,opening_balance,status,note)
+                 VALUES (:name,:owner,:bank,:bank_account_id,:opening_balance,:status,:note)",
+                $bind + [':bank_account_id' => $accountId]
+            );
+            return Database::lastId();
+        }
         Database::exec(
             "INSERT INTO visa_cards (name, owner, bank, opening_balance, status, note)
-             VALUES (:name, :owner, :bank, :opening_balance, :status, :note)", self::bind($d));
+             VALUES (:name, :owner, :bank, :opening_balance, :status, :note)", $bind);
         return Database::lastId();
     }
 
@@ -73,14 +113,39 @@ class VisaCard
     {
         $p = self::bind($d);
         $p[':id'] = $id;
+        if (BankAccount::ready()) {
+            $old = self::find($id);
+            if (!$old) { throw new \RuntimeException('الكارت مش موجود.'); }
+            $accountId = (int) ($d['bank_account_id'] ?? 0);
+            if (!BankAccount::isActive($accountId) && $accountId !== (int) $old['bank_account_id']) {
+                throw new \RuntimeException('اختار حسابًا بنكيًا نشطًا للكارت.');
+            }
+            if ($accountId !== (int) $old['bank_account_id'] && self::usageCount($id) > 0) {
+                throw new \RuntimeException('الكارت عليه عمليات؛ ما ينفعش تنقله لحساب تاني لأن ده هينقل تاريخه المالي. أضف كارتًا جديدًا.');
+            }
+            $p[':bank_account_id'] = $accountId;
+            Database::exec(
+                "UPDATE visa_cards SET name=:name,owner=:owner,bank=:bank,
+                        bank_account_id=:bank_account_id,opening_balance=:opening_balance,
+                        status=:status,note=:note WHERE id=:id", $p
+            );
+            return;
+        }
         Database::exec(
             "UPDATE visa_cards SET name=:name, owner=:owner, bank=:bank,
                     opening_balance=:opening_balance, status=:status, note=:note WHERE id=:id", $p);
     }
 
-    /** حذف الكارت + فكّ نسبة عملياته (visa_card_id → NULL) حتى لا تختفي من السجلات. */
+    /** الكارت المستخدم ماليًا لا يُحذف؛ يُوقَف حتى يظل التاريخ منسوبًا له. */
     public static function delete(int $id): void
     {
+        if (BankAccount::ready()) {
+            if (self::usageCount($id) > 0) {
+                throw new \RuntimeException('الكارت عليه عمليات مالية؛ وقّفه بدل الحذف عشان السجل يفضل صحيحًا.');
+            }
+            Database::exec('DELETE FROM visa_cards WHERE id=?', [$id]);
+            return;
+        }
         $tables = ['manual_expenses', 'permit_stages', 'movement_items', 'debt_payments'];
         // v45: نثريات المناديب مصدر خامس — لازم تتفكّ هي كمان وإلا بتفضل منسوبة
         // لكارت اتمسح، فتختفي من كشوف الكروت وتبقى يتيمة.
@@ -94,14 +159,37 @@ class VisaCard
 
     private static function bind(array $d): array
     {
+        $bank = ($d['bank'] ?? '') !== '' ? $d['bank'] : null;
+        if (BankAccount::ready() && !empty($d['bank_account_id'])) {
+            $account = BankAccount::find((int) $d['bank_account_id']);
+            $bank = $account['bank_name'] ?? $account['name'] ?? $bank;
+        }
         return [
             ':name'            => trim((string) ($d['name'] ?? '')),
             ':owner'           => ($d['owner'] ?? '') !== '' ? $d['owner'] : null,
-            ':bank'            => ($d['bank'] ?? '') !== '' ? $d['bank'] : null,
+            ':bank'            => $bank,
             ':opening_balance' => (float) ($d['opening_balance'] ?? 0),
             ':status'          => ($d['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active',
             ':note'            => ($d['note'] ?? '') !== '' ? $d['note'] : null,
         ];
+    }
+
+    private static function paymentCount(int $id): int
+    {
+        return (int) Database::scalar(
+            'SELECT COUNT(*) FROM (' . self::paymentsUnion() . ') t WHERE t.card_id=?', [$id]
+        );
+    }
+
+    /** أي أثر تاريخي يمنع حذف الكارت أو نقله حتى لا تتغيّر نسبة السجل. */
+    private static function usageCount(int $id): int
+    {
+        $count = self::paymentCount($id);
+        if (!BankAccount::ready()) { return $count; }
+        $count += (int) Database::scalar('SELECT COUNT(*) FROM visa_deposits WHERE card_id=?', [$id]);
+        $count += (int) Database::scalar('SELECT COUNT(*) FROM client_payments WHERE visa_card_id=?', [$id]);
+        $count += (int) Database::scalar('SELECT COUNT(*) FROM company_safe_entries WHERE visa_card_id=?', [$id]);
+        return $count;
     }
 
     // ─────────────────────────────────────────────── الشحنات (الإيداعات)
@@ -113,6 +201,10 @@ class VisaCard
 
     public static function deposits(int $cardId): array
     {
+        if (BankAccount::ready()) {
+            $accountId = self::accountId($cardId, false);
+            return $accountId ? BankAccount::entries($accountId) : [];
+        }
         return Database::all(
             "SELECT * FROM visa_deposits WHERE card_id = ? ORDER BY (dep_date IS NULL), dep_date DESC, id DESC",
             [$cardId]);
@@ -120,6 +212,11 @@ class VisaCard
 
     public static function createDeposit(int $cardId, array $d): int
     {
+        if (BankAccount::ready()) {
+            $accountId = self::accountId($cardId, true);
+            if (!$accountId) { throw new \RuntimeException('كارت الفيزا أو حسابه البنكي مش موجود أو متوقف.'); }
+            return BankAccount::createEntry($accountId, $d + ['card_id' => $cardId]);
+        }
         Database::exec(
             "INSERT INTO visa_deposits (card_id, dep_date, amount, note)
              VALUES (?,?,?,?)",
@@ -130,6 +227,24 @@ class VisaCard
 
     public static function updateDeposit(int $id, array $d): void
     {
+        if (BankAccount::ready()) {
+            $old = BankAccount::findEntry($id);
+            if (!$old) { throw new \RuntimeException('حركة الحساب مش موجودة.'); }
+            $amount = round((float) ($d['amount'] ?? 0), 2);
+            if (abs($amount) < 0.005) { throw new \RuntimeException('اكتب مبلغًا غير صفر.'); }
+            $accountId = (int) $old['bank_account_id'];
+            BankAccount::withAccountSpendDeltas(
+                [$accountId => round((float) $old['amount'] - $amount, 2)],
+                static function () use ($id, $d, $amount): void {
+                    Database::exec(
+                        'UPDATE visa_deposits SET dep_date=?,amount=?,note=? WHERE id=?',
+                        [$d['dep_date'] ?: null, $amount,
+                         ($d['note'] ?? '') !== '' ? $d['note'] : null, $id]
+                    );
+                }
+            );
+            return;
+        }
         Database::exec(
             "UPDATE visa_deposits SET dep_date=?, amount=?, note=? WHERE id=?",
             [$d['dep_date'] ?: null, (float) ($d['amount'] ?? 0),
@@ -138,6 +253,7 @@ class VisaCard
 
     public static function deleteDeposit(int $id): void
     {
+        if (BankAccount::ready()) { BankAccount::deleteEntry($id); return; }
         Database::exec("DELETE FROM visa_deposits WHERE id = ?", [$id]);
     }
 
@@ -147,7 +263,7 @@ class VisaCard
      * اتحاد كل عمليات الفيزا المنسوبة لكارت (is_visa=1 AND visa_card_id IS NOT NULL).
      * أعمدة موحّدة: source, card_id, ref_id, d, category, party, amount, note.
      */
-    private static function paymentsUnion(): string
+    public static function paymentsUnion(): string
     {
         $stageCase = "CASE s.stage_key";
         foreach (array_keys(Permit::STAGES) as $k) {
@@ -261,6 +377,19 @@ class VisaCard
     public static function withBalances(bool $activeOnly = false): array
     {
         $cards = self::all($activeOnly);
+        if (BankAccount::ready()) {
+            $accounts = [];
+            foreach (BankAccount::withBalances() as $a) { $accounts[(int) $a['id']] = $a; }
+            $cardPayments = self::paymentsByCard();
+            foreach ($cards as &$c) {
+                $a = $accounts[(int) $c['bank_account_id']] ?? [];
+                $c['dep_total'] = (float) ($a['entry_total'] ?? 0);
+                $c['pay_total'] = $cardPayments[(int) $c['id']] ?? 0.0;
+                $c['balance'] = (float) ($a['balance'] ?? 0);
+            }
+            unset($c);
+            return $cards;
+        }
         $deps  = self::depositsByCard();
         $pays  = self::paymentsByCard();
         foreach ($cards as &$c) {
@@ -280,6 +409,7 @@ class VisaCard
     {
         $c = self::find($cardId);
         if (!$c) { return 0.0; }
+        if (BankAccount::ready()) { return BankAccount::balanceOf((int) $c['bank_account_id']); }
         $dep = (float) Database::scalar("SELECT COALESCE(SUM(amount),0) FROM visa_deposits WHERE card_id = ?", [$cardId]);
         $pay = self::paymentsByCard()[$cardId] ?? 0.0;
         return round((float) $c['opening_balance'] + $dep - $pay, 2);
@@ -288,6 +418,11 @@ class VisaCard
     /** إجماليات لوحة الوحدة: عدد الكروت، إجمالي الأرصدة، الشحنات، المدفوعات. */
     public static function summary(): array
     {
+        if (BankAccount::ready()) {
+            $s = BankAccount::summary();
+            return ['count' => $s['cards'], 'balance' => $s['balance'], 'deposits' => $s['entries'],
+                    'payments' => $s['payments'], 'opening' => 0.0];
+        }
         $cards = self::withBalances();
         $bal = 0.0; $dep = 0.0; $pay = 0.0; $open = 0.0;
         foreach ($cards as $c) {
@@ -311,10 +446,18 @@ class VisaCard
         $out = [];
         foreach (self::withBalances() as $c) {
             $key = ($c['owner'] ?? '') !== '' ? $c['owner'] : '(بدون صاحب)';
-            if (!isset($out[$key])) { $out[$key] = ['owner' => $key, 'cards' => 0, 'balance' => 0.0]; }
+            if (!isset($out[$key])) { $out[$key] = ['owner' => $key, 'cards' => 0, 'accounts' => 0]; }
             $out[$key]['cards']++;
-            $out[$key]['balance'] = round($out[$key]['balance'] + (float) $c['balance'], 2);
+            $accountKey = BankAccount::ready() ? (int) $c['bank_account_id'] : (int) $c['id'];
+            $out[$key]['_accounts'][$accountKey] = true;
         }
+        foreach ($out as &$row) {
+            // الرصيد لا يُقسَّم على أصحاب الكروت؛ الحساب قد يحمل كروتًا لأكثر
+            // من شخص، وعرض الرصيد لكل واحد كان سيكرر نفس المال.
+            $row['accounts'] = count($row['_accounts'] ?? []);
+            unset($row['_accounts']);
+        }
+        unset($row);
         return array_values($out);
     }
 
@@ -380,6 +523,13 @@ class VisaCard
     /** آخر شحنة رصيد على الكارت (الأحدث) أو null. */
     public static function lastDeposit(int $cardId): ?array
     {
+        if (BankAccount::ready()) {
+            $accountId = self::accountId($cardId, false);
+            return $accountId > 0 ? Database::row(
+                "SELECT * FROM visa_deposits WHERE bank_account_id=? AND amount>0
+                 ORDER BY (dep_date IS NULL),dep_date DESC,id DESC LIMIT 1", [$accountId]
+            ) : null;
+        }
         return Database::row(
             "SELECT * FROM visa_deposits WHERE card_id = ?
              ORDER BY (dep_date IS NULL), dep_date DESC, id DESC LIMIT 1", [$cardId]);
@@ -413,7 +563,9 @@ class VisaCard
             if ((float) $r['mx'] > $max) { $max = (float) $r['mx']; }
             if ($r['last_ts'] && (!$last || $r['last_ts'] > $last)) { $last = $r['last_ts']; }
         }
-        $depCount = (int) Database::scalar("SELECT COUNT(*) FROM visa_deposits WHERE card_id = ?", [$cardId]);
+        $depCount = BankAccount::ready()
+            ? (int) Database::scalar('SELECT COUNT(*) FROM visa_deposits WHERE bank_account_id=?', [self::accountId($cardId, false)])
+            : (int) Database::scalar("SELECT COUNT(*) FROM visa_deposits WHERE card_id = ?", [$cardId]);
 
         return [
             'by_source'      => $bySource,

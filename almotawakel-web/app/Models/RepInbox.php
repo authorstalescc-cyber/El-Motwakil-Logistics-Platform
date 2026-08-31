@@ -586,26 +586,26 @@ class RepInbox
             if ($stageId) {
                 /* نفس اشتقاق `approve()` بالحرف — مصدر واحد للسؤال «البند ده
                    بيتكتب على أنهي مرحلة وباتجاه إيه؟». */
-                Database::exec(
-                    "UPDATE permit_stages
-                        SET stage_key=?, direction=?, movement_id=?, amount=?, qty=?, actual_amount=?,
-                            entry_date=?, ref_no=?, note=?, is_visa=?, visa_card_id=?, unpaid=?
-                      WHERE id=?",
-                    [
-                        $v['kind'] === 'receipt' ? 'receipts' : 'custom',
-                        $v['kind'] === 'expense' ? 'expense' : null,
-                        $v['movement_id'],
-                        $v['amount'],
-                        $v['qty'],
-                        $v['actual'] === null ? null : round($v['actual'] * $v['qty'], 2),
-                        $v['date'],
-                        $v['ref'],
-                        $v['note'],
-                        $v['is_visa'] ? 1 : 0,
-                        $v['visa_card_id'],
-                        $v['unpaid'] ? 1 : 0,
-                        $stageId,
-                    ]);
+                BankAccount::withCardSpendChanges([[
+                    'old_card' => !empty($before['is_visa']) ? $before['visa_card_id'] : null,
+                    'old_amount' => !empty($before['is_visa']) ? $before['amount'] : 0,
+                    'new_card' => $v['is_visa'] ? $v['visa_card_id'] : null,
+                    'new_amount' => $v['is_visa'] ? $v['amount'] : 0,
+                ]], static function () use ($v, $stageId): void {
+                    Database::exec(
+                        "UPDATE permit_stages
+                            SET stage_key=?, direction=?, movement_id=?, amount=?, qty=?, actual_amount=?,
+                                entry_date=?, ref_no=?, note=?, is_visa=?, visa_card_id=?, unpaid=?
+                          WHERE id=?",
+                        [
+                            $v['kind'] === 'receipt' ? 'receipts' : 'custom',
+                            $v['kind'] === 'expense' ? 'expense' : null,
+                            $v['movement_id'], $v['amount'], $v['qty'],
+                            $v['actual'] === null ? null : round($v['actual'] * $v['qty'], 2),
+                            $v['date'], $v['ref'], $v['note'], $v['is_visa'] ? 1 : 0,
+                            $v['visa_card_id'], $v['unpaid'] ? 1 : 0, $stageId,
+                        ]);
+                });
 
                 /* v109 — التفصيل بيتحدّث مع البند في نفس المعاملة. لو ما
                    اتحدّثش هنا، بند اتغيّر إجماليه بيفضل شايل سطورًا مجموعها
@@ -825,29 +825,25 @@ class RepInbox
             $actualTotal = ($s['actual_unit'] === null || $s['actual_unit'] === '')
                 ? null : round((float) $s['actual_unit'] * (int) $s['qty'], 2);
 
-            Database::exec(
-                "INSERT INTO permit_stages
-                    (permit_id, movement_id, stage_key, direction, amount, qty, actual_amount,
-                     entry_date, ref_no, note, status, attachment, is_visa, visa_card_id,
-                     unpaid, paid_by_rep_id)
-                 VALUES (?,?,?,?,?,?,?,?,?,?, 'done', ?, ?, ?, ?, ?)",
-                [
-                    (int) $s['permit_id'], $s['movement_id'] ? (int) $s['movement_id'] : null,
-                    $stageKey, $direction,
-                    round((float) $s['amount'], 2), (int) $s['qty'], $actualTotal,
-                    $s['entry_date'], $s['ref_no'], $s['note'],
-                    $s['photo'],                    // صورة الإيصال بتروح مرفق على البند
-                    // v45: وسم الفيزا بيتنقل زي ما هو. is_visa=1 معناه إن المبلغ
-                    // خرج من الكارت — فبيتخصم منه، وبيتستثنى من الخزنة (زي أي بند
-                    // فيزا) **ومن عهدة المندوب الكاش** (RepCustody::spentTotal).
-                    (int) ($s['is_visa'] ?? 0),
-                    !empty($s['is_visa']) && !empty($s['visa_card_id']) ? (int) $s['visa_card_id'] : null,
-                    // v57: وسم «غير مدفوع» بيتنقل زي وسم الفيزا بالظبط — البند
-                    // بيظهر على الإذن وفي فاتورة العميل، لكن `Permit::cashOutSql`
-                    // بتستثنيه من **الخزنة ومن عهدة المندوب** مع بعض.
-                    (int) ($s['unpaid'] ?? 0),
-                    (int) $s['rep_id'],             // يربط المصروف بعهدة المندوب
-                ]);
+            BankAccount::withCardSpendChanges([[
+                'new_card' => !empty($s['is_visa']) ? ($s['visa_card_id'] ?? null) : null,
+                'new_amount' => !empty($s['is_visa']) ? (float) $s['amount'] : 0,
+            ]], static function () use ($s, $stageKey, $direction, $actualTotal): void {
+                Database::exec(
+                    "INSERT INTO permit_stages
+                        (permit_id, movement_id, stage_key, direction, amount, qty, actual_amount,
+                         entry_date, ref_no, note, status, attachment, is_visa, visa_card_id,
+                         unpaid, paid_by_rep_id)
+                     VALUES (?,?,?,?,?,?,?,?,?,?, 'done', ?, ?, ?, ?, ?)",
+                    [
+                        (int) $s['permit_id'], $s['movement_id'] ? (int) $s['movement_id'] : null,
+                        $stageKey, $direction, round((float) $s['amount'], 2), (int) $s['qty'], $actualTotal,
+                        $s['entry_date'], $s['ref_no'], $s['note'], $s['photo'],
+                        (int) ($s['is_visa'] ?? 0),
+                        !empty($s['is_visa']) && !empty($s['visa_card_id']) ? (int) $s['visa_card_id'] : null,
+                        (int) ($s['unpaid'] ?? 0), (int) $s['rep_id'],
+                    ]);
+            });
             $stageId = Database::lastId();
 
             // v109 — الأسعار المفصّلة بتتحوّل لسطور حقيقية دلوقتي (وقبل كده
@@ -1086,19 +1082,24 @@ class RepInbox
                 [$subId]);
             if ($changed !== 1) { throw new RuntimeException('اتغيّرت حالة البند من طلب تاني — حدّث الصفحة.'); }
 
-            if ($stageId) {
-                Database::exec('DELETE FROM permit_stages WHERE id=?', [$stageId]);
-                Audit::log('delete', 'permit_stages', $stageId, $before, null,
-                    'إلغاء اعتماد بند مندوب' . $label . ' — ' . Permit::noLabel($s['permit_type'] ?? 'sader')
-                    . ' ' . ($s['permit_no'] ?: '#' . $s['permit_id']),
-                    ['permit_id' => (int) $s['permit_id'], 'permit_no' => $s['permit_no'],
-                     'record_date' => $day, 'rep_id' => (int) $s['rep_id'], 'submission_id' => $subId]);
-            } else {
-                Database::exec('DELETE FROM rep_misc_expenses WHERE id=?', [$miscId]);
-                Audit::log('delete', 'rep_misc_expenses', $miscId, $before, null,
-                    'إلغاء اعتماد نثرية مندوب' . $label,
-                    ['record_date' => $day, 'rep_id' => (int) $s['rep_id'], 'submission_id' => $subId]);
-            }
+            BankAccount::withCardSpendChanges([[
+                'old_card'=>!empty($before['is_visa']) ? $before['visa_card_id'] : null,
+                'old_amount'=>!empty($before['is_visa']) ? $before['amount'] : 0,
+            ]], static function () use ($stageId, $miscId, $before, $label, $s, $day, $subId): void {
+                if ($stageId) {
+                    Database::exec('DELETE FROM permit_stages WHERE id=?', [$stageId]);
+                    Audit::log('delete', 'permit_stages', $stageId, $before, null,
+                        'إلغاء اعتماد بند مندوب' . $label . ' — ' . Permit::noLabel($s['permit_type'] ?? 'sader')
+                        . ' ' . ($s['permit_no'] ?: '#' . $s['permit_id']),
+                        ['permit_id' => (int) $s['permit_id'], 'permit_no' => $s['permit_no'],
+                         'record_date' => $day, 'rep_id' => (int) $s['rep_id'], 'submission_id' => $subId]);
+                } else {
+                    Database::exec('DELETE FROM rep_misc_expenses WHERE id=?', [$miscId]);
+                    Audit::log('delete', 'rep_misc_expenses', $miscId, $before, null,
+                        'إلغاء اعتماد نثرية مندوب' . $label,
+                        ['record_date' => $day, 'rep_id' => (int) $s['rep_id'], 'submission_id' => $subId]);
+                }
+            });
 
             Audit::log('update', 'rep_submissions', $subId, $s, self::find($subId),
                 'إلغاء اعتماد بند مندوب' . $label . ' — رجع لصندوق المراجعة',

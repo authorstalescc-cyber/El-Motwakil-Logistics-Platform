@@ -95,12 +95,18 @@ class RepMiscExpense
         ];
         if ($kindReady) { $args[] = $kind; }
 
-        Database::exec(
-            "INSERT INTO rep_misc_expenses ($cols)
-             VALUES (" . implode(',', array_fill(0, count($args), '?')) . ")",
-            $args
-        );
-        return Database::lastId();
+        $amount = round($unit * $qty, 2);
+        $cardId = $isVisa && !empty($d['visa_card_id']) ? (int) $d['visa_card_id'] : null;
+        return BankAccount::withCardSpendChanges([[
+            'new_card' => $cardId, 'new_amount' => $isVisa ? $amount : 0,
+        ]], static function () use ($cols, $args): int {
+            Database::exec(
+                "INSERT INTO rep_misc_expenses ($cols)
+                 VALUES (" . implode(',', array_fill(0, count($args), '?')) . ")",
+                $args
+            );
+            return Database::lastId();
+        });
     }
 
     /**
@@ -117,6 +123,8 @@ class RepMiscExpense
      */
     public static function update(int $id, array $d): void
     {
+        $old = self::find($id);
+        if (!$old) { throw new \RuntimeException('النثرية مش موجودة.'); }
         $qty  = max(1, (int) ($d['qty'] ?? 1));
         $unit = round((float) ($d['unit_amount'] ?? 0), 2);
         $kind = RepMiscKind::normalize($d['misc_kind'] ?? null);
@@ -138,14 +146,22 @@ class RepMiscExpense
         if ($kindReady) { $args[] = $kind; }
         $args[] = $id;
 
-        Database::exec(
-            "UPDATE rep_misc_expenses
-                SET exp_date=?, category=?, note=?, qty=?, unit_amount=?, amount=?,
-                    ref_no=?, is_visa=?, visa_card_id=?"
-                    . ($kindReady ? ', misc_kind=?' : '') . "
-              WHERE id=?",
-            $args
-        );
+        $newAmount = round($unit * $qty, 2);
+        $newCard = $isVisa && !empty($d['visa_card_id']) ? (int) $d['visa_card_id'] : null;
+        BankAccount::withCardSpendChanges([[
+            'old_card' => !empty($old['is_visa']) ? $old['visa_card_id'] : null,
+            'old_amount' => !empty($old['is_visa']) ? $old['amount'] : 0,
+            'new_card' => $newCard, 'new_amount' => $isVisa ? $newAmount : 0,
+        ]], static function () use ($kindReady, $args): void {
+            Database::exec(
+                "UPDATE rep_misc_expenses
+                    SET exp_date=?, category=?, note=?, qty=?, unit_amount=?, amount=?,
+                        ref_no=?, is_visa=?, visa_card_id=?"
+                        . ($kindReady ? ', misc_kind=?' : '') . "
+                  WHERE id=?",
+                $args
+            );
+        });
     }
 
     /**
@@ -183,8 +199,9 @@ class RepMiscExpense
     /**
      * ⚠️ شرط «النثرية الكاش» (v45) — المصدر الوحيد له.
      *
-     * النثرية المدفوعة بكارت الفيزا بتتخصم من **الكارت وبس**: لا من الخزنة ولا
-     * من عهدة المندوب. فأي حساب كاش لازم يمرّ على الشرط ده بدل ما يكتبه بإيده.
+     * النثرية المدفوعة بكارت الفيزا بتتخصم من **الحساب البنكي التابع له الكارت**:
+     * لا من الخزنة ولا من عهدة المندوب. فأي حساب كاش لازم يمرّ على الشرط ده بدل
+     * ما يكتبه بإيده.
      * بيرجع '1' قبل الترحيل، فالنظام يفضل بسلوكه القديم بدل ما يكسر.
      *
      * بيستخدمه: Closing::sumRepMisc/hasMovementBetween/earliestMovementDate ·
@@ -220,9 +237,16 @@ class RepMiscExpense
 
     public static function delete(int $id): void
     {
-        // الأدمن له حرية الحذف (قرار المالك): بنفكّ الربط وسجل الاعتماد بيفضل محفوظ.
-        DeletionPolicy::detachMisc($id);
-        Database::exec("DELETE FROM rep_misc_expenses WHERE id = ?", [$id]);
+        $old = self::find($id);
+        if (!$old) { return; }
+        BankAccount::withCardSpendChanges([[
+            'old_card' => !empty($old['is_visa']) ? $old['visa_card_id'] : null,
+            'old_amount' => !empty($old['is_visa']) ? $old['amount'] : 0,
+        ]], static function () use ($id): void {
+            // الأدمن له حرية الحذف: نفكّ الربط وسجل الاعتماد يفضل محفوظًا.
+            DeletionPolicy::detachMisc($id);
+            Database::exec("DELETE FROM rep_misc_expenses WHERE id = ?", [$id]);
+        });
     }
 
     // ─────────────────────────────────────────────── القراءة

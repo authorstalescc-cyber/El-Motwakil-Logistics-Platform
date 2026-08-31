@@ -28,8 +28,8 @@ $kindHint = [
     'to_office'   => 'الشركة تنقص · الدرج يزيد',
     'from_office' => 'الدرج ينقص · الشركة تزيد',
     'expense'     => 'الشركة تنقص',
-    'to_visa'     => 'الشركة تنقص · الكارت يزيد',
-    'from_visa'   => 'الكارت ينقص · الشركة تزيد',
+    'to_visa'     => 'الشركة تنقص · الحساب البنكي يزيد',
+    'from_visa'   => 'الحساب البنكي ينقص · الشركة تزيد',
     'to_rep'      => 'الشركة تنقص · المندوب يزيد',
 ];
 $selKind = (string) $val('kind', 'to_office');
@@ -140,11 +140,9 @@ $selKind = (string) $val('kind', 'to_office');
 
         <div class="cs-field" data-cs-for="to_visa from_visa"
              <?= $editing && !in_array($editRow['kind'], CompanySafe::VISA_KINDS, true) ? 'hidden' : '' ?>>
-          <label>كارت الفيزا</label>
-          <?php /* ⚠️ `visa_card_select()` المشتركة — المصدر الوحيد لأي قايمة
-                   كروت في النظام. نسخة محلية كانت هتتفرّع مع أول تعديل. */ ?>
-          <?= visa_card_select((int) $val('visa_card_id', 0)) ?>
-          <?= fieldError('visa_card_id', $errors) ?>
+          <label>الحساب البنكي</label>
+          <?= bank_account_select((int) $val('bank_account_id', 0)) ?>
+          <?= fieldError('bank_account_id', $errors) ?>
         </div>
 
         <div class="cs-field" data-cs-for="to_rep"

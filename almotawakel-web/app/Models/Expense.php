@@ -349,32 +349,51 @@ class Expense
 
     public static function createManual(array $d): int
     {
-        Database::exec(
-            "INSERT INTO manual_expenses (exp_date, category, beneficiary, amount, note, is_visa, visa_card_id)
-             VALUES (:exp_date, :category, :beneficiary, :amount, :note, :is_visa, :visa_card_id)",
-            self::bind($d));
-        $id = Database::lastId();
-        $saved = self::findManual($id);
-        Audit::log('create', 'manual_expenses', $id, null, $saved,
-            'إضافة مصروف يدوي'.(!empty($d['category']) ? ' — '.$d['category'] : '').
-            ' بقيمة '.number_format((float)$d['amount'], 2, '.', ','),
-            ['record_date'=>$d['exp_date'] ?? null]);
-        return $id;
+        $p = self::bind($d);
+        return BankAccount::withCardSpendChanges([[
+            'new_card' => $p[':visa_card_id'], 'new_amount' => $p[':is_visa'] ? $p[':amount'] : 0,
+        ]], static function () use ($p, $d): int {
+            Database::exec(
+                "INSERT INTO manual_expenses (exp_date, category, beneficiary, amount, note, is_visa, visa_card_id)
+                 VALUES (:exp_date, :category, :beneficiary, :amount, :note, :is_visa, :visa_card_id)", $p);
+            $id = Database::lastId();
+            $saved = self::findManual($id);
+            Audit::log('create', 'manual_expenses', $id, null, $saved,
+                'إضافة مصروف يدوي'.(!empty($d['category']) ? ' — '.$d['category'] : '').
+                ' بقيمة '.number_format((float)$d['amount'], 2, '.', ','),
+                ['record_date'=>$d['exp_date'] ?? null]);
+            return $id;
+        });
     }
 
     public static function updateManual(int $id, array $d): void
     {
+        $old = self::findManual($id);
+        if (!$old) { throw new \RuntimeException('المصروف مش موجود.'); }
         $p = self::bind($d);
         $p[':id'] = $id;
-        Database::exec(
-            "UPDATE manual_expenses SET exp_date=:exp_date, category=:category,
-                    beneficiary=:beneficiary, amount=:amount, note=:note, is_visa=:is_visa,
-                    visa_card_id=:visa_card_id WHERE id=:id", $p);
+        BankAccount::withCardSpendChanges([[
+            'old_card' => !empty($old['is_visa']) ? $old['visa_card_id'] : null,
+            'old_amount' => !empty($old['is_visa']) ? $old['amount'] : 0,
+            'new_card' => $p[':visa_card_id'], 'new_amount' => $p[':is_visa'] ? $p[':amount'] : 0,
+        ]], static function () use ($p): void {
+            Database::exec(
+                "UPDATE manual_expenses SET exp_date=:exp_date, category=:category,
+                        beneficiary=:beneficiary, amount=:amount, note=:note, is_visa=:is_visa,
+                        visa_card_id=:visa_card_id WHERE id=:id", $p);
+        });
     }
 
     public static function deleteManual(int $id): void
     {
-        Database::exec("DELETE FROM manual_expenses WHERE id = ?", [$id]);
+        $old = self::findManual($id);
+        if (!$old) { return; }
+        BankAccount::withCardSpendChanges([[
+            'old_card' => !empty($old['is_visa']) ? $old['visa_card_id'] : null,
+            'old_amount' => !empty($old['is_visa']) ? $old['amount'] : 0,
+        ]], static function () use ($id): void {
+            Database::exec("DELETE FROM manual_expenses WHERE id = ?", [$id]);
+        });
     }
 
     private static function bind(array $d): array

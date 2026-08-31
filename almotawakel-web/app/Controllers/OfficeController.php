@@ -3,13 +3,13 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\FormState;
+use App\Core\Database;
+use App\Models\BankAccount;
 use App\Models\VisaCard;
 
 /**
- * رصيد المكتب — كروت الفيزا وأرصدتها.
- * لوحة بكل الكروت + رصيد كل كارت (افتتاحي + شحنات − مدفوعات بالفيزا)،
- * صفحة تفصيل لكل كارت بسجل حركاته، وإدارة الكروت والشحنات.
- * المدفوعات تُسحب حيًّا من عمليات الفيزا المنسوبة للكارت (غير قابلة للتعديل من هنا).
+ * الحسابات البنكية وكروت الفيزا التابعة لها.
+ * الحساب هو المحفظة صاحبة الرصيد؛ الكارت أداة صرف وهوية للعملية فقط.
  */
 class OfficeController extends Controller
 {
@@ -18,9 +18,10 @@ class OfficeController extends Controller
     {
         $this->requireAuth();
         $this->render('office/index', [
-            'title'   => 'رصيد المكتب',
+            'title'   => 'الحسابات البنكية وكروت الفيزا',
+            'accounts'=> BankAccount::withBalances(),
             'cards'   => VisaCard::withBalances(),
-            'summary' => VisaCard::summary(),
+            'summary' => BankAccount::summary(),
             'byOwner' => VisaCard::byOwner(),
         ]);
     }
@@ -51,8 +52,9 @@ class OfficeController extends Controller
         }
         $this->render('office/_drill', [
             'what'    => $what,
+            'accounts'=> BankAccount::withBalances(),
             'cards'   => VisaCard::withBalances(),
-            'summary' => VisaCard::summary(),
+            'summary' => BankAccount::summary(),
             'byOwner' => VisaCard::byOwner(),
         ], false);
     }
@@ -63,15 +65,13 @@ class OfficeController extends Controller
         $this->requireAuth();
         $card = VisaCard::find((int) $id);
         if (!$card) { flash('error', 'الكارت غير موجود.'); redirect('office'); }
-        $state = FormState::consume('office.deposit.' . (int) $id, 'office/' . (int) $id);
         $this->render('office/card', [
             'title'   => 'كارت: ' . $card['name'],
             'card'    => $card,
-            'ledger'  => VisaCard::ledger((int) $id),
+            'payments'=> VisaCard::payments((int) $id),
             'balance' => VisaCard::balanceOf((int) $id),
             'stats'   => VisaCard::stats((int) $id),
-            'lastDep' => VisaCard::lastDeposit((int) $id),
-            'depositState' => $state,
+            'account' => BankAccount::find((int) ($card['bank_account_id'] ?? 0)),
         ]);
     }
 
@@ -84,7 +84,7 @@ class OfficeController extends Controller
         $this->render('office/statement', [
             'title'   => 'كشف حساب — ' . $card['name'],
             'card'    => $card,
-            'ledger'  => VisaCard::ledger((int) $id),
+            'payments'=> VisaCard::payments((int) $id),
             'balance' => VisaCard::balanceOf((int) $id),
             'stats'   => VisaCard::stats((int) $id),
         ], false);
@@ -95,7 +95,7 @@ class OfficeController extends Controller
     {
         $this->requireAuth();
         $state = FormState::consume('office.card.create', 'office');
-        $defaults = ['name' => '', 'owner' => '', 'bank' => '', 'opening_balance' => '', 'status' => 'active', 'note' => '', 'init_amount' => '', 'init_date' => work_date()];
+        $defaults = ['name' => '', 'owner' => '', 'bank_account_id' => '', 'status' => 'active', 'note' => ''];
         $this->render('office/form', [
             'title'  => 'إضافة كارت فيزا',
             'row'    => array_replace($defaults, $state['old']),
@@ -104,6 +104,7 @@ class OfficeController extends Controller
             'errors' => $state['errors'],
             'formToken' => $state['token'],
             'back' => $state['back'],
+            'accounts' => BankAccount::all(true),
         ]);
     }
 
@@ -112,20 +113,21 @@ class OfficeController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $data = $this->collect();
+        $errors = [];
         if ($data['name'] === '') {
+            $errors['name'] = 'اكتب اسم أو رقم الكارت.';
+        }
+        if (!BankAccount::isActive((int) $data['bank_account_id'])) {
+            $errors['bank_account_id'] = 'اختار حسابًا بنكيًا نشطًا.';
+        }
+        if ($errors) {
             $this->formFailure('office.card.create', 'office/new', $_POST,
-                ['name' => 'اكتب اسم أو رقم الكارت.'], 'office');
+                $errors, 'office');
         }
         $this->claimForm('office');
-        $id = VisaCard::create($data);
-        // رصيد مبدئي اختياري → يُسجَّل كشحنة مؤرَّخة (بدل الرصيد الافتتاحي)
-        $init = ($_POST['init_amount'] ?? '') === '' ? 0 : (float) $_POST['init_amount'];
-        if ($init != 0) {
-            VisaCard::createDeposit($id, [
-                'dep_date' => $this->cleanDate($_POST['init_date'] ?? '') ?: work_date(),
-                'amount'   => $init,
-                'note'     => 'رصيد مبدئي',
-            ]);
+        try { $id = VisaCard::create($data); }
+        catch (\Throwable $e) {
+            $this->formFailure('office.card.create', 'office/new', $_POST, ['_form' => $e->getMessage()], 'office');
         }
         flash('success', 'تمت إضافة الكارت.');
         redirect('office/' . $id);
@@ -145,6 +147,7 @@ class OfficeController extends Controller
             'errors' => $state['errors'],
             'formToken' => $state['token'],
             'back' => $state['back'],
+            'accounts' => BankAccount::all(false),
         ]);
     }
 
@@ -153,12 +156,19 @@ class OfficeController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $data = $this->collect();
-        if ($data['name'] === '') {
+        $errors = [];
+        if ($data['name'] === '') { $errors['name'] = 'اكتب اسم أو رقم الكارت.'; }
+        if ((int) $data['bank_account_id'] <= 0) { $errors['bank_account_id'] = 'اختار الحساب البنكي.'; }
+        if ($errors) {
             $this->formFailure('office.card.edit.' . (int) $id, 'office/' . (int) $id . '/edit', $_POST,
-                ['name' => 'اكتب اسم أو رقم الكارت.'], 'office/' . (int) $id);
+                $errors, 'office/' . (int) $id);
         }
         $this->claimForm('office/' . (int) $id);
-        VisaCard::update((int) $id, $data);
+        try { VisaCard::update((int) $id, $data); }
+        catch (\Throwable $e) {
+            $this->formFailure('office.card.edit.' . (int) $id, 'office/' . (int) $id . '/edit', $_POST,
+                ['_form' => $e->getMessage()], 'office/' . (int) $id);
+        }
         flash('success', 'تم حفظ التعديلات.');
         redirect('office/' . $id);
     }
@@ -168,8 +178,9 @@ class OfficeController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $this->claimForm('office');
-        VisaCard::delete((int) $id);
-        flash('success', 'تم حذف الكارت (وفُكّت نسبة عملياته).');
+        try { VisaCard::delete((int) $id); }
+        catch (\Throwable $e) { flash('error', $e->getMessage()); redirect('office/' . $id); }
+        flash('success', 'تم حذف الكارت غير المستخدم.');
         redirect('office');
     }
 
@@ -189,9 +200,11 @@ class OfficeController extends Controller
                 ['amount' => 'اكتب مبلغ شحن أكبر من صفر.'], 'office/' . (int) $id);
         }
         $this->claimForm('office/' . (int) $id . '#deposit');
-        VisaCard::createDeposit((int) $id, $d);
-        flash('success', 'تمت إضافة الشحن للرصيد.');
-        redirect('office/' . $id);
+        try { VisaCard::createDeposit((int) $id, $d); }
+        catch (\Throwable $e) { flash('error', $e->getMessage()); redirect('office/' . $id); }
+        $card = VisaCard::find((int) $id);
+        flash('success', 'تمت إضافة الإيداع للحساب البنكي.');
+        redirect('office/accounts/' . (int) ($card['bank_account_id'] ?? 0));
     }
 
     public function deleteDeposit(string $depId): void
@@ -199,10 +212,12 @@ class OfficeController extends Controller
         $this->requireAuth();
         $this->requireCsrf();
         $dep = VisaCard::findDeposit((int) $depId);
-        $this->claimForm($dep ? 'office/' . (int) $dep['card_id'] : 'office');
-        VisaCard::deleteDeposit((int) $depId);
-        flash('success', 'تم حذف الشحن.');
-        redirect($dep ? 'office/' . (int) $dep['card_id'] : 'office');
+        $back = $dep && !empty($dep['bank_account_id']) ? 'office/accounts/' . (int) $dep['bank_account_id'] : 'office';
+        $this->claimForm($back);
+        try { VisaCard::deleteDeposit((int) $depId); }
+        catch (\Throwable $e) { flash('error', $e->getMessage()); redirect($back); }
+        flash('success', 'تم حذف حركة الحساب.');
+        redirect($back);
     }
 
     // ─────────────────────────────────────────── أدوات
@@ -211,11 +226,172 @@ class OfficeController extends Controller
         return [
             'name'            => trim($_POST['name'] ?? ''),
             'owner'           => trim($_POST['owner'] ?? ''),
-            'bank'            => trim($_POST['bank'] ?? ''),
+            'bank_account_id' => (int) ($_POST['bank_account_id'] ?? 0),
+            'bank'            => '',
             // الرصيد الافتتاحي أُلغِيَ لصالح «الشحنات المؤرَّخة» (visa_deposits) — يبقى 0 دائمًا.
             'opening_balance' => 0,
             'status'          => ($_POST['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active',
             'note'            => trim($_POST['note'] ?? ''),
+        ];
+    }
+
+    // ─────────────────────────────────────────── الحسابات البنكية
+
+    public function accountCreate(): void
+    {
+        $this->requireAuth();
+        $state = FormState::consume('office.account.create', 'office');
+        $this->render('office/account_form', [
+            'title' => 'إضافة حساب بنكي', 'isEdit' => false, 'action' => url('office/accounts'),
+            'row' => array_replace(['name'=>'','bank_name'=>'','account_ref'=>'','owner'=>'','status'=>'active',
+                'note'=>'','init_amount'=>'','init_date'=>work_date()], $state['old']),
+            'errors'=>$state['errors'], 'formToken'=>$state['token'], 'back'=>$state['back'],
+        ]);
+    }
+
+    public function accountStore(): void
+    {
+        $this->requireAuth(); $this->requireCsrf();
+        $data = $this->collectAccount();
+        if ($data['name'] === '') {
+            $this->formFailure('office.account.create', 'office/accounts/new', $_POST,
+                ['name'=>'اكتب اسم الحساب البنكي.'], 'office');
+        }
+        $init = round((float) ($_POST['init_amount'] ?? 0), 2);
+        if ($init < 0) {
+            $this->formFailure('office.account.create', 'office/accounts/new', $_POST,
+                ['init_amount'=>'الرصيد المبدئي لا يمكن يكون سالبًا.'], 'office');
+        }
+        if ($init > 0 && $data['status'] !== 'active') {
+            $this->formFailure('office.account.create', 'office/accounts/new', $_POST,
+                ['status'=>'فعّل الحساب أولًا لإضافة رصيد مبدئي.'], 'office');
+        }
+        $this->claimForm('office');
+        $pdo = Database::conn(); $own = !$pdo->inTransaction();
+        if ($own) { $pdo->beginTransaction(); }
+        try {
+            $id = BankAccount::create($data);
+            if ($init > 0) {
+                BankAccount::createEntry($id, ['dep_date'=>$this->cleanDate($_POST['init_date'] ?? '') ?: work_date(),
+                    'amount'=>$init, 'note'=>'رصيد مبدئي']);
+            }
+            if ($own) { $pdo->commit(); }
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
+            $this->formFailure('office.account.create', 'office/accounts/new', $_POST,
+                ['_form'=>$e->getMessage()], 'office');
+        }
+        flash('success', 'تمت إضافة الحساب البنكي.'); redirect('office/accounts/' . $id);
+    }
+
+    public function account(string $id): void
+    {
+        $this->requireAuth();
+        $account = BankAccount::find((int) $id);
+        if (!$account) { flash('error','الحساب البنكي مش موجود.'); redirect('office'); }
+        $state = FormState::consume('office.account.entry.' . (int) $id, 'office/accounts/' . (int) $id);
+        $this->render('office/account', [
+            'title'=>'حساب: ' . $account['name'], 'account'=>$account,
+            'cards'=>BankAccount::cards((int)$id), 'ledger'=>BankAccount::ledger((int)$id),
+            'balance'=>BankAccount::balanceOf((int)$id), 'entryState'=>$state,
+        ]);
+    }
+
+    public function accountStatement(string $id): void
+    {
+        $this->requireAuth();
+        $account = BankAccount::find((int) $id);
+        if (!$account) { flash('error','الحساب البنكي مش موجود.'); redirect('office'); }
+        $this->render('office/account_statement', [
+            'title'=>'كشف حساب — ' . $account['name'], 'account'=>$account,
+            'cards'=>BankAccount::cards((int)$id), 'ledger'=>BankAccount::ledger((int)$id),
+            'balance'=>BankAccount::balanceOf((int)$id),
+        ], false);
+    }
+
+    public function accountEdit(string $id): void
+    {
+        $this->requireAuth();
+        $row = BankAccount::find((int)$id);
+        if (!$row) { flash('error','الحساب البنكي مش موجود.'); redirect('office'); }
+        $state = FormState::consume('office.account.edit.' . (int)$id, 'office/accounts/' . (int)$id);
+        $this->render('office/account_form', [
+            'title'=>'تعديل حساب بنكي', 'isEdit'=>true, 'action'=>url('office/accounts/'.$id),
+            'row'=>array_replace($row,$state['old']), 'errors'=>$state['errors'],
+            'formToken'=>$state['token'], 'back'=>$state['back'],
+        ]);
+    }
+
+    public function accountUpdate(string $id): void
+    {
+        $this->requireAuth(); $this->requireCsrf();
+        $data = $this->collectAccount();
+        if ($data['name'] === '') {
+            $this->formFailure('office.account.edit.'.(int)$id, 'office/accounts/'.(int)$id.'/edit', $_POST,
+                ['name'=>'اكتب اسم الحساب البنكي.'], 'office/accounts/'.(int)$id);
+        }
+        $this->claimForm('office/accounts/'.(int)$id);
+        try { BankAccount::update((int)$id,$data); }
+        catch (\Throwable $e) {
+            $this->formFailure('office.account.edit.'.(int)$id, 'office/accounts/'.(int)$id.'/edit', $_POST,
+                ['_form'=>$e->getMessage()], 'office/accounts/'.(int)$id);
+        }
+        flash('success','تم حفظ الحساب.'); redirect('office/accounts/'.$id);
+    }
+
+    public function accountDestroy(string $id): void
+    {
+        $this->requireAuth(); $this->requireCsrf(); $this->claimForm('office');
+        try { BankAccount::delete((int)$id); flash('success','تم حذف الحساب الفارغ.'); }
+        catch (\Throwable $e) { flash('error',$e->getMessage()); }
+        redirect('office');
+    }
+
+    public function storeAccountEntry(string $id): void
+    {
+        $this->requireAuth(); $this->requireCsrf();
+        $kind = ($_POST['kind'] ?? 'deposit') === 'withdraw' ? 'withdraw' : 'deposit';
+        $amount = round((float) ($_POST['amount'] ?? 0), 2);
+        $back = 'office/accounts/' . (int)$id . '#entry';
+        if ($amount <= 0) {
+            $this->formFailure('office.account.entry.'.(int)$id, $back, $_POST,
+                ['amount'=>'اكتب مبلغًا أكبر من صفر.'], 'office/accounts/'.(int)$id);
+        }
+        $this->claimForm($back);
+        try {
+            BankAccount::createEntry((int)$id, [
+                'dep_date'=>$this->cleanDate($_POST['dep_date'] ?? '') ?: work_date(),
+                'amount'=>$kind === 'withdraw' ? -$amount : $amount,
+                'note'=>trim((string)($_POST['note'] ?? '')),
+            ]);
+        } catch (\Throwable $e) {
+            $this->formFailure('office.account.entry.'.(int)$id, $back, $_POST,
+                ['_form'=>$e->getMessage()], 'office/accounts/'.(int)$id);
+        }
+        flash('success',$kind === 'withdraw' ? 'تم تسجيل السحب.' : 'تم تسجيل الإيداع.');
+        redirect('office/accounts/'.$id);
+    }
+
+    public function deleteAccountEntry(string $entryId): void
+    {
+        $this->requireAuth(); $this->requireCsrf();
+        $row = BankAccount::findEntry((int)$entryId);
+        $back = $row ? 'office/accounts/'.(int)$row['bank_account_id'] : 'office';
+        $this->claimForm($back);
+        try { BankAccount::deleteEntry((int)$entryId); flash('success','تم حذف حركة الحساب.'); }
+        catch (\Throwable $e) { flash('error',$e->getMessage()); }
+        redirect($back);
+    }
+
+    private function collectAccount(): array
+    {
+        return [
+            'name'=>trim((string)($_POST['name'] ?? '')),
+            'bank_name'=>trim((string)($_POST['bank_name'] ?? '')),
+            'account_ref'=>trim((string)($_POST['account_ref'] ?? '')),
+            'owner'=>trim((string)($_POST['owner'] ?? '')),
+            'status'=>($_POST['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active',
+            'note'=>trim((string)($_POST['note'] ?? '')),
         ];
     }
 

@@ -8,7 +8,7 @@
  * ⚠️ **صفر جملة تعليمية** — اللي فاضل تحذيرات وظيفية في ≤٦ كلمات.
  *
  * @var array $agent @var string $tab @var array $head @var array $aging
- * @var array $billable @var array $payState @var array $visaCards @var array $openInv
+ * @var array $billable @var array $payState @var array $bankAccounts @var array $openInv
  */
 use App\Models\ClientAccount;
 

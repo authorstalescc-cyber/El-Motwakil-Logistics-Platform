@@ -36,14 +36,14 @@ use App\Core\PrivateFile;
  * ═══ v67 — التوسّع (قرار مالك جديد، نفس اليوم) ═══
  * v66 كانت «تغذّي المكتب وبس». المالك طلب حزمة كاملة، فاتضافت أربع حركات:
  *   • `expense`    مصروف بيتصرف من الخزنة مباشرة (بفئة وجهة صرف ومرفق).
- *   • `to_visa`    شحن كارت فيزا من خزنة الشركة.
- *   • `from_visa`  سحب كاش من كارت فيزا لخزنة الشركة (شحنة بالسالب).
+ *   • `to_visa`    تحويل من خزنة الشركة إلى حساب بنكي.
+ *   • `from_visa`  سحب من حساب بنكي إلى خزنة الشركة (حركة حساب سالبة).
  *   • `to_rep`     تنزيل عهدة لمندوب من خزنة الشركة على طول.
  *
  * ⚠️⚠️ **العزل بالبناء لسه هو القاعدة.** الأنواع الجديدة إما بلا أي أثر برّه
  *    الجدول (`expense`)، أو أثرها بيمرّ على **API الوحدة التانية** بالظبط زي ما
  *    التحويل للمكتب بيمرّ على `Custody::createTopup`:
- *      `to_visa`/`from_visa` → `VisaCard::createDeposit`
+ *      `to_visa`/`from_visa` → `BankAccount::createEntry`
  *      `to_rep`              → `RepCustody::createDeposit(..., 'company')`
  *    فمفيش سطر واحد اتضاف لـ`Closing`/`DailyReview`/`Metrics`/`Expense`.
  *
@@ -99,7 +99,7 @@ class CompanySafe
     /** الأنواع اللي بتولّد صف `manual_custody` (بتمسّ خزنة المكتب). */
     public const OFFICE_KINDS = ['to_office', 'from_office'];
 
-    /** الأنواع اللي بتولّد شحنة على كارت فيزا (`visa_deposits`). */
+    /** الأنواع اللي بتولّد حركة على حساب بنكي (`visa_deposits` اسم تاريخي). */
     public const VISA_KINDS = ['to_visa', 'from_visa'];
 
     /**
@@ -148,8 +148,8 @@ class CompanySafe
             'from_office' => 'سحب من خزنة المكتب',
             'to_office'   => 'تحويل لخزنة المكتب',
             'expense'     => 'مصروف من خزنة الشركة',
-            'to_visa'     => 'شحن كارت فيزا',
-            'from_visa'   => 'سحب كاش من كارت فيزا',
+            'to_visa'     => 'تحويل لحساب بنكي',
+            'from_visa'   => 'سحب من حساب بنكي',
             'to_rep'      => 'عهدة لمندوب',
         ];
     }
@@ -414,8 +414,7 @@ class CompanySafe
             $r['title']     = trim((string) ($r['source'] ?? '')) !== ''
                 ? (string) $r['source'] : self::label($k);
             $r['subtitle']  = $r['title'] === self::label($k) ? null : self::label($k);
-            /* ⚠️ **اسم الكارت/المندوب لازم يبان** (طلب المالك: «لو من فيزا يتم
-               كتابة أي فيزا»). بيتحلّ في استعلامين بعد الحلقة — واحد لكل صف
+            /* ⚠️ **اسم الحساب/المندوب لازم يبان**. بيتحلّ بعد الحلقة — واحد لكل صف
                كان هيدّي N+1. */
             $r['wallet'] = null;
             // ⚠️ الحركة المولَّدة من وحدة تانية ممنوع تتعدّل/تتمسح من هنا.
@@ -427,22 +426,32 @@ class CompanySafe
     }
 
     /**
-     * بيحطّ اسم كارت الفيزا / المندوب على الصفوف اللي بتخصّهم.
+     * بيحطّ اسم الحساب البنكي / المندوب على الصفوف اللي بتخصّهم، مع fallback
+     * لاسم الكارت في الحركات التاريخية السابقة لـv110.
      *
      * ⚠️ **استعلامان لكل القايمة لا استعلام لكل صف** (N+1). و⚠️ الاسم **بيتقرا
-     *    وقت العرض لا بيتخزَّن**: لو المالك غيّر اسم الكارت، السجل القديم لازم
-     *    يعرض الاسم الجديد — تخزين نسخة كان هيدّي اسمين لنفس الكارت.
-     * ⚠️ الكارت/المندوب الممسوح بيرجّع `null` والشاشة بتعرض النوع بس — ما
+     *    وقت العرض لا بيتخزَّن**: لو المالك غيّر اسم الحساب، السجل القديم لازم
+     *    يعرض الاسم الجديد — تخزين نسخة كان هيدّي اسمين لنفس الحساب.
+     * ⚠️ الحساب/المندوب الممسوح بيرجّع `null` والشاشة بتعرض النوع بس — ما
      *    بنخترعش اسمًا.
      */
     private static function attachWallets(array &$rows): void
     {
-        $cardIds = $repIds = [];
+        $accountIds = $cardIds = $repIds = [];
         foreach ($rows as $r) {
+            if (!empty($r['bank_account_id'])) { $accountIds[(int) $r['bank_account_id']] = true; }
             if (!empty($r['visa_card_id'])) { $cardIds[(int) $r['visa_card_id']] = true; }
             if (!empty($r['rep_id']))       { $repIds[(int) $r['rep_id']] = true; }
         }
-        $cards = $reps = [];
+        $accounts = $cards = $reps = [];
+        if ($accountIds) {
+            $in = implode(',', array_fill(0, count($accountIds), '?'));
+            foreach (Database::all("SELECT id,name,bank_name FROM bank_accounts WHERE id IN ($in)",
+                                   array_keys($accountIds)) as $a) {
+                $accounts[(int) $a['id']] = trim((string) $a['name']
+                    . (($a['bank_name'] ?? '') !== '' ? ' — ' . $a['bank_name'] : ''));
+            }
+        }
         if ($cardIds) {
             $in = implode(',', array_fill(0, count($cardIds), '?'));
             foreach (Database::all("SELECT id, name, owner FROM visa_cards WHERE id IN ($in)",
@@ -459,7 +468,8 @@ class CompanySafe
             }
         }
         foreach ($rows as &$r) {
-            if (!empty($r['visa_card_id'])) { $r['wallet'] = $cards[(int) $r['visa_card_id']] ?? null; }
+            if (!empty($r['bank_account_id'])) { $r['wallet'] = $accounts[(int) $r['bank_account_id']] ?? null; }
+            elseif (!empty($r['visa_card_id'])) { $r['wallet'] = $cards[(int) $r['visa_card_id']] ?? null; }
             elseif (!empty($r['rep_id']))   { $r['wallet'] = $reps[(int) $r['rep_id']] ?? null; }
         }
         unset($r);
@@ -619,11 +629,12 @@ class CompanySafe
             Database::exec(
                 'INSERT INTO company_safe_entries
                     (entry_date, kind, amount, source, note, category, attachment,
-                     custody_id, visa_card_id, visa_deposit_id, rep_id, rep_deposit_id, created_by)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                     custody_id, visa_card_id, bank_account_id, visa_deposit_id,
+                     rep_id, rep_deposit_id, created_by)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 [$v['date'], $kind, $v['amount'], $v['source'], $v['note'],
                  $v['category'], $v['attachment'],
-                 $link['custody_id'], $v['visa_card_id'], $link['visa_deposit_id'],
+                 $link['custody_id'], null, $v['bank_account_id'], $link['visa_deposit_id'],
                  $v['rep_id'], $link['rep_deposit_id'], Auth::user()]
             );
             $id = Database::lastId();
@@ -643,7 +654,7 @@ class CompanySafe
      *    بيتفحصوا هنا، فأي مسار جديد (أو فورم مزوّر) بيعدّي على نفس القواعد.
      *
      * @return array{kind:string,amount:float,date:string,source:?string,note:?string,
-     *               category:?string,attachment:?string,visa_card_id:?int,rep_id:?int}
+     *               category:?string,attachment:?string,bank_account_id:?int,rep_id:?int}
      */
     private static function normalise(array $d): array
     {
@@ -664,12 +675,12 @@ class CompanySafe
            تقرير «راح فين» يعدّ حركات مش مصروفات — والفاحص بيمنعها. */
         $category = $kind === 'expense' ? self::cleanCat($d['category'] ?? null) : null;
 
-        // ⚠️ كارت الفيزا إلزامي للنوعين وبيتفحص إنه **نشط** فعلاً (نفس قاعدة v45).
-        $visaCardId = null;
+        // ⚠️ الحساب البنكي إلزامي للنوعين؛ كل كروته تشترك في نفس الرصيد.
+        $bankAccountId = null;
         if (in_array($kind, self::VISA_KINDS, true)) {
-            $visaCardId = (int) ($d['visa_card_id'] ?? 0);
-            if ($visaCardId <= 0 || !VisaCard::isActive($visaCardId)) {
-                throw new \RuntimeException('اختار كارت الفيزا الأول.');
+            $bankAccountId = (int) ($d['bank_account_id'] ?? 0);
+            if ($bankAccountId <= 0 || !BankAccount::isActive($bankAccountId)) {
+                throw new \RuntimeException('اختار الحساب البنكي الأول.');
             }
         }
 
@@ -688,7 +699,7 @@ class CompanySafe
                 'source' => $source !== '' ? $source : null,
                 'note' => $note !== '' ? $note : null,
                 'category' => $category, 'attachment' => $attachment,
-                'visa_card_id' => $visaCardId, 'rep_id' => $repId];
+                'bank_account_id' => $bankAccountId, 'rep_id' => $repId];
     }
 
     /**
@@ -715,10 +726,8 @@ class CompanySafe
                 'note'      => self::custodyNote($kind, (string) $v['note']),
             ]);
         } elseif (in_array($kind, self::VISA_KINDS, true)) {
-            /* ⚠️ `from_visa` بيتسجّل **شحنة بالسالب** — رصيد الكارت =
-               الافتتاحي + Σالشحنات − Σالمدفوعات، فالسالب بينقّصه بالظبط.
-               و`VisaCard::createDeposit` بتقبل أي قيمة بلا `abs()`. */
-            $out['visa_deposit_id'] = VisaCard::createDeposit((int) $v['visa_card_id'], [
+            /* `from_visa` حركة حساب سالبة؛ الحارس المركزي يمنع تجاوز الرصيد. */
+            $out['visa_deposit_id'] = BankAccount::createEntry((int) $v['bank_account_id'], [
                 'dep_date' => $v['date'],
                 'amount'   => $kind === 'to_visa' ? $v['amount'] : -$v['amount'],
                 'note'     => self::visaNote($kind, (string) $v['note']),
@@ -795,10 +804,16 @@ class CompanySafe
      *    فيها المبلغ وخزنة الشركة رجّعته). ولازم يمشي مع `writeLinked` أي نوع
      *    جديد يتضاف — الفاحص بيقارن القايمتين.
      */
-    private static function removeLinked(array $row): void
+    private static function removeLinked(array $row, bool $skipBankGuard = false): void
     {
         if (!empty($row['custody_id']))      { Custody::deleteTopup((int) $row['custody_id']); }
-        if (!empty($row['visa_deposit_id'])) { VisaCard::deleteDeposit((int) $row['visa_deposit_id']); }
+        if (!empty($row['visa_deposit_id'])) {
+            if (BankAccount::ready()) {
+                BankAccount::deleteEntry((int) $row['visa_deposit_id'], true, !$skipBankGuard);
+            } else {
+                VisaCard::deleteDeposit((int) $row['visa_deposit_id']);
+            }
+        }
         if (!empty($row['rep_deposit_id']))  { RepCustody::deleteDeposit((int) $row['rep_deposit_id']); }
     }
 
@@ -859,11 +874,8 @@ class CompanySafe
             }
         }
 
-        $pdo = Database::conn();
-        $own = !$pdo->inTransaction();
-        if ($own) { $pdo->beginTransaction(); }
-        try {
-            self::removeLinked($row);
+        $write = static function () use ($id, $row, $old, $v): void {
+            self::removeLinked($row, in_array($old, self::VISA_KINDS, true));
             $link = self::writeLinked($old, $v);
             /* المرفق: الجديد بيغلب، ولو مفيش جديد القديم بيفضل. `attachment`
                بترجع NULL من `normalise` لو ما اترفعش ملف — فالـ`??` هنا مقصودة. */
@@ -871,11 +883,11 @@ class CompanySafe
             Database::exec(
                 'UPDATE company_safe_entries
                     SET entry_date=?, amount=?, source=?, note=?, category=?, attachment=?,
-                        custody_id=?, visa_card_id=?, visa_deposit_id=?,
+                        custody_id=?, visa_card_id=NULL, bank_account_id=?, visa_deposit_id=?,
                         rep_id=?, rep_deposit_id=?, updated_by=?, updated_at=NOW()
                   WHERE id=?',
                 [$v['date'], $v['amount'], $v['source'], $v['note'], $v['category'], $att,
-                 $link['custody_id'], $v['visa_card_id'], $link['visa_deposit_id'],
+                 $link['custody_id'], $v['bank_account_id'], $link['visa_deposit_id'],
                  $v['rep_id'], $link['rep_deposit_id'], Auth::user(), $id]
             );
             if ($v['attachment'] !== null && !empty($row['attachment'])
@@ -885,10 +897,19 @@ class CompanySafe
             Audit::log('update', 'company_safe_entries', $id, $row, self::find($id),
                 'تعديل حركة خزنة الشركة: ' . self::label($old),
                 ['record_date' => $v['date']]);
-            if ($own) { $pdo->commit(); }
-        } catch (\Throwable $e) {
-            if ($own && $pdo->inTransaction()) { $pdo->rollBack(); }
-            throw $e;
+        };
+
+        if (BankAccount::ready() && in_array($old, self::VISA_KINDS, true)) {
+            $oldAccount = (int) ($row['bank_account_id'] ?? 0);
+            $newAccount = (int) ($v['bank_account_id'] ?? 0);
+            $oldSigned = $old === 'to_visa' ? (float) $row['amount'] : -(float) $row['amount'];
+            $newSigned = $old === 'to_visa' ? (float) $v['amount'] : -(float) $v['amount'];
+            $deltas = [];
+            if ($oldAccount > 0) { $deltas[$oldAccount] = ($deltas[$oldAccount] ?? 0.0) + $oldSigned; }
+            if ($newAccount > 0) { $deltas[$newAccount] = ($deltas[$newAccount] ?? 0.0) - $newSigned; }
+            BankAccount::withAccountSpendDeltas($deltas, $write);
+        } else {
+            BankAccount::withAccountSpendDeltas([], $write);
         }
     }
 

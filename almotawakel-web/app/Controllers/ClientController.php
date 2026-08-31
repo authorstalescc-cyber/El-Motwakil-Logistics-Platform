@@ -10,7 +10,7 @@ use App\Models\Party;
 use App\Models\PartyDoc;
 use App\Models\PartyMaster;
 use App\Models\PermitInvoice;
-use App\Models\VisaCard;
+use App\Models\BankAccount;
 
 /**
  * **حسابات العملاء (v93)** — الوحدة المستقلة اللي اتفصلت عن «دليل الأطراف».
@@ -64,7 +64,7 @@ class ClientController extends Controller
             'aging'     => ClientAccount::aging($agentId),
             'billable'  => ClientAccount::billable($name),
             'payState'  => FormState::consume('clients.pay.' . $agentId, 'clients/' . $agentId),
-            'visaCards' => VisaCard::all(true),
+            'bankAccounts' => BankAccount::all(true),
             'openInv'   => ClientAccount::openInvoices($agentId),
         ];
 
@@ -207,10 +207,10 @@ class ClientController extends Controller
         // ⚠️ القايمة من `ClientPayment::routeChoices()` — المصدر الوحيد اللي
         //    الشاشة بتقرا منه كمان (وإلا خيار معروض والخادم يرفضه بالسكوت).
         $route = isset(ClientPayment::routeChoices()[$_POST['route'] ?? '']) ? (string) $_POST['route'] : 'none';
-        $card  = (int) ($_POST['visa_card_id'] ?? 0);
+        $account = (int) ($_POST['bank_account_id'] ?? 0);
 
-        if ($route === 'visa' && $card <= 0) {
-            $this->payFailure($agentId, 'اختار كارت الفيزا اللي الدفعة هتتوجّه له.');
+        if ($route === 'visa' && !BankAccount::isActive($account)) {
+            $this->payFailure($agentId, 'اختار الحساب البنكي اللي الدفعة هتتوجّه له.');
         }
         // العهدة النقدية تدخل التقفيل اليومي → امنع الكتابة على يوم متقفل
         if ($route === 'cash' && ($err = Closing::guard($date))) { $this->payFailure($agentId, $err); }
@@ -238,7 +238,7 @@ class ClientController extends Controller
                 'amount'        => $amount,
                 'note'          => trim($_POST['note'] ?? ''),
                 'route'         => $route,
-                'visa_card_id'  => $card,
+                'bank_account_id' => $account,
                 'invoice_id'    => $invoiceId,
                 'auto_allocate' => $invoiceId <= 0 && !empty($_POST['auto_allocate']),
             ]);
@@ -259,7 +259,7 @@ class ClientController extends Controller
                 'pay_date'      => (string) ($_POST['pay_date'] ?? ''),
                 'note'          => (string) ($_POST['note'] ?? ''),
                 'route'         => (string) ($_POST['route'] ?? 'none'),
-                'visa_card_id'  => (string) ($_POST['visa_card_id'] ?? ''),
+                'bank_account_id' => (string) ($_POST['bank_account_id'] ?? ''),
                 'invoice_id'    => (string) ($_POST['invoice_id'] ?? ''),
                 'auto_allocate' => !empty($_POST['auto_allocate']) ? '1' : '',
             ],

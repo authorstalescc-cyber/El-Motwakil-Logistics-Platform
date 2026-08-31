@@ -73,7 +73,8 @@ class Movement
     /** حفظ بنود الحركة (يحذف القديمة ويعيد الإدراج) */
     public static function saveItems(int $movementId, array $types, array $categories, array $amounts, array $notes, array $visas = [], array $cards = []): void
     {
-        Database::exec('DELETE FROM movement_items WHERE movement_id = ?', [$movementId]);
+        $oldRows = self::items($movementId);
+        $newRows = [];
         $n = count($amounts);
         for ($i = 0; $i < $n; $i++) {
             $amt = (float)($amounts[$i] ?? 0);
@@ -81,13 +82,33 @@ class Movement
             if ($amt == 0 || !isset(self::ITEM_TYPES[$type])) { continue; }
             $isVisa = !empty($visas[$i]) ? 1 : 0;
             $cardId = ($isVisa && !empty($cards[$i])) ? (int) $cards[$i] : null;
-            Database::exec(
-                'INSERT INTO movement_items (movement_id, item_type, category, amount, note, is_visa, visa_card_id) VALUES (?,?,?,?,?,?,?)',
-                [$movementId, $type, trim($categories[$i] ?? '') ?: null, $amt, trim($notes[$i] ?? '') ?: null,
-                 $isVisa, $cardId]
-            );
+            if ($isVisa && $type === 'expense' && !$cardId) {
+                throw new \RuntimeException('اختار كارت الفيزا لكل مصروف مدفوع بالفيزا.');
+            }
+            $newRows[] = [$movementId, $type, trim($categories[$i] ?? '') ?: null, $amt,
+                          trim($notes[$i] ?? '') ?: null, $isVisa, $cardId];
         }
-        self::recalc($movementId);
+        $changes = [];
+        foreach ($oldRows as $row) {
+            if ($row['item_type'] === 'expense' && !empty($row['is_visa']) && !empty($row['visa_card_id'])) {
+                $changes[] = ['old_card' => $row['visa_card_id'], 'old_amount' => $row['amount']];
+            }
+        }
+        foreach ($newRows as $row) {
+            if ($row[1] === 'expense' && $row[5] && $row[6]) {
+                $changes[] = ['new_card' => $row[6], 'new_amount' => $row[3]];
+            }
+        }
+        BankAccount::withCardSpendChanges($changes, static function () use ($movementId, $newRows): void {
+            Database::exec('DELETE FROM movement_items WHERE movement_id = ?', [$movementId]);
+            foreach ($newRows as $row) {
+                Database::exec(
+                    'INSERT INTO movement_items (movement_id,item_type,category,amount,note,is_visa,visa_card_id)
+                     VALUES (?,?,?,?,?,?,?)', $row
+                );
+            }
+            self::recalc($movementId);
+        });
     }
 
     /** إعادة حساب إجماليات الحركة من بنودها */

@@ -194,7 +194,7 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
       <div class="tt cl"><div class="l">رصيد آخر المدة</div>
         <div class="v"><?= money($st['closing'], false) ?></div>
         <?php if ($st['other_out'] > 0.005): ?>
-          <div class="n">بعد خصم <?= money($st['other_out'], false) ?> فيزا وعهد مناديب</div>
+          <div class="n">بعد خصم <?= money($st['other_out'], false) ?> حسابات بنكية وعهد مناديب</div>
         <?php endif; ?></div>
     </div>
 
@@ -222,7 +222,7 @@ foreach (['assets/img/logo.png', 'assets/img/logo.jpg', 'assets/img/logo.jpeg'] 
           $wallet = trim((string) ($r['wallet'] ?? ''));
           if ($wallet !== '') {
               $wallet = (in_array((string) $r['kind'], CompanySafe::VISA_KINDS, true)
-                  ? 'كارت: ' : 'مندوب: ') . $wallet;
+                  ? 'حساب بنكي: ' : 'مندوب: ') . $wallet;
           }
           $parts = array_filter([
               $wallet !== '' ? $wallet : null,

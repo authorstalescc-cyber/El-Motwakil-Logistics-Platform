@@ -1,0 +1,18 @@
+<?php
+use App\Core\App;
+$company=App::setting('company_name','شركة المتوكل');
+$currency=App::setting('currency','ج.م');
+$in=$out=0.0; foreach($ledger as $r){ if($r['amount']>0)$in+=$r['amount']; else $out+=-$r['amount']; }
+?><!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title><?= e($title) ?> — <?= e($company) ?></title><?php partial('print_base'); ?>
+<style>
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:var(--font);color:var(--ink);direction:rtl}.sheet{width:210mm;min-height:297mm;margin:14px auto;background:var(--card);padding:18mm 15mm}.head{display:flex;justify-content:space-between;align-items:end;border-bottom:3px solid var(--navy);padding-bottom:12px}.head h1{margin:0;color:var(--ink);font-size:var(--fs-6)}.muted{color:var(--ink);opacity:.65;font-size:var(--fs-2)}.info,.totals{display:flex;gap:10px;margin:14px 0}.box{flex:1;border:1px solid var(--line);border-radius:var(--radius-2);padding:10px}.box b{display:block;font-size:var(--fs-4);margin-top:3px}.balance{background:var(--navy);color:#fff}.balance .muted{color:#d9e6f5;opacity:1}table{width:100%;border-collapse:collapse;font-size:var(--fs-2)}th,td{border:1px solid var(--line);padding:7px;text-align:center}th{background:var(--navy);color:#fff}.txt{text-align:right}.pos,.neg{color:var(--ink);font-weight:600}.tools{width:210mm;margin:12px auto;display:flex;gap:8px;justify-content:center}.btn{padding:9px 16px;border:1px solid var(--navy);border-radius:var(--radius-1);background:var(--navy);color:#fff;text-decoration:none;font-family:inherit}.btn.alt{background:var(--card);color:var(--ink)}@media print{body{background:var(--card)}.sheet{margin:0}.tools{display:none}}
+</style></head><body>
+<div class="tools"><button class="btn" onclick="window.print()">طباعة / حفظ PDF</button><a class="btn alt" href="<?= url('office/accounts/'.$account['id']) ?>">رجوع للحساب</a></div>
+<main class="sheet"><div class="head"><div><h1><?= e($company) ?></h1><div class="muted">كشف حساب بنكي داخلي</div></div><div><b><?= e($account['name']) ?></b><div class="muted">صادر في <?= e(dfmt(work_date())) ?></div></div></div>
+<div class="info"><div class="box"><span class="muted">البنك</span><b><?= e($account['bank_name'] ?: '—') ?></b></div><div class="box"><span class="muted">مرجع الحساب</span><b><?= e($account['account_ref'] ?: '—') ?></b></div><div class="box"><span class="muted">الكروت</span><b><?= e(implode(' · ',array_column($cards,'name')) ?: '—') ?></b></div></div>
+<div class="totals"><div class="box"><span class="muted">إجمالي الداخل</span><b class="pos"><?= money($in) ?></b></div><div class="box"><span class="muted">إجمالي الخارج</span><b class="neg"><?= money($out) ?></b></div><div class="box balance"><span class="muted">الرصيد المتاح</span><b><?= money($balance) ?></b></div></div>
+<table><thead><tr><th>التاريخ</th><th>الحركة</th><th>الكارت</th><th>الطرف / البيان</th><th>داخل</th><th>خارج</th><th>الرصيد</th></tr></thead><tbody>
+<?php foreach($ledger as $r): ?><tr><td><?= $r['d']?e(dfmt($r['d'])):'—' ?></td><td><?= e($r['label']) ?></td><td><?= e($r['card'] ?: '—') ?></td><td class="txt"><?= e($r['party'] ?: '—') ?></td><td class="pos"><?= $r['amount']>0?money($r['amount'],false):'' ?></td><td class="neg"><?= $r['amount']<0?money(-$r['amount'],false):'' ?></td><td><?= money($r['running'],false) ?></td></tr><?php endforeach; ?>
+<?php if(!$ledger): ?><tr><td colspan="7">لا توجد حركات.</td></tr><?php endif; ?>
+</tbody></table><p class="muted">العملة: <?= e($currency) ?> · الرصيد موحّد لكل الكروت التابعة للحساب.</p></main></body></html>

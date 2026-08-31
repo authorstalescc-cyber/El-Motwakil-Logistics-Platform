@@ -5,18 +5,18 @@
  * ⚠️ بيقرا من `ClientPayment::all()` نفسها اللي السجل بيتبنى منها، **وبنفس
  *    الفلاتر** — لو النافذة جابت الكل والشاشة مفلترة يبقى الرقم كذب.
  *
- * متغيّرات: $what $rows $summary $visaCards
+ * متغيّرات: $what $rows $summary $bankAccounts
  */
-$cardName = [];
-foreach ($visaCards as $vc) {
-    $cardName[(int) $vc['id']] = $vc['name'] . ($vc['owner'] ? ' — ' . $vc['owner'] : '');
+$accountName = [];
+foreach ($bankAccounts as $a) {
+    $accountName[(int) $a['id']] = $a['name'] . ($a['bank_name'] ? ' — ' . $a['bank_name'] : '');
 }
 $br = $summary['by_route'];
 [$howText, $totalLabel, $totalValue] = match ($what) {
     'cash'  => ['التحصيلات اللي المالك وجّهها **للعهدة النقدية**: بتولّد إضافة عهدة بتاريخ الدفعة فتزوّد خزنة اليوم وتدخل التقفيل.',
                 'عهدة نقدية', $br['cash']['value']],
-    'visa'  => ['التحصيلات اللي اتوجّهت **لشحن كارت فيزا**: بتولّد شحنة على الكارت المختار فتزوّد رصيده — والخزنة ما بتتأثرش.',
-                'شحن فيزا', $br['visa']['value']],
+    'visa'  => ['التحصيلات اللي اتوجّهت **لحساب بنكي**: بتولّد إيداعًا يزيد الرصيد المشترك لكل كروت الحساب.',
+                'إيداع بنكي', $br['visa']['value']],
     'none'  => ['تحصيلات اتسجّلت في حساب العميل بس — **بلا أي توجيه**: لا عهدة ولا كارت، بتقلّل المتبقّي على العميل وخلاص.',
                 'بدون توجيه', $br['none']['value']],
     default => ['كل التحصيلات اللي العملاء سلّموها للشركة على الفلاتر المعروضة. التوجيه بيحدّد الفلوس راحت فين بعد ما اتسلّمت.',
@@ -29,11 +29,11 @@ $br = $summary['by_route'];
     'total' => ['label' => $totalLabel, 'value' => money($totalValue, false)],
     'more'  => ['label' => 'سجل التحصيلات', 'url' => url('payments')],
     'empty' => ['title' => 'مفيش تحصيلات في النطاق ده'],
-    'body'  => function () use ($rows, $cardName) {
+    'body'  => function () use ($rows, $accountName) {
         foreach ($rows as $pm) {
             [$ic, $routeTxt] = match ($pm['route']) {
                 'cash' => ['wallet', 'عهدة نقدية'],
-                'visa' => ['credit-card', $cardName[(int) $pm['visa_card_id']] ?? 'فيزا'],
+                'visa' => ['landmark', $accountName[(int) ($pm['bank_account_id'] ?? 0)] ?? 'حساب بنكي'],
                 default => ['file-text', 'بدون توجيه'],
             };
             $meta = [

@@ -10,7 +10,7 @@ use App\Core\Database;
  * ويمكن «توجيه» المبلغ لأحد رصيدَي العهدة:
  *   • route='cash' → إضافة عهدة يدوية (manual_custody) بتاريخ الدفعة → تزيد عهدة اليوم
  *                    وتدخل التقفيل اليومي. تحترم قاعدة الإقفال (Closing::guard) في الكنترولر.
- *   • route='visa' → شحنة رصيد (visa_deposits) على كارت مختار → تزيد رصيد الكارت.
+ *   • route='visa' → إيداع في حساب بنكي مختار → يزيد رصيد الحساب الموحّد.
  *   • route='company' → حركة في **خزنة الشركة** (company_safe_entries، v66) → تزيد رصيدها.
  *                    ⚠️ **بلا Closing::guard** عن قصد: الفلوس دخلت خزنة الشركة مش الدرج،
  *                    فمفيش رصيد مثبَّت في daily_closings بيتغيّر — زي route='visa' بالظبط.
@@ -27,7 +27,7 @@ class ClientPayment
     public const ROUTES = [
         'none'    => 'بدون توجيه',
         'cash'    => 'عهدة نقدية (عهدة اليوم)',
-        'visa'    => 'شحن كارت فيزا',
+        'visa'    => 'الحساب البنكي',
         'company' => 'خزنة الشركة',
     ];
 
@@ -175,7 +175,7 @@ class ClientPayment
 
     /**
      * إنشاء دفعة + توليد السجل المرتبط حسب التوجيه.
-     * $d: client_name, pay_date, amount, note, route, visa_card_id.
+     * $d: client_name, pay_date, amount, note, route, bank_account_id.
      * يفترض أن الكنترولر تحقّق من Closing::guard قبل النداء لو route='cash'.
      */
     public static function create(array $d): int
@@ -186,6 +186,7 @@ class ClientPayment
         $amount = (float) ($d['amount'] ?? 0);
         $note   = trim((string) ($d['note'] ?? ''));
         $cardId = (int) ($d['visa_card_id'] ?? 0);
+        $bankAccountId = (int) ($d['bank_account_id'] ?? 0);
 
         $agent = !empty($d['agent_id']) ? PartyMaster::find('agent',(int)$d['agent_id']) : PartyMaster::ensure('agent',$name);
         if (!$agent) { throw new \RuntimeException('العميل غير موجود في البيانات الأساسية.'); }
@@ -211,22 +212,34 @@ class ClientPayment
                     'amount'    => $amount,
                     'note'      => 'تحصيل من عميل' . ($note !== '' ? ' — ' . $note : ''),
                 ]);
+            } elseif ($route === 'visa' && BankAccount::ready()) {
+                if (!BankAccount::isActive($bankAccountId)) {
+                    throw new \RuntimeException('اختار حسابًا بنكيًا نشطًا لتوجيه التحصيل.');
+                }
+                $depositId = BankAccount::createEntry($bankAccountId, [
+                    'dep_date' => $date, 'amount' => $amount,
+                    'note' => 'تحصيل من عميل: ' . $name . ($note !== '' ? ' — ' . $note : ''),
+                ]);
             } elseif ($route === 'visa' && $cardId > 0) {
+                // توافق قبل v110 فقط.
                 $visaCardId = $cardId;
-                $depositId  = VisaCard::createDeposit($cardId, [
-                    'dep_date' => $date,
-                    'amount'   => $amount,
-                    'note'     => 'تحصيل من عميل: ' . $name . ($note !== '' ? ' — ' . $note : ''),
+                $depositId = VisaCard::createDeposit($cardId, [
+                    'dep_date'=>$date,'amount'=>$amount,
+                    'note'=>'تحصيل من عميل: '.$name.($note!==''?' — '.$note:''),
                 ]);
             } else {
                 $route = 'none';
             }
 
+            $bankCol = BankAccount::ready() ? ',bank_account_id' : '';
+            $bankVal = BankAccount::ready() ? ',?' : '';
+            $args = [$name,(int)$agent['id'],$date,$amount,$amount,$note!==''?$note:null,$route,
+                     $custodyId,$depositId,$visaCardId,$companyEntryId];
+            if (BankAccount::ready()) { $args[] = $route === 'visa' ? $bankAccountId : null; }
             Database::exec(
                 "INSERT INTO client_payments
-                    (client_name,agent_id,pay_date,amount,status,unallocated_amount,note,route,custody_id,deposit_id,visa_card_id,company_entry_id)
-                 VALUES (?,?,?,?, 'posted', ?,?,?,?,?,?,?)",
-                [$name,(int)$agent['id'],$date,$amount,$amount,$note!==''?$note:null,$route,$custodyId,$depositId,$visaCardId,$companyEntryId]
+                    (client_name,agent_id,pay_date,amount,status,unallocated_amount,note,route,custody_id,deposit_id,visa_card_id,company_entry_id$bankCol)
+                 VALUES (?,?,?,?, 'posted', ?,?,?,?,?,?,?$bankVal)", $args
             );
             $id = Database::lastId();
             $invoiceId = (int)($d['invoice_id'] ?? 0);
@@ -263,7 +276,10 @@ class ClientPayment
             ),'invoice_id'));
             Database::exec('DELETE FROM invoice_payment_allocations WHERE payment_id=?',[$id]);
             if ($row['route']==='cash' && $row['custody_id']) { Custody::deleteTopup((int)$row['custody_id']); }
-            elseif ($row['route']==='visa' && $row['deposit_id']) { VisaCard::deleteDeposit((int)$row['deposit_id']); }
+            elseif ($row['route']==='visa' && $row['deposit_id']) {
+                if (BankAccount::ready()) { BankAccount::deleteEntry((int)$row['deposit_id'], true); }
+                else { VisaCard::deleteDeposit((int)$row['deposit_id']); }
+            }
             // ⚠️ لازم يتشال هنا كمان وإلا خزنة الشركة تفضل فيها فلوس تحصيل اتعكس.
             elseif ($row['route']==='company' && !empty($row['company_entry_id'])) {
                 CompanySafe::deleteRaw((int)$row['company_entry_id']);

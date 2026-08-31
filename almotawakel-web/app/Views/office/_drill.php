@@ -1,86 +1,32 @@
 <?php
-/**
- * أجسام نوافذ تفاصيل كروت الفيزا — المرحلة ١٤.
- *
- * ⚠ بترندر بلا layout وبترجع HTML للنافذة العامة (`#uiDrill`)، وبتقرا من نفس
- *    دوال `VisaCard` اللي أرقام الشاشة اتحسبت منها — فمستحيل الرقم يختلف.
- *
- * متغيّرات: $what $cards $summary $byOwner
- */
-$cardRow = static function (array $c, string $show): void {
-    $meta = [];
-    if ($c['owner']) { $meta[] = ['icon' => 'user', 'text' => $c['owner']]; }
-    if ($c['bank'])  { $meta[] = ['icon' => 'home', 'text' => $c['bank']]; }
-    $meta[] = ['icon' => 'wallet', 'text' => 'شحن ' . money($c['dep_total'] + $c['opening_balance'], false)];
-    $meta[] = ['icon' => 'trending-down', 'text' => 'مدفوع ' . money($c['pay_total'], false)];
-    $amount = match ($show) {
-        'deposits' => money($c['dep_total'] + $c['opening_balance'], false),
-        'payments' => money($c['pay_total'], false),
-        default    => money($c['balance'], false),
-    };
-    partial('row_item', [
-        'title'  => $c['name'],
-        'icon'   => 'credit-card',
-        'url'    => url('office/' . (int) $c['id']),
-        'meta'   => $meta,
-        'chips'  => $c['status'] === 'inactive' ? [['icon' => 'clock', 'text' => 'متوقف']] : [],
-        'amount' => $amount,
-        'amount_tone' => $show === 'payments' ? 'ex' : ($c['balance'] < 0 ? 'neg' : 'pos'),
-    ]);
+$accountRow = static function(array $a,string $show): void {
+  $amount = $show==='deposits' ? $a['entry_total'] : ($show==='payments' ? $a['pay_total'] : $a['balance']);
+  partial('row_item',[
+    'title'=>$a['name'],'icon'=>'landmark','url'=>url('office/accounts/'.(int)$a['id']),
+    'meta'=>[['icon'=>'credit-card','text'=>intf($a['cards_count']).' كارت'],
+             ['icon'=>'wallet','text'=>'صافي الحركات '.money($a['entry_total'],false)],
+             ['icon'=>'trending-down','text'=>'صرف '.money($a['pay_total'],false)]],
+    'chips'=>$a['status']==='inactive' ? [['icon'=>'clock','text'=>'متوقف']] : [],
+    'amount'=>money($amount,false),'amount_tone'=>$show==='payments'?'ex':($a['balance']<0?'neg':'pos'),
+  ]);
 };
-
-switch ($what) {
-
-case 'deposits':
-    partial('drill', [
-        'how'   => 'كل شحنة اتحطّت على أي كارت — الأرصدة المبدئية القديمة اتحوّلت لشحنات مؤرَّخة كمان.',
-        'count' => count($cards),
-        'total' => ['label' => 'إجمالي الشحنات', 'value' => money($summary['deposits'] + $summary['opening'], false)],
-        'more'  => ['label' => 'كل الكروت', 'url' => url('office')],
-        'empty' => ['title' => 'مفيش كروت فيزا لسه'],
-        'body'  => function () use ($cards, $cardRow) { foreach ($cards as $c) { $cardRow($c, 'deposits'); } },
-    ]);
-    break;
-
-case 'payments':
-    partial('drill', [
-        'how'   => 'المدفوع بالفيزا = كل عملية معلَّمة «مدفوع بالفيزا» ومنسوبة لكارت — مصروفات وبنود أذونات وبنود حركات وسداد مديونيات وبنود المناديب.',
-        'count' => count($cards),
-        'total' => ['label' => 'إجمالي المدفوع', 'value' => money($summary['payments'], false)],
-        'more'  => ['label' => 'تتبع الفيزا', 'url' => url('debts?tab=visa')],
-        'empty' => ['title' => 'مفيش كروت فيزا لسه'],
-        'body'  => function () use ($cards, $cardRow) { foreach ($cards as $c) { $cardRow($c, 'payments'); } },
-    ]);
-    break;
-
-case 'owners':
-    partial('drill', [
-        'how'   => 'الأرصدة مجمّعة على صاحب الكارت — مفيدة لما يكون لصاحب واحد أكتر من كارت.',
-        'count' => count($byOwner),
-        'total' => ['label' => 'إجمالي الأرصدة', 'value' => money($summary['balance'], false)],
-        'more'  => ['label' => 'كل الكروت', 'url' => url('office')],
-        'empty' => ['title' => 'مفيش أصحاب كروت مسجَّلين'],
-        'body'  => function () use ($byOwner) {
-            foreach ($byOwner as $o) {
-                partial('row_item', [
-                    'title'  => $o['owner'],
-                    'icon'   => 'user',
-                    'meta'   => [['icon' => 'credit-card', 'text' => intf($o['cards']) . ' كارت']],
-                    'amount' => money($o['balance'], false),
-                    'amount_tone' => $o['balance'] < 0 ? 'neg' : 'pos',
-                ]);
-            }
-        },
-    ]);
-    break;
-
-default:   // balance
-    partial('drill', [
-        'how'   => 'رصيد الكارت = الشحنات − المدفوع بالفيزا المنسوب له. الكارت معزول عن خزنة المكتب: المدفوع بالفيزا ما بيتخصمش من الخزنة ولا من التقفيل اليومي.',
-        'count' => count($cards),
-        'total' => ['label' => 'إجمالي الأرصدة المتاحة', 'value' => money($summary['balance'], false)],
-        'more'  => ['label' => 'كل الكروت', 'url' => url('office')],
-        'empty' => ['title' => 'مفيش كروت فيزا لسه'],
-        'body'  => function () use ($cards, $cardRow) { foreach ($cards as $c) { $cardRow($c, 'balance'); } },
-    ]);
-}
+$cfg = match($what) {
+  'deposits'=>['حركات الحساب الموقّعة: الإيداع موجب والسحب سالب.','صافي الإيداع والسحب',$summary['entries']],
+  'payments'=>['كل المصروفات المنسوبة لكروت الحساب؛ وتُخصم من رصيده المشترك.','إجمالي المدفوع',$summary['payments']],
+  'owners'=>['عرض تنظيمي لأصحاب الكروت فقط؛ الرصيد على الحساب البنكي ولا يتوزع أو يتكرر على أصحاب كروته.','أصحاب الكروت',count($byOwner)],
+  default=>['رصيد الحساب = حركاته الموقّعة − كل الصرف بكروته.','إجمالي الرصيد',$summary['balance']],
+};
+partial('drill',[
+  'how'=>$cfg[0],'count'=>$what==='owners'?count($byOwner):count($accounts),
+  'total'=>['label'=>$cfg[1],'value'=>$what==='owners'?intf($cfg[2]):money($cfg[2],false)],
+  'more'=>['label'=>'الحسابات والكروت','url'=>url('office')],
+  'empty'=>['title'=>'مفيش بيانات لسه'],
+  'body'=>function() use($what,$accounts,$byOwner,$accountRow) {
+    if ($what==='owners') {
+      foreach ($byOwner as $o) { partial('row_item',['title'=>$o['owner'],'icon'=>'user',
+        'meta'=>[['icon'=>'credit-card','text'=>intf($o['cards']).' كارت']],
+        'amount'=>intf($o['accounts']).' حساب']); } return;
+    }
+    foreach ($accounts as $a) { $accountRow($a,$what); }
+  },
+]);

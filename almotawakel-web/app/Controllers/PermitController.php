@@ -20,6 +20,7 @@ use App\Models\PermitTrack;
 use App\Models\ReceiptModel;
 use App\Models\PermitQuickEntry;
 use App\Models\VisaCard;
+use App\Models\BankAccount;
 
 /**
  * الإصدارات (إذن للصادر / شهادة للوارد) — أكبر عملية في النظام.
@@ -1469,18 +1470,30 @@ class PermitController extends Controller
 
         $this->claimForm('permits/'.$pid.'/manage#movement-'.(int)$mid);
 
-        // احذف مرفقات بنود الحركة
-        foreach (Database::all('SELECT id, attachment FROM permit_stages WHERE movement_id = ?', [(int)$mid]) as $s) {
-            $this->deleteFile($s['attachment']);
-            // فكّ ارتباط أي اعتماد مندوب قبل الحذف — السجل يفضل محفوظًا (قرار المالك)
-            DeletionPolicy::detachStage((int) $s['id']);
+        $stageRows = Database::all(
+            'SELECT id,attachment,is_visa,visa_card_id,amount FROM permit_stages WHERE movement_id=?',
+            [(int) $mid]
+        );
+        $visaChanges = [];
+        foreach ($stageRows as $s) {
+            if (!empty($s['is_visa'])) {
+                $visaChanges[] = ['old_card'=>$s['visa_card_id'],'old_amount'=>$s['amount']];
+            }
         }
-        Database::exec('DELETE FROM permit_stages WHERE movement_id = ?', [(int)$mid]);
-
-        // أعِد بوالص هذه الحركة لأقدم حركة أخرى
-        Database::exec('UPDATE bawalis SET movement_id = ? WHERE movement_id = ?', [$other ? (int)$other : null, (int)$mid]);
-
-        Database::exec('DELETE FROM permit_movements WHERE id = ?', [(int)$mid]);
+        BankAccount::withCardSpendChanges($visaChanges, static function () use ($stageRows, $mid, $other): void {
+            foreach ($stageRows as $s) {
+                // فكّ ارتباط أي اعتماد مندوب قبل الحذف — السجل يفضل محفوظًا.
+                DeletionPolicy::detachStage((int) $s['id']);
+            }
+            Database::exec('DELETE FROM permit_stages WHERE movement_id = ?', [(int)$mid]);
+            // أعِد بوالص هذه الحركة لأقدم حركة أخرى.
+            Database::exec('UPDATE bawalis SET movement_id = ? WHERE movement_id = ?', [
+                $other ? (int)$other : null, (int)$mid,
+            ]);
+            Database::exec('DELETE FROM permit_movements WHERE id = ?', [(int)$mid]);
+        });
+        // الملفات لا تدخل rollback؛ لا نمسحها إلا بعد نجاح كل كتابة القاعدة.
+        foreach ($stageRows as $s) { $this->deleteFile($s['attachment']); }
         if ($this->wantsJson()) { $this->ajaxMovement(null, 'تم حذف الحركة.', (int)$mid); return; }
         flash('success', 'تم حذف الحركة.');
         redirect('permits/'.$pid.'/manage#stage-bills');
@@ -1606,26 +1619,38 @@ class PermitController extends Controller
         $beforeStage = $stageId > 0
             ? Database::row('SELECT * FROM permit_stages WHERE id = ? AND permit_id = ?', [$stageId, $pid])
             : null;
-        if ($stageId > 0) {
-            // تعديل بند قائم
-            $set = 'direction=:direction, amount=:amount, qty=:qty, actual_amount=:actual_amount, entry_date=:entry_date, ref_no=:ref_no, note=:note, status=:status, is_visa=:is_visa, visa_card_id=:visa_card_id, unpaid=:unpaid';
-            $prm = array_combine(array_map(fn($c)=>":$c",array_keys($data)), array_values($data));
-            $prm[':id'] = $stageId; $prm[':pid'] = $pid;
-            if ($attach !== null) { $set .= ', attachment=:attachment'; $prm[':attachment'] = $attach; }
-            Database::exec("UPDATE permit_stages SET $set WHERE id=:id AND permit_id=:pid", $prm);
-        } else {
-            Database::exec(
-                'INSERT INTO permit_stages (permit_id, movement_id, stage_key, direction, amount, qty, actual_amount, entry_date, ref_no, note, status, attachment, is_visa, visa_card_id, unpaid)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                [$pid, $movementId, $key, $direction, $data['amount'], $data['qty'], $data['actual_amount'], $data['entry_date'], $data['ref_no'], $data['note'], $data['status'], $attach, $data['is_visa'], $data['visa_card_id'], $data['unpaid']]
-            );
-            $stageId = Database::lastId();
+        $changes = [[
+            'old_card' => !empty($beforeStage['is_visa']) ? ($beforeStage['visa_card_id'] ?? null) : null,
+            'old_amount' => !empty($beforeStage['is_visa']) ? ($beforeStage['amount'] ?? 0) : 0,
+            'new_card' => $data['is_visa'] ? $data['visa_card_id'] : null,
+            'new_amount' => $data['is_visa'] ? $data['amount'] : 0,
+        ]];
+        try {
+            BankAccount::withCardSpendChanges($changes, function () use (
+                &$stageId, $pid, $movementId, $key, $direction, $data, $attach
+            ): void {
+                if ($stageId > 0) {
+                    $set = 'direction=:direction, amount=:amount, qty=:qty, actual_amount=:actual_amount, entry_date=:entry_date, ref_no=:ref_no, note=:note, status=:status, is_visa=:is_visa, visa_card_id=:visa_card_id, unpaid=:unpaid';
+                    $prm = array_combine(array_map(fn($c)=>":$c",array_keys($data)), array_values($data));
+                    $prm[':id'] = $stageId; $prm[':pid'] = $pid;
+                    if ($attach !== null) { $set .= ', attachment=:attachment'; $prm[':attachment'] = $attach; }
+                    Database::exec("UPDATE permit_stages SET $set WHERE id=:id AND permit_id=:pid", $prm);
+                } else {
+                    Database::exec(
+                        'INSERT INTO permit_stages (permit_id, movement_id, stage_key, direction, amount, qty, actual_amount, entry_date, ref_no, note, status, attachment, is_visa, visa_card_id, unpaid)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                        [$pid, $movementId, $key, $direction, $data['amount'], $data['qty'], $data['actual_amount'], $data['entry_date'], $data['ref_no'], $data['note'], $data['status'], $attach, $data['is_visa'], $data['visa_card_id'], $data['unpaid']]
+                    );
+                    $stageId = Database::lastId();
+                }
+                \App\Models\ReceiptLine::refreshFor($stageId);
+            });
+        } catch (\Throwable $e) {
+            if ($attach !== null) { $this->deleteFile($attach); }
+            if ($this->wantsJson()) { $this->jsonFormFailure(['amount' => $e->getMessage()]); }
+            flash('error', $e->getMessage());
+            redirect('permits/'.$pid.'/manage'.($movementId ? '#movement-'.$movementId : '#stage-'.$key));
         }
-        /* v109 — البند اللي ليه تفصيل أسعار لازم تفصيله يفضل مطابقًا لإجماليه.
-           المالك بيعدّل الإجمالي من الفورم ده مباشرةً، فالمصالِح بيعيد بناء
-           السطور بالتساوي لو الإجمالي أو العدد اتغيّر (وبيسيبها زي ما هي لو
-           مطابقة). البند اللي مالوش تفصيل ما بيتلمسش. */
-        \App\Models\ReceiptLine::refreshFor($stageId);
 
         $savedStage = Database::row('SELECT * FROM permit_stages WHERE id = ?', [$stageId]);
         $entryKind = $key === 'receipts' ? 'إيصال'
@@ -1735,7 +1760,9 @@ class PermitController extends Controller
         if (\App\Models\OfficeDriverStatement::stageAllocationTotal((int)$sid) > 0.005) {
             $this->fail('الإيصال مربوط ببيان سائق سيارة المكتب. فكّ الربط من بيان السائق أولاً.', 'permits');
         }
-        $row = Database::row('SELECT permit_id, movement_id, attachment, entry_date, stage_key, direction, is_visa FROM permit_stages WHERE id = ?', [(int)$sid]);
+        $row = Database::row('SELECT permit_id,movement_id,attachment,entry_date,stage_key,direction,
+                                     is_visa,visa_card_id,amount
+                                FROM permit_stages WHERE id=?', [(int)$sid]);
         if ($row) {
             // بند ناتج عن اعتماد مندوب: الأدمن له حرية الحذف (قرار المالك) — بنفكّ الربط
             // وسجل الاعتماد نفسه بيفضل محفوظ في `rep_submissions` بحالته ومعاه ملاحظة الحذف.
@@ -1750,8 +1777,13 @@ class PermitController extends Controller
                 redirect('permits/'.(int)$row['permit_id'].'/manage');
             }
             $this->claimForm('permits/'.(int)$row['permit_id'].'/manage');
-            if ($repSubmission) { DeletionPolicy::detachStage((int) $sid); }
-            Database::exec('DELETE FROM permit_stages WHERE id = ?', [(int)$sid]);
+            BankAccount::withCardSpendChanges([[
+                'old_card'=>!empty($row['is_visa']) ? $row['visa_card_id'] : null,
+                'old_amount'=>!empty($row['is_visa']) ? $row['amount'] : 0,
+            ]], static function () use ($repSubmission, $sid): void {
+                if ($repSubmission) { DeletionPolicy::detachStage((int) $sid); }
+                Database::exec('DELETE FROM permit_stages WHERE id = ?', [(int)$sid]);
+            });
             $this->deleteFile($row['attachment']);
             $mvId = $row['movement_id'] ? (int)$row['movement_id'] : null;
             if ($this->wantsJson()) {

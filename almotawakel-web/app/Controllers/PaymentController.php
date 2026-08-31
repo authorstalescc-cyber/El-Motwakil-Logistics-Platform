@@ -6,7 +6,7 @@ use App\Core\FormState;
 use App\Models\ClientPayment;
 use App\Models\Closing;
 use App\Models\Party;
-use App\Models\VisaCard;
+use App\Models\BankAccount;
 
 /**
  * تحصيلات العملاء — تسجيل التحصيل وتخصيصه على الفواتير أو عكسه دون حذف.
@@ -36,7 +36,7 @@ class PaymentController extends Controller
             'payments'  => ClientPayment::all($f),
             'summary'   => ClientPayment::summary($f),
             'agents'    => Party::agents(),
-            'visaCards' => VisaCard::all(true),
+            'bankAccounts' => BankAccount::all(true),
             'formState' => $state,
         ]);
     }
@@ -72,7 +72,7 @@ class PaymentController extends Controller
             'what'      => $what,
             'rows'      => ClientPayment::all($f),
             'summary'   => ClientPayment::summary($f),
-            'visaCards' => VisaCard::all(false),
+            'bankAccounts' => BankAccount::all(false),
         ], false);
     }
 
@@ -90,12 +90,14 @@ class PaymentController extends Controller
         // ⚠️ القايمة من `ClientPayment::routeChoices()` — المصدر الوحيد اللي
         //    الشاشة بتقرا منه كمان (وإلا خيار معروض والخادم يرفضه بالسكوت).
         $route = isset(ClientPayment::routeChoices()[$_POST['route'] ?? '']) ? (string) $_POST['route'] : 'none';
-        $card  = (int) ($_POST['visa_card_id'] ?? 0);
+        $account = (int) ($_POST['bank_account_id'] ?? 0);
 
         $errors = [];
         if ($name === '') { $errors['client_name'] = 'اختر العميل أولاً.'; }
         if ($amount <= 0) { $errors['amount'] = 'أدخل مبلغًا أكبر من صفر.'; }
-        if ($route === 'visa' && $card <= 0) { $errors['visa_card_id'] = 'اختر كارت الفيزا لتوجيه الدفعة إليه.'; }
+        if ($route === 'visa' && !BankAccount::isActive($account)) {
+            $errors['bank_account_id'] = 'اختر حسابًا بنكيًا نشطًا لتوجيه الدفعة إليه.';
+        }
         $back = safe_back('payments', $_POST['_back'] ?? null);
         if ($errors) { $this->formFailure('payments.pay', $back, $_POST, $errors, 'payments'); }
         if ($route === 'cash' && ($err = Closing::guard($date))) {
@@ -111,7 +113,7 @@ class PaymentController extends Controller
                 'amount'       => $amount,
                 'note'         => trim($_POST['note'] ?? ''),
                 'route'        => $route,
-                'visa_card_id' => $card,
+                'bank_account_id' => $account,
                 'auto_allocate'=> !empty($_POST['auto_allocate']),
             ]);
             // ⚠️ الإشعار **بعد** نجاح الحفظ وخارج أي transaction (docs/15 §٨.٢)

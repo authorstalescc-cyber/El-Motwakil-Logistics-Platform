@@ -79,6 +79,7 @@ EXCLUDES=(
   --exclude 'storage/backups' --exclude 'database/backups'
   --exclude 'storage/private_uploads' --exclude 'public/uploads'
   --exclude 'storage/*.log' --exclude '*.log' --exclude '*.command'
+  --exclude '*.code-workspace'
   --exclude '__pycache__' --exclude '.venv' --exclude 'node_modules'
   # ⚠️ **حالة تشغيل محلية ومخرجات متولّدة — مالهاش لزوم على السيرفر.**
   #    `.sync.lock` قفل `flock` (الحالة في نواة النظام مش في الملف، فرفعه
@@ -208,7 +209,7 @@ if [[ -z "$CHANGED" ]]; then
   ok "مفيش ملفات اتغيّرت — السيرفر متطابق أصلاً"
 else
   echo "$CHANGED" | sed 's/^/  /'
-  ok "$(echo "$CHANGED" | wc -l | tr -d ' ') ملف اتنقل"
+  ok "$(echo "$CHANGED" | wc -l | LC_ALL=C tr -d ' ') ملف اتنقل"
 fi
 
 if [[ $DRY -eq 1 ]]; then
@@ -225,7 +226,9 @@ if [[ -n "$CHANGED" ]]; then
   say "2ب) مطابقة بصمات الملفات اللي اتنقلت"
   PATHS=$(echo "$CHANGED" | sed 's/^[^ ]* //' | grep -v '/$' || true)
   if [[ -n "$PATHS" ]]; then
-    REMOTE_SUMS=$(ssh "$HOST" "cd '$REMOTE' && md5sum $(echo "$PATHS" | tr '\n' ' ') 2>/dev/null")
+    # openrsync على macOS قد يطبع أسماء UTF-8 كخلطة bytes لا يقبلها locale؛
+    # التحويل هنا بايتات فقط، فـC هو الوضع الصحيح ولا يغيّر الاسم نفسه.
+    REMOTE_SUMS=$(ssh "$HOST" "cd '$REMOTE' && md5sum $(echo "$PATHS" | LC_ALL=C tr '\n' ' ') 2>/dev/null")
     BAD=0
     while IFS= read -r f; do
       [[ -f "$LOCAL/$f" ]] || continue
