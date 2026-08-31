@@ -20,20 +20,47 @@ class CustodyController extends Controller
     {
         $this->requireAuth();
         $state = FormState::consume('custody.topup.create', 'custody');
+        [$from, $to] = $this->range();
         $this->render('custody/index', [
             'title'      => 'رصيد العهدة',
             // نزّل عهدة لمندوب من الدرج — بتظهر بس لو فيه مناديب نشطين
             'repList'    => RepCustody::available() ? RepCustody::activeReps() : [],
             'repDepState'=> FormState::consume('custody.repdep.create', 'custody'),
-            'balance'    => Custody::balance(),
-            'topups'     => Custody::topupsTotal(),
-            'driverOut'  => Custody::driverCustodyOut(),
             'rate'       => Custody::deductionRate(),
-            'ledger'     => Custody::ledger(),
+            /* ⚠️ الحركة والرصيد الجاري من `Custody::movements()` — المصدر الوحيد
+               المبني على `DailyReview::officeCashItems` + `Closing`. الدالة
+               القديمة `ledger()` كانت بتحسب بإيدها فكانت بتقول رقمًا يخالف
+               الرصيد المعروض فوق (شرحها في ترويسة `movements`). */
+            'move'       => Custody::movements($from, $to),
+            /* ⚠️ تفكيك المحفظة — «الرصيد» معناه بيتغيّر مع النموذج الفعّال:
+               في النموذج المجمّع هو الدرج **+ جيوب المناديب**. لازم الشاشة
+               تفرّقهم وإلا بتقول «متاح» على فلوس مش في الدرج. */
+            'wallet'     => Closing::walletSplit(),
             'breakdown'  => Closing::currentBreakdown(),
             'lastClosed' => Closing::lastClosedDate(),
+            'aggregate'  => RepCustody::bankTopupActive(),
             'topupState' => $state,
         ]);
+    }
+
+    /**
+     * فترة العرض من الرابط، والافتراضي الشهر الحالي.
+     *
+     * ⚠️ التاريخ بيتفحص بالشكل قبل ما يوصل لأي استعلام — الرابط مش مصدر ثقة.
+     */
+    private function range(): array
+    {
+        [$defFrom, $defTo] = Custody::defaultRange();
+        $from = self::cleanDate($_GET['from'] ?? '') ?: $defFrom;
+        $to   = self::cleanDate($_GET['to'] ?? '') ?: $defTo;
+        return $from > $to ? [$to, $from] : [$from, $to];
+    }
+
+    /** تاريخ بالشكل `Y-m-d` أو فاضي — أي حاجة تانية بترجع فاضية. */
+    private static function cleanDate($v): string
+    {
+        $v = trim((string) $v);
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : '';
     }
 
     // ─────────────────────────────────────────── الإضافات اليدوية (توب-أب)

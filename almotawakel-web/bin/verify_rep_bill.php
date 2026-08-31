@@ -178,12 +178,34 @@ foreach ($safeFiles as $f) {
         ? bad("⚠️ $f كاتب شرط custody_rep_id بإيده — لازم يمرّ على officeExcludeSql")
         : ok("$f بيمرّ على المصدر الوحيد");
 }
-// عدد نقاط التزامن — لو نقصت يبقى موضع اتنسي.
+/* عدد نقاط التزامن — لو نقصت يبقى موضع اتنسي.
+   ⚠️⚠️ **الرقم نزل من ٩ لـ٨ في 2026-08-31 — والسبب متسجّل هنا عشان ما يتقريش
+      «حد ضعّف الحارس».** `Custody::ledger()` اتشالت بالكامل (كانت بتحسب سجل
+      الخزنة بإيدها فبتدّي رقمًا يخالف الرصيد بمئات الألوف — docs/21). النقطة
+      اللي راحت كانت جوّه الدالة المتشالة نفسها، **والتغطية ما نقصتش**: البديل
+      `Custody::movements()` ما بيقراش `bawalis` خالص، بيمرّ على
+      `DailyReview::officeCashItems` — وهي في القايمة فوق وبتنادي الشرط وبتعدّي
+      الفحص. يعني الاستعلام المباشر اتشال، مش الحارس.
+   ⚠️ الاستعلام التاني الفاضل في `Custody.php` هو `capError()` — قراءة صفّ واحد
+      بالـ`id` بلا أي تجميع، فمالوش علاقة بالاستثناء أصلاً.
+   ⚠️ **لو الرقم ده نزل تاني، ما تنزّلوش قبل ما تتأكد إن الاستعلام راح لمصدر
+      محروس** — النزول بلا سبب مكتوب معناه نقطة اتنسيت. */
 $callSites = 0;
 foreach ($safeFiles as $f) { $callSites += substr_count(code_only(src($f)), 'officeExcludeSql('); }
-$callSites >= 9
-    ? ok("نقاط التزامن الـ٩ كلها بتنادي الشرط (لقينا {$callSites})")
-    : bad("نقاط التزامن ناقصة — لقينا {$callSites} والمتوقع ٩ على الأقل");
+$callSites >= 8
+    ? ok("نقاط التزامن كلها بتنادي الشرط (لقينا {$callSites})")
+    : bad("نقاط التزامن ناقصة — لقينا {$callSites} والمتوقع ٨ على الأقل");
+
+/* ⚠️ حارس مضاف مع النزول: البديل لازم يفضل **ما بيقراش `bawalis`** — أول ما
+   يرجع يقراها بإيده يبقى لازم ينادي الشرط، والفحص ده بيمسك اللحظة دي. */
+$movBody = code_only(src('app/Models/Custody.php'));
+$mStart  = strpos($movBody, 'function movements');
+$mEnd    = strpos($movBody, 'function groupIcon');
+$movOnly = ($mStart !== false && $mEnd !== false && $mEnd > $mStart)
+    ? substr($movBody, $mStart, $mEnd - $mStart) : '';
+$movOnly !== '' && !str_contains($movOnly, 'bawalis')
+    ? ok('`Custody::movements()` ما بتقراش `bawalis` — بتمرّ على `DailyReview`')
+    : bad('`Custody::movements()` بقت تقرا `bawalis` بإيدها — لازم تنادي `officeExcludeSql`');
 
 sec('٣) الاتجاه التاني — عهدة المندوب بتشوف البوليصة');
 $rc = code_only(src('app/Models/RepCustody.php'));

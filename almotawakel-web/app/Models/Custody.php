@@ -240,62 +240,129 @@ class Custody
         return null;
     }
 
-    // ─────────────────────────────────────────────── السجل الموحّد
+    // ─────────────────────────────────────────────── حركة الخزنة في فترة
 
     /**
-     * سجل موحّد بكل حركات العهدة (إضافات + عهد سائقين)، مرتّب من الأقدم للأحدث
-     * مع رصيد جارٍ. كل صف: kind(topup|driver), d, label, party, amount(±), custody, deduction, running.
+     * ⚠️⚠️ **المصدر الوحيد لصفوف حركة درج المكتب — وممنوع يتحسب هنا أي رقم من الأول.**
+     *
+     * ═══ ليه الدالة القديمة (`ledger()`) اتشالت ═══
+     * كانت بتحسب `Σ(الإضافات) − Σ(عهدة البوليصة − ١٠٠)` بإيدها، بينما الرصيد
+     * المعروض فوق بييجي من `Closing::currentBalance()` = `آخر إقفال + إضافات −
+     * **مصروفات** − عهد سائقين`. يعني السجل كان ناقصه ٣ حاجات:
+     *   ① رصيد نقطة الارتكاز (كان بيبدأ من صفر بدل رصيد آخر إقفال)
+     *   ② **المصروفات كلها** (أكبر بند صرف في الخزنة أصلاً — ما كانش ليه ولا سطر)
+     *   ③ `rep_custody_deposits` (بتتحسب إضافة أو مصروف حسب النموذج الفعّال)
+     * النتيجة كانت **رقمين مختلفين لنفس السؤال على نفس الشاشة** (مقيس على
+     * قاعدة التطوير 2026-08-31: الكارت ٢٤٥,٠٥٠ والسجل ٥٧٢,٧٩٠ — فرق ٣٢٧,٧٤٠).
+     *
+     * ═══ ليه `DailyReview::officeCashItems` بالذات ═══
+     * لأن `verify_v108` **بيحرس بالفعل** إن `Σ(signed)` عليها =
+     * `Closing::rangeMovement()['net']` بالمليم. فالسجل المبني عليها **مستحيل**
+     * يخالف الرصيد — الفجوة مقفولة بالبناء مش بالمراجعة.
+     *
+     * ⚠️ **الرصيد الجاري بيبدأ من `Closing::openingFor($from)`** مش من صفر —
+     *    ده اللي بيخلّي آخر سطر = `Closing::closingFor($to)`.
+     *
+     * ⚠️ **`drift`**: الفرق بين (رصيد آخر المدة) و(رصيد أولها + صافي الحركة).
+     *    المفروض صفر؛ أي رقم تاني معناه **لقطة إقفال اتقادمت** بعد تعديل على
+     *    بيانات يوم متقفل. الشاشة بتقوله صراحةً بدل ما تخبّيه (نفس مفهوم
+     *    `SafeInventory::statement`).
+     *
+     * ⚠️ **السقف من `SafeInventory`** مش ثوابت جديدة — الصفوف بتتبني بنداء
+     *    `DailyReview` **لكل يوم**، فالفترة الأطول من `MAX_ROW_DAYS` بترجّع
+     *    الإجماليات كاملة و`capped=true`، والشاشة بتقول إن الصفوف مقطوعة
+     *    (**ممنوع قطع صامت**).
+     *
+     * @return array{from:string,to:string,days:int,opening:float,closing:float,
+     *               in:float,out:float,net:float,drift:float,parts:array<string,float>,
+     *               rows:list<array<string,mixed>>,capped:bool,rows_total:int}
      */
-    public static function ledger(): array
+    public static function movements(string $from, string $to): array
     {
-        $rate = self::deductionRate();
+        if ($from > $to) { [$from, $to] = [$to, $from]; }
 
-        $topups = Database::all(
-            "SELECT id, cust_date AS d, driver, note, amount FROM manual_custody");
+        $opening = round(Closing::openingFor($from), 2);
+        $closing = round(Closing::closingFor($to), 2);
+        $move    = Closing::rangeMovement($from, $to);
+        $net     = round((float) $move['net'], 2);
+
+        $days   = (int) floor((strtotime($to) - strtotime($from)) / 86400) + 1;
+        $capped = $days > SafeInventory::MAX_ROW_DAYS;
+
         $rows = [];
-        foreach ($topups as $t) {
-            $rows[] = [
-                'kind'      => 'topup',
-                'id'        => (int) $t['id'],
-                'd'         => $t['d'],
-                'label'     => 'إضافة عهدة يدوية',
-                'party'     => $t['driver'] ?: ($t['note'] ?: '—'),
-                'note'      => $t['note'],
-                'custody'   => null,
-                'deduction' => null,
-                'amount'    => round((float) $t['amount'], 2),   // موجب (+)
-            ];
+        if (!$capped) {
+            for ($d = $from; $d <= $to; $d = date('Y-m-d', strtotime($d . ' +1 day'))) {
+                foreach (DailyReview::officeCashItems($d) as $it) {
+                    $rows[] = [
+                        'date'   => $d,
+                        'group'  => (string) $it['group'],
+                        'icon'   => self::groupIcon((string) $it['group']),
+                        'title'  => (string) $it['title'],
+                        'ref'    => trim((string) ($it['ref'] ?? '')) ?: null,
+                        'party'  => ($it['party'] ?? '—') !== '—' ? (string) $it['party'] : null,
+                        'note'   => trim((string) ($it['note'] ?? '')) ?: null,
+                        'by_rep' => trim((string) ($it['by_rep'] ?? '')) ?: null,
+                        'signed' => round((float) $it['signed'], 2),
+                        'link'   => $it['link'] ?? null,
+                        // مفتاح البند الأصلي — الإضافة اليدوية بس هي القابلة للتعديل من هنا
+                        'type'   => (string) $it['type'],
+                        'id'     => (int) $it['id'],
+                    ];
+                }
+            }
         }
 
-        $drivers = Database::all(
-            "SELECT b.id, b.bill_date AS d, b.bill_number, b.driver, b.company, b.custody, b.car_no, p.permit_no
-             FROM bawalis b LEFT JOIN permits p ON p.id = b.permit_id
-             WHERE b.is_legacy = 0 AND b.custody > 0" . RepBillCustody::officeExcludeSql('b'));
-        foreach ($drivers as $b) {
-            $ded = self::billDeduction((float) $b['custody'], $b['car_no'] ?? null);
-            $rows[] = [
-                'kind'      => 'driver',
-                'id'        => (int) $b['id'],
-                'd'         => $b['d'],
-                'label'     => $b['bill_number'] ?: ('إذن ' . $b['permit_no']),
-                'party'     => $b['driver'] ?: '—',
-                'note'      => $b['company'],
-                'custody'   => round((float) $b['custody'], 2),
-                'deduction' => $ded,
-                'amount'    => -$ded,                            // سالب (−)
-            ];
+        /* ⚠️ ترتيب **مستقر**: التاريخ ثم ترتيب الإدراج. من غير الكسر الأخير صفوف
+           نفس اليوم بتتنطط بين تحميل وتاني والرصيد الجاري يقرا مختلفًا كل فتحة. */
+        $seq = 0;
+        foreach ($rows as &$r) { $r['seq'] = $seq++; }
+        unset($r);
+        usort($rows, static fn ($a, $b) => [$a['date'], $a['seq']] <=> [$b['date'], $b['seq']]);
+
+        $rowsTotal = count($rows);
+        if ($rowsTotal > SafeInventory::MAX_ROWS) {
+            $rows = array_slice($rows, 0, SafeInventory::MAX_ROWS);
         }
 
-        // ترتيب من الأقدم للأحدث (NULL أولاً) لحساب الرصيد الجارٍ، ثم عكسه للعرض
-        usort($rows, function ($a, $b) {
-            $da = $a['d'] ?? ''; $db = $b['d'] ?? '';
-            return $da <=> $db ?: ($a['id'] <=> $b['id']);
-        });
-        $run = 0.0;
-        foreach ($rows as &$r) { $run = round($run + $r['amount'], 2); $r['running'] = $run; }
+        // الرصيد الجاري من رصيد أول المدة — فآخر سطر بيساوي رصيد آخرها
+        $run = $opening;
+        foreach ($rows as &$r) { $run = round($run + $r['signed'], 2); $r['running'] = $run; }
         unset($r);
 
-        return array_reverse($rows);
+        return [
+            'from' => $from, 'to' => $to, 'days' => $days,
+            'opening' => $opening, 'closing' => $closing,
+            'in'  => round((float) $move['in'], 2),
+            'out' => round((float) $move['out'], 2),
+            'net' => $net,
+            'drift' => round($closing - $opening - $net, 2),
+            'parts' => [
+                'topups'   => round((float) $move['topups'], 2),
+                'expenses' => round((float) $move['expenses'], 2),
+                'driver'   => round((float) $move['driver'], 2),
+            ],
+            'rows' => $rows, 'capped' => $capped, 'rows_total' => $rowsTotal,
+        ];
+    }
+
+    /** أيقونة قسم الحركة — ⚠️ كل اسم لازم يكون في خريطة `icon()` وإلا دايرة فاضية. */
+    private static function groupIcon(string $group): string
+    {
+        return match ($group) {
+            'topups'      => 'wallet',
+            'permits'     => 'file-text',
+            'general'     => 'trending-down',
+            'custody'     => 'truck',
+            'rep_deposit' => 'briefcase',
+            default       => 'layers',
+        };
+    }
+
+    /** الفترة الافتراضية للشاشة: الشهر الحالي (بيوم العمل لا بتاريخ الخادم). */
+    public static function defaultRange(): array
+    {
+        $today = work_date();
+        return [date('Y-m-01', strtotime($today)), $today];
     }
 
     // ─────────────────────────────────────────────── إدارة الإضافات اليدوية (توب-أب)

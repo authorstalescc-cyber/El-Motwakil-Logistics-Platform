@@ -23,10 +23,19 @@ $returnPath = current_app_path() ?: 'custody';
 
 <?php /* ⚠️ **ممنوع رقم أصمّ**: الرصيد بيفتح تفكيكه، وكل بند في التفكيك بيقول
          جاي منين. التفكيك **جاهز في الصفحة** (`#custodyBreak`) لأنه أربعة
-         أرقام محسوبة أصلاً — مش محتاج طلب تاني للخادم. */ ?>
-<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($breakdown, $rate) { ?>
+         أرقام محسوبة أصلاً — مش محتاج طلب تاني للخادم.
+
+         ⚠️⚠️ **الكارت الأول اتسمّى بالنموذج الفعّال مش بالكلمة الثابتة.**
+            `Closing::currentBalance()` معناه بيتغيّر: في النموذج المجمّع
+            (`bankTopupActive`) هو **الدرج + جيوب المناديب**، فتسميته «المتاح»
+            كانت بتقول إن فلوس في جيب مندوب متاحة في الدرج. التفكيك من
+            `Closing::walletSplit()` — نفس الدالة اللي `/closing` و`/safe-audit`
+            بيستخدموها، فمستحيل الشاشات التلاتة يختلفوا. */ ?>
+<?php partial('stat_grid', ['items' => 4, 'class' => 'mb', 'body' => function () use ($breakdown, $rate, $wallet, $aggregate) { ?>
   <?php partial('stat', [
-    'label' => 'الرصيد الحالي المتاح', 'value' => intf($breakdown['balance']),
+    'label' => $aggregate ? 'رصيد الخزنة (شامل جيوب المناديب)' : 'الرصيد الحالي المتاح',
+    'value' => intf($breakdown['balance']),
+    'unit'  => $aggregate ? 'في الدرج ' . intf($wallet['drawer']) : null,
     'icon'  => 'briefcase', 'tone' => $breakdown['balance'] < 0 ? 'red' : 'gold', 'drill' => '#custodyBreak', 'title' => 'من إيه اتكوّن الرصيد',
   ]); ?>
   <?php partial('stat', [
@@ -56,7 +65,28 @@ $returnPath = current_app_path() ?: 'custody';
     'how'   => 'الرصيد بيتحسب من آخر إقفال يومي مثبَّت، وبعده كل إضافة عهدة تزوّد وكل مصروف أو عهدة سائق تنقّص. الرقم ده هو نفسه اللي في شاشة التقفيل.',
     'total' => ['label' => 'الرصيد الحالي', 'value' => money($breakdown['balance'], false)],
     'more'  => ['label' => 'التقفيل اليومي', 'url' => url('closing')],
-    'body'  => function () use ($breakdown, $rate) {
+    'body'  => function () use ($breakdown, $rate, $wallet, $aggregate) {
+      /* ⚠️ تفكيك المحفظة أول حاجة في النافذة **لما يكون فارقًا بس**: في نموذج
+         «الدرج بس» الرقم = الدرج فعلاً، فسطر «في الدرج» ساعتها تكرار مشتِّت. */
+      if ($aggregate) {
+        partial('row_item', [
+          'title' => 'في درج المكتب',
+          'icon'  => 'briefcase',
+          'meta'  => [['icon' => 'info', 'text' => 'اللي ينعدّ بالإيد']],
+          'amount' => money($wallet['drawer'], false),
+          'amount_tone' => $wallet['drawer'] < 0 ? 'neg' : 'pos',
+        ]);
+        foreach ($wallet['reps'] as $rep) {
+          partial('row_item', [
+            'title' => 'مع ' . $rep['name'],
+            'icon'  => 'user',
+            'url'   => url('rep-custody/' . (int) $rep['id']),
+            'meta'  => [['icon' => 'info', 'text' => 'عهدة مندوب']],
+            'amount' => money($rep['balance'], false),
+            'amount_tone' => $rep['balance'] < 0 ? 'neg' : 'pos',
+          ]);
+        }
+      }
       partial('row_item', [
         'title' => $breakdown['anchorDate'] ? 'رصيد آخر إقفال (' . dfmt($breakdown['anchorDate']) . ')' : 'من البداية',
         'icon'  => 'lock',
@@ -159,38 +189,88 @@ $returnPath = current_app_path() ?: 'custody';
 </div>
 <?php endif; ?>
 
-<?php /* الجدول (٨ أعمدة مليانة `—`) اتشال: كل صف هنا **حركة** — إضافة عهدة أو
-         عهدة سائق — مش سطر مقارنة رقمية. الرصيد الجاري بيبان كسطر صغير تحت
-         المبلغ بدل عمود لوحده. */ ?>
+<?php /* ═══ حركة الخزنة في فترة ═══
+         ⚠️ **الصفوف والرصيد الجاري من `Custody::movements()`** — المبنية على
+            `DailyReview::officeCashItems` + `Closing`. السجل القديم كان بيجمع
+            الإضافات ناقص عهد السائقين وبس (بلا مصروفات وبلا رصيد آخر إقفال)
+            فكان بيقول رقمًا يخالف الكارت اللي فوقه بمئات الألوف.
+         ⚠️ **آخر سطر لازم يساوي رصيد آخر المدة** — ده اللي `verify_custody_ui`
+            بيثبته، مش تعليق طموح. */ ?>
+
+<form class="cs-filters" method="get" action="<?= url('custody') ?>">
+  <?php
+  $today = work_date();
+  $pm    = date('Y-m-d', strtotime(date('Y-m-01', strtotime($today)) . ' -1 day'));
+  $presets = [
+    'اليوم'          => [$today, $today],
+    'الشهر الحالي'   => [date('Y-m-01', strtotime($today)), $today],
+    'الشهر اللي فات' => [date('Y-m-01', strtotime($pm)), date('Y-m-t', strtotime($pm))],
+  ];
+  foreach ($presets as $lbl => [$a, $b]):
+    $on = $move['from'] === $a && $move['to'] === $b;
+  ?>
+    <a class="cs-period-btn<?= $on ? ' on' : '' ?>"
+       href="<?= url('custody') ?>?from=<?= e($a) ?>&to=<?= e($b) ?>"><?= e($lbl) ?></a>
+  <?php endforeach; ?>
+  <input type="date" name="from" value="<?= e($move['from']) ?>" aria-label="من">
+  <input type="date" name="to" value="<?= e($move['to']) ?>" aria-label="إلى">
+  <button class="btn" type="submit"><?= icon('filter', 15) ?> فلترة</button>
+</form>
+
+<?php /* تحذير وظيفي في ≤٦ كلمات — ولا واحد منهم شرح تعليمي. */ ?>
+<?php if (abs($move['drift']) >= 0.005): ?>
+  <div class="card mb p5-pad-sm p5-edge-gold-r">
+    <?= icon('alert', 15) ?> لقطة إقفال متقادمة — فرق <?= money($move['drift'], false) ?>.
+    <a href="<?= url('closing') ?>">راجع التقفيل</a>
+  </div>
+<?php endif; ?>
+<?php if ($move['capped']): ?>
+  <div class="card mb p5-pad-sm p5-edge-gold-r">
+    <?= icon('info', 15) ?> الفترة أطول من <?= intf(\App\Models\SafeInventory::MAX_ROW_DAYS) ?> يوم — الإجماليات كاملة والصفوف مخفية.
+  </div>
+<?php endif; ?>
+
 <?php partial('panel', [
-  'title'  => 'سجل حركات الخزنة',
+  'title'  => 'حركة الخزنة',
   'icon'   => 'layers',
-  'badge'  => $ledger ? ['text' => intf(count($ledger)), 'tone' => 'navy'] : null,
+  'badge'  => $move['rows_total'] ? ['text' => intf($move['rows_total']), 'tone' => 'navy'] : null,
   'scroll' => true,
-  'body'   => function () use ($ledger, $returnPath) {
-    if (!$ledger) {
-      partial('empty', [
-        'emoji' => '📭', 'title' => 'لا حركات عهدة بعد',
-      ]);
+  'body'   => function () use ($move, $returnPath) {
+    if (!$move['rows']) {
+      partial('empty', ['emoji' => '📭', 'title' => $move['capped']
+        ? 'اختار فترة أقصر عشان تشوف الصفوف'
+        : 'مفيش حركة في الفترة دي']);
       return;
     }
-    foreach ($ledger as $r) {
-      $isTopup = $r['kind'] === 'topup';
-      $meta = [['icon' => 'calendar', 'text' => $r['d'] ? dfmt($r['d']) : '—']];
-      if ($r['party']) { $meta[] = ['icon' => 'user', 'text' => $r['party']]; }
-      if (!$isTopup) {
-        $meta[] = ['icon' => 'truck', 'text' => 'عهدة ' . money($r['custody'], false)];
-        if ($r['note']) { $meta[] = ['icon' => 'file-text', 'text' => $r['note']]; }
+    /* سطر افتتاحي — من غيره الرصيد الجاري في أول صف بيبان كأنه طالع من العدم. */
+    partial('row_item', [
+      'title'  => 'رصيد أول المدة (' . dfmt($move['from']) . ')',
+      'icon'   => 'lock',
+      'meta'   => [['icon' => 'info', 'text' => 'نقطة البداية']],
+      'amount' => money($move['opening'], false),
+    ]);
+    $day = null;
+    foreach ($move['rows'] as $r) {
+      if ($r['date'] !== $day) {
+        $day = $r['date'];
+        echo '<div class="cs-day">' . icon('calendar', 15) . ' ' . e(dfmt($day)) . '</div>';
       }
+      $meta = [];
+      if ($r['ref'])    { $meta[] = ['icon' => 'file-text', 'text' => $r['ref']]; }
+      if ($r['party'])  { $meta[] = ['icon' => 'user', 'text' => $r['party']]; }
+      if ($r['by_rep']) { $meta[] = ['icon' => 'briefcase', 'text' => 'دفعها ' . $r['by_rep']]; }
+      if ($r['note'])   { $meta[] = ['icon' => 'info', 'text' => $r['note']]; }
       $meta[] = ['icon' => 'briefcase', 'text' => 'الرصيد الجاري ' . money($r['running'], false)];
       partial('row_item', [
-        'title'  => $isTopup ? ($r['party'] ?: 'إضافة عهدة يدوية') : ('عهدة سائق — ' . $r['label']),
-        'icon'   => $isTopup ? 'wallet' : 'truck',
-        'url'    => $isTopup ? null : url('bawalis/' . $r['id']),
+        'title'  => $r['title'],
+        'icon'   => $r['icon'],
+        'url'    => $r['link'] ? url($r['link']) : null,
         'meta'   => $meta,
-        'amount' => $isTopup ? '+ ' . money($r['amount'], false) : '- ' . money($r['deduction'], false),
-        'amount_tone' => $isTopup ? 'pos' : 'ex',
-        'extra'  => $isTopup ? function () use ($r, $returnPath) { ?>
+        'amount' => ($r['signed'] >= 0 ? '+ ' : '- ') . money(abs($r['signed']), false),
+        'amount_tone' => $r['signed'] >= 0 ? 'pos' : 'ex',
+        /* الإضافة اليدوية بس هي اللي بتتعدّل من هنا — الباقي بيتعدّل من مصدره
+           (البوليصة · الإذن · المصروف)، والرابط فوق بيوصّل له. */
+        'extra'  => $r['type'] === 'topup' ? function () use ($r, $returnPath) { ?>
           <a class="edit" href="<?= url('custody/topup/' . $r['id'] . '/edit') ?>?back=<?= urlencode($returnPath) ?>"
              title="تعديل"><?= icon('edit', 13) ?></a>
           <form method="post" action="<?= url('custody/topup/' . $r['id'] . '/delete') ?>"
@@ -202,5 +282,12 @@ $returnPath = current_app_path() ?: 'custody';
         <?php } : '',
       ]);
     }
+    partial('row_item', [
+      'title'  => 'رصيد آخر المدة (' . dfmt($move['to']) . ')',
+      'icon'   => 'briefcase',
+      'meta'   => [['icon' => 'info', 'text' => 'بعد كل حركة الفترة']],
+      'amount' => money($move['closing'], false),
+      'amount_tone' => $move['closing'] < 0 ? 'neg' : 'pos',
+    ]);
   },
 ]); ?>

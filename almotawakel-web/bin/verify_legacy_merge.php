@@ -154,7 +154,7 @@ $smoke = [
     'Metrics::activityTrend'          => fn() => Metrics::activityTrend(),
     'Debt::ownersSummary (مقصود قديم)' => fn() => Debt::ownersSummary(),
     'Closing::currentBalance'         => fn() => Closing::currentBalance(),
-    'Custody::ledger'                 => fn() => Custody::ledger(),
+    'Custody::movements'              => fn() => Custody::movements(...Custody::defaultRange()),
 ];
 foreach ($smoke as $label => $fn) {
     try { $fn(); $check(true, $label); }
